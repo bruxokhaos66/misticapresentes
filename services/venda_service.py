@@ -29,6 +29,8 @@ def calcular_total_venda(carrinho, desconto_percentual=0, forma_pagamento="Dinhe
 
 
 def registrar_venda_service(carrinho, cliente, data_venda, data_iso, calculo, forma_pagamento, vendedor, caixa_id):
+    if not caixa_id:
+        raise ValueError("Abra o caixa antes de registrar uma venda.")
     validar_estoque_carrinho(carrinho)
     conn = get_connection()
     cur = conn.cursor()
@@ -58,16 +60,7 @@ def registrar_venda_service(carrinho, cliente, data_venda, data_iso, calculo, fo
             if quantidade > estoque_anterior:
                 raise ValueError(f"Estoque insuficiente para {nome_produto}. Disponivel: {estoque_anterior}.")
 
-            vendas_repo.inserir_item_cursor(
-                cur,
-                venda_id,
-                item["id"],
-                item["n"],
-                quantidade,
-                custo_unitario,
-                item["p"],
-                item["t"],
-            )
+            vendas_repo.inserir_item_cursor(cur, venda_id, item["id"], item["n"], quantidade, custo_unitario, item["p"], item["t"])
             if estoque_repo.baixar_estoque_cursor(cur, item["id"], quantidade) != 1:
                 raise ValueError(f"Nao consegui baixar estoque de {nome_produto}; atualize a venda.")
 
@@ -114,13 +107,17 @@ def consultar_venda_salva(venda_id):
 
 
 def cancelar_venda_service(venda_id, usuario, caixa_id=None):
-    status_total = vendas_repo.obter_status_total(venda_id)
+    if not caixa_id:
+        raise ValueError("Abra o caixa antes de cancelar/estornar uma venda.")
+
+    status_total = vendas_repo.obter_status_total_forma(venda_id)
     if not status_total:
         raise ValueError("Venda nao localizada.")
-    status, valor_estorno = status_total
+    status, valor_estorno, forma_original = status_total
     if status == "Cancelado":
         raise ValueError("Venda ja cancelada.")
 
+    forma_estorno = forma_original or "Estorno"
     valor_estorno = float(valor_estorno or 0)
     conn = get_connection()
     cur = conn.cursor()
@@ -152,12 +149,12 @@ def cancelar_venda_service(venda_id, usuario, caixa_id=None):
         vendas_repo.inserir_fluxo_cursor(
             cur,
             "Saida",
-            f"Estorno no {venda_id}",
+            f"Estorno venda no {venda_id} ({forma_estorno})",
             valor_estorno,
             agora_data,
             agora_iso,
             caixa_id,
-            "Estorno",
+            forma_estorno,
         )
         conn.commit()
         return valor_estorno
