@@ -82,7 +82,7 @@ def init_db():
         except Exception:
             pass
 
-    for col, typ in [("custo","REAL DEFAULT 0.0"), ("lucro","REAL DEFAULT 0.0"), ("estoque_minimo","INTEGER DEFAULT 0")]:
+    for col, typ in [("custo", "REAL DEFAULT 0.0"), ("lucro", "REAL DEFAULT 0.0"), ("estoque_minimo", "INTEGER DEFAULT 0")]:
         try:
             query_db(f"ALTER TABLE produtos ADD COLUMN {col} {typ}", commit=True)
         except Exception:
@@ -97,6 +97,10 @@ def init_db():
         pass
     try:
         query_db("ALTER TABLE fluxo_caixa ADD COLUMN data_iso TEXT", commit=True)
+    except Exception:
+        pass
+    try:
+        query_db("ALTER TABLE fluxo_caixa ADD COLUMN forma_pagamento TEXT", commit=True)
     except Exception:
         pass
     try:
@@ -116,6 +120,7 @@ def init_db():
         "fornecedores": [("whatsapp", "TEXT"), ("cidade", "TEXT"), ("observacoes", "TEXT"), ("ativo", "INTEGER DEFAULT 1"), ("excluido_em", "TEXT")],
         "contas_a_pagar": [("categoria", "TEXT DEFAULT 'Outros'"), ("cancelado_em", "TEXT")],
         "vendas_itens": [("custo_unitario", "REAL DEFAULT 0.0"), ("valor_unitario", "REAL DEFAULT 0.0"), ("valor_total", "REAL DEFAULT 0.0")],
+        "fluxo_caixa": [("data_iso", "TEXT"), ("forma_pagamento", "TEXT"), ("caixa_id", "INTEGER")],
     }.items():
         for col, typ in colunas:
             try:
@@ -139,8 +144,9 @@ def init_db():
         "CREATE INDEX IF NOT EXISTS idx_vendas_status ON vendas(status)",
         "CREATE INDEX IF NOT EXISTS idx_vendas_itens_venda ON vendas_itens(venda_id)",
         "CREATE INDEX IF NOT EXISTS idx_fluxo_caixa_id ON fluxo_caixa(caixa_id)",
+        "CREATE INDEX IF NOT EXISTS idx_fluxo_caixa_forma ON fluxo_caixa(forma_pagamento)",
         "CREATE INDEX IF NOT EXISTS idx_isis_memoria_tipo ON isis_memoria(tipo)",
-        "CREATE INDEX IF NOT EXISTS idx_isis_memoria_chave ON isis_memoria(chave)"
+        "CREATE INDEX IF NOT EXISTS idx_isis_memoria_chave ON isis_memoria(chave)",
     ]:
         try:
             query_db(sql_idx, commit=True)
@@ -170,4 +176,3 @@ def init_db():
             query_db("INSERT INTO categorias (nome) VALUES (?)", (c,), commit=True)
         except Exception:
             pass
-
