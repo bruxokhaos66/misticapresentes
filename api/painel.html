@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mística Presentes - Painel</title>
+  <style>
+    :root { --bg:#121018; --card:#1d1727; --gold:#d8b56d; --green:#6fbf9b; --red:#e07070; --text:#f6f0df; --muted:#b9ad96; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Arial, sans-serif; background:radial-gradient(circle at top,#2a2037,#121018 48%); color:var(--text); }
+    header { padding:18px 16px; position:sticky; top:0; background:rgba(18,16,24,.92); backdrop-filter:blur(8px); border-bottom:1px solid rgba(216,181,109,.25); z-index:2; }
+    h1 { margin:0; font-family:Georgia, serif; color:var(--gold); font-size:24px; }
+    .sub { color:var(--muted); margin-top:5px; font-size:13px; }
+    main { padding:14px; max-width:1100px; margin:0 auto; }
+    .grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+    .card { background:rgba(29,23,39,.92); border:1px solid rgba(216,181,109,.18); border-radius:18px; padding:14px; box-shadow:0 12px 28px rgba(0,0,0,.22); }
+    .card h2 { font-size:14px; color:var(--muted); margin:0 0 8px; font-weight:600; }
+    .value { font-size:26px; font-weight:800; color:#fff; }
+    .gold { color:var(--gold); } .green { color:var(--green); } .red { color:var(--red); }
+    .section { margin-top:14px; }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th,td { padding:8px 6px; border-bottom:1px solid rgba(255,255,255,.08); text-align:left; }
+    th { color:var(--gold); font-weight:700; }
+    .pill { display:inline-block; padding:3px 8px; border-radius:999px; background:rgba(216,181,109,.13); color:var(--gold); font-size:12px; }
+    .alerta { line-height:1.45; white-space:pre-wrap; color:#fff4d0; }
+    .footer { text-align:center; color:var(--muted); padding:18px; font-size:12px; }
+    @media (max-width:850px){ .grid{grid-template-columns:repeat(2,minmax(0,1fr));} .value{font-size:22px;} }
+    @media (max-width:520px){ .grid{grid-template-columns:1fr;} header{padding:14px;} main{padding:10px;} table{font-size:12px;} th:nth-child(2), td:nth-child(2){display:none;} }
+  </style>
+</head>
+<body>
+<header>
+  <h1>🌙 Mística Presentes</h1>
+  <div class="sub">Painel mobile em tempo real da loja • <span id="status">conectando...</span></div>
+</header>
+<main>
+  <div class="grid">
+    <div class="card"><h2>Vendas hoje</h2><div class="value" id="qtdHoje">0</div></div>
+    <div class="card"><h2>Faturamento hoje</h2><div class="value gold" id="fatHoje">R$ 0,00</div></div>
+    <div class="card"><h2>Caixa</h2><div class="value" id="caixaStatus">--</div></div>
+    <div class="card"><h2>Estoque baixo</h2><div class="value red" id="estoqueQtd">0</div></div>
+  </div>
+
+  <div class="section card">
+    <h2>Alertas da Isis</h2>
+    <div class="alerta" id="alertas">Carregando...</div>
+  </div>
+
+  <div class="section card">
+    <h2>Últimas vendas</h2>
+    <table><thead><tr><th>Nº</th><th>Data</th><th>Cliente</th><th>Total</th><th>Vendedor</th><th>Status</th></tr></thead><tbody id="vendas"></tbody></table>
+  </div>
+
+  <div class="section card">
+    <h2>Produtos com estoque baixo</h2>
+    <table><thead><tr><th>Produto</th><th>Qtd</th><th>Mínimo</th></tr></thead><tbody id="estoque"></tbody></table>
+  </div>
+
+  <div class="section card">
+    <h2>Contas e cancelamentos</h2>
+    <div id="contas"></div>
+    <div id="cancelamentos" style="margin-top:10px"></div>
+  </div>
+</main>
+<div class="footer">Atualiza automaticamente a cada poucos segundos. Primeira fase: somente leitura.</div>
+<script>
+const TOKEN = localStorage.getItem('MISTICA_API_TOKEN') || 'mistica-local';
+function moeda(v){ return Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
+function txt(v){ return (v===null || v===undefined || v==='') ? '-' : v; }
+function render(data){
+  document.getElementById('qtdHoje').textContent = data.vendas_hoje.quantidade;
+  document.getElementById('fatHoje').textContent = moeda(data.vendas_hoje.faturamento);
+  document.getElementById('caixaStatus').textContent = data.caixa.aberto ? 'Aberto' : 'Fechado';
+  document.getElementById('caixaStatus').className = data.caixa.aberto ? 'value green' : 'value red';
+  document.getElementById('estoqueQtd').textContent = data.estoque_baixo.length;
+  document.getElementById('alertas').textContent = data.alertas_isis.texto || 'Sem alertas.';
+  document.getElementById('vendas').innerHTML = data.ultimas_vendas.map(v=>`<tr><td>${v.id}</td><td>${txt(v.data_venda)}</td><td>${txt(v.cliente)}</td><td>${moeda(v.total_final)}</td><td>${txt(v.vendedor)}</td><td><span class="pill">${txt(v.status)}</span></td></tr>`).join('') || '<tr><td colspan="6">Sem vendas ainda.</td></tr>';
+  document.getElementById('estoque').innerHTML = data.estoque_baixo.map(p=>`<tr><td>${txt(p.produto)}</td><td>${p.quantidade}</td><td>${p.estoque_minimo}</td></tr>`).join('') || '<tr><td colspan="3">Nenhum produto crítico.</td></tr>';
+  document.getElementById('contas').innerHTML = '<b>Contas:</b><br>' + (data.contas_alerta.map(c=>`${txt(c.descricao)} • ${moeda(c.valor)} • ${txt(c.vencimento)}`).join('<br>') || 'Sem contas em alerta.');
+  document.getElementById('cancelamentos').innerHTML = '<b>Cancelamentos recentes:</b><br>' + (data.cancelamentos.map(c=>`Venda ${c.id} • ${moeda(c.total_final)} • ${txt(c.vendedor)}`).join('<br>') || 'Nenhum cancelamento recente.');
+}
+async function carregar(){
+  try{
+    const r = await fetch('/api/dashboard',{headers:{'X-Mistica-Token':TOKEN}});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const data = await r.json();
+    render(data); document.getElementById('status').textContent = 'online • '+data.gerado_em;
+  }catch(e){ document.getElementById('status').textContent = 'offline / sem acesso'; }
+}
+function websocket(){
+  try{
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(`${proto}://${location.host}/ws/dashboard`);
+    ws.onmessage = ev => { render(JSON.parse(ev.data)); document.getElementById('status').textContent='online em tempo real'; };
+    ws.onerror = () => carregar();
+    ws.onclose = () => setTimeout(websocket, 6000);
+  }catch(e){ setInterval(carregar,5000); }
+}
+carregar(); websocket(); setInterval(carregar,15000);
+</script>
+</body>
+</html>
