@@ -1,6 +1,7 @@
 from reports.estoque_report import valoracao_estoque
 from reports.financeiro_report import dre_periodo
-from reports.vendas_report import lucro_liquido_periodo, produtos_mais_vendidos, ranking_clientes, vendas_por_filtro
+from reports.produtos_vendidos_report import produtos_mais_vendidos
+from reports.vendas_report import lucro_liquido_periodo, ranking_clientes, vendas_por_filtro
 
 
 def relatorio_vendas_periodo(filtro):
