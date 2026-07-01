@@ -35,10 +35,22 @@ class IsisAssistant:
         if auto:
             return {"handled": True, "modo": "automacao", "texto": auto}
 
-        if any(x in p for x in ["corrigir sistema", "corrigir bugs", "reparar sistema", "fazer correcoes", "fazer correções"]):
+        gatilhos_correcao = [
+            "corrigir sistema", "corrigir bugs", "reparar sistema", "fazer correcoes", "fazer correções",
+            "arrumar sistema", "consertar sistema", "corrige o sistema"
+        ]
+        if any(x in p for x in gatilhos_correcao):
             return {"handled": True, "modo": "correcao_sistema", "texto": self._auditoria_manual(corrigir=True)}
 
-        if any(x in p for x in ["auditoria", "analise completa", "análise completa", "verificar sistema", "revisar sistema", "buscar erros", "procurar bugs", "erros do sistema", "bugs do sistema"]):
+        gatilhos_auditoria = [
+            "auditoria", "analise completa", "análise completa", "verificar sistema", "verifica sistema",
+            "verifica o sistema", "verifica como esta o sistema", "verifica como está o sistema",
+            "checar sistema", "checa sistema", "checa o sistema", "status do sistema",
+            "como esta o sistema", "como está o sistema", "revisar sistema", "buscar erros",
+            "procurar bugs", "erros do sistema", "bugs do sistema", "diagnostico do sistema",
+            "diagnóstico do sistema", "analisar sistema", "analisa o sistema"
+        ]
+        if any(x in p for x in gatilhos_auditoria):
             return {"handled": True, "modo": "auditoria_sistema", "texto": self._auditoria_manual(corrigir=False)}
 
         if any(x in p for x in ["prioridade", "o que fazer hoje", "tarefas de hoje"]):
