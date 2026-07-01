@@ -65,9 +65,13 @@ def carregar_codigo_corrigido(caminho: Path) -> str:
         r".*?"
         r"(?=\n[ \t]*def importar_json_isis_para_sqlite\(self\):)"
     )
+
+    def bloco_corrigido(_match):
+        return "\n" + BLOCO_ISIS_CORRIGIDO.strip("\n")
+
     codigo, alterados = re.subn(
         padrao,
-        "\n" + BLOCO_ISIS_CORRIGIDO.strip("\n"),
+        bloco_corrigido,
         codigo,
         count=1,
         flags=re.DOTALL,
