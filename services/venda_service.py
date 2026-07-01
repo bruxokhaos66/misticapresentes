@@ -1,4 +1,4 @@
-﻿from datetime import datetime
+from datetime import datetime
 
 from database import get_connection
 from repositories import estoque as estoque_repo
@@ -18,7 +18,7 @@ def calcular_total_venda(carrinho, desconto_percentual=0, forma_pagamento="Dinhe
     forma = forma_pagamento or "Dinheiro"
     taxa = 0.0
     if forma == "Debito" and base > 0:
-        taxa = 1.5
+        taxa = 1.5  # Taxa fixa definida pela loja.
     elif "Credito 1x" in forma:
         taxa = base * 0.015
     elif "Credito 2x" in forma:
@@ -94,6 +94,7 @@ def registrar_venda_service(carrinho, cliente, data_venda, data_iso, calculo, fo
             data_venda,
             data_iso,
             caixa_id,
+            forma_pagamento,
         )
         conn.commit()
         return venda_id
@@ -156,6 +157,7 @@ def cancelar_venda_service(venda_id, usuario, caixa_id=None):
             agora_data,
             agora_iso,
             caixa_id,
+            "Estorno",
         )
         conn.commit()
         return valor_estorno
@@ -164,4 +166,3 @@ def cancelar_venda_service(venda_id, usuario, caixa_id=None):
         raise
     finally:
         conn.close()
-
