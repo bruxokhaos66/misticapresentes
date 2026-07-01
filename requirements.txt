@@ -4,3 +4,6 @@ pyttsx3
 pyinstaller
 ddgs
 Pillow
+fastapi
+uvicorn[standard]
+httpx
