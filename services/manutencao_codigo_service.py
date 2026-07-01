@@ -44,7 +44,6 @@ AUTENTICAR_CORRIGIDO = '''
             self.login_tentativas[u] = self.login_tentativas.get(u, 0) + 1
             messagebox.showerror("Senha bloqueada", "A senha padrao admin/admin foi desativada por seguranca. Use a senha cadastrada pelo administrador.")
             return
-
         res = query_db("SELECT nome, perfil, login, senha_hash, COALESCE(senha_salt,'') FROM usuarios WHERE login=? AND COALESCE(ativo,1)=1", (u,))
         autenticado = False
         if res:
@@ -57,7 +56,6 @@ AUTENTICAR_CORRIGIDO = '''
                     novo_salt = secrets.token_hex(16)
                     novo_hash = hash_password_pbkdf2(senha_plana, novo_salt.encode("utf-8"))
                     query_db("UPDATE usuarios SET senha_hash=?, senha_salt=? WHERE login=?", (novo_hash, novo_salt, login), commit=True)
-
         if res and autenticado:
             self.login_tentativas[u] = 0
             self.login_bloqueios.pop(u, None)
@@ -141,8 +139,7 @@ SALVAR_USUARIO_CORRIGIDO = '''
         try:
             salt = secrets.token_hex(16)
             senha_hash = hash_password_pbkdf2(senha, salt.encode("utf-8"))
-            query_db("INSERT INTO usuarios (nome, cpf, endereco, telefone, login, senha_hash, senha_salt, perfil) VALUES (?,?,?,?,?,?,?,?)",
-                     (nome, self.uc_u.get(), self.ue_u.get(), self.ut_u.get(), login, senha_hash, salt, self.upf_u.get()), commit=True)
+            query_db("INSERT INTO usuarios (nome, cpf, endereco, telefone, login, senha_hash, senha_salt, perfil) VALUES (?,?,?,?,?,?,?,?)", (nome, self.uc_u.get(), self.ue_u.get(), self.ut_u.get(), login, senha_hash, salt, self.upf_u.get()), commit=True)
             self.refresh_audit()
             self.un_u.delete(0, 'end')
             self.uc_u.delete(0, 'end')
@@ -160,7 +157,6 @@ BLOCO_ISIS_CORRIGIDO = '''
     def inserir_texto_com_links_isis(self, texto):
         import re
         import webbrowser
-
         texto = str(texto or "")
         urls = re.findall(r"https?://[^\\s]+", texto)
         pos = 0
@@ -198,7 +194,8 @@ BLOCO_ISIS_CORRIGIDO = '''
 
 
 def _replace_regex(codigo: str, padrao: str, bloco: str) -> tuple[str, bool]:
-    novo, qtd = re.subn(padrao, "\n" + bloco.strip("\n") + "\n", codigo, count=1, flags=re.DOTALL)
+    substituto = "\n" + bloco.strip("\n") + "\n"
+    novo, qtd = re.subn(padrao, lambda _match: substituto, codigo, count=1, flags=re.DOTALL)
     return novo, qtd > 0
 
 
@@ -207,8 +204,7 @@ def _substituir_conv_float(codigo: str) -> tuple[str, bool]:
 
 
 def _substituir_bloco_isis(codigo: str) -> tuple[str, bool]:
-    padrao = r"\n[ \t]*def inserir_texto_com_links_isis\(self, texto\):.*?(?=\n[ \t]*def importar_json_isis_para_sqlite\(self\):)"
-    return _replace_regex(codigo, padrao, BLOCO_ISIS_CORRIGIDO)
+    return _replace_regex(codigo, r"\n[ \t]*def inserir_texto_com_links_isis\(self, texto\):.*?(?=\n[ \t]*def importar_json_isis_para_sqlite\(self\):)", BLOCO_ISIS_CORRIGIDO)
 
 
 def _substituir_caminho_fixo(codigo: str) -> tuple[str, bool]:
@@ -236,7 +232,6 @@ def limpar_mistica_presentes(caminho: Path) -> dict:
     caminho = Path(caminho)
     resultado = {"alterou": False, "acoes": []}
     codigo = caminho.read_text(encoding="utf-8-sig").replace("\t", "    ")
-
     for func, msg in [
         (_substituir_caminho_fixo, "Caminho fixo antigo trocado por caminho relativo ao arquivo."),
         (_substituir_conv_float, "conv_float corrigida para formatos monetarios comuns."),
@@ -247,8 +242,6 @@ def limpar_mistica_presentes(caminho: Path) -> dict:
         if alterou:
             resultado["alterou"] = True
             resultado["acoes"].append(msg)
-
     if resultado["alterou"]:
         caminho.write_text(codigo, encoding="utf-8")
-
     return resultado
