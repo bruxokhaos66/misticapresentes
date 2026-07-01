@@ -4,6 +4,7 @@ Usa caminho relativo ao proprio repositorio e aplica uma correcao segura de
 indentacao conhecida antes de executar o arquivo principal.
 """
 from pathlib import Path
+import re
 import sys
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -56,16 +57,29 @@ BLOCO_ISIS_CORRIGIDO = '''
 
 
 def carregar_codigo_corrigido(caminho: Path) -> str:
-    codigo = caminho.read_text(encoding="utf-8-sig").replace("\t", "    ")
+    codigo = caminho.read_text(encoding="utf-8-sig")
+    codigo = codigo.replace("\t", "    ")
 
-    inicio = codigo.find("\n    def inserir_texto_com_links_isis")
-    if inicio == -1:
-        inicio = codigo.find("\ndef inserir_texto_com_links_isis")
+    padrao = (
+        r"\n[ \t]*def inserir_texto_com_links_isis\(self, texto\):"
+        r".*?"
+        r"(?=\n[ \t]*def importar_json_isis_para_sqlite\(self\):)"
+    )
+    codigo, alterados = re.subn(
+        padrao,
+        "\n" + BLOCO_ISIS_CORRIGIDO.strip("\n"),
+        codigo,
+        count=1,
+        flags=re.DOTALL,
+    )
 
-    fim = codigo.find("\n    def importar_json_isis_para_sqlite", inicio)
-
-    if inicio != -1 and fim != -1:
-        codigo = codigo[:inicio] + "\n" + BLOCO_ISIS_CORRIGIDO.rstrip() + codigo[fim:]
+    if alterados == 0:
+        inicio = codigo.find("def inserir_texto_com_links_isis")
+        fim = codigo.find("def importar_json_isis_para_sqlite", inicio)
+        if inicio != -1 and fim != -1:
+            linha_inicio = codigo.rfind("\n", 0, inicio)
+            linha_fim = codigo.rfind("\n", 0, fim)
+            codigo = codigo[:linha_inicio] + "\n" + BLOCO_ISIS_CORRIGIDO.strip("\n") + codigo[linha_fim:]
 
     return codigo
 
