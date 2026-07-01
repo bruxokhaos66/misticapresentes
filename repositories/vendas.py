@@ -1,4 +1,4 @@
-﻿from database import query_db
+from database import query_db
 
 
 def inserir_venda_cursor(cur, cliente, data_venda, data_iso, subtotal, desconto, taxa, total_final, forma_pagamento, vendedor, status="Concluído"):
@@ -24,13 +24,13 @@ def inserir_item_cursor(cur, venda_id, codigo_p, nome_p, quantidade, custo_unita
     )
 
 
-def inserir_fluxo_cursor(cur, tipo, descricao, valor, data_hora, data_iso, caixa_id):
+def inserir_fluxo_cursor(cur, tipo, descricao, valor, data_hora, data_iso, caixa_id, forma_pagamento=None):
     cur.execute(
         """
-        INSERT INTO fluxo_caixa (tipo, descricao, valor, data_hora, data_iso, caixa_id)
-        VALUES (?,?,?,?,?,?)
+        INSERT INTO fluxo_caixa (tipo, descricao, valor, data_hora, data_iso, caixa_id, forma_pagamento)
+        VALUES (?,?,?,?,?,?,?)
         """,
-        (tipo, descricao, valor, data_hora, data_iso, caixa_id),
+        (tipo, descricao, valor, data_hora, data_iso, caixa_id, forma_pagamento),
     )
 
 
@@ -61,4 +61,3 @@ def buscar_venda(venda_id):
         (venda_id,),
     )
     return res[0] if res else None
-
