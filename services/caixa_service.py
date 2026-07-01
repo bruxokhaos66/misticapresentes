@@ -17,17 +17,9 @@ def abrir_caixa(valor_inicial, operador, descricao="Abertura de Caixa"):
     if obter_caixa_id_ativo():
         raise ValueError("O caixa ja esta aberto.")
     data_ini = datetime.now().strftime("%d/%m/%Y %H:%M")
-    query_db(
-        "INSERT INTO caixa_diario (data_abertura, saldo_inicial, status, operador) VALUES (?,?,?,?)",
-        (data_ini, float(valor_inicial or 0), "Aberto", operador),
-        commit=True,
-    )
+    query_db("INSERT INTO caixa_diario (data_abertura, saldo_inicial, status, operador) VALUES (?,?,?,?)", (data_ini, float(valor_inicial or 0), "Aberto", operador), commit=True)
     cx_id = obter_caixa_id_ativo()
-    query_db(
-        "INSERT INTO fluxo_caixa (tipo, descricao, valor, data_hora, caixa_id, forma_pagamento) VALUES (?,?,?,?,?,?)",
-        ("Entrada", descricao, float(valor_inicial or 0), data_ini, cx_id, "Dinheiro"),
-        commit=True,
-    )
+    query_db("INSERT INTO fluxo_caixa (tipo, descricao, valor, data_hora, caixa_id, forma_pagamento) VALUES (?,?,?,?,?,?)", ("Entrada", descricao, float(valor_inicial or 0), data_ini, cx_id, "Dinheiro"), commit=True)
     return cx_id
 
 
@@ -44,23 +36,24 @@ def _soma_fluxo(caixa_id, tipo=None, forma_pagamento=None):
     return float(res[0][0] or 0.0) if res else 0.0
 
 
+def _saldo_por_forma(caixa_id, forma):
+    entradas = _soma_fluxo(caixa_id, "Entrada", forma)
+    saidas = _soma_fluxo(caixa_id, "Saida", forma) + _soma_fluxo(caixa_id, "Saída", forma)
+    return float(entradas or 0.0) - float(saidas or 0.0)
+
+
 def resumo_fechamento_caixa():
     cx = query_db("SELECT id, saldo_inicial FROM caixa_diario WHERE status='Aberto' ORDER BY id DESC LIMIT 1")
     if not cx:
         return None
     cx_id = cx[0][0]
     entradas = _soma_fluxo(cx_id, "Entrada")
-    saida_sem_acento = _soma_fluxo(cx_id, "Saida")
-    saida_com_acento = _soma_fluxo(cx_id, "Saída")
-    saidas = float(saida_sem_acento or 0.0) + float(saida_com_acento or 0.0)
-    saldo = float(entradas or 0.0) - saidas
+    saidas = _soma_fluxo(cx_id, "Saida") + _soma_fluxo(cx_id, "Saída")
+    saldo = float(entradas or 0.0) - float(saidas or 0.0)
 
-    pix = _soma_fluxo(cx_id, "Entrada", "Pix")
-    debito = _soma_fluxo(cx_id, "Entrada", "Debito")
-    credito = sum(
-        _soma_fluxo(cx_id, "Entrada", forma)
-        for forma in ("Credito 1x", "Credito 2x", "Credito 3x")
-    )
+    pix = _saldo_por_forma(cx_id, "Pix")
+    debito = _saldo_por_forma(cx_id, "Debito")
+    credito = sum(_saldo_por_forma(cx_id, forma) for forma in ("Credito 1x", "Credito 2x", "Credito 3x"))
 
     # Fallback para lançamentos antigos sem forma_pagamento gravada.
     pix += query_db("SELECT COALESCE(SUM(valor),0) FROM fluxo_caixa WHERE caixa_id=? AND COALESCE(forma_pagamento,'')='' AND descricao LIKE '%(Pix)%'", (cx_id,))[0][0] or 0.0
@@ -69,7 +62,7 @@ def resumo_fechamento_caixa():
 
     dinheiro = saldo - float(pix or 0.0) - float(debito or 0.0) - float(credito or 0.0)
     formas = {"Dinheiro": dinheiro, "Pix": float(pix or 0.0), "Debito": float(debito or 0.0), "Credito": float(credito or 0.0)}
-    return {"caixa_id": cx_id, "entradas": float(entradas or 0.0), "saidas": saidas, "saldo": saldo, "formas": formas}
+    return {"caixa_id": cx_id, "entradas": float(entradas or 0.0), "saidas": float(saidas or 0.0), "saldo": saldo, "formas": formas}
 
 
 def fechar_caixa_conferido(caixa_id, saldo, formas, informado):
@@ -77,45 +70,17 @@ def fechar_caixa_conferido(caixa_id, saldo, formas, informado):
     query_db(
         """
         UPDATE caixa_diario
-        SET status='Fechado',
-            data_fechamento=?,
-            saldo_final=?,
-            dinheiro_sistema=?,
-            pix_sistema=?,
-            debito_sistema=?,
-            credito_sistema=?,
-            dinheiro_informado=?,
-            pix_informado=?,
-            debito_informado=?,
-            credito_informado=?,
-            diferenca_caixa=?
+        SET status='Fechado', data_fechamento=?, saldo_final=?, dinheiro_sistema=?, pix_sistema=?, debito_sistema=?, credito_sistema=?, dinheiro_informado=?, pix_informado=?, debito_informado=?, credito_informado=?, diferenca_caixa=?
         WHERE id=?
         """,
-        (
-            datetime.now().strftime("%d/%m/%Y %H:%M"),
-            saldo,
-            formas.get("Dinheiro", 0.0),
-            formas.get("Pix", 0.0),
-            formas.get("Debito", 0.0),
-            formas.get("Credito", 0.0),
-            informado.get("Dinheiro", 0.0),
-            informado.get("Pix", 0.0),
-            informado.get("Debito", 0.0),
-            informado.get("Credito", 0.0),
-            diferenca,
-            caixa_id,
-        ),
+        (datetime.now().strftime("%d/%m/%Y %H:%M"), saldo, formas.get("Dinheiro", 0.0), formas.get("Pix", 0.0), formas.get("Debito", 0.0), formas.get("Credito", 0.0), informado.get("Dinheiro", 0.0), informado.get("Pix", 0.0), informado.get("Debito", 0.0), informado.get("Credito", 0.0), diferenca, caixa_id),
         commit=True,
     )
     return diferenca
 
 
 def fechar_caixa_simples(caixa_id, saldo):
-    query_db(
-        "UPDATE caixa_diario SET status='Fechado', data_fechamento=?, saldo_final=? WHERE id=?",
-        (datetime.now().strftime("%d/%m/%Y %H:%M"), saldo, caixa_id),
-        commit=True,
-    )
+    query_db("UPDATE caixa_diario SET status='Fechado', data_fechamento=?, saldo_final=? WHERE id=?", (datetime.now().strftime("%d/%m/%Y %H:%M"), saldo, caixa_id), commit=True)
 
 
 def lancar_fluxo(tipo, descricao, valor, caixa_id, rotulo=None, forma_pagamento=None):
@@ -136,11 +101,7 @@ def listar_fluxo(caixa_id=None):
 
 
 def salvar_conta(descricao, valor, vencimento, categoria):
-    query_db(
-        "INSERT INTO contas_a_pagar (descricao, valor, data_vencimento, categoria, status) VALUES (?,?,?,?,?)",
-        (descricao, float(valor or 0), vencimento, categoria, "Pendente"),
-        commit=True,
-    )
+    query_db("INSERT INTO contas_a_pagar (descricao, valor, data_vencimento, categoria, status) VALUES (?,?,?,?,?)", (descricao, float(valor or 0), vencimento, categoria, "Pendente"), commit=True)
 
 
 def obter_conta(conta_id):
@@ -166,11 +127,7 @@ def marcar_conta_paga(conta_id, caixa_id):
 
 
 def excluir_conta(conta_id):
-    query_db(
-        "UPDATE contas_a_pagar SET status='Excluido', cancelado_em=? WHERE id=?",
-        (datetime.now().strftime("%d/%m/%Y %H:%M:%S"), conta_id),
-        commit=True,
-    )
+    query_db("UPDATE contas_a_pagar SET status='Excluido', cancelado_em=? WHERE id=?", (datetime.now().strftime("%d/%m/%Y %H:%M:%S"), conta_id), commit=True)
 
 
 def listar_contas():
