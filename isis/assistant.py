@@ -6,10 +6,10 @@ class IsisAssistant:
     def __init__(self, usuario=None):
         self.usuario = usuario or {}
 
-    def _auditoria_manual(self):
+    def _auditoria_manual(self, corrigir=False):
         from services.auditoria_service import executar_auditoria_sistema, resumo_curto_auditoria
 
-        relatorio = executar_auditoria_sistema(corrigir=True, origem="manual_isis")
+        relatorio = executar_auditoria_sistema(corrigir=bool(corrigir), origem="manual_isis")
         texto = resumo_curto_auditoria(relatorio)
 
         problemas = relatorio.get("problemas", [])
@@ -22,8 +22,10 @@ class IsisAssistant:
 
         if correcoes:
             texto += "\n\nCorreções seguras aplicadas:\n- " + "\n- ".join(correcoes[:8])
+        elif not corrigir:
+            texto += "\n\nModo usado: apenas análise. Para aplicar correções seguras, diga: Isis, corrigir sistema."
 
-        texto += "\n\nEu posso corrigir automaticamente apenas estrutura do banco, índices e dados básicos. Bugs de código ficam registrados no relatório para revisão antes de alterar."
+        texto += "\n\nMudanças em código-fonte continuam exigindo revisão antes de alterar."
         return texto
 
     def responder(self, pergunta):
@@ -33,11 +35,12 @@ class IsisAssistant:
         if auto:
             return {"handled": True, "modo": "automacao", "texto": auto}
 
-        if any(x in p for x in ["auditoria", "analise completa", "análise completa", "verificar sistema", "revisar sistema", "buscar erros", "procurar bugs", "corrigir sistema"]):
-            return {"handled": True, "modo": "auditoria_sistema", "texto": self._auditoria_manual()}
+        if any(x in p for x in ["corrigir sistema", "corrigir bugs", "reparar sistema", "fazer correcoes", "fazer correções"]):
+            return {"handled": True, "modo": "correcao_sistema", "texto": self._auditoria_manual(corrigir=True)}
 
-        # Pesquisa online fica centralizada em services.isis_service.processar_comando_inteligente.
-        # Este assistente cuida das respostas operacionais internas quando a pesquisa nao foi acionada.
+        if any(x in p for x in ["auditoria", "analise completa", "análise completa", "verificar sistema", "revisar sistema", "buscar erros", "procurar bugs", "erros do sistema", "bugs do sistema"]):
+            return {"handled": True, "modo": "auditoria_sistema", "texto": self._auditoria_manual(corrigir=False)}
+
         if any(x in p for x in ["prioridade", "o que fazer hoje", "tarefas de hoje"]):
             return {"handled": True, "modo": "prioridades", "texto": isis_service.prioridades_do_dia()}
         if any(x in p for x in ["resumo da loja", "como esta a loja", "como está a loja", "painel da loja"]):
