@@ -2,7 +2,7 @@ from database import query_db
 
 
 def valoracao_estoque():
-    linhas = query_db("SELECT nome, quantidade, custo, preco FROM produtos")
+    linhas = query_db("SELECT nome, quantidade, custo, preco FROM produtos WHERE COALESCE(ativo,1)=1")
     itens = []
     custo_total = 0.0
     venda_total = 0.0
@@ -21,7 +21,8 @@ def estoque_baixo(limite=6):
         """
         SELECT nome, quantidade, estoque_minimo
         FROM produtos
-        WHERE COALESCE(quantidade,0) <= COALESCE(estoque_minimo,0)
+        WHERE COALESCE(ativo,1)=1
+          AND COALESCE(quantidade,0) <= COALESCE(estoque_minimo,0)
         ORDER BY quantidade ASC
         LIMIT ?
         """,
@@ -30,7 +31,7 @@ def estoque_baixo(limite=6):
 
 
 def contar_estoque_baixo():
-    res = query_db("SELECT COUNT(*) FROM produtos WHERE COALESCE(quantidade,0) <= COALESCE(estoque_minimo,0)")
+    res = query_db("SELECT COUNT(*) FROM produtos WHERE COALESCE(ativo,1)=1 AND COALESCE(quantidade,0) <= COALESCE(estoque_minimo,0)")
     return int(res[0][0] or 0) if res else 0
 
 
@@ -40,7 +41,8 @@ def produtos_sem_giro(limite=15, somente_com_estoque=False):
         f"""
         SELECT p.nome, p.quantidade, p.categoria
         FROM produtos p
-        WHERE p.codigo_p NOT IN (
+        WHERE COALESCE(p.ativo,1)=1
+          AND p.codigo_p NOT IN (
             SELECT DISTINCT codigo_p FROM vendas_itens WHERE codigo_p IS NOT NULL AND codigo_p != ''
         )
         {filtro_estoque}
@@ -52,9 +54,9 @@ def produtos_sem_giro(limite=15, somente_com_estoque=False):
 
 
 def produtos_para_giro():
-    return query_db("SELECT codigo_p, nome, quantidade, estoque_minimo, categoria FROM produtos")
+    return query_db("SELECT codigo_p, nome, quantidade, estoque_minimo, categoria FROM produtos WHERE COALESCE(ativo,1)=1")
 
 
 def produtos_cadastro_incompleto():
-    res = query_db("SELECT COUNT(*) FROM produtos WHERE codigo_p IS NULL OR codigo_p='' OR nome IS NULL OR nome=''")
+    res = query_db("SELECT COUNT(*) FROM produtos WHERE COALESCE(ativo,1)=1 AND (codigo_p IS NULL OR codigo_p='' OR nome IS NULL OR nome='')")
     return int(res[0][0] or 0) if res else 0
