@@ -1,6 +1,6 @@
-from services import isis_service
-from services import pesquisa_produto_service
 from services import automacao_service
+from services import isis_service
+
 
 class IsisAssistant:
     def __init__(self, usuario=None):
@@ -8,27 +8,13 @@ class IsisAssistant:
 
     def responder(self, pergunta):
         p = isis_service.normalizar_texto(pergunta)
-        nome = self.usuario.get("nome", "Sistema") if isinstance(self.usuario, dict) else "Sistema"
 
         auto = automacao_service.processar(pergunta)
         if auto:
             return {"handled": True, "modo": "automacao", "texto": auto}
 
-        if any(x in p for x in ["pesquise", "pesquisar", "buscar online", "internet", "shopee", "mercado livre", "fornecedor", "atacado"]):
-            consulta = pergunta
-            for gatilho in ["pesquise na internet", "pesquisar na internet", "buscar na internet", "busque na internet", "pesquise", "pesquisar"]:
-                if p.startswith(gatilho):
-                    consulta = pergunta[len(gatilho):].strip(" :,-")
-                    break
-            dados = pesquisa_produto_service.pesquisar(consulta, usuario=nome, salvar=True)
-            if not dados.get("ok") and not dados.get("resultados"):
-                return {"handled": True, "modo": "pesquisa", "texto": "Tentei pesquisar, mas não encontrei resultado claro agora."}
-            linhas = [f"Pesquisei por: {consulta}", "Resultados iniciais:"]
-            for i, r in enumerate(dados.get("resultados", [])[:8], 1):
-                linhas.append(f"{i}. {r.get('titulo')}\n   {r.get('link')}")
-            linhas.append("\nConfirme preço, reputação, CNPJ, frete e prazo antes de comprar.")
-            return {"handled": True, "modo": "pesquisa", "texto": "\n".join(linhas)}
-
+        # Pesquisa online fica centralizada em services.isis_service.processar_comando_inteligente.
+        # Este assistente cuida das respostas operacionais internas quando a pesquisa nao foi acionada.
         if any(x in p for x in ["prioridade", "o que fazer hoje", "tarefas de hoje"]):
             return {"handled": True, "modo": "prioridades", "texto": isis_service.prioridades_do_dia()}
         if any(x in p for x in ["resumo da loja", "como esta a loja", "como está a loja", "painel da loja"]):
