@@ -43,6 +43,23 @@ HIDDEN_IMPORTS = [
     "PIL",
     "PIL.Image",
     "PIL.ImageTk",
+    "database",
+    "services",
+    "repositories",
+    "reports",
+    "reports.estoque_report",
+    "reports.financeiro_report",
+    "reports.vendas_report",
+    "reports.produtos_vendidos_report",
+    "isis",
+]
+
+COLLECT_SUBMODULES = [
+    "database",
+    "services",
+    "repositories",
+    "reports",
+    "isis",
 ]
 
 
@@ -85,10 +102,9 @@ def gerar_icone_xamanico():
     ASSETS_DIR.mkdir(parents=True, exist_ok=True)
     size = 256
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-
-    # Fundo circular com gradiente escuro sofisticado.
     bg = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(bg)
+
     for r in range(125, 0, -1):
         t = r / 125
         red = int(18 + 25 * (1 - t))
@@ -96,22 +112,18 @@ def gerar_icone_xamanico():
         blue = int(34 + 35 * (1 - t))
         draw.ellipse((128 - r, 128 - r, 128 + r, 128 + r), fill=(red, green, blue, 255))
 
-    # Borda dourada.
     draw.ellipse((10, 10, 246, 246), outline=(218, 181, 109, 255), width=7)
     draw.ellipse((22, 22, 234, 234), outline=(116, 92, 50, 190), width=2)
 
-    # Lua crescente.
     draw.ellipse((72, 42, 154, 124), fill=(226, 198, 126, 255))
     draw.ellipse((92, 36, 174, 118), fill=(25, 40, 48, 255))
 
-    # Cristal central.
     cristal = [(128, 66), (166, 124), (145, 202), (111, 202), (90, 124)]
     draw.polygon(cristal, fill=(72, 153, 133, 255), outline=(226, 198, 126, 255))
     draw.line((128, 66, 128, 202), fill=(205, 244, 220, 190), width=3)
     draw.line((90, 124, 166, 124), fill=(205, 244, 220, 130), width=2)
     draw.line((111, 202, 128, 124, 145, 202), fill=(30, 77, 70, 170), width=2)
 
-    # Pena/folhas laterais em estilo xamanico.
     for lado in [-1, 1]:
         base_x = 128 + lado * 42
         pontos = []
@@ -124,14 +136,11 @@ def gerar_icone_xamanico():
             draw.line((x, y, x + lado * 22, y - 8), fill=(78, 160, 130, 220), width=3)
             draw.line((x, y, x + lado * 18, y + 8), fill=(78, 160, 130, 190), width=3)
 
-    # Pontos/estrelas discretas.
     for x, y, rr in [(58, 161, 3), (199, 161, 3), (64, 82, 2), (193, 82, 2), (128, 34, 2)]:
         draw.ellipse((x - rr, y - rr, x + rr, y + rr), fill=(226, 198, 126, 230))
 
-    # Sombra e acabamento.
     sombra = bg.filter(ImageFilter.GaussianBlur(0.4))
     img.alpha_composite(sombra)
-
     tamanhos = [(256, 256), (128, 128), (64, 64), (48, 48), (32, 32), (16, 16)]
     img.save(ICON_PATH, format="ICO", sizes=tamanhos)
     print("Icone criado:", ICON_PATH)
@@ -164,6 +173,9 @@ def montar_comando_pyinstaller():
             cmd.extend(["--add-data", add_data_arg(origem, pasta)])
 
     cmd.extend(["--collect-all", "customtkinter"])
+
+    for modulo in COLLECT_SUBMODULES:
+        cmd.extend(["--collect-submodules", modulo])
 
     for item in HIDDEN_IMPORTS:
         cmd.extend(["--hidden-import", item])
