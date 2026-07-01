@@ -24,11 +24,24 @@ def abrir_caixa(valor_inicial, operador, descricao="Abertura de Caixa"):
     )
     cx_id = obter_caixa_id_ativo()
     query_db(
-        "INSERT INTO fluxo_caixa (tipo, descricao, valor, data_hora, caixa_id) VALUES (?,?,?,?,?)",
-        ("Entrada", descricao, float(valor_inicial or 0), data_ini, cx_id),
+        "INSERT INTO fluxo_caixa (tipo, descricao, valor, data_hora, caixa_id, forma_pagamento) VALUES (?,?,?,?,?,?)",
+        ("Entrada", descricao, float(valor_inicial or 0), data_ini, cx_id, "Dinheiro"),
         commit=True,
     )
     return cx_id
+
+
+def _soma_fluxo(caixa_id, tipo=None, forma_pagamento=None):
+    sql = "SELECT COALESCE(SUM(valor),0) FROM fluxo_caixa WHERE caixa_id=?"
+    params = [caixa_id]
+    if tipo:
+        sql += " AND tipo=?"
+        params.append(tipo)
+    if forma_pagamento:
+        sql += " AND forma_pagamento=?"
+        params.append(forma_pagamento)
+    res = query_db(sql, tuple(params))
+    return float(res[0][0] or 0.0) if res else 0.0
 
 
 def resumo_fechamento_caixa():
@@ -36,20 +49,24 @@ def resumo_fechamento_caixa():
     if not cx:
         return None
     cx_id = cx[0][0]
-    entradas = query_db("SELECT SUM(valor) FROM fluxo_caixa WHERE tipo='Entrada' AND caixa_id=?", (cx_id,))[0][0] or 0.0
-    saida_sem_acento = query_db("SELECT SUM(valor) FROM fluxo_caixa WHERE tipo='Saida' AND caixa_id=?", (cx_id,))[0][0] or 0.0
-    saida_com_acento = query_db("SELECT SUM(valor) FROM fluxo_caixa WHERE tipo='Saída' AND caixa_id=?", (cx_id,))[0][0] or 0.0
+    entradas = _soma_fluxo(cx_id, "Entrada")
+    saida_sem_acento = _soma_fluxo(cx_id, "Saida")
+    saida_com_acento = _soma_fluxo(cx_id, "Saída")
     saidas = float(saida_sem_acento or 0.0) + float(saida_com_acento or 0.0)
     saldo = float(entradas or 0.0) - saidas
-    pix = query_db("SELECT SUM(valor) FROM fluxo_caixa WHERE caixa_id=? AND descricao LIKE '%(Pix)%'", (cx_id,))[0][0] or 0.0
-    debito = query_db(
-        "SELECT SUM(valor) FROM fluxo_caixa WHERE caixa_id=? AND (descricao LIKE '%(Debito)%' OR descricao LIKE '%(Débito)%' OR descricao LIKE '%(D?bito)%')",
-        (cx_id,),
-    )[0][0] or 0.0
-    credito = query_db(
-        "SELECT SUM(valor) FROM fluxo_caixa WHERE caixa_id=? AND (descricao LIKE '%(Credito%' OR descricao LIKE '%(Crédito%' OR descricao LIKE '%(Cr?dito%')",
-        (cx_id,),
-    )[0][0] or 0.0
+
+    pix = _soma_fluxo(cx_id, "Entrada", "Pix")
+    debito = _soma_fluxo(cx_id, "Entrada", "Debito")
+    credito = sum(
+        _soma_fluxo(cx_id, "Entrada", forma)
+        for forma in ("Credito 1x", "Credito 2x", "Credito 3x")
+    )
+
+    # Fallback para lançamentos antigos sem forma_pagamento gravada.
+    pix += query_db("SELECT COALESCE(SUM(valor),0) FROM fluxo_caixa WHERE caixa_id=? AND COALESCE(forma_pagamento,'')='' AND descricao LIKE '%(Pix)%'", (cx_id,))[0][0] or 0.0
+    debito += query_db("SELECT COALESCE(SUM(valor),0) FROM fluxo_caixa WHERE caixa_id=? AND COALESCE(forma_pagamento,'')='' AND (descricao LIKE '%(Debito)%' OR descricao LIKE '%(Débito)%')", (cx_id,))[0][0] or 0.0
+    credito += query_db("SELECT COALESCE(SUM(valor),0) FROM fluxo_caixa WHERE caixa_id=? AND COALESCE(forma_pagamento,'')='' AND (descricao LIKE '%(Credito%' OR descricao LIKE '%(Crédito%')", (cx_id,))[0][0] or 0.0
+
     dinheiro = saldo - float(pix or 0.0) - float(debito or 0.0) - float(credito or 0.0)
     formas = {"Dinheiro": dinheiro, "Pix": float(pix or 0.0), "Debito": float(debito or 0.0), "Credito": float(credito or 0.0)}
     return {"caixa_id": cx_id, "entradas": float(entradas or 0.0), "saidas": saidas, "saldo": saldo, "formas": formas}
@@ -101,13 +118,13 @@ def fechar_caixa_simples(caixa_id, saldo):
     )
 
 
-def lancar_fluxo(tipo, descricao, valor, caixa_id, rotulo=None):
+def lancar_fluxo(tipo, descricao, valor, caixa_id, rotulo=None, forma_pagamento=None):
     if not caixa_id:
         raise ValueError("Abra o caixa antes de fazer lançamentos.")
     rotulo = rotulo or ("Reforco de caixa" if tipo == "Entrada" else "Sangria")
     query_db(
-        "INSERT INTO fluxo_caixa (tipo, descricao, valor, data_hora, data_iso, caixa_id) VALUES (?,?,?,?,?,?)",
-        (tipo, f"{rotulo}: {descricao}", float(valor or 0), datetime.now().strftime("%d/%m/%Y %H:%M"), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), caixa_id),
+        "INSERT INTO fluxo_caixa (tipo, descricao, valor, data_hora, data_iso, caixa_id, forma_pagamento) VALUES (?,?,?,?,?,?,?)",
+        (tipo, f"{rotulo}: {descricao}", float(valor or 0), datetime.now().strftime("%d/%m/%Y %H:%M"), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), caixa_id, forma_pagamento),
         commit=True,
     )
 
@@ -132,6 +149,8 @@ def obter_conta(conta_id):
 
 
 def marcar_conta_paga(conta_id, caixa_id):
+    if not caixa_id:
+        raise ValueError("Abra o caixa antes de marcar uma conta como paga.")
     conta = obter_conta(conta_id)
     if not conta:
         raise ValueError("Conta nao localizada.")
@@ -139,8 +158,8 @@ def marcar_conta_paga(conta_id, caixa_id):
         raise ValueError("Esta conta ja esta marcada como paga.")
     query_db("UPDATE contas_a_pagar SET status='Pago' WHERE id=?", (conta_id,), commit=True)
     query_db(
-        "INSERT INTO fluxo_caixa (tipo, descricao, valor, data_hora, data_iso, caixa_id) VALUES (?,?,?,?,?,?)",
-        ("Saida", f"[{conta[2]}] {conta[0]}", conta[1], datetime.now().strftime("%d/%m/%Y %H:%M"), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), caixa_id),
+        "INSERT INTO fluxo_caixa (tipo, descricao, valor, data_hora, data_iso, caixa_id, forma_pagamento) VALUES (?,?,?,?,?,?,?)",
+        ("Saida", f"[{conta[2]}] {conta[0]}", conta[1], datetime.now().strftime("%d/%m/%Y %H:%M"), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), caixa_id, None),
         commit=True,
     )
     return conta
