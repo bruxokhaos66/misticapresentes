@@ -6,12 +6,35 @@ class IsisAssistant:
     def __init__(self, usuario=None):
         self.usuario = usuario or {}
 
+    def _auditoria_manual(self):
+        from services.auditoria_service import executar_auditoria_sistema, resumo_curto_auditoria
+
+        relatorio = executar_auditoria_sistema(corrigir=True, origem="manual_isis")
+        texto = resumo_curto_auditoria(relatorio)
+
+        problemas = relatorio.get("problemas", [])
+        correcoes = relatorio.get("correcoes", [])
+
+        if problemas:
+            texto += "\n\nPontos de atenção encontrados:\n- " + "\n- ".join(problemas[:8])
+        else:
+            texto += "\n\nNão encontrei problema crítico agora."
+
+        if correcoes:
+            texto += "\n\nCorreções seguras aplicadas:\n- " + "\n- ".join(correcoes[:8])
+
+        texto += "\n\nEu posso corrigir automaticamente apenas estrutura do banco, índices e dados básicos. Bugs de código ficam registrados no relatório para revisão antes de alterar."
+        return texto
+
     def responder(self, pergunta):
         p = isis_service.normalizar_texto(pergunta)
 
         auto = automacao_service.processar(pergunta)
         if auto:
             return {"handled": True, "modo": "automacao", "texto": auto}
+
+        if any(x in p for x in ["auditoria", "analise completa", "análise completa", "verificar sistema", "revisar sistema", "buscar erros", "procurar bugs", "corrigir sistema"]):
+            return {"handled": True, "modo": "auditoria_sistema", "texto": self._auditoria_manual()}
 
         # Pesquisa online fica centralizada em services.isis_service.processar_comando_inteligente.
         # Este assistente cuida das respostas operacionais internas quando a pesquisa nao foi acionada.
