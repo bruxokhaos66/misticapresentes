@@ -39,6 +39,11 @@ def obter_status_total(venda_id):
     return res[0] if res else None
 
 
+def obter_status_total_forma(venda_id):
+    res = query_db("SELECT status, total_final, forma_pagamento FROM vendas WHERE id=?", (venda_id,))
+    return res[0] if res else None
+
+
 def listar_itens_cursor(cur, venda_id):
     return cur.execute(
         "SELECT codigo_p, nome_p, quantidade FROM vendas_itens WHERE venda_id=?",
