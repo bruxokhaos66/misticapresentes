@@ -1,0 +1,5 @@
+customtkinter
+SpeechRecognition
+pyttsx3
+PyAudio; platform_system == "Windows"
+pyinstaller
