@@ -50,23 +50,18 @@ def lucro_liquido_periodo(mes, ano):
     )
     despesas = float(despesas_res[0][0] or 0.0) if despesas_res else 0.0
     lucro = receitas - custos - despesas
-    return {
-        "receitas": receitas,
-        "taxas": taxas,
-        "descontos": descontos,
-        "custos": custos,
-        "despesas": despesas,
-        "lucro": lucro,
-    }
+    return {"receitas": receitas, "taxas": taxas, "descontos": descontos, "custos": custos, "despesas": despesas, "lucro": lucro}
 
 
 def produtos_mais_vendidos(limite=15):
     return query_db(
         """
-        SELECT codigo_p, nome_p, SUM(quantidade), SUM(valor_total)
-        FROM vendas_itens
-        GROUP BY codigo_p
-        ORDER BY SUM(quantidade) DESC
+        SELECT vi.codigo_p, vi.nome_p, SUM(vi.quantidade), SUM(vi.valor_total)
+        FROM vendas_itens vi
+        JOIN vendas v ON vi.venda_id = v.id
+        WHERE COALESCE(v.status,'Concluído') != 'Cancelado'
+        GROUP BY vi.codigo_p, vi.nome_p
+        ORDER BY SUM(vi.quantidade) DESC
         LIMIT ?
         """,
         (int(limite),),
@@ -124,7 +119,7 @@ def produto_campeao():
         FROM vendas_itens vi
         JOIN vendas v ON vi.venda_id = v.id
         WHERE COALESCE(v.status,'Concluído') != 'Cancelado'
-        GROUP BY vi.codigo_p
+        GROUP BY vi.codigo_p, vi.nome_p
         ORDER BY SUM(vi.quantidade) DESC
         LIMIT 1
         """
@@ -141,10 +136,7 @@ def buscar_venda_resumo(venda_id):
 
 
 def vendas_recentes(limite=5):
-    return query_db(
-        "SELECT id, data_venda, cliente, total_final FROM vendas ORDER BY id DESC LIMIT ?",
-        (int(limite),),
-    )
+    return query_db("SELECT id, data_venda, cliente, total_final FROM vendas ORDER BY id DESC LIMIT ?", (int(limite),))
 
 
 def buscar_venda_cupom(venda_id):
@@ -160,10 +152,7 @@ def buscar_venda_cupom(venda_id):
 
 
 def itens_venda(venda_id):
-    return query_db(
-        "SELECT nome_p, quantidade, valor_total FROM vendas_itens WHERE venda_id=?",
-        (venda_id,),
-    )
+    return query_db("SELECT nome_p, quantidade, valor_total FROM vendas_itens WHERE venda_id=?", (venda_id,))
 
 
 def total_vendido_produto(codigo_p):
