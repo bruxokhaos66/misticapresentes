@@ -1,13 +1,15 @@
-"""Entrada alternativa da arquitetura 2.0.
+"""Entrada alternativa do sistema Mistica Presentes.
 
-Por enquanto, mantém compatibilidade chamando o arquivo principal antigo.
-A interface será movida para cá nas próximas etapas.
+Usa caminho relativo ao proprio repositorio para evitar erro quando o projeto
+for movido de pasta ou usado para gerar EXE.
 """
-import os
+from pathlib import Path
 import runpy
 
-DOCS_PATH = os.path.join(os.path.expanduser("~"), "Documents")
-MAIN_FILE = os.path.join(DOCS_PATH, "mistica_presentes.py")
+BASE_DIR = Path(__file__).resolve().parent
+MAIN_FILE = BASE_DIR / "mistica_presentes.py"
 
 if __name__ == "__main__":
-    runpy.run_path(MAIN_FILE, run_name="__main__")
+    if not MAIN_FILE.exists():
+        raise FileNotFoundError(f"Arquivo principal nao encontrado: {MAIN_FILE}")
+    runpy.run_path(str(MAIN_FILE), run_name="__main__")
