@@ -13,17 +13,86 @@ from services.maintenance_service import (
 )
 
 
+_TITULOS = {
+    "ok": "Status",
+    "area": "Área",
+    "acao": "Ação",
+    "removeu_mensagem_personalizada": "Mensagem personalizada removida",
+    "mensagem": "Resultado",
+    "caixas_abertos": "Caixas abertos",
+    "fluxo_sem_caixa": "Lançamentos sem caixa vinculado",
+    "produtos_sem_categoria": "Produtos sem categoria",
+    "contas_pendentes": "Contas pendentes",
+    "valor_pendente": "Valor pendente",
+    "contas_pagas_sem_fluxo": "Contas pagas sem fluxo localizado",
+    "vendas_sem_fluxo": "Vendas sem fluxo localizado",
+    "backup": "Backup",
+}
+
+_VALORES = {
+    True: "OK",
+    False: "Não",
+    "dashboard": "Dashboard",
+    "caixa": "Caixa",
+    "estoque": "Estoque",
+    "financeiro": "Financeiro",
+    "geral": "Geral",
+    "reiniciar_visual": "Reinício visual",
+}
+
+
+def _valor_amigavel(valor):
+    if valor in _VALORES:
+        return _VALORES[valor]
+    if isinstance(valor, float):
+        return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return str(valor)
+
+
 def _formatar_resultado(dados):
     if isinstance(dados, dict):
+        if dados.get("area") == "dashboard":
+            return dados.get("mensagem") or "Dashboard reiniciado visualmente sem apagar dados reais."
+
         linhas = []
+        ordem = [
+            "ok",
+            "area",
+            "acao",
+            "mensagem",
+            "caixas_abertos",
+            "fluxo_sem_caixa",
+            "produtos_sem_categoria",
+            "contas_pendentes",
+            "valor_pendente",
+            "contas_pagas_sem_fluxo",
+            "vendas_sem_fluxo",
+            "backup",
+        ]
+        ocultar = {
+            "ultimos_caixas",
+            "produtos_baixos",
+            "produtos_negativos",
+            "diagnostico_geral",
+            "caixa",
+            "estoque",
+            "financeiro",
+            "lancamento_removido",
+        }
+        for chave in ordem:
+            if chave in dados and chave not in ocultar:
+                linhas.append(f"{_TITULOS.get(chave, chave)}: {_valor_amigavel(dados[chave])}")
         for chave, valor in dados.items():
-            if chave in {"ultimos_caixas", "produtos_baixos", "produtos_negativos", "diagnostico_geral", "caixa", "estoque", "financeiro"}:
+            if chave in ordem or chave in ocultar or chave == "problemas":
                 continue
-            linhas.append(f"{chave}: {valor}")
+            linhas.append(f"{_TITULOS.get(chave, chave)}: {_valor_amigavel(valor)}")
+
         problemas = dados.get("problemas") or []
         if problemas:
             linhas.append("\nProblemas encontrados:")
             linhas.extend(f"- {p}" for p in problemas)
+        elif dados.get("ok") is True:
+            linhas.append("\nNenhum problema crítico encontrado.")
         return "\n".join(linhas) or str(dados)
     return str(dados)
 
@@ -57,7 +126,7 @@ def _janela_apagar_lancamento_caixa(app):
 
     win = ctk.CTkToplevel(app)
     win.title("Manutenção do Caixa")
-    win.geometry("920x560")
+    win.geometry("980x600")
     win.grab_set()
 
     topo = ctk.CTkFrame(win, fg_color=getattr(app, "cor_vinho", "#1a1621"), corner_radius=12)
@@ -70,17 +139,23 @@ def _janela_apagar_lancamento_caixa(app):
     ).pack(pady=(12, 4))
     ctk.CTkLabel(
         topo,
-        text="Use somente para correção administrativa. O sistema cria backup e registra log com o usuário.",
+        text="Selecione um ou vários lançamentos com o mouse. Use Ctrl+clique para marcar itens separados e Shift+clique para marcar sequência. O sistema cria backup e registra log com o usuário.",
         font=getattr(app, "font_input", ("Arial", 13)),
-        wraplength=820,
+        wraplength=900,
     ).pack(pady=(0, 12))
 
-    tree = ttk.Treeview(win, columns=("id", "tipo", "descricao", "valor", "data", "caixa", "forma"), show="headings", height=13)
+    tree = ttk.Treeview(
+        win,
+        columns=("id", "tipo", "descricao", "valor", "data", "caixa", "forma"),
+        show="headings",
+        height=14,
+        selectmode="extended",
+    )
     for col, titulo in zip(("id", "tipo", "descricao", "valor", "data", "caixa", "forma"), ("ID", "Tipo", "Descrição", "Valor", "Data", "Caixa", "Forma")):
         tree.heading(col, text=titulo)
     tree.column("id", width=60, anchor="center")
     tree.column("tipo", width=80, anchor="center")
-    tree.column("descricao", width=330)
+    tree.column("descricao", width=360)
     tree.column("valor", width=90, anchor="center")
     tree.column("data", width=130, anchor="center")
     tree.column("caixa", width=70, anchor="center")
@@ -104,46 +179,82 @@ def _janela_apagar_lancamento_caixa(app):
         except Exception as exc:
             messagebox.showerror("Caixa", f"Erro ao listar lançamentos: {exc}")
 
+    def selecionar_todos():
+        tree.selection_set(tree.get_children())
+
+    def limpar_selecao():
+        tree.selection_remove(tree.selection())
+
     def apagar():
-        sel = tree.selection()
-        if not sel:
-            messagebox.showwarning("Caixa", "Selecione um lançamento para apagar.")
+        selecoes = list(tree.selection())
+        if not selecoes:
+            messagebox.showwarning("Caixa", "Selecione um ou mais lançamentos para apagar.")
             return
-        valores = tree.item(sel[0], "values")
-        fluxo_id = valores[0]
-        desc = valores[2]
-        val = valores[3]
+
+        itens = []
+        total_estimado = 0.0
+        for item in selecoes:
+            valores = tree.item(item, "values")
+            itens.append(valores)
+            try:
+                total_estimado += float(str(valores[3]).replace("R$", "").replace(".", "").replace(",", ".").strip())
+            except Exception:
+                pass
+
         motivo_txt = motivo.get().strip() or "Correção administrativa"
+        preview = "\n".join(f"- ID {v[0]} | {v[1]} | {v[3]} | {v[2][:70]}" for v in itens[:8])
+        if len(itens) > 8:
+            preview += f"\n... e mais {len(itens) - 8} lançamento(s)."
         aviso = (
-            f"Você vai apagar o lançamento ID {fluxo_id}.\n\n"
-            f"Descrição: {desc}\n"
-            f"Valor: {val}\n"
+            f"Você selecionou {len(itens)} lançamento(s) para apagar.\n"
+            f"Total aproximado selecionado: {_valor_amigavel(total_estimado)}\n\n"
+            f"{preview}\n\n"
             f"Motivo: {motivo_txt}\n\n"
-            "Antes de apagar, o sistema fará backup e registrará log com seu usuário.\n"
+            "Antes de cada exclusão, o sistema fará backup e registrará log com seu usuário.\n"
             "Confirmar?"
         )
         if not messagebox.askyesno("Confirmar exclusão do caixa", aviso):
             return
         if not messagebox.askyesno("Confirmação final", "Esta ação altera o fluxo do caixa. Deseja realmente continuar?"):
             return
-        try:
-            resultado = apagar_lancamento_caixa(app.current_user, fluxo_id, motivo_txt)
-            messagebox.showinfo("Caixa", resultado.get("mensagem", "Lançamento apagado."))
-            carregar()
+        removidos = 0
+        erros = []
+        for valores in itens:
+            fluxo_id = valores[0]
             try:
-                if hasattr(app, "refresh_audit"):
-                    app.refresh_audit(filtrar=False)
-            except Exception:
-                pass
-        except Exception as exc:
-            messagebox.showerror("Caixa", f"Erro ao apagar lançamento: {exc}")
+                apagar_lancamento_caixa(app.current_user, fluxo_id, motivo_txt)
+                removidos += 1
+            except Exception as exc:
+                erros.append(f"ID {fluxo_id}: {exc}")
+        carregar()
+        try:
+            if hasattr(app, "refresh_audit"):
+                app.refresh_audit(filtrar=False)
+        except Exception:
+            pass
+        if erros:
+            messagebox.showwarning("Caixa", f"{removidos} lançamento(s) apagado(s).\n\nErros:\n" + "\n".join(erros[:10]))
+        else:
+            messagebox.showinfo("Caixa", f"{removidos} lançamento(s) apagado(s) com backup e log administrativo.")
 
     botoes = ctk.CTkFrame(win, fg_color="transparent")
     botoes.pack(fill="x", padx=14, pady=10)
     ctk.CTkButton(botoes, text="RECARREGAR", height=38, command=carregar).pack(side="left", padx=4)
-    ctk.CTkButton(botoes, text="APAGAR LANÇAMENTO SELECIONADO", height=38, fg_color="#7f4c4c", command=apagar).pack(side="right", padx=4)
+    ctk.CTkButton(botoes, text="SELECIONAR TODOS", height=38, fg_color="#5c5c5c", command=selecionar_todos).pack(side="left", padx=4)
+    ctk.CTkButton(botoes, text="LIMPAR SELEÇÃO", height=38, fg_color="#5c5c5c", command=limpar_selecao).pack(side="left", padx=4)
+    ctk.CTkButton(botoes, text="APAGAR SELECIONADOS", height=38, fg_color="#7f4c4c", command=apagar).pack(side="right", padx=4)
 
     carregar()
+
+
+def _habilitar_selecao_multipla_treeviews(app):
+    """Habilita Ctrl+clique/Shift+clique nos Treeviews já existentes da interface."""
+    for nome, valor in vars(app).items():
+        if isinstance(valor, ttk.Treeview):
+            try:
+                valor.configure(selectmode="extended")
+            except Exception:
+                pass
 
 
 def patch_mistica_app(MisticaApp):
@@ -151,6 +262,7 @@ def patch_mistica_app(MisticaApp):
         return MisticaApp
 
     original_montar_administracao = MisticaApp.montar_administracao
+    original_executar_montagem_segura = getattr(MisticaApp, "executar_montagem_segura", None)
 
     def montar_administracao_com_manutencao(self, *args, **kwargs):
         original_montar_administracao(self, *args, **kwargs)
@@ -219,13 +331,25 @@ def patch_mistica_app(MisticaApp):
 
         ctk.CTkButton(
             painel,
-            text="APAGAR LANÇAMENTO DO CAIXA",
+            text="APAGAR LANÇAMENTOS DO CAIXA",
             height=38,
             fg_color="#7f4c4c",
             font=getattr(self, "font_button", ("Arial", 13, "bold")),
             command=lambda: _janela_apagar_lancamento_caixa(self),
         ).grid(row=2, column=2, padx=8, pady=5, sticky="ew")
 
+        _habilitar_selecao_multipla_treeviews(self)
+
+    def executar_montagem_segura_com_multiselecao(self, *args, **kwargs):
+        if original_executar_montagem_segura:
+            retorno = original_executar_montagem_segura(self, *args, **kwargs)
+        else:
+            retorno = None
+        _habilitar_selecao_multipla_treeviews(self)
+        return retorno
+
     MisticaApp.montar_administracao = montar_administracao_com_manutencao
+    if original_executar_montagem_segura:
+        MisticaApp.executar_montagem_segura = executar_montagem_segura_com_multiselecao
     MisticaApp._maintenance_patch_installed = True
     return MisticaApp
