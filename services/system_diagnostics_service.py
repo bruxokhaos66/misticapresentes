@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 
-from config import DB_PATH
+import database
 from database import get_connection, realizar_backup
 
 
@@ -25,17 +25,26 @@ TABELAS_OBRIGATORIAS = [
 ]
 
 
+def _db_path_ativo():
+    try:
+        database._resolver_caminhos()
+    except Exception:
+        pass
+    return getattr(database, "DB_PATH", "")
+
+
 def diagnosticar_banco():
     """Executa diagnóstico somente leitura e retorna dict amigável para tela/Isis."""
+    db_path = _db_path_ativo()
     resultado = {
         "ok": True,
         "data_hora": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-        "db_path": DB_PATH,
+        "db_path": db_path,
         "problemas": [],
         "avisos": [],
         "metricas": {},
     }
-    if not os.path.exists(DB_PATH):
+    if not db_path or not os.path.exists(db_path):
         resultado["ok"] = False
         resultado["problemas"].append("Banco de dados ainda não existe no caminho configurado.")
         return resultado
