@@ -2,7 +2,7 @@
 
 Aplicativo Android para acompanhar o painel da loja pelo celular.
 
-Esta versão usa um app nativo com WebView e tela de configuração premium. Ele abre o painel local criado pela API do Mística Presentes.
+Esta versão usa um app nativo com WebView, tela de configuração premium e seção Sobre / Atualização. Ele abre o painel local criado pela API do Mística Presentes.
 
 ## Visual e experiência
 
@@ -15,6 +15,19 @@ Esta versão usa um app nativo com WebView e tela de configuração premium. Ele
 - Botão de configuração sempre visível.
 - Status de conexão: CONFIG, ABRINDO, ONLINE ou ERRO.
 - Botão para limpar configuração.
+- Tela Sobre / Atualização.
+
+## Sobre / Atualização
+
+A seção mostra:
+
+- versão instalada do app;
+- código interno da versão;
+- servidor configurado;
+- versão disponível informada pela API da loja;
+- botão Verificar atualização.
+
+Quando houver nova versão, o app avisa para gerar um novo APK no computador e instalar por cima do app atual.
 
 ## O que o app faz
 
@@ -23,13 +36,15 @@ Esta versão usa um app nativo com WebView e tela de configuração premium. Ele
 - Salva o endereço e o token no celular.
 - Atualiza as informações em tempo real pelo painel WebSocket.
 - Funciona dentro da rede Wi-Fi da loja.
+- Verifica a versão disponível no servidor local.
 
 ## O que o app ainda não faz
 
 - Não registra venda.
 - Não altera estoque.
 - Não fecha caixa.
-- Não acessa fora da loja sem VPN/Tailscale/Cloudflare Tunnel.
+- Não atualiza sozinho pela Play Store.
+- Não acessa fora da loja sem uma conexão segura configurada.
 
 ## Como usar
 
@@ -47,13 +62,15 @@ http://192.168.0.115:8000
 
 3. Abrir o app no celular.
 4. Informar o endereço do servidor.
-5. Token padrão:
-
-```text
-mistica-local
-```
-
+5. Informar o token da API.
 6. Tocar em `Salvar e abrir painel`.
+
+## Como verificar atualização
+
+1. Abra o app.
+2. Toque em `Sobre` ou no botão de configuração.
+3. Confira a versão instalada.
+4. Toque em `Verificar atualização`.
 
 ## Como abrir no Android Studio
 
@@ -73,7 +90,7 @@ mobile_android
 No Android Studio:
 
 ```text
-Build > Build Bundle(s) / APK(s) > Build APK(s)
+Build > Generate App Bundles or APKs > Generate APK
 ```
 
 O APK será gerado em:
