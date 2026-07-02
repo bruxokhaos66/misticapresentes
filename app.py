@@ -14,6 +14,9 @@ if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
 from mistica_presentes import MisticaApp, garantir_instancia_unica, init_db, realizar_backup  # noqa: E402
+from ui.admin_maintenance_patch import patch_mistica_app  # noqa: E402
+
+patch_mistica_app(MisticaApp)
 
 
 def main():
