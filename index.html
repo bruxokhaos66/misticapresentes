@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Mística Presentes - produtos místicos, incensos, velas, pedras, aromatizantes e presentes especiais." />
+  <title>Mística Presentes | Produtos Místicos e Especiais</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <nav class="nav container">
+      <a class="brand" href="#inicio" aria-label="Mística Presentes">
+        <img src="assets/logo-mistica.svg" alt="Logo Mística Presentes" />
+        <span>Mística Presentes</span>
+      </a>
+      <button class="menu-toggle" type="button" aria-label="Abrir menu" data-menu-toggle>☰</button>
+      <div class="nav-links" data-nav-links>
+        <a href="#sobre">Sobre</a>
+        <a href="#produtos">Produtos</a>
+        <a href="#cliente">Cliente</a>
+        <a href="#checkout">Venda Pix</a>
+        <a class="btn btn-small" href="https://wa.me/5500000000000" target="_blank" rel="noopener">WhatsApp</a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <section id="inicio" class="hero">
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <p class="eyebrow">Energia • Proteção • Presentes especiais</p>
+          <h1>Produtos místicos para transformar o seu dia.</h1>
+          <p class="hero-text">Incensos, velas, pedras, aromatizadores, banhos de ervas e presentes escolhidos com cuidado para quem busca equilíbrio, beleza e boas energias.</p>
+          <div class="hero-actions">
+            <a class="btn" href="#produtos">Ver produtos</a>
+            <a class="btn btn-ghost" href="#checkout">Montar venda</a>
+          </div>
+          <div class="trust-row" aria-label="Destaques da loja">
+            <span>Atendimento acolhedor</span>
+            <span>Produtos selecionados</span>
+            <span>Pagamento via Pix</span>
+          </div>
+        </div>
+        <div class="hero-card">
+          <img src="assets/hero-xamanico.svg" alt="Arte xamânica com lua, folhas e cristais" />
+          <div class="floating-card">
+            <strong>Novidades da semana</strong>
+            <span>Incensos, pedras, velas e aromas especiais.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="sobre" class="section about">
+      <div class="container split">
+        <div>
+          <p class="eyebrow">Sobre a loja</p>
+          <h2>Um espaço comercial com alma mística.</h2>
+        </div>
+        <p>A Mística Presentes nasceu para conectar pessoas a produtos que carregam significado. O site foi preparado para apresentar a loja, exibir produtos, registrar clientes e facilitar vendas com Pix de forma simples e organizada.</p>
+      </div>
+      <div class="container feature-grid">
+        <article class="feature-card">
+          <span>🌿</span>
+          <h3>Visual xamânico</h3>
+          <p>Layout com tons naturais, elementos de lua, folhas, cristais e energia espiritual.</p>
+        </article>
+        <article class="feature-card">
+          <span>🛒</span>
+          <h3>Venda rápida</h3>
+          <p>Escolha produtos, quantidade e acompanhe o total da venda em tempo real.</p>
+        </article>
+        <article class="feature-card">
+          <span>🔮</span>
+          <h3>Cadastro de clientes</h3>
+          <p>Registre nome, CPF, endereço e WhatsApp para organizar o atendimento.</p>
+        </article>
+        <article class="feature-card">
+          <span>💠</span>
+          <h3>QR Code Pix</h3>
+          <p>Gere Pix copia e cola e QR Code para o cliente finalizar a compra.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="produtos" class="section products-section">
+      <div class="container section-title">
+        <p class="eyebrow">Catálogo comercial</p>
+        <h2>Produtos da Mística</h2>
+        <p>Selecione itens para montar a venda. Os valores podem ser alterados no arquivo <strong>app.js</strong>.</p>
+      </div>
+      <div class="container product-grid" data-product-grid></div>
+    </section>
+
+    <section id="cliente" class="section client-section">
+      <div class="container checkout-grid">
+        <div class="form-panel">
+          <p class="eyebrow">Cadastro</p>
+          <h2>Dados do cliente</h2>
+          <form id="clientForm" class="form">
+            <label>
+              Nome completo
+              <input id="clientName" type="text" placeholder="Ex.: Maria Aparecida" required />
+            </label>
+            <label>
+              CPF
+              <input id="clientCpf" type="text" placeholder="000.000.000-00" maxlength="14" required />
+            </label>
+            <label>
+              Endereço
+              <input id="clientAddress" type="text" placeholder="Rua, número, bairro e cidade" required />
+            </label>
+            <label>
+              WhatsApp
+              <input id="clientWhatsapp" type="text" placeholder="(49) 99999-9999" maxlength="15" required />
+            </label>
+            <button class="btn" type="submit">Salvar cliente</button>
+          </form>
+          <div id="clientSaved" class="saved-box" hidden></div>
+        </div>
+
+        <aside class="form-panel dark-panel">
+          <p class="eyebrow">Clientes salvos</p>
+          <h2>Últimos cadastros</h2>
+          <div id="clientList" class="client-list"></div>
+        </aside>
+      </div>
+    </section>
+
+    <section id="checkout" class="section checkout-section">
+      <div class="container checkout-grid">
+        <div class="form-panel">
+          <p class="eyebrow">Carrinho</p>
+          <h2>Venda em andamento</h2>
+          <div id="cartList" class="cart-list"></div>
+          <div class="total-box">
+            <span>Total</span>
+            <strong id="cartTotal">R$ 0,00</strong>
+          </div>
+          <div class="checkout-actions">
+            <button class="btn btn-ghost" type="button" data-clear-cart>Limpar carrinho</button>
+            <button class="btn" type="button" data-generate-pix>Gerar QR Code Pix</button>
+          </div>
+        </div>
+
+        <div class="form-panel pix-panel">
+          <p class="eyebrow">Pagamento</p>
+          <h2>Pix da venda</h2>
+          <label class="pix-key-label">
+            Chave Pix da loja
+            <input id="pixKey" type="text" value="misticapresentes@email.com" />
+          </label>
+          <label class="pix-key-label">
+            Nome do recebedor
+            <input id="merchantName" type="text" value="MISTICA PRESENTES" maxlength="25" />
+          </label>
+          <label class="pix-key-label">
+            Cidade
+            <input id="merchantCity" type="text" value="PINHALZINHO" maxlength="15" />
+          </label>
+          <div class="qr-wrap">
+            <canvas id="pixQr" width="220" height="220" aria-label="QR Code Pix"></canvas>
+            <p id="pixStatus">Adicione produtos ao carrinho e gere o Pix.</p>
+          </div>
+          <textarea id="pixPayload" readonly placeholder="Pix copia e cola aparecerá aqui"></textarea>
+          <button class="btn btn-full" type="button" data-copy-pix>Copiar Pix copia e cola</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-grid">
+      <div>
+        <img src="assets/logo-mistica.svg" alt="Logo Mística Presentes" />
+        <strong>Mística Presentes</strong>
+        <p>Produtos místicos, presentes especiais e atendimento com boas energias.</p>
+      </div>
+      <div>
+        <h3>Contato</h3>
+        <p>WhatsApp: atualize o link no arquivo index.html</p>
+        <p>Instagram: @misticaprodutos</p>
+      </div>
+      <div>
+        <h3>Publicação</h3>
+        <p>Site pronto para GitHub Pages. Basta publicar a branch ou mesclar no main.</p>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>
