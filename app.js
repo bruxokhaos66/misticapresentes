@@ -13,14 +13,14 @@ const PLACEHOLDER_WHATSAPP = "5549999999999";
 const PLACEHOLDER_PIX = "misticapresentes@email.com";
 
 const products = [
-  { id: "incenso-natural", name: "Incenso Natural", category: "Aromas", description: "Aromas para purificação, proteção e harmonização do ambiente.", price: 12.9, stock: 30, icon: "🌿", imageUrl: "" },
-  { id: "vela-ritualistica", name: "Vela Ritualística", category: "Velas", description: "Cores e intenções para rituais, decoração e momentos especiais.", price: 18.0, stock: 24, icon: "🕯️", imageUrl: "" },
-  { id: "pedra-energetica", name: "Pedra Energética", category: "Cristais", description: "Pedras selecionadas para proteção, equilíbrio e boas vibrações.", price: 24.9, stock: 18, icon: "💎", imageUrl: "" },
-  { id: "banho-ervas", name: "Banho de Ervas", category: "Ervas", description: "Preparos especiais para limpeza energética e renovação espiritual.", price: 16.5, stock: 20, icon: "🍃", imageUrl: "" },
-  { id: "aromatizador", name: "Aromatizador Via Aroma", category: "Aromas", description: "Perfume o ambiente com essências marcantes e acolhedoras.", price: 29.9, stock: 16, icon: "✨", imageUrl: "" },
-  { id: "incensario", name: "Incensário Decorativo", category: "Presentes", description: "Peça prática e bonita para usar com incensos na loja ou em casa.", price: 35.0, stock: 12, icon: "🔮", imageUrl: "" },
-  { id: "oleo-essencial", name: "Óleo Essencial", category: "Bem-estar", description: "Opções para relaxar, perfumar e criar experiências sensoriais.", price: 39.9, stock: 10, icon: "🌙", imageUrl: "" },
-  { id: "presente-mistico", name: "Kit Presente Místico", category: "Kits", description: "Combinação especial de produtos para presentear com significado.", price: 59.9, stock: 8, icon: "🎁", imageUrl: "" }
+  { id: "incenso-natural", name: "Incensos Naturais", category: "Aromas e proteção", description: "Incensos para oração, limpeza do ambiente, acolhimento e boas energias.", price: 12.9, stock: 30, icon: "🌿", imageUrl: "" },
+  { id: "vela-ritualistica", name: "Velas de Intenção", category: "Fé e luz", description: "Velas para momentos de fé, pedidos, gratidão, decoração e conexão espiritual.", price: 18.0, stock: 24, icon: "🕯️", imageUrl: "" },
+  { id: "pedra-energetica", name: "Pedras e Cristais", category: "Proteção e equilíbrio", description: "Pedras selecionadas para proteção, equilíbrio, presente e cuidado energético.", price: 24.9, stock: 18, icon: "💎", imageUrl: "" },
+  { id: "banho-ervas", name: "Banhos de Ervas", category: "Ervas e limpeza", description: "Preparos especiais para renovação, descarrego, harmonia e bem-estar espiritual.", price: 16.5, stock: 20, icon: "🍃", imageUrl: "" },
+  { id: "aromatizador", name: "Aromatizadores Via Aroma", category: "Casa perfumada", description: "Essências e aromas para deixar o lar mais leve, acolhedor e agradável.", price: 29.9, stock: 16, icon: "✨", imageUrl: "" },
+  { id: "incensario", name: "Incensários Decorativos", category: "Decoração mística", description: "Peças bonitas e funcionais para usar com incensos e compor ambientes especiais.", price: 35.0, stock: 12, icon: "🔮", imageUrl: "" },
+  { id: "artigo-fe", name: "Artigos de Fé e Proteção", category: "Fé e bênçãos", description: "Itens para presentear, abençoar ambientes e fortalecer momentos de oração e esperança.", price: 32.9, stock: 14, icon: "🙏", imageUrl: "" },
+  { id: "presente-mistico", name: "Kit Presente Especial", category: "Kits e presentes", description: "Combinação especial com aromas, velas, pedras e artigos escolhidos com carinho.", price: 59.9, stock: 8, icon: "🎁", imageUrl: "" }
 ];
 
 let cart = loadStorage("misticaCart", []);
@@ -391,7 +391,7 @@ function sendSaleWhatsapp() {
 function buyProductWhatsapp(productId) {
   const product = products.find(item => item.id === productId);
   if (!product) return;
-  const message = `Olá, tenho interesse neste produto da ${storeConfig.name}:\n\n${product.name}\nValor: ${currency.format(product.price)}\nCategoria: ${product.category}`;
+  const message = `Olá, tenho interesse neste produto da ${storeConfig.name}:\n\n${product.name}\nValor: ${currency.format(product.price)}\nCategoria: ${product.category}\n\nGostaria de saber disponibilidade e opções parecidas.`;
   window.open(buildWhatsappUrl(message), "_blank", "noopener");
 }
 
@@ -619,5 +619,5 @@ if (sessionStorage.getItem("misticaAdminUnlocked") === "true") {
 }
 renderAll();
 clearQrCanvas();
-appendIsis("bot", "Olá, eu sou a Isis. Posso ajudar com vendas, estoque, fornecedores e pesquisa de produtos.");
+appendIsis("bot", "Olá, eu sou a Isis. Posso ajudar com produtos, pedidos, vendas, estoque, fornecedores e pesquisas.");
 saveState();
