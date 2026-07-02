@@ -2,7 +2,7 @@
 
 Aplicativo Android para acompanhar o painel da loja pelo celular.
 
-Esta versão usa um app nativo com WebView, tela de configuração premium e seção Sobre / Atualização. Ele abre o painel local criado pela API do Mística Presentes.
+Esta versão usa um app nativo com WebView, tela de configuração premium, seção Sobre / Atualização e suporte a endereço externo seguro em HTTPS.
 
 ## Visual e experiência
 
@@ -10,6 +10,7 @@ Esta versão usa um app nativo com WebView, tela de configuração premium e se�
 - Identidade visual escura, dourada e mística.
 - Cartão de conexão com instruções claras.
 - Campo para endereço do servidor.
+- Aceita endereço local `http://` e endereço externo seguro `https://`.
 - Campo para token da API.
 - Botão de atualizar painel.
 - Botão de configuração sempre visível.
@@ -32,11 +33,12 @@ Quando houver nova versão, o app avisa para gerar um novo APK no computador e i
 ## O que o app faz
 
 - Abre o painel mobile da loja.
-- Permite configurar o endereço do servidor local.
+- Permite configurar o endereço do servidor.
 - Salva o endereço e o token no celular.
 - Atualiza as informações em tempo real pelo painel WebSocket.
 - Funciona dentro da rede Wi-Fi da loja.
-- Verifica a versão disponível no servidor local.
+- Funciona fora da loja quando usado com endereço externo seguro.
+- Verifica a versão disponível no servidor.
 
 ## O que o app ainda não faz
 
@@ -44,14 +46,13 @@ Quando houver nova versão, o app avisa para gerar um novo APK no computador e i
 - Não altera estoque.
 - Não fecha caixa.
 - Não atualiza sozinho pela Play Store.
-- Não acessa fora da loja sem uma conexão segura configurada.
 
-## Como usar
+## Como usar dentro da loja
 
-1. No computador principal da loja, iniciar a API:
+1. No computador principal da loja, iniciar o servidor dedicado:
 
 ```bash
-python scripts/iniciar_servidor_local.py
+python scripts/iniciar_servidor_dedicado.py
 ```
 
 2. Anotar o endereço mostrado no terminal, por exemplo:
@@ -64,6 +65,16 @@ http://192.168.0.115:8000
 4. Informar o endereço do servidor.
 5. Informar o token da API.
 6. Tocar em `Salvar e abrir painel`.
+
+## Como usar fora da loja
+
+Configure um acesso externo seguro apontando para o servidor dedicado, como VPN, Tailscale ou Cloudflare Tunnel.
+
+Depois coloque no app um endereço em HTTPS, por exemplo:
+
+```text
+https://seu-endereco-seguro
+```
 
 ## Como verificar atualização
 
@@ -100,8 +111,6 @@ mobile_android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
 ## Segurança
-
-Use somente dentro da rede da loja.
 
 Não abra portas do roteador diretamente para a internet.
 
