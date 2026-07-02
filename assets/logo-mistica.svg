@@ -1,0 +1,18 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Logo Mística Presentes</title>
+  <desc id="desc">Símbolo circular com lua, folhas e cristal em estilo xamânico.</desc>
+  <rect width="512" height="512" rx="128" fill="#11170D"/>
+  <circle cx="256" cy="256" r="188" fill="#182311" stroke="#E0B35B" stroke-width="10"/>
+  <path d="M314 112C264 128 229 175 229 230C229 300 286 357 356 357C365 357 373 356 382 354C354 389 311 412 262 412C176 412 106 342 106 256C106 180 161 117 234 104C261 99 288 102 314 112Z" fill="#E0B35B"/>
+  <path d="M315 142C281 158 258 192 258 232C258 289 304 335 361 335C372 335 383 333 393 329C373 355 342 372 306 372C245 372 196 323 196 262C196 206 238 160 292 153C300 151 308 150 315 142Z" fill="#182311" opacity="0.92"/>
+  <path d="M256 154L288 235L256 323L224 235L256 154Z" fill="#F6D58E" stroke="#FFF3C8" stroke-width="6"/>
+  <path d="M224 235H288" stroke="#8D5132" stroke-width="6" stroke-linecap="round"/>
+  <path d="M256 323L208 376H304L256 323Z" fill="#798B48" stroke="#E0B35B" stroke-width="6"/>
+  <path d="M158 298C199 293 226 270 236 232C193 236 166 259 158 298Z" fill="#B7C98A"/>
+  <path d="M354 213C316 219 291 242 282 279C321 274 347 251 354 213Z" fill="#B7C98A"/>
+  <path d="M154 298C187 289 211 268 232 236" stroke="#41512B" stroke-width="6" stroke-linecap="round"/>
+  <path d="M286 276C311 256 332 237 354 214" stroke="#41512B" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="167" cy="169" r="8" fill="#F6D58E"/>
+  <circle cx="361" cy="143" r="6" fill="#F6D58E"/>
+  <circle cx="391" cy="248" r="7" fill="#F6D58E"/>
+</svg>

@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Mística Presentes em Pinhalzinho/SC - produtos místicos, incensos, velas, pedras, aromatizantes e presentes especiais." />
+  <meta name="theme-color" content="#172012" />
+  <title>Mística Presentes | Produtos Místicos e Especiais</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <nav class="nav container">
+      <a class="brand" href="#inicio" aria-label="Mística Presentes">
+        <img src="assets/logo-mistica.svg" alt="Logo Mística Presentes" />
+        <span>Mística Presentes</span>
+      </a>
+      <button class="menu-toggle" type="button" aria-label="Abrir menu" data-menu-toggle>☰</button>
+      <div class="nav-links" data-nav-links>
+        <a href="#sobre">Sobre</a>
+        <a href="#produtos">Produtos</a>
+        <a href="#cliente">Cliente</a>
+        <a href="#checkout">Venda Pix</a>
+        <a href="#historico">Histórico</a>
+        <a href="#admin">Admin</a>
+        <a href="#isis">Isis</a>
+        <a class="btn btn-small" href="#" data-whatsapp-link target="_blank" rel="noopener">WhatsApp</a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <section id="inicio" class="hero">
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <p class="eyebrow">Energia • Proteção • Presentes especiais</p>
+          <h1>Produtos místicos para transformar o seu dia.</h1>
+          <p class="hero-text">Incensos, velas, pedras, aromatizadores, banhos de ervas e presentes escolhidos com cuidado para quem busca equilíbrio, beleza e boas energias.</p>
+          <div class="hero-actions">
+            <a class="btn" href="#produtos">Ver produtos</a>
+            <a class="btn btn-ghost" href="#checkout">Montar venda</a>
+          </div>
+          <div class="trust-row" aria-label="Destaques da loja">
+            <span>Atendimento acolhedor</span>
+            <span>Produtos selecionados</span>
+            <span>Pagamento via Pix</span>
+          </div>
+        </div>
+        <div class="hero-card">
+          <img src="assets/hero-xamanico.svg" alt="Arte xamânica com lua, folhas e cristais" />
+          <div class="floating-card">
+            <strong>Novidades da semana</strong>
+            <span>Incensos, pedras, velas e aromas especiais.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="sobre" class="section about">
+      <div class="container split">
+        <div>
+          <p class="eyebrow">Sobre a loja</p>
+          <h2>Um espaço comercial com alma mística.</h2>
+        </div>
+        <p>A Mística Presentes nasceu para conectar pessoas a produtos que carregam significado. O site apresenta a loja, exibe produtos, registra clientes, controla estoque simples, facilita vendas com Pix e WhatsApp e entrega uma área administrativa inicial para operação.</p>
+      </div>
+      <div class="container feature-grid">
+        <article class="feature-card">
+          <span>🌿</span>
+          <h3>Visual xamânico</h3>
+          <p>Layout com tons naturais, elementos de lua, folhas, cristais e energia espiritual.</p>
+        </article>
+        <article class="feature-card">
+          <span>🛒</span>
+          <h3>Venda rápida</h3>
+          <p>Escolha produtos, quantidade, acompanhe total e envie resumo para o WhatsApp.</p>
+        </article>
+        <article class="feature-card">
+          <span>📊</span>
+          <h3>Dashboard</h3>
+          <p>Acompanhe faturamento diário, semanal, mensal, histórico e estoque mínimo.</p>
+        </article>
+        <article class="feature-card">
+          <span>🔮</span>
+          <h3>Isis</h3>
+          <p>Área inicial da assistente para respostas rápidas, atendimento e pesquisa de produtos.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="produtos" class="section products-section">
+      <div class="container section-title">
+        <p class="eyebrow">Catálogo comercial</p>
+        <h2>Produtos da Mística</h2>
+        <p>Selecione itens para montar a venda ou envie um produto direto pelo WhatsApp. As fotos reais podem ser configuradas no campo <strong>imageUrl</strong> de cada produto no arquivo <strong>app.js</strong>.</p>
+      </div>
+      <div class="container product-grid" data-product-grid></div>
+    </section>
+
+    <section id="cliente" class="section client-section">
+      <div class="container checkout-grid">
+        <div class="form-panel">
+          <p class="eyebrow">Cadastro</p>
+          <h2>Dados do cliente</h2>
+          <p class="privacy-note">Use o cadastro apenas com autorização do cliente. CPF e endereço são dados pessoais e devem ser tratados com cuidado.</p>
+          <form id="clientForm" class="form">
+            <label>Nome completo<input id="clientName" type="text" placeholder="Ex.: Maria Aparecida" minlength="3" required /></label>
+            <label>CPF<input id="clientCpf" type="text" placeholder="000.000.000-00" maxlength="14" inputmode="numeric" required /></label>
+            <label>Endereço<input id="clientAddress" type="text" placeholder="Rua, número, bairro e cidade" minlength="5" required /></label>
+            <label>WhatsApp<input id="clientWhatsapp" type="text" placeholder="(49) 99999-9999" maxlength="15" inputmode="numeric" required /></label>
+            <label class="check-row"><input id="privacyConsent" type="checkbox" required /><span>Tenho autorização do cliente para salvar estes dados neste navegador.</span></label>
+            <button class="btn" type="submit">Salvar cliente</button>
+          </form>
+          <div id="clientSaved" class="saved-box" hidden></div>
+        </div>
+
+        <aside class="form-panel dark-panel">
+          <p class="eyebrow">Clientes salvos</p>
+          <h2>Últimos cadastros</h2>
+          <div id="clientList" class="client-list"></div>
+          <button class="btn btn-ghost btn-full" type="button" data-export-clients>Exportar clientes CSV</button>
+        </aside>
+      </div>
+    </section>
+
+    <section id="checkout" class="section checkout-section">
+      <div class="container checkout-grid">
+        <div class="form-panel">
+          <p class="eyebrow">Carrinho</p>
+          <h2>Venda em andamento</h2>
+          <div id="cartList" class="cart-list"></div>
+          <div class="total-box"><span>Total</span><strong id="cartTotal">R$ 0,00</strong></div>
+          <div class="checkout-actions">
+            <button class="btn btn-ghost" type="button" data-clear-cart>Limpar carrinho</button>
+            <button class="btn btn-ghost" type="button" data-send-sale-whatsapp>Enviar pedido WhatsApp</button>
+            <button class="btn" type="button" data-generate-pix>Gerar QR Code Pix</button>
+          </div>
+        </div>
+
+        <div class="form-panel pix-panel">
+          <p class="eyebrow">Pagamento</p>
+          <h2>Pix da venda</h2>
+          <div class="warning-box"><strong>Antes de pagar:</strong> confira no aplicativo do banco se o valor e o nome do recebedor estão corretos.</div>
+          <label class="pix-key-label">Chave Pix da loja<input id="pixKey" type="text" readonly /></label>
+          <label class="pix-key-label">Nome do recebedor<input id="merchantName" type="text" readonly /></label>
+          <label class="pix-key-label">Cidade<input id="merchantCity" type="text" readonly /></label>
+          <div id="publishWarning" class="warning-box warning-danger" hidden></div>
+          <div class="qr-wrap">
+            <canvas id="pixQr" width="220" height="220" aria-label="QR Code Pix"></canvas>
+            <p id="pixStatus">Adicione produtos ao carrinho e gere o Pix.</p>
+          </div>
+          <textarea id="pixPayload" readonly placeholder="Pix copia e cola aparecerá aqui"></textarea>
+          <button class="btn btn-full" type="button" data-copy-pix>Copiar Pix copia e cola</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="historico" class="section history-section">
+      <div class="container checkout-grid">
+        <div class="form-panel">
+          <p class="eyebrow">Histórico</p>
+          <h2>Últimas vendas</h2>
+          <div id="salesHistory" class="history-list"></div>
+          <div class="stack-actions">
+            <button class="btn btn-ghost btn-full" type="button" data-export-sales>Exportar vendas CSV</button>
+            <button class="btn btn-ghost btn-full" type="button" data-print-last-receipt>Imprimir último cupom</button>
+            <button class="btn btn-ghost btn-full" type="button" data-send-last-receipt-whatsapp>Enviar comprovante WhatsApp</button>
+          </div>
+        </div>
+        <div class="form-panel dark-panel">
+          <p class="eyebrow">Estoque</p>
+          <h2>Controle simples</h2>
+          <p class="privacy-note">O estoque é salvo neste navegador. Para operação com mais de um computador, será necessário backend com banco de dados.</p>
+          <div id="stockList" class="stock-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="admin" class="section admin-section">
+      <div class="container section-title">
+        <p class="eyebrow">Administração</p>
+        <h2>Painel interno da Mística</h2>
+        <p>Área protegida por senha local para dashboard, fornecedores, backup, estoque mínimo e plano de banco de dados.</p>
+      </div>
+
+      <div class="container form-panel" id="adminLoginPanel">
+        <h3>Entrar no painel administrativo</h3>
+        <p class="privacy-note">Proteção simples para site estático. Para segurança real, use login com backend.</p>
+        <form id="adminLoginForm" class="form inline-form">
+          <label>Senha administrativa<input id="adminPassword" type="password" placeholder="Digite a senha" required /></label>
+          <button class="btn" type="submit">Entrar</button>
+        </form>
+        <div id="adminLoginStatus" class="saved-box" hidden></div>
+      </div>
+
+      <div class="container admin-content" id="adminContent" hidden>
+        <div class="dashboard-grid">
+          <article class="metric-card"><span>Hoje</span><strong id="revenueToday">R$ 0,00</strong></article>
+          <article class="metric-card"><span>Semana</span><strong id="revenueWeek">R$ 0,00</strong></article>
+          <article class="metric-card"><span>Mês</span><strong id="revenueMonth">R$ 0,00</strong></article>
+          <article class="metric-card"><span>Vendas</span><strong id="salesCount">0</strong></article>
+        </div>
+
+        <div class="checkout-grid admin-grid">
+          <div class="form-panel">
+            <p class="eyebrow">Alertas</p>
+            <h2>Estoque mínimo</h2>
+            <div id="lowStockAlerts" class="history-list"></div>
+          </div>
+
+          <div class="form-panel dark-panel">
+            <p class="eyebrow">Backup</p>
+            <h2>Dados locais</h2>
+            <p class="privacy-note">Baixe um backup JSON de clientes, vendas, estoque e fornecedores. O backup automático salva uma cópia no próprio navegador.</p>
+            <div class="stack-actions">
+              <button class="btn btn-full" type="button" data-download-backup>Baixar backup JSON</button>
+              <button class="btn btn-ghost btn-full" type="button" data-restore-backup>Restaurar backup de exemplo</button>
+            </div>
+            <small id="backupStatus" class="privacy-note"></small>
+          </div>
+        </div>
+
+        <div class="checkout-grid admin-grid">
+          <div class="form-panel">
+            <p class="eyebrow">Fornecedores</p>
+            <h2>Cadastro de fornecedores</h2>
+            <form id="supplierForm" class="form">
+              <label>Nome do fornecedor<input id="supplierName" type="text" placeholder="Ex.: Distribuidora de Incensos" required /></label>
+              <label>Categoria<input id="supplierCategory" type="text" placeholder="Incensos, pedras, velas..." required /></label>
+              <label>WhatsApp<input id="supplierWhatsapp" type="text" placeholder="(49) 99999-9999" maxlength="15" inputmode="numeric" /></label>
+              <label>Observação<textarea id="supplierNotes" placeholder="Prazos, marcas, condições, contato..."></textarea></label>
+              <button class="btn" type="submit">Salvar fornecedor</button>
+            </form>
+          </div>
+          <div class="form-panel dark-panel">
+            <p class="eyebrow">Lista</p>
+            <h2>Fornecedores salvos</h2>
+            <div id="supplierList" class="history-list"></div>
+          </div>
+        </div>
+
+        <div class="form-panel database-plan">
+          <p class="eyebrow">Próxima evolução</p>
+          <h2>Integração futura com banco de dados</h2>
+          <div class="timeline-grid">
+            <div><strong>1. Backend</strong><span>API para produtos, clientes, vendas, estoque e fornecedores.</span></div>
+            <div><strong>2. Banco</strong><span>SQLite/PostgreSQL para dados centralizados e backup real.</span></div>
+            <div><strong>3. Login</strong><span>Usuários com senha segura, permissões e trilha de auditoria.</span></div>
+            <div><strong>4. Pix oficial</strong><span>Confirmação automática de pagamento por provedor bancário.</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="isis" class="section isis-section">
+      <div class="container checkout-grid">
+        <div class="form-panel">
+          <p class="eyebrow">IA Isis</p>
+          <h2>Assistente da loja</h2>
+          <p class="privacy-note">Versão inicial local para atendimento, resumo da loja e pesquisa de produtos. Futuramente pode ser integrada a uma API de IA e busca na internet.</p>
+          <div id="isisChat" class="isis-chat"></div>
+          <form id="isisForm" class="form inline-form">
+            <label>Mensagem para a Isis<input id="isisInput" type="text" placeholder="Ex.: resumo das vendas, produtos com estoque baixo, pesquisar incensos..." required /></label>
+            <button class="btn" type="submit">Perguntar</button>
+          </form>
+        </div>
+        <div class="form-panel dark-panel">
+          <p class="eyebrow">Ações rápidas</p>
+          <h2>Comandos úteis</h2>
+          <div class="quick-actions">
+            <button class="btn btn-ghost" type="button" data-isis-command="vendas hoje">Vendas de hoje</button>
+            <button class="btn btn-ghost" type="button" data-isis-command="estoque baixo">Estoque baixo</button>
+            <button class="btn btn-ghost" type="button" data-isis-command="fornecedores">Fornecedores</button>
+            <button class="btn btn-ghost" type="button" data-isis-command="pesquisar incensos atacado">Pesquisar incensos</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-grid">
+      <div>
+        <img src="assets/logo-mistica.svg" alt="Logo Mística Presentes" />
+        <strong>Mística Presentes</strong>
+        <p>Produtos místicos, presentes especiais e atendimento com boas energias.</p>
+      </div>
+      <div>
+        <h3>Contato</h3>
+        <p>WhatsApp: (49) 98409-0802</p>
+        <p>Instagram: @misticaprodutos</p>
+      </div>
+      <div>
+        <h3>Publicação</h3>
+        <p>Pix CPF configurado para o titular Fredinei Jean Bach. Confira os dados no banco antes de divulgar.</p>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>
