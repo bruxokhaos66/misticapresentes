@@ -3,6 +3,7 @@ from datetime import datetime
 
 from config import DASHBOARD_MSG_PATH
 from database import query_db
+from services.caixa_service import excluir_lancamento_fluxo, listar_fluxo_detalhado, obter_lancamento_fluxo
 from services.system_diagnostics_service import backup_manual, diagnosticar_banco
 
 
@@ -90,6 +91,40 @@ def diagnosticar_caixa(usuario):
         "fluxo_sem_caixa": int(fluxo_sem_caixa),
         "ultimos_caixas": ultimos,
         "problemas": problemas,
+    }
+
+
+def listar_lancamentos_caixa_para_manutencao(usuario, caixa_id=None, limite=200):
+    exigir_adm(usuario)
+    lancamentos = listar_fluxo_detalhado(caixa_id, limite)
+    registrar_log_manutencao(usuario, "Listar Lançamentos Caixa", f"Listou {len(lancamentos)} lançamento(s) para manutenção.")
+    return lancamentos
+
+
+def apagar_lancamento_caixa(usuario, fluxo_id, motivo="Correção administrativa"):
+    """Apaga um lançamento específico do fluxo de caixa.
+
+    Ação restrita a adm, com backup prévio e log detalhado.
+    Não apaga vendas, itens de venda, produtos ou contas; remove somente a linha do fluxo_caixa.
+    """
+    exigir_adm(usuario)
+    lancamento = obter_lancamento_fluxo(fluxo_id)
+    if not lancamento:
+        raise ValueError("Lançamento do caixa não localizado.")
+    backup = backup_manual()
+    removido = excluir_lancamento_fluxo(fluxo_id)
+    registrar_log_manutencao(
+        usuario,
+        "Apagar Lançamento Caixa",
+        f"Fluxo ID {removido[0]} apagado. Tipo={removido[1]}; Descrição={removido[2]}; Valor={removido[3]}; Caixa={removido[5]}; Motivo={motivo}; Backup={backup}",
+    )
+    return {
+        "ok": True,
+        "area": "caixa",
+        "acao": "apagar_lancamento",
+        "backup": backup,
+        "lancamento_removido": removido,
+        "mensagem": "Lançamento do caixa apagado com backup e log administrativo.",
     }
 
 
