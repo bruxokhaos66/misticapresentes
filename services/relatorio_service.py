@@ -15,7 +15,7 @@ def _produtos_mais_vendidos_fallback(limite=15):
         SELECT vi.codigo_p, vi.nome_p, SUM(vi.quantidade), SUM(vi.valor_total)
         FROM vendas_itens vi
         JOIN vendas v ON vi.venda_id = v.id
-        WHERE COALESCE(v.status,'Concluido') != 'Cancelado'
+        WHERE COALESCE(v.status,'Concluído') != 'Cancelado'
         GROUP BY vi.codigo_p, vi.nome_p
         ORDER BY SUM(vi.quantidade) DESC
         LIMIT ?
