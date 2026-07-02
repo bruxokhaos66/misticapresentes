@@ -2,13 +2,15 @@ from pathlib import Path
 import asyncio
 import json
 
-from fastapi import Depends, FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 from database import init_db
 from api.audit import registrar_acesso_api
 from api.security import validar_token, validar_token_valor
+from api.app_auth import login_app, logout_app, validar_sessao_app
 from api.service import (
     alertas_isis_api,
     app_android_info,
@@ -16,6 +18,7 @@ from api.service import (
     cancelamentos_recentes,
     contas_alerta_api,
     dashboard_api,
+    dashboard_app,
     estoque_baixo_api,
     server_status_api,
     ultimas_vendas,
@@ -30,6 +33,12 @@ NO_CACHE_HEADERS = {
     "Expires": "0",
 }
 
+
+class LoginAppRequest(BaseModel):
+    login: str
+    senha: str
+
+
 app = FastAPI(
     title="Mística Presentes API Local",
     version="0.1.0",
@@ -40,7 +49,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["GET", "OPTIONS"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -113,6 +122,27 @@ def api_server_status():
 @app.get("/api/app/android", dependencies=[Depends(validar_token)])
 def api_app_android():
     return app_android_info()
+
+
+@app.post("/api/app/login", dependencies=[Depends(validar_token)])
+def api_app_login(payload: LoginAppRequest):
+    resultado = login_app(payload.login, payload.senha)
+    if not resultado.get("ok"):
+        raise HTTPException(status_code=401, detail=resultado.get("erro", "Usuário ou senha incorretos."))
+    return resultado
+
+
+@app.post("/api/app/logout", dependencies=[Depends(validar_token)])
+def api_app_logout(x_mistica_app_session: str | None = Header(default=None)):
+    return logout_app(x_mistica_app_session)
+
+
+@app.get("/api/app/painel", dependencies=[Depends(validar_token)])
+def api_app_painel(x_mistica_app_session: str | None = Header(default=None)):
+    sessao = validar_sessao_app(x_mistica_app_session)
+    if not sessao:
+        raise HTTPException(status_code=401, detail="Faça login novamente no app.")
+    return dashboard_app(sessao)
 
 
 @app.get("/api/dashboard", dependencies=[Depends(validar_token)])
