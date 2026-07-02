@@ -26,11 +26,16 @@
     .footer { text-align:center; color:var(--muted); padding:18px; font-size:12px; }
     .security { display:none; margin-bottom:14px; border-color:rgba(224,112,112,.55); background:rgba(80,28,36,.72); }
     .security strong { color:#ffd0d0; }
+    #saleToast { position:fixed; left:14px; right:14px; top:76px; z-index:9; display:none; background:linear-gradient(135deg,rgba(34,91,66,.98),rgba(29,23,39,.98)); border:1px solid rgba(216,181,109,.55); color:#fff; border-radius:18px; padding:14px 16px; box-shadow:0 18px 40px rgba(0,0,0,.38); }
+    #saleToast .title { color:var(--gold); font-weight:800; margin-bottom:4px; }
+    #saleToast .desc { font-size:14px; line-height:1.35; }
+    #notifBtn { margin-top:8px; border:0; border-radius:999px; padding:8px 12px; background:var(--gold); color:#1d1727; font-weight:700; }
     @media (max-width:850px){ .grid{grid-template-columns:repeat(2,minmax(0,1fr));} .value{font-size:22px;} }
-    @media (max-width:520px){ .grid{grid-template-columns:1fr;} header{padding:14px;} main{padding:10px;} table{font-size:12px;} th:nth-child(2), td:nth-child(2){display:none;} }
+    @media (max-width:520px){ .grid{grid-template-columns:1fr;} header{padding:14px;} main{padding:10px;} table{font-size:12px;} th:nth-child(2), td:nth-child(2){display:none;} #saleToast{top:68px;} }
   </style>
 </head>
 <body>
+<div id="saleToast"><div class="title">🛒 Nova venda realizada</div><div class="desc" id="saleToastText">Venda registrada.</div></div>
 <header>
   <h1>🌙 Mística Presentes</h1>
   <div class="sub">Painel mobile em tempo real da loja • <span id="status">conectando...</span></div>
@@ -66,7 +71,7 @@
     <div id="cancelamentos" style="margin-top:10px"></div>
   </div>
 </main>
-<div class="footer">Atualiza automaticamente a cada poucos segundos. Primeira fase: somente leitura.</div>
+<div class="footer">Atualiza automaticamente a cada poucos segundos. Avisa no app quando uma venda nova entra.</div>
 <script>
 const params = new URLSearchParams(location.search);
 const tokenUrl = params.get('app_token') || params.get('token');
@@ -77,6 +82,8 @@ if(tokenUrl){
   history.replaceState({}, document.title, clean);
 }
 const TOKEN = localStorage.getItem('MISTICA_API_TOKEN') || 'mistica-local';
+let ultimaVendaNotificada = Number(localStorage.getItem('MISTICA_ULTIMA_VENDA_ID') || 0);
+let primeiraCargaVendas = true;
 function moeda(v){ return Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
 function txt(v){ return (v===null || v===undefined || v==='') ? '-' : String(v); }
 function esc(v){ return txt(v).replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch])); }
@@ -86,15 +93,48 @@ function avisoSeguranca(data){
   const seg = data && data.seguranca;
   warn.style.display = seg && !seg.token_forte_configurado ? 'block' : 'none';
 }
+function solicitarPermissaoNotificacao(){
+  try{
+    if('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+  }catch(e){}
+}
+function avisoVenda(venda){
+  const vendaId = Number(venda && venda.id || 0);
+  if(!vendaId) return;
+  if(primeiraCargaVendas){
+    primeiraCargaVendas = false;
+    if(!ultimaVendaNotificada || vendaId > ultimaVendaNotificada){
+      ultimaVendaNotificada = vendaId;
+      localStorage.setItem('MISTICA_ULTIMA_VENDA_ID', String(vendaId));
+    }
+    return;
+  }
+  if(vendaId <= ultimaVendaNotificada) return;
+  ultimaVendaNotificada = vendaId;
+  localStorage.setItem('MISTICA_ULTIMA_VENDA_ID', String(vendaId));
+  const mensagem = `Venda ${vendaId} • ${moeda(venda.total_final)} • ${txt(venda.cliente)}`;
+  const toast = document.getElementById('saleToast');
+  document.getElementById('saleToastText').textContent = mensagem;
+  toast.style.display = 'block';
+  setTimeout(()=>{ toast.style.display = 'none'; }, 7000);
+  try{ if(navigator.vibrate) navigator.vibrate([180,80,180]); }catch(e){}
+  try{
+    if('Notification' in window && Notification.permission === 'granted'){
+      new Notification('Nova venda na Mística', { body: mensagem, tag: 'mistica-venda-'+vendaId });
+    }
+  }catch(e){}
+}
 function render(data){
   avisoSeguranca(data);
+  const ultimas = data.ultimas_vendas || [];
+  if(ultimas.length) avisoVenda(ultimas[0]);
   setText('qtdHoje', data.vendas_hoje.quantidade);
   setText('fatHoje', moeda(data.vendas_hoje.faturamento));
   setText('caixaStatus', data.caixa.aberto ? 'Aberto' : 'Fechado');
   document.getElementById('caixaStatus').className = data.caixa.aberto ? 'value green' : 'value red';
   setText('estoqueQtd', data.estoque_baixo.length);
   setText('alertas', data.alertas_isis.texto || 'Sem alertas.');
-  document.getElementById('vendas').innerHTML = data.ultimas_vendas.map(v=>`<tr><td>${esc(v.id)}</td><td>${esc(v.data_venda)}</td><td>${esc(v.cliente)}</td><td>${esc(moeda(v.total_final))}</td><td>${esc(v.vendedor)}</td><td><span class="pill">${esc(v.status)}</span></td></tr>`).join('') || '<tr><td colspan="6">Sem vendas ainda.</td></tr>';
+  document.getElementById('vendas').innerHTML = ultimas.map(v=>`<tr><td>${esc(v.id)}</td><td>${esc(v.data_venda)}</td><td>${esc(v.cliente)}</td><td>${esc(moeda(v.total_final))}</td><td>${esc(v.vendedor)}</td><td><span class="pill">${esc(v.status)}</span></td></tr>`).join('') || '<tr><td colspan="6">Sem vendas ainda.</td></tr>';
   document.getElementById('estoque').innerHTML = data.estoque_baixo.map(p=>`<tr><td>${esc(p.produto)}</td><td>${esc(p.quantidade)}</td><td>${esc(p.estoque_minimo)}</td></tr>`).join('') || '<tr><td colspan="3">Nenhum produto crítico.</td></tr>';
   document.getElementById('contas').innerHTML = '<b>Contas:</b><br>' + (data.contas_alerta.map(c=>`${esc(c.descricao)} • ${esc(moeda(c.valor))} • ${esc(c.vencimento)}`).join('<br>') || 'Sem contas em alerta.');
   document.getElementById('cancelamentos').innerHTML = '<b>Cancelamentos recentes:</b><br>' + (data.cancelamentos.map(c=>`Venda ${esc(c.id)} • ${esc(moeda(c.total_final))} • ${esc(c.vendedor)}`).join('<br>') || 'Nenhum cancelamento recente.');
@@ -116,7 +156,7 @@ function websocket(){
     ws.onclose = () => setTimeout(websocket, 6000);
   }catch(e){ setInterval(carregar,5000); }
 }
-carregar(); websocket(); setInterval(carregar,15000);
+solicitarPermissaoNotificacao(); carregar(); websocket(); setInterval(carregar,15000);
 </script>
 </body>
 </html>
