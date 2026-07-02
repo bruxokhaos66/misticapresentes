@@ -4,6 +4,9 @@ from datetime import datetime
 import database
 from database import get_connection, realizar_backup
 
+# Mantido para compatibilidade com testes/monkeypatch e integrações antigas.
+DB_PATH = getattr(database, "DB_PATH", "")
+
 
 TABELAS_OBRIGATORIAS = [
     "usuarios",
@@ -26,11 +29,15 @@ TABELAS_OBRIGATORIAS = [
 
 
 def _db_path_ativo():
+    global DB_PATH
     try:
+        if DB_PATH and DB_PATH != getattr(database, "DB_PATH", ""):
+            database.DB_PATH = DB_PATH
         database._resolver_caminhos()
+        DB_PATH = getattr(database, "DB_PATH", DB_PATH)
     except Exception:
         pass
-    return getattr(database, "DB_PATH", "")
+    return DB_PATH or getattr(database, "DB_PATH", "")
 
 
 def diagnosticar_banco():
