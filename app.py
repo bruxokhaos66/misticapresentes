@@ -15,12 +15,14 @@ if str(BASE_DIR) not in sys.path:
 
 from mistica_presentes import MisticaApp, garantir_instancia_unica, init_db, realizar_backup  # noqa: E402
 from ui.admin_maintenance_patch import patch_mistica_app  # noqa: E402
+from ui.audit_logs_tab_patch import patch_audit_logs_tab  # noqa: E402
 from ui.dashboard_runtime_patch import patch_dashboard_runtime  # noqa: E402
 from ui.maintenance_center_patch import patch_maintenance_center  # noqa: E402
 
 patch_mistica_app(MisticaApp)
 patch_dashboard_runtime(MisticaApp)
 patch_maintenance_center(MisticaApp)
+patch_audit_logs_tab(MisticaApp)
 
 
 def main():
