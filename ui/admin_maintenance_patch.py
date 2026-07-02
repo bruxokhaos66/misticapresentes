@@ -158,7 +158,11 @@ def patch_mistica_app(MisticaApp):
             return
 
         painel = ctk.CTkFrame(self.tab_adm, fg_color=getattr(self, "cor_vinho", "#1a1621"), corner_radius=15)
-        painel.pack(fill="x", padx=20, pady=(0, 14), ipady=10)
+        filhos = list(self.tab_adm.winfo_children())
+        if filhos:
+            painel.pack(fill="x", padx=20, pady=(10, 14), ipady=10, before=filhos[0])
+        else:
+            painel.pack(fill="x", padx=20, pady=(10, 14), ipady=10)
         painel.columnconfigure((0, 1, 2), weight=1)
 
         ctk.CTkLabel(
