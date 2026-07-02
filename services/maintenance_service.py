@@ -4,6 +4,7 @@ from datetime import datetime
 from config import DASHBOARD_MSG_PATH
 from database import query_db
 from services.caixa_service import excluir_lancamento_fluxo, listar_fluxo_detalhado, obter_lancamento_fluxo
+from services.dashboard_service import registrar_fechamento_diario_dashboard
 from services.system_diagnostics_service import backup_manual, diagnosticar_banco
 
 
@@ -43,27 +44,29 @@ def registrar_log_manutencao(usuario, acao, detalhes):
 
 
 def reiniciar_dashboard(usuario):
-    """Reinicia o dashboard visual/configurável sem apagar dados reais.
+    """Fecha o dia do card VENDAS HOJE e recarrega o dashboard sem apagar histórico.
 
-    A ação limpa somente a mensagem personalizada do dashboard e registra log.
-    A remontagem visual da aba é feita pela camada de interface.
+    VENDAS HOJE passa a somar apenas vendas feitas após este fechamento.
+    VENDAS MÊS continua somando o mês inteiro e zera apenas na troca de mês ou se o histórico do mês for apagado/cancelado.
     """
     exigir_adm(usuario)
     removeu_msg = False
     if os.path.exists(DASHBOARD_MSG_PATH):
         os.remove(DASHBOARD_MSG_PATH)
         removeu_msg = True
+    corte = registrar_fechamento_diario_dashboard(_nome_usuario(usuario))
     registrar_log_manutencao(
         usuario,
-        "Reiniciar Dashboard",
-        "Dashboard visual reiniciado; mensagem personalizada removida." if removeu_msg else "Dashboard visual reiniciado; não havia mensagem personalizada.",
+        "Fechar Dia Dashboard",
+        f"Fechamento diário registrado em {corte}. VENDAS HOJE reinicia a contagem a partir deste horário. VENDAS MÊS preservado.",
     )
     return {
         "ok": True,
         "area": "dashboard",
-        "acao": "reiniciar_visual",
+        "acao": "fechar_dia_dashboard",
         "removeu_mensagem_personalizada": removeu_msg,
-        "mensagem": "Dashboard reiniciado e recarregado na tela. Nenhum dado real foi apagado.",
+        "fechamento_diario": corte,
+        "mensagem": "Dia fechado no Dashboard. VENDAS HOJE foi zerado a partir deste momento; VENDAS MÊS foi preservado.",
     }
 
 
@@ -103,11 +106,6 @@ def listar_lancamentos_caixa_para_manutencao(usuario, caixa_id=None, limite=200)
 
 
 def apagar_lancamento_caixa(usuario, fluxo_id, motivo="Correção administrativa"):
-    """Apaga um lançamento específico do fluxo de caixa.
-
-    Ação restrita a adm, com backup prévio e log detalhado.
-    Não apaga vendas, itens de venda, produtos ou contas; remove somente a linha do fluxo_caixa.
-    """
     exigir_adm(usuario)
     lancamento = obter_lancamento_fluxo(fluxo_id)
     if not lancamento:
@@ -205,7 +203,6 @@ def diagnosticar_financeiro(usuario):
 
 
 def reiniciar_area_segura(area, usuario):
-    """Executa reinício seguro/diagnóstico de área, sem apagar dados reais."""
     exigir_adm(usuario)
     area_norm = str(area or "").strip().lower()
     if area_norm == "dashboard":
