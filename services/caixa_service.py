@@ -72,7 +72,6 @@ def resumo_fechamento_caixa():
     debito = _saldo_por_forma(cx_id, "Debito")
     credito = sum(_saldo_por_forma(cx_id, forma) for forma in ("Credito 1x", "Credito 2x", "Credito 3x"))
 
-    # Fallback para lançamentos antigos sem forma_pagamento gravada.
     pix += query_db("SELECT COALESCE(SUM(valor),0) FROM fluxo_caixa WHERE caixa_id=? AND COALESCE(forma_pagamento,'')='' AND descricao LIKE '%(Pix)%'", (cx_id,))[0][0] or 0.0
     debito += query_db("SELECT COALESCE(SUM(valor),0) FROM fluxo_caixa WHERE caixa_id=? AND COALESCE(forma_pagamento,'')='' AND (descricao LIKE '%(Debito)%' OR descricao LIKE '%(Débito)%')", (cx_id,))[0][0] or 0.0
     credito += query_db("SELECT COALESCE(SUM(valor),0) FROM fluxo_caixa WHERE caixa_id=? AND COALESCE(forma_pagamento,'')='' AND (descricao LIKE '%(Credito%' OR descricao LIKE '%(Crédito%')", (cx_id,))[0][0] or 0.0
@@ -115,6 +114,48 @@ def listar_fluxo(caixa_id=None):
     if caixa_id:
         return query_db("SELECT tipo, descricao, valor, data_hora FROM fluxo_caixa WHERE caixa_id=? ORDER BY id DESC", (caixa_id,))
     return query_db("SELECT tipo, descricao, valor, data_hora FROM fluxo_caixa ORDER BY id DESC LIMIT 50")
+
+
+def listar_fluxo_detalhado(caixa_id=None, limite=200):
+    if caixa_id:
+        return query_db(
+            "SELECT id, tipo, descricao, valor, data_hora, caixa_id, forma_pagamento FROM fluxo_caixa WHERE caixa_id=? ORDER BY id DESC LIMIT ?",
+            (caixa_id, int(limite)),
+        )
+    return query_db(
+        "SELECT id, tipo, descricao, valor, data_hora, caixa_id, forma_pagamento FROM fluxo_caixa ORDER BY id DESC LIMIT ?",
+        (int(limite),),
+    )
+
+
+def obter_lancamento_fluxo(fluxo_id):
+    res = query_db(
+        "SELECT id, tipo, descricao, valor, data_hora, caixa_id, forma_pagamento FROM fluxo_caixa WHERE id=?",
+        (fluxo_id,),
+    )
+    return res[0] if res else None
+
+
+def excluir_lancamento_fluxo(fluxo_id):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        lancamento = cur.execute(
+            "SELECT id, tipo, descricao, valor, data_hora, caixa_id, forma_pagamento FROM fluxo_caixa WHERE id=?",
+            (fluxo_id,),
+        ).fetchone()
+        if not lancamento:
+            raise ValueError("Lançamento do caixa não localizado.")
+        cur.execute("DELETE FROM fluxo_caixa WHERE id=?", (fluxo_id,))
+        if cur.rowcount != 1:
+            raise ValueError("Não consegui apagar o lançamento do caixa.")
+        conn.commit()
+        return lancamento
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def salvar_conta(descricao, valor, vencimento, categoria):
