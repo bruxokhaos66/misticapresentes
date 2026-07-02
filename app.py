@@ -1,32 +1,50 @@
-"""Entrada alternativa do sistema Mistica Presentes.
+"""Entrada alternativa do sistema Mística Presentes.
 
 Funciona em modo Python normal e dentro do EXE gerado pelo PyInstaller.
-
-IMPORTANTE:
-- Esta entrada nao altera mais o arquivo mistica_presentes.py automaticamente.
-- Correcoes de codigo devem ser feitas por commit/revisao no GitHub.
-- O modulo services.manutencao_codigo_service deve ser usado apenas manualmente,
-  em ambiente de desenvolvimento, quando houver backup e revisao das alteracoes.
+Esta versão evita executar o arquivo principal via exec e usa importação normal.
 """
 from pathlib import Path
 import sys
+from tkinter import messagebox
+
+import customtkinter as ctk
 
 BASE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
-MAIN_FILE = BASE_DIR / "mistica_presentes.py"
-
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
+from mistica_presentes import MisticaApp, garantir_instancia_unica, init_db, realizar_backup  # noqa: E402
+from ui.admin_audit_cleanup_patch import patch_admin_audit_cleanup  # noqa: E402
+from ui.admin_maintenance_patch import patch_mistica_app  # noqa: E402
+from ui.audit_logs_tab_patch import patch_audit_logs_tab  # noqa: E402
+from ui.dashboard_auto_refresh_patch import patch_dashboard_auto_refresh  # noqa: E402
+from ui.dashboard_runtime_patch import patch_dashboard_runtime  # noqa: E402
+from ui.maintenance_center_patch import patch_maintenance_center  # noqa: E402
+
+patch_mistica_app(MisticaApp)
+patch_dashboard_runtime(MisticaApp)
+patch_maintenance_center(MisticaApp)
+patch_audit_logs_tab(MisticaApp)
+patch_admin_audit_cleanup(MisticaApp)
+patch_dashboard_auto_refresh(MisticaApp)
+
+
+def main():
+    if not garantir_instancia_unica():
+        try:
+            root = ctk.CTk()
+            root.withdraw()
+            messagebox.showwarning("Mística Presentes", "O sistema ja está aberto.")
+            root.destroy()
+        except Exception:
+            pass
+        sys.exit(0)
+
+    init_db()
+    realizar_backup()
+    app = MisticaApp()
+    app.mainloop()
+
 
 if __name__ == "__main__":
-    if not MAIN_FILE.exists():
-        raise FileNotFoundError(f"Arquivo principal nao encontrado: {MAIN_FILE}")
-
-    fonte = MAIN_FILE.read_text(encoding="utf-8-sig")
-    globais = {
-        "__name__": "__main__",
-        "__file__": str(MAIN_FILE),
-        "__package__": None,
-        "__cached__": None,
-    }
-    exec(compile(fonte, str(MAIN_FILE), "exec"), globais)
+    main()

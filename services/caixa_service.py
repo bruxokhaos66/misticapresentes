@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from database import query_db
+from database import get_connection, query_db
 
 
 def obter_caixa_id_ativo():
@@ -14,13 +14,30 @@ def status_caixa_aberto():
 
 
 def abrir_caixa(valor_inicial, operador, descricao="Abertura de Caixa"):
-    if obter_caixa_id_ativo():
-        raise ValueError("Ja existe um caixa aberto. Feche o caixa atual antes de abrir outro.")
     data_ini = datetime.now().strftime("%d/%m/%Y %H:%M")
-    query_db("INSERT INTO caixa_diario (data_abertura, saldo_inicial, status, operador) VALUES (?,?,?,?)", (data_ini, float(valor_inicial or 0), "Aberto", operador), commit=True)
-    cx_id = obter_caixa_id_ativo()
-    query_db("INSERT INTO fluxo_caixa (tipo, descricao, valor, data_hora, caixa_id, forma_pagamento) VALUES (?,?,?,?,?,?)", ("Entrada", descricao, float(valor_inicial or 0), data_ini, cx_id, "Dinheiro"), commit=True)
-    return cx_id
+    data_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        aberto = cur.execute("SELECT id FROM caixa_diario WHERE status='Aberto' ORDER BY id DESC LIMIT 1").fetchone()
+        if aberto:
+            raise ValueError("Ja existe um caixa aberto. Feche o caixa atual antes de abrir outro.")
+        cur.execute(
+            "INSERT INTO caixa_diario (data_abertura, saldo_inicial, status, operador) VALUES (?,?,?,?)",
+            (data_ini, float(valor_inicial or 0), "Aberto", operador),
+        )
+        cx_id = cur.lastrowid
+        cur.execute(
+            "INSERT INTO fluxo_caixa (tipo, descricao, valor, data_hora, data_iso, caixa_id, forma_pagamento) VALUES (?,?,?,?,?,?,?)",
+            ("Entrada", descricao, float(valor_inicial or 0), data_ini, data_iso, cx_id, "Dinheiro"),
+        )
+        conn.commit()
+        return cx_id
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def _soma_fluxo(caixa_id, tipo=None, forma_pagamento=None):
@@ -55,7 +72,6 @@ def resumo_fechamento_caixa():
     debito = _saldo_por_forma(cx_id, "Debito")
     credito = sum(_saldo_por_forma(cx_id, forma) for forma in ("Credito 1x", "Credito 2x", "Credito 3x"))
 
-    # Fallback para lançamentos antigos sem forma_pagamento gravada.
     pix += query_db("SELECT COALESCE(SUM(valor),0) FROM fluxo_caixa WHERE caixa_id=? AND COALESCE(forma_pagamento,'')='' AND descricao LIKE '%(Pix)%'", (cx_id,))[0][0] or 0.0
     debito += query_db("SELECT COALESCE(SUM(valor),0) FROM fluxo_caixa WHERE caixa_id=? AND COALESCE(forma_pagamento,'')='' AND (descricao LIKE '%(Debito)%' OR descricao LIKE '%(Débito)%')", (cx_id,))[0][0] or 0.0
     credito += query_db("SELECT COALESCE(SUM(valor),0) FROM fluxo_caixa WHERE caixa_id=? AND COALESCE(forma_pagamento,'')='' AND (descricao LIKE '%(Credito%' OR descricao LIKE '%(Crédito%')", (cx_id,))[0][0] or 0.0
@@ -71,7 +87,7 @@ def fechar_caixa_conferido(caixa_id, saldo, formas, informado):
         """
         UPDATE caixa_diario
         SET status='Fechado', data_fechamento=?, saldo_final=?, dinheiro_sistema=?, pix_sistema=?, debito_sistema=?, credito_sistema=?, dinheiro_informado=?, pix_informado=?, debito_informado=?, credito_informado=?, diferenca_caixa=?
-        WHERE id=?
+        WHERE id=? AND status='Aberto'
         """,
         (datetime.now().strftime("%d/%m/%Y %H:%M"), saldo, formas.get("Dinheiro", 0.0), formas.get("Pix", 0.0), formas.get("Debito", 0.0), formas.get("Credito", 0.0), informado.get("Dinheiro", 0.0), informado.get("Pix", 0.0), informado.get("Debito", 0.0), informado.get("Credito", 0.0), diferenca, caixa_id),
         commit=True,
@@ -80,7 +96,7 @@ def fechar_caixa_conferido(caixa_id, saldo, formas, informado):
 
 
 def fechar_caixa_simples(caixa_id, saldo):
-    query_db("UPDATE caixa_diario SET status='Fechado', data_fechamento=?, saldo_final=? WHERE id=?", (datetime.now().strftime("%d/%m/%Y %H:%M"), saldo, caixa_id), commit=True)
+    query_db("UPDATE caixa_diario SET status='Fechado', data_fechamento=?, saldo_final=? WHERE id=? AND status='Aberto'", (datetime.now().strftime("%d/%m/%Y %H:%M"), saldo, caixa_id), commit=True)
 
 
 def lancar_fluxo(tipo, descricao, valor, caixa_id, rotulo=None, forma_pagamento=None):
@@ -100,6 +116,48 @@ def listar_fluxo(caixa_id=None):
     return query_db("SELECT tipo, descricao, valor, data_hora FROM fluxo_caixa ORDER BY id DESC LIMIT 50")
 
 
+def listar_fluxo_detalhado(caixa_id=None, limite=200):
+    if caixa_id:
+        return query_db(
+            "SELECT id, tipo, descricao, valor, data_hora, caixa_id, forma_pagamento FROM fluxo_caixa WHERE caixa_id=? ORDER BY id DESC LIMIT ?",
+            (caixa_id, int(limite)),
+        )
+    return query_db(
+        "SELECT id, tipo, descricao, valor, data_hora, caixa_id, forma_pagamento FROM fluxo_caixa ORDER BY id DESC LIMIT ?",
+        (int(limite),),
+    )
+
+
+def obter_lancamento_fluxo(fluxo_id):
+    res = query_db(
+        "SELECT id, tipo, descricao, valor, data_hora, caixa_id, forma_pagamento FROM fluxo_caixa WHERE id=?",
+        (fluxo_id,),
+    )
+    return res[0] if res else None
+
+
+def excluir_lancamento_fluxo(fluxo_id):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        lancamento = cur.execute(
+            "SELECT id, tipo, descricao, valor, data_hora, caixa_id, forma_pagamento FROM fluxo_caixa WHERE id=?",
+            (fluxo_id,),
+        ).fetchone()
+        if not lancamento:
+            raise ValueError("Lançamento do caixa não localizado.")
+        cur.execute("DELETE FROM fluxo_caixa WHERE id=?", (fluxo_id,))
+        if cur.rowcount != 1:
+            raise ValueError("Não consegui apagar o lançamento do caixa.")
+        conn.commit()
+        return lancamento
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def salvar_conta(descricao, valor, vencimento, categoria):
     query_db("INSERT INTO contas_a_pagar (descricao, valor, data_vencimento, categoria, status) VALUES (?,?,?,?,?)", (descricao, float(valor or 0), vencimento, categoria, "Pendente"), commit=True)
 
@@ -112,18 +170,31 @@ def obter_conta(conta_id):
 def marcar_conta_paga(conta_id, caixa_id):
     if not caixa_id:
         raise ValueError("Abra o caixa antes de marcar uma conta como paga.")
-    conta = obter_conta(conta_id)
-    if not conta:
-        raise ValueError("Conta nao localizada.")
-    if str(conta[3]).lower() == "pago":
-        raise ValueError("Esta conta ja esta marcada como paga.")
-    query_db("UPDATE contas_a_pagar SET status='Pago' WHERE id=?", (conta_id,), commit=True)
-    query_db(
-        "INSERT INTO fluxo_caixa (tipo, descricao, valor, data_hora, data_iso, caixa_id, forma_pagamento) VALUES (?,?,?,?,?,?,?)",
-        ("Saida", f"[{conta[2]}] {conta[0]}", conta[1], datetime.now().strftime("%d/%m/%Y %H:%M"), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), caixa_id, None),
-        commit=True,
-    )
-    return conta
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        conta = cur.execute("SELECT descricao, valor, categoria, status FROM contas_a_pagar WHERE id=?", (conta_id,)).fetchone()
+        if not conta:
+            raise ValueError("Conta nao localizada.")
+        if str(conta[3]).lower() == "pago":
+            raise ValueError("Esta conta ja esta marcada como paga.")
+        caixa = cur.execute("SELECT id FROM caixa_diario WHERE id=? AND status='Aberto'", (caixa_id,)).fetchone()
+        if not caixa:
+            raise ValueError("Caixa informado nao esta aberto.")
+        cur.execute("UPDATE contas_a_pagar SET status='Pago' WHERE id=?", (conta_id,))
+        if cur.rowcount != 1:
+            raise ValueError("Nao consegui atualizar a conta como paga.")
+        cur.execute(
+            "INSERT INTO fluxo_caixa (tipo, descricao, valor, data_hora, data_iso, caixa_id, forma_pagamento) VALUES (?,?,?,?,?,?,?)",
+            ("Saida", f"[{conta[2]}] {conta[0]}", conta[1], datetime.now().strftime("%d/%m/%Y %H:%M"), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), caixa_id, None),
+        )
+        conn.commit()
+        return conta
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def excluir_conta(conta_id):

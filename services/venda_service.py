@@ -18,7 +18,7 @@ def calcular_total_venda(carrinho, desconto_percentual=0, forma_pagamento="Dinhe
     forma = forma_pagamento or "Dinheiro"
     taxa = 0.0
     if forma == "Debito" and base > 0:
-        taxa = 1.5  # Taxa fixa definida pela loja.
+        taxa = base * 0.015
     elif "Credito 1x" in forma:
         taxa = base * 0.015
     elif "Credito 2x" in forma:
@@ -122,13 +122,23 @@ def cancelar_venda_service(venda_id, usuario, caixa_id=None):
     conn = get_connection()
     cur = conn.cursor()
     try:
+        caixa = cur.execute("SELECT id FROM caixa_diario WHERE id=? AND status='Aberto'", (caixa_id,)).fetchone()
+        if not caixa:
+            raise ValueError("Caixa informado nao esta aberto.")
+
         itens = vendas_repo.listar_itens_cursor(cur, venda_id)
+        if not itens:
+            raise ValueError("Venda sem itens para estornar. Verifique o banco antes de cancelar.")
+
         for codigo_p, nome_p, quantidade in itens:
             quantidade = int(quantidade or 0)
             produto = estoque_repo.buscar_produto_movimento_cursor(cur, codigo_p)
-            estoque_anterior = int(produto[2] if produto else 0)
+            if not produto:
+                raise ValueError(f"Produto {codigo_p} da venda {venda_id} nao localizado para estorno.")
+            estoque_anterior = int(produto[2] or 0)
             estoque_posterior = estoque_anterior + quantidade
-            estoque_repo.somar_estoque_cursor(cur, codigo_p, quantidade)
+            if estoque_repo.somar_estoque_cursor(cur, codigo_p, quantidade) != 1:
+                raise ValueError(f"Nao consegui devolver estoque do produto {codigo_p}.")
             estoque_repo.registrar_movimentacao_cursor(
                 cur,
                 codigo_p,
@@ -143,7 +153,8 @@ def cancelar_venda_service(venda_id, usuario, caixa_id=None):
                 venda_id,
             )
 
-        vendas_repo.marcar_cancelada_cursor(cur, venda_id)
+        if vendas_repo.marcar_cancelada_cursor(cur, venda_id) != 1:
+            raise ValueError("Nao consegui marcar a venda como cancelada.")
         agora_data = datetime.now().strftime("%d/%m/%Y %H:%M")
         agora_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         vendas_repo.inserir_fluxo_cursor(

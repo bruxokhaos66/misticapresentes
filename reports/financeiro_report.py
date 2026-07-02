@@ -2,6 +2,7 @@ import calendar
 from datetime import datetime
 
 from database import query_db
+from reports.date_filters import filtro_data_iso_sql, intervalo_mes
 from reports.vendas_report import _custo_vendas
 
 
@@ -23,15 +24,15 @@ def despesas_por_categoria(mes, ano):
 
 
 def dre_periodo(mes, ano):
-    filtro = f"/{mes}/{ano}"
+    inicio, fim = intervalo_mes(mes, ano)
     vendas = query_db(
-        """
+        f"""
         SELECT id, total_final
         FROM vendas
         WHERE COALESCE(status,'Concluído') != 'Cancelado'
-          AND (COALESCE(data_venda, '') LIKE ? OR COALESCE(data_iso, '') LIKE ?)
+          AND {filtro_data_iso_sql()}
         """,
-        (f"%{filtro}%", f"%{filtro}%"),
+        (inicio, fim),
     )
     receitas = sum(float(v[1] or 0.0) for v in vendas)
     custos = _custo_vendas([v[0] for v in vendas])
@@ -42,7 +43,7 @@ def dre_periodo(mes, ano):
 
     dia_atual = datetime.now().day
     dias_no_mes = calendar.monthrange(int(ano), int(mes))[1]
-    if str(mes) != datetime.now().strftime("%m") or str(ano) != datetime.now().strftime("%Y"):
+    if str(mes).zfill(2) != datetime.now().strftime("%m") or str(ano) != datetime.now().strftime("%Y"):
         dia_atual = dias_no_mes
     faturamento_previsto = (receitas / dia_atual) * dias_no_mes if dia_atual > 0 else receitas
     media_diaria = receitas / dia_atual if dia_atual > 0 else 0.0
