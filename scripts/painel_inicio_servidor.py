@@ -1,4 +1,4 @@
-"""Janela de inicio do servidor do app Mística Presentes.
+r"""Painel compacto para iniciar o servidor do app Mística Presentes.
 
 Uso recomendado no começo do dia:
     python scripts\painel_inicio_servidor.py
@@ -29,14 +29,23 @@ TOKEN_FILE = CONFIG_DIR / "api_token.txt"
 PORT = os.getenv("MISTICA_SERVER_PORT", "8000")
 HOST = os.getenv("MISTICA_SERVER_HOST", "0.0.0.0")
 
+COR_FUNDO = "#120d16"
+COR_CARD = "#201724"
+COR_CARD_2 = "#2b2031"
+COR_TEXTO = "#f6f0df"
+COR_MUTED = "#bfb7c8"
+COR_DOURADO = "#d8b56d"
+COR_VERDE = "#6fbf9b"
+COR_VERMELHO = "#c96c6c"
+
 
 class PainelServidor(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Mística Presentes - Servidor do App")
-        self.geometry("760x540")
-        self.minsize(720, 500)
-        self.configure(bg="#151018")
+        self.title("Mística - Servidor do App")
+        self.geometry("560x390")
+        self.minsize(520, 360)
+        self.configure(bg=COR_FUNDO)
         self.processo: subprocess.Popen | None = None
         self.token = gerar_ou_ler_token()
         self.ip = ip_local()
@@ -46,92 +55,118 @@ class PainelServidor(tk.Tk):
         self.after(500, self.iniciar_servidor)
         self.protocol("WM_DELETE_WINDOW", self.ao_fechar)
 
-    def _label(self, texto, tamanho=11, cor="#f6f0df", negrito=False):
-        fonte = ("Segoe UI", tamanho, "bold" if negrito else "normal")
-        return tk.Label(self, text=texto, bg="#151018", fg=cor, font=fonte, anchor="w", justify="left")
-
-    def _entry_readonly(self, valor):
+    def _entry_readonly(self, valor: str):
         var = tk.StringVar(value=valor)
-        entrada = tk.Entry(self, textvariable=var, font=("Consolas", 11), relief="flat", bg="#231a29", fg="#f6f0df", insertbackground="#f6f0df")
-        entrada.configure(state="readonly", readonlybackground="#231a29")
+        entrada = tk.Entry(
+            self,
+            textvariable=var,
+            font=("Consolas", 10),
+            relief="flat",
+            bg=COR_CARD_2,
+            fg=COR_TEXTO,
+            insertbackground=COR_TEXTO,
+        )
+        entrada.configure(state="readonly", readonlybackground=COR_CARD_2)
         return entrada
 
-    def _botao(self, texto, comando, cor="#d8b56d"):
+    def _botao(self, texto, comando, cor=COR_DOURADO, largura=None):
         return tk.Button(
             self,
             text=texto,
             command=comando,
             bg=cor,
-            fg="#151018",
-            activebackground="#f1d38b",
-            activeforeground="#151018",
+            fg=COR_FUNDO,
+            activebackground="#f1d38b" if cor == COR_DOURADO else cor,
+            activeforeground=COR_FUNDO,
             relief="flat",
-            font=("Segoe UI", 10, "bold"),
-            padx=12,
-            pady=8,
+            font=("Segoe UI", 9, "bold"),
+            padx=10,
+            pady=6,
+            width=largura,
             cursor="hand2",
         )
 
+    def _card_label(self, parent, texto, cor=COR_MUTED):
+        return tk.Label(parent, text=texto, bg=COR_CARD, fg=cor, font=("Segoe UI", 9, "bold"), anchor="w")
+
     def _montar_tela(self):
-        topo = tk.Frame(self, bg="#151018")
-        topo.pack(fill="x", padx=24, pady=(22, 12))
-        tk.Label(topo, text="🌙", bg="#151018", fg="#d8b56d", font=("Segoe UI", 28)).pack(side="left")
+        topo = tk.Frame(self, bg=COR_FUNDO)
+        topo.pack(fill="x", padx=18, pady=(16, 8))
+        tk.Label(topo, text="🌙", bg=COR_FUNDO, fg=COR_DOURADO, font=("Segoe UI", 22)).pack(side="left")
+        bloco_titulo = tk.Frame(topo, bg=COR_FUNDO)
+        bloco_titulo.pack(side="left", padx=10, fill="x", expand=True)
         tk.Label(
-            topo,
-            text="Mística Presentes - Servidor do App",
-            bg="#151018",
-            fg="#f6f0df",
-            font=("Segoe UI", 18, "bold"),
-        ).pack(side="left", padx=12)
+            bloco_titulo,
+            text="Servidor do App",
+            bg=COR_FUNDO,
+            fg=COR_TEXTO,
+            font=("Segoe UI", 15, "bold"),
+            anchor="w",
+        ).pack(fill="x")
+        tk.Label(
+            bloco_titulo,
+            text="Mística Presentes • painel de início do dia",
+            bg=COR_FUNDO,
+            fg=COR_MUTED,
+            font=("Segoe UI", 9),
+            anchor="w",
+        ).pack(fill="x")
 
         self.status_var = tk.StringVar(value="Iniciando servidor...")
-        self.status_label = tk.Label(self, textvariable=self.status_var, bg="#151018", fg="#f1d38b", font=("Segoe UI", 12, "bold"), anchor="w")
-        self.status_label.pack(fill="x", padx=28, pady=(0, 14))
-
-        quadro = tk.Frame(self, bg="#201724", padx=18, pady=16)
-        quadro.pack(fill="x", padx=24, pady=8)
-
-        tk.Label(quadro, text="Endereço para usar no APP / celular:", bg="#201724", fg="#f6f0df", font=("Segoe UI", 11, "bold"), anchor="w").pack(fill="x")
-        self.url_rede_entry = self._entry_readonly(self.url_rede)
-        self.url_rede_entry.pack(fill="x", pady=(6, 12))
-
-        tk.Label(quadro, text="Endereço neste computador:", bg="#201724", fg="#f6f0df", font=("Segoe UI", 11, "bold"), anchor="w").pack(fill="x")
-        self.url_local_entry = self._entry_readonly(self.url_local)
-        self.url_local_entry.pack(fill="x", pady=(6, 12))
-
-        tk.Label(quadro, text="Token do app:", bg="#201724", fg="#f6f0df", font=("Segoe UI", 11, "bold"), anchor="w").pack(fill="x")
-        self.token_entry = self._entry_readonly(self.token)
-        self.token_entry.pack(fill="x", pady=(6, 8))
-
-        aviso = "Não envie print com o token. Envie somente para pessoas autorizadas da loja."
-        tk.Label(quadro, text=aviso, bg="#201724", fg="#e8b86d", font=("Segoe UI", 9), anchor="w").pack(fill="x")
-
-        botoes = tk.Frame(self, bg="#151018")
-        botoes.pack(fill="x", padx=24, pady=18)
-        self._botao("Iniciar servidor", self.iniciar_servidor).pack(side="left", padx=(0, 8))
-        self._botao("Parar", self.parar_servidor, cor="#c96c6c").pack(side="left", padx=8)
-        self._botao("Copiar URL do app", lambda: self.copiar(self.url_rede)).pack(side="left", padx=8)
-        self._botao("Copiar token", lambda: self.copiar(self.token)).pack(side="left", padx=8)
-
-        botoes2 = tk.Frame(self, bg="#151018")
-        botoes2.pack(fill="x", padx=24, pady=(0, 10))
-        self._botao("Abrir status", lambda: webbrowser.open(f"{self.url_rede}/api/server/status")).pack(side="left", padx=(0, 8))
-        self._botao("Abrir docs", lambda: webbrowser.open(f"{self.url_rede}/docs")).pack(side="left", padx=8)
-        self._botao("Abrir painel", lambda: webbrowser.open(self.url_rede)).pack(side="left", padx=8)
-        self._botao("Enviar WhatsApp", self.enviar_whatsapp, cor="#6fbf9b").pack(side="left", padx=8)
-
-        botoes3 = tk.Frame(self, bg="#151018")
-        botoes3.pack(fill="x", padx=24, pady=(0, 10))
-        self._botao("Copiar mensagem WhatsApp", lambda: self.copiar(self.mensagem_whatsapp()), cor="#b7d8a8").pack(side="left", padx=(0, 8))
-
-        instrucoes = (
-            "Para começar o dia:\n"
-            "1. Deixe esta janela aberta.\n"
-            "2. No app, use o endereço e token acima.\n"
-            "3. O celular precisa estar no mesmo Wi-Fi ou acessar por VPN/Tailscale/Cloudflare.\n"
-            "4. Se trocar de Wi-Fi, o IP pode mudar; copie a nova URL mostrada aqui."
+        self.status_label = tk.Label(
+            self,
+            textvariable=self.status_var,
+            bg=COR_CARD,
+            fg=COR_DOURADO,
+            font=("Segoe UI", 10, "bold"),
+            anchor="w",
+            padx=12,
+            pady=8,
         )
-        tk.Label(self, text=instrucoes, bg="#151018", fg="#bfb7c8", font=("Segoe UI", 10), justify="left", anchor="w").pack(fill="x", padx=28, pady=(8, 0))
+        self.status_label.pack(fill="x", padx=18, pady=(0, 10))
+
+        quadro = tk.Frame(self, bg=COR_CARD, padx=14, pady=12)
+        quadro.pack(fill="x", padx=18, pady=4)
+
+        self._card_label(quadro, "URL para o app / celular").pack(fill="x")
+        self.url_rede_entry = self._entry_readonly(self.url_rede)
+        self.url_rede_entry.pack(fill="x", pady=(4, 8))
+
+        self._card_label(quadro, "Token do app").pack(fill="x")
+        self.token_entry = self._entry_readonly(self.token)
+        self.token_entry.pack(fill="x", pady=(4, 6))
+
+        aviso = "Envie o token apenas para pessoas autorizadas. Evite prints."
+        tk.Label(quadro, text=aviso, bg=COR_CARD, fg="#e8b86d", font=("Segoe UI", 8), anchor="w").pack(fill="x")
+
+        botoes = tk.Frame(self, bg=COR_FUNDO)
+        botoes.pack(fill="x", padx=18, pady=(12, 6))
+        self._botao("Iniciar", self.iniciar_servidor, largura=10).pack(side="left", padx=(0, 6))
+        self._botao("Parar", self.parar_servidor, cor=COR_VERMELHO, largura=8).pack(side="left", padx=6)
+        self._botao("Copiar URL", lambda: self.copiar(self.url_rede), largura=11).pack(side="left", padx=6)
+        self._botao("Copiar token", lambda: self.copiar(self.token), largura=12).pack(side="left", padx=6)
+
+        botoes2 = tk.Frame(self, bg=COR_FUNDO)
+        botoes2.pack(fill="x", padx=18, pady=(2, 8))
+        self._botao("Status", lambda: webbrowser.open(f"{self.url_rede}/api/server/status"), largura=9).pack(side="left", padx=(0, 6))
+        self._botao("Docs", lambda: webbrowser.open(f"{self.url_rede}/docs"), largura=8).pack(side="left", padx=6)
+        self._botao("WhatsApp", self.enviar_whatsapp, cor=COR_VERDE, largura=11).pack(side="left", padx=6)
+        self._botao("Copiar mensagem", lambda: self.copiar(self.mensagem_whatsapp()), cor="#b7d8a8", largura=16).pack(side="left", padx=6)
+
+        rodape = (
+            "Começo do dia: deixe esta janela aberta e use a URL acima no app. "
+            "Se mudar de Wi-Fi, o IP pode mudar."
+        )
+        tk.Label(
+            self,
+            text=rodape,
+            bg=COR_FUNDO,
+            fg=COR_MUTED,
+            font=("Segoe UI", 9),
+            wraplength=510,
+            justify="left",
+            anchor="w",
+        ).pack(fill="x", padx=20, pady=(4, 0))
 
     def copiar(self, texto: str):
         self.clipboard_clear()
@@ -162,6 +197,9 @@ class PainelServidor(tk.Tk):
     def iniciar_servidor(self):
         if self.processo and self.processo.poll() is None:
             self.status_var.set(f"Servidor online: {self.url_rede}")
+            return
+        if porta_em_uso(PORT):
+            self.status_var.set(f"Servidor já está ativo na porta {PORT}: {self.url_rede}")
             return
 
         env = os.environ.copy()
@@ -195,9 +233,12 @@ class PainelServidor(tk.Tk):
             messagebox.showerror("Erro", f"Não foi possível iniciar o servidor:\n{exc}")
 
     def _monitorar_inicio(self):
-        for _ in range(20):
+        for _ in range(14):
             if self.processo and self.processo.poll() is not None:
-                self.status_var.set("Servidor parou inesperadamente.")
+                if porta_em_uso(PORT):
+                    self.status_var.set(f"Servidor já estava ativo: {self.url_rede}")
+                else:
+                    self.status_var.set("Servidor parou inesperadamente. Verifique se a porta 8000 está livre.")
                 return
             time.sleep(0.5)
         self.status_var.set(f"Servidor online: {self.url_rede}")
@@ -206,6 +247,8 @@ class PainelServidor(tk.Tk):
         if self.processo and self.processo.poll() is None:
             self.processo.terminate()
             self.status_var.set("Servidor parado.")
+        elif porta_em_uso(PORT):
+            self.status_var.set("Servidor ativo por outro processo. Feche pelo terminal se precisar parar.")
         else:
             self.status_var.set("Servidor já está parado.")
 
@@ -237,6 +280,15 @@ def ip_local() -> str:
         return ip
     except Exception:
         return "127.0.0.1"
+
+
+def porta_em_uso(porta: str | int) -> bool:
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.35)
+            return s.connect_ex(("127.0.0.1", int(porta))) == 0
+    except Exception:
+        return False
 
 
 def main():
