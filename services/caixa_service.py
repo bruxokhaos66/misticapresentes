@@ -15,7 +15,7 @@ def status_caixa_aberto():
 
 def abrir_caixa(valor_inicial, operador, descricao="Abertura de Caixa"):
     if obter_caixa_id_ativo():
-        raise ValueError("O caixa ja esta aberto.")
+        raise ValueError("Ja existe um caixa aberto. Feche o caixa atual antes de abrir outro.")
     data_ini = datetime.now().strftime("%d/%m/%Y %H:%M")
     query_db("INSERT INTO caixa_diario (data_abertura, saldo_inicial, status, operador) VALUES (?,?,?,?)", (data_ini, float(valor_inicial or 0), "Aberto", operador), commit=True)
     cx_id = obter_caixa_id_ativo()

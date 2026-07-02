@@ -17,7 +17,7 @@ HOST = os.getenv("MISTICA_SERVER_HOST", "0.0.0.0")
 PORT = os.getenv("MISTICA_SERVER_PORT", "8000")
 CONFIG_DIR = Path.home() / "Documents" / "Mistica_Servidor_Dedicado"
 TOKEN_FILE = CONFIG_DIR / "api_token.txt"
-TOKEN_PADRAO = "mistica-local"
+TOKEN_PADRAO = ""
 
 
 def carregar_token_seguro():
@@ -57,8 +57,8 @@ def main():
     print(f"Local:      http://127.0.0.1:{PORT}")
     print(f"Rede loja:  http://{ip}:{PORT}")
     print("Externo: use Tailscale, VPN ou Cloudflare Tunnel apontando para este servidor.")
-    if token_atual == TOKEN_PADRAO:
-        print("ATENÇÃO: usando token padrão. Para internet/Cloudflare, configure um token forte.")
+    if not token_atual:
+        print("ATENÇÃO: nenhum token configurado. Defina MISTICA_API_TOKEN para uso seguro.")
         print("Rode: python scripts/configurar_inicio_servidor_windows.py")
     else:
         print("Token forte carregado para a API.")

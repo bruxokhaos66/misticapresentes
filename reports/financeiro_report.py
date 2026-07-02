@@ -29,9 +29,9 @@ def dre_periodo(mes, ano):
         SELECT id, total_final
         FROM vendas
         WHERE COALESCE(status,'Concluído') != 'Cancelado'
-          AND data_venda LIKE ?
+          AND (COALESCE(data_venda, '') LIKE ? OR COALESCE(data_iso, '') LIKE ?)
         """,
-        (f"%{filtro}%",),
+        (f"%{filtro}%", f"%{filtro}%"),
     )
     receitas = sum(float(v[1] or 0.0) for v in vendas)
     custos = _custo_vendas([v[0] for v in vendas])

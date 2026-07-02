@@ -103,14 +103,13 @@ def init_db():
     except Exception:
         pass
 
-    for sql_idx in ["CREATE INDEX IF NOT EXISTS idx_produtos_codigo ON produtos(codigo_p)", "CREATE UNIQUE INDEX IF NOT EXISTS ux_produtos_codigo_unico ON produtos(codigo_p) WHERE codigo_p IS NOT NULL AND codigo_p != ''", "CREATE INDEX IF NOT EXISTS idx_mov_estoque_codigo ON movimentacao_estoque(codigo_p)", "CREATE INDEX IF NOT EXISTS idx_produtos_nome ON produtos(nome)", "CREATE INDEX IF NOT EXISTS idx_clientes_nome ON clientes(nome)", "CREATE INDEX IF NOT EXISTS idx_vendas_data ON vendas(data_venda)", "CREATE INDEX IF NOT EXISTS idx_vendas_status ON vendas(status)", "CREATE INDEX IF NOT EXISTS idx_vendas_itens_venda ON vendas_itens(venda_id)", "CREATE INDEX IF NOT EXISTS idx_fluxo_caixa_id ON fluxo_caixa(caixa_id)", "CREATE INDEX IF NOT EXISTS idx_fluxo_caixa_forma ON fluxo_caixa(forma_pagamento)", "CREATE INDEX IF NOT EXISTS idx_isis_memoria_tipo ON isis_memoria(tipo)", "CREATE INDEX IF NOT EXISTS idx_isis_memoria_chave ON isis_memoria(chave)"]:
+    for sql_idx in ["CREATE INDEX IF NOT EXISTS idx_produtos_codigo ON produtos(codigo_p)", "CREATE UNIQUE INDEX IF NOT EXISTS ux_produtos_codigo_unico ON produtos(codigo_p) WHERE codigo_p IS NOT NULL AND codigo_p != ''", "CREATE INDEX IF NOT EXISTS idx_mov_estoque_codigo ON movimentacao_estoque(codigo_p)", "CREATE INDEX IF NOT EXISTS idx_produtos_nome ON produtos(nome)", "CREATE INDEX IF NOT EXISTS idx_clientes_nome ON clientes(nome)", "CREATE INDEX IF NOT EXISTS idx_vendas_data ON vendas(data_venda)", "CREATE INDEX IF NOT EXISTS idx_vendas_data_iso ON vendas(data_iso)", "CREATE INDEX IF NOT EXISTS idx_vendas_status ON vendas(status)", "CREATE INDEX IF NOT EXISTS idx_vendas_itens_venda ON vendas_itens(venda_id)", "CREATE INDEX IF NOT EXISTS idx_fluxo_caixa_id ON fluxo_caixa(caixa_id)", "CREATE INDEX IF NOT EXISTS idx_fluxo_caixa_forma ON fluxo_caixa(forma_pagamento)", "CREATE INDEX IF NOT EXISTS idx_isis_memoria_tipo ON isis_memoria(tipo)", "CREATE INDEX IF NOT EXISTS idx_isis_memoria_chave ON isis_memoria(chave)"]:
         try:
             query_db(sql_idx, commit=True)
         except Exception:
             pass
 
     admin_res = query_db("SELECT senha_hash FROM usuarios WHERE login='admin'")
-    admin_padrao_pbkdf2 = hash_password_pbkdf2("admin")
     if not admin_res:
         senha_temp = "Mistica@" + secrets.token_hex(4)
         salt = secrets.token_hex(16)
@@ -118,17 +117,8 @@ def init_db():
         try:
             with open(os.path.join(DOCS_PATH, "mistica_senha_admin_inicial.txt"), "w", encoding="utf-8") as f:
                 f.write("Login: admin\nSenha temporaria: " + senha_temp + "\nTroque esta senha no primeiro acesso.\n")
-        except Exception:
-            pass
-    elif admin_res[0][0] == admin_padrao_pbkdf2:
-        senha_temp = "Mistica@" + secrets.token_hex(4)
-        salt = secrets.token_hex(16)
-        query_db("UPDATE usuarios SET senha_hash=?, senha_salt=?, ativo=1 WHERE login='admin'", (hash_password_pbkdf2(senha_temp, salt.encode("utf-8")), salt), commit=True)
-        try:
-            with open(os.path.join(DOCS_PATH, "mistica_senha_admin_inicial.txt"), "w", encoding="utf-8") as f:
-                f.write("Login: admin\nSenha temporaria: " + senha_temp + "\nA senha admin/admin foi bloqueada por seguranca.\n")
-        except Exception:
-            pass
+        except Exception as exc:
+            print(f"[DB init] Falha ao gravar senha admin temporaria: {exc}")
     for c in ["Velas", "Incensos", "Cristais", "Óleos"]:
         try:
             query_db("INSERT INTO categorias (nome) VALUES (?)", (c,), commit=True)

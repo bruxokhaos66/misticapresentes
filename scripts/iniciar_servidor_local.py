@@ -29,13 +29,17 @@ def ip_local():
 def main():
     os.chdir(ROOT)
     ip = ip_local()
-    token = os.getenv("MISTICA_API_TOKEN", "mistica-local")
+    token = os.getenv("MISTICA_API_TOKEN", "").strip()
+    if token:
+        token_texto = token
+    else:
+        token_texto = "(configure MISTICA_API_TOKEN)"
     print("=" * 62)
     print("Mística Presentes - Servidor local da loja")
     print("=" * 62)
     print("Painel neste computador: http://127.0.0.1:8000")
     print(f"Painel na rede local:   http://{ip}:8000")
-    print(f"Token local atual:      {token}")
+    print(f"Token local atual:      {token_texto}")
     print("\nAtenção: use apenas na rede da loja ou via VPN/Tailscale/Cloudflare Tunnel.")
     print("Para parar: CTRL+C")
     print("=" * 62)

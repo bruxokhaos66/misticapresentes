@@ -12,16 +12,20 @@ def _custo_vendas(vendas_ids):
     return float(res[0][0] or 0.0) if res else 0.0
 
 
+def _filtro_data_sql(coluna='data_venda'):
+    return f"(COALESCE({coluna}, '') LIKE ? OR COALESCE(data_iso, '') LIKE ?)"
+
+
 def vendas_por_filtro(filtro):
     vendas = query_db(
-        """
+        f"""
         SELECT id, data_venda, cliente, total_final, vendedor
         FROM vendas
         WHERE COALESCE(status,'Concluído') != 'Cancelado'
-          AND data_venda LIKE ?
+          AND {_filtro_data_sql()}
         ORDER BY id DESC
         """,
-        (f"%{filtro}%",),
+        (f"%{filtro}%", f"%{filtro}%"),
     )
     total = sum(float(v[3] or 0) for v in vendas)
     ids = [v[0] for v in vendas]
@@ -32,13 +36,13 @@ def vendas_por_filtro(filtro):
 def lucro_liquido_periodo(mes, ano):
     filtro = f"/{mes}/{ano}"
     vendas = query_db(
-        """
+        f"""
         SELECT id, total_final, COALESCE(taxa,0), COALESCE(desconto,0)
         FROM vendas
         WHERE COALESCE(status,'Concluído') != 'Cancelado'
-          AND data_venda LIKE ?
+          AND {_filtro_data_sql()}
         """,
-        (f"%{filtro}%",),
+        (f"%{filtro}%", f"%{filtro}%"),
     )
     receitas = sum(float(v[1] or 0) for v in vendas)
     taxas = sum(float(v[2] or 0) for v in vendas)
@@ -85,29 +89,29 @@ def ranking_clientes(limite=10):
 
 def resumo_vendas_periodo(filtro):
     res = query_db(
-        """
+        f"""
         SELECT COUNT(*), COALESCE(SUM(total_final),0)
         FROM vendas
         WHERE COALESCE(status,'Concluído') != 'Cancelado'
-          AND data_venda LIKE ?
+          AND {_filtro_data_sql()}
         """,
-        (f"%{filtro}%",),
+        (f"%{filtro}%", f"%{filtro}%"),
     )
     return res[0] if res else (0, 0.0)
 
 
 def lucro_bruto_itens_periodo(filtro):
     res = query_db(
-        """
+        f"""
         SELECT COALESCE(SUM(vi.quantidade * (vi.valor_unitario - vi.custo_unitario)),0),
                COALESCE(SUM(vi.valor_total),0),
                COALESCE(SUM(vi.quantidade * vi.custo_unitario),0)
         FROM vendas_itens vi
         JOIN vendas v ON vi.venda_id = v.id
         WHERE COALESCE(v.status,'Concluído') != 'Cancelado'
-          AND v.data_venda LIKE ?
+          AND {_filtro_data_sql('v.data_venda')}
         """,
-        (f"%{filtro}%",),
+        (f"%{filtro}%", f"%{filtro}%"),
     )
     return res[0] if res else (0.0, 0.0, 0.0)
 

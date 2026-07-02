@@ -1,6 +1,7 @@
 from pathlib import Path
 import asyncio
 import json
+import os
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
@@ -39,6 +40,13 @@ class LoginAppRequest(BaseModel):
     senha: str
 
 
+def _allowed_origins() -> list[str]:
+    configurado = os.getenv("MISTICA_ALLOWED_ORIGINS", "http://localhost,http://127.0.0.1").strip()
+    if not configurado:
+        return []
+    return [origem.strip() for origem in configurado.split(",") if origem.strip()]
+
+
 app = FastAPI(
     title="Mística Presentes API Local",
     version="0.1.0",
@@ -47,7 +55,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins(),
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],

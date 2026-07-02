@@ -14,8 +14,8 @@ def _registrar_falha_backup(erro):
             f.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " | Falha no backup automatico\n")
             f.write(str(erro) + "\n")
             f.write(traceback.format_exc())
-    except Exception:
-        pass
+    except Exception as exc_log:
+        print(f"[Backup] Falha ao registrar log: {exc_log}")
 
 
 def realizar_backup(tag_extra=None):

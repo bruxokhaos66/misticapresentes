@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hmac
+import os
 import secrets
 from datetime import datetime, timedelta
 
@@ -60,7 +61,8 @@ def _senha_confere(senha_digitada: str, senha_hash: str | None, senha_salt: str 
     if senha_salt:
         calculado = hash_password_pbkdf2(senha_digitada, str(senha_salt).encode("utf-8"))
     else:
-        calculado = hash_password_pbkdf2(senha_digitada)
+        fallback_salt = os.getenv("MISTICA_PASSWORD_SALT", "").strip()
+        calculado = hash_password_pbkdf2(senha_digitada, fallback_salt.encode("utf-8") if fallback_salt else None)
     return hmac.compare_digest(str(calculado), str(senha_hash))
 
 

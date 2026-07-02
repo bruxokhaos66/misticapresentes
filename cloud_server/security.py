@@ -6,7 +6,7 @@ import hmac
 import os
 from fastapi import Header, HTTPException, status
 
-DEFAULT_ADMIN_TOKEN = "troque-este-token"
+DEFAULT_ADMIN_TOKEN = ""
 
 
 def hash_token(token: str) -> str:
@@ -18,7 +18,7 @@ def comparar_token(token: str, token_hash: str) -> bool:
 
 
 def admin_token() -> str:
-    return os.getenv("MISTICA_CLOUD_ADMIN_TOKEN", DEFAULT_ADMIN_TOKEN)
+    return os.getenv("MISTICA_CLOUD_ADMIN_TOKEN", DEFAULT_ADMIN_TOKEN).strip()
 
 
 def exigir_admin(x_mistica_admin_token: str | None = Header(default=None)):

@@ -10,21 +10,21 @@ import hmac
 import os
 from fastapi import Header, HTTPException, status
 
-DEFAULT_LOCAL_TOKEN = "mistica-local"
 MIN_TOKEN_FORTE = 12
 
 
-def api_token_configurado() -> str:
-    return os.getenv("MISTICA_API_TOKEN", DEFAULT_LOCAL_TOKEN)
+def api_token_configurado() -> str | None:
+    token = os.getenv("MISTICA_API_TOKEN", "").strip()
+    return token or None
 
 
 def token_padrao_em_uso() -> bool:
-    return api_token_configurado() == DEFAULT_LOCAL_TOKEN
+    return False
 
 
 def token_forte_configurado() -> bool:
     token = api_token_configurado()
-    if not token or token == DEFAULT_LOCAL_TOKEN:
+    if not token:
         return False
     return len(token) >= MIN_TOKEN_FORTE
 
@@ -40,7 +40,7 @@ def resumo_seguranca_api() -> dict:
 def validar_token_valor(token_recebido: str | None) -> bool:
     esperado = api_token_configurado()
     if not esperado:
-        return True
+        return False
     return hmac.compare_digest(str(token_recebido or ""), str(esperado))
 
 

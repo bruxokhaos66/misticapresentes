@@ -23,7 +23,7 @@ from tkinter import messagebox, ttk, PhotoImage, Label
 # VERSÃO AUDITADA - correções de estabilidade, abas, SQL e validações
 
 # --- CONFIGURAÇÃO, BANCO E BACKUP (Arquitetura 2.0 - Etapa 1) ---
-PROJECT_DIR = os.path.join(os.path.expanduser("~"), "Documents", "mistica_presentes")
+PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 if PROJECT_DIR not in sys.path:
     sys.path.insert(0, PROJECT_DIR)
 
@@ -153,10 +153,23 @@ def format_moeda(valor):
         return "R$ 0,00"
 
 def conv_float(texto):
-    if not texto:
+    """Converte valores monetarios em float.
+
+    Aceita: 18, 18,00, R$ 18,00, 1.250,50 e 1250.50.
+    """
+    if texto is None:
         return 0.0
-    limpo = "".join(filter(str.isdigit, str(texto)))
-    return float(limpo) / 100 if limpo else 0.0
+    txt = str(texto).strip()
+    if not txt:
+        return 0.0
+    txt = txt.replace("R$", "").replace("r$", "").replace(" ", "")
+    try:
+        if "," in txt:
+            txt = txt.replace(".", "").replace(",", ".")
+        return float(txt)
+    except Exception:
+        limpo = re.sub(r"[^0-9]", "", str(texto))
+        return float(limpo) / 100 if limpo else 0.0
 
 def carregar_mensagem_dashboard():
     """Carrega a mensagem motivacional do Dashboard.
@@ -199,8 +212,8 @@ def registrar_movimentacao_estoque(codigo_p, produto, quantidade, tipo, motivo, 
             estoque_posterior,
             venda_id,
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        registrar_erro_sistema("registrar_movimentacao_estoque", exc)
 
 def registrar_erro_sistema(contexto, erro):
     try:
@@ -214,8 +227,8 @@ def registrar_erro_sistema(contexto, erro):
             arq.write("Traceback:\n")
             arq.write(traceback.format_exc())
             arq.write("\n")
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"[Erro] Falha ao registrar log do sistema: {exc}")
 
 
 # --- INTERFACE ---
@@ -349,9 +362,19 @@ class MisticaApp(ctk.CTk):
             self.login_tentativas[u] = self.login_tentativas.get(u, 0) + 1
             messagebox.showerror("Senha bloqueada", "A senha padrao admin/admin foi desativada por seguranca. Use a senha cadastrada pelo administrador.")
             return
-        senha_segura = hash_password_pbkdf2(senha_plana)
-        res = query_db("SELECT nome, perfil, login, senha_hash FROM usuarios WHERE login=? AND COALESCE(ativo,1)=1", (u,))
-        if res and res[0][3] == senha_segura:
+        res = query_db("SELECT nome, perfil, login, senha_hash, COALESCE(senha_salt,'') FROM usuarios WHERE login=? AND COALESCE(ativo,1)=1", (u,))
+        autenticado = False
+        if res:
+            nome, perfil, login, senha_hash, senha_salt = res[0]
+            if senha_salt:
+                autenticado = senha_hash == hash_password_pbkdf2(senha_plana, str(senha_salt).encode("utf-8"))
+            else:
+                autenticado = senha_hash == hash_password_pbkdf2(senha_plana)
+                if autenticado:
+                    novo_salt = secrets.token_hex(16)
+                    novo_hash = hash_password_pbkdf2(senha_plana, novo_salt.encode("utf-8"))
+                    query_db("UPDATE usuarios SET senha_hash=?, senha_salt=? WHERE login=?", (novo_hash, novo_salt, login), commit=True)
+        if res and autenticado:
             self.login_tentativas[u] = 0
             self.login_bloqueios.pop(u, None)
             self.current_user = {"nome": res[0][0], "perfil": res[0][1], "login": res[0][2]}
@@ -382,8 +405,9 @@ class MisticaApp(ctk.CTk):
             if len(senha_txt) < 4:
                 messagebox.showerror("Erro", "A senha precisa ter pelo menos 4 caracteres.")
                 return
-            query_db("UPDATE usuarios SET senha_hash=? WHERE login=?", (hash_password_pbkdf2(senha_txt), login_usuario), commit=True)
-            messagebox.showinfo("Sucesso", "Senhá atualizada! Prossiga com o login.")
+            salt = secrets.token_hex(16)
+            query_db("UPDATE usuarios SET senha_hash=?, senha_salt=? WHERE login=?", (hash_password_pbkdf2(senha_txt, salt.encode("utf-8")), salt, login_usuario), commit=True)
+            messagebox.showinfo("Sucesso", "Senha atualizada! Prossiga com o login.")
             win_troca.destroy()
         ctk.CTkButton(win_troca, text="SALVAR NOVA SENHA", height=42, fg_color=self.cor_botao, font=self.font_button, command=salvar_senha).pack(pady=15)
 
@@ -1861,7 +1885,7 @@ class MisticaApp(ctk.CTk):
         nome_val = un.get().strip()
         login_val = ul.get().strip().lower()
         if not nome_val or not login_val:
-            messagebox.showerror("Erro", "Preenchá Nome e Login.")
+            messagebox.showerror("Erro", "Preencha Nome e Login.")
             return
         existe = query_db("SELECT id FROM usuarios WHERE login=? AND id!=?", (login_val, self.selected_user_id))
         if existe:
@@ -1877,7 +1901,9 @@ class MisticaApp(ctk.CTk):
             return
         nova_senha = up.get()
         if nova_senha:
-            query_db("UPDATE usuarios SET nome=?, cpf=?, endereco=?, telefone=?, login=?, senha_hash=?, perfil=? WHERE id=?", (nome_val, uc.get(), ue.get(), ut.get(), login_val, hash_password_pbkdf2(nova_senha), upf.get(), self.selected_user_id), commit=True)
+            salt = secrets.token_hex(16)
+            senha_hash = hash_password_pbkdf2(nova_senha, salt.encode("utf-8"))
+            query_db("UPDATE usuarios SET nome=?, cpf=?, endereco=?, telefone=?, login=?, senha_hash=?, senha_salt=?, perfil=? WHERE id=?", (nome_val, uc.get(), ue.get(), ut.get(), login_val, senha_hash, salt, upf.get(), self.selected_user_id), commit=True)
         else:
             query_db("UPDATE usuarios SET nome=?, cpf=?, endereco=?, telefone=?, login=?, perfil=? WHERE id=?", (nome_val, uc.get(), ue.get(), ut.get(), login_val, upf.get(), self.selected_user_id), commit=True)
         messagebox.showinfo("Sucesso", "Usuário atualizado!")
@@ -2003,8 +2029,9 @@ class MisticaApp(ctk.CTk):
             messagebox.showerror("Erro", "Campos obrigatórios.")
             return
         try:
-            query_db("INSERT INTO usuarios (nome, cpf, endereco, telefone, login, senha_hash, perfil) VALUES (?,?,?,?,?,?,?)",
-                     (nome, self.uc_u.get(), self.ue_u.get(), self.ut_u.get(), login, hash_password_pbkdf2(senha), self.upf_u.get()), commit=True)
+            salt = secrets.token_hex(16)
+            senha_hash = hash_password_pbkdf2(senha, salt.encode("utf-8"))
+            query_db("INSERT INTO usuarios (nome, cpf, endereco, telefone, login, senha_hash, senha_salt, perfil) VALUES (?,?,?,?,?,?,?,?)", (nome, self.uc_u.get(), self.ue_u.get(), self.ut_u.get(), login, senha_hash, salt, self.upf_u.get()), commit=True)
             self.refresh_audit()
             self.un_u.delete(0, 'end')
             self.uc_u.delete(0, 'end')
@@ -2012,8 +2039,9 @@ class MisticaApp(ctk.CTk):
             self.ut_u.delete(0, 'end')
             self.ul_u.delete(0, 'end')
             self.up_u.delete(0, 'end')
-        except Exception:
-            messagebox.showerror("Erro", "Login em uso")
+        except Exception as e:
+            registrar_erro_sistema("Criar usuario", e)
+            messagebox.showerror("Erro", "Login em uso ou dados inválidos.")
 
     def refresh_audit(self, filtrar=False):
         for i in self.tree_logs.get_children():
@@ -2247,31 +2275,27 @@ class MisticaApp(ctk.CTk):
                 self.enviar_pergunta_ia()
         except Exception as e:
             messagebox.showinfo("Voz da Isis", f"Voz ainda nao configurada neste computador.\n\nDetalhe: {e}")
-	
-   def inserir_texto_com_links_isis(self, texto):
-    import re
-    import webbrowser
-
-    urls = re.findall(r"https?://[^\s]+", str(texto))
-
-    pos = 0
-    for idx, url in enumerate(urls):
-        inicio = texto.find(url, pos)
-
-        if inicio > pos:
-            self.txt_chat.insert("end", texto[pos:inicio])
-
-        tag = f"link_isis_{idx}_{inicio}"
-        self.txt_chat.insert("end", url, tag)
-
-        self.txt_chat.tag_config(tag, foreground="#4da3ff", underline=True)
-        self.txt_chat.tag_bind(tag, "<Button-1>", lambda e, u=url: webbrowser.open(u))
-
-        pos = inicio + len(url)
-
-    self.txt_chat.insert("end", texto[pos:])
     
-   def enviar_pergunta_ia(self):
+    def inserir_texto_com_links_isis(self, texto):
+        import re
+        import webbrowser
+        texto = str(texto or "")
+        urls = re.findall(r"https?://[^\s]+", texto)
+        pos = 0
+        for idx, url in enumerate(urls):
+            inicio = texto.find(url, pos)
+            if inicio < 0:
+                continue
+            if inicio > pos:
+                self.txt_chat.insert("end", texto[pos:inicio])
+            tag = f"link_isis_{idx}_{inicio}"
+            self.txt_chat.insert("end", url, tag)
+            self.txt_chat.tag_config(tag, foreground="#4da3ff", underline=True)
+            self.txt_chat.tag_bind(tag, "<Button-1>", lambda e, u=url: webbrowser.open(u))
+            pos = inicio + len(url)
+        self.txt_chat.insert("end", texto[pos:])
+
+    def enviar_pergunta_ia(self):
         pergunta = self.ent_pergunta.get().strip()
         if not pergunta:
             return
@@ -2280,11 +2304,11 @@ class MisticaApp(ctk.CTk):
         resposta = self.processar_pergunta_ia(pergunta)
         try:
             self.registrar_aprendizado_issis(pergunta, resposta)
-        except Exception:
-            pass
-	self.txt_chat.insert("end", "Isis a Bruxinha:\n")
-	self.inserir_texto_com_links_isis(resposta)
-	self.txt_chat.insert("end", "\n\n" + "-"*56 + "\n\n")
+        except Exception as e:
+            registrar_erro_sistema("Registrar aprendizado Isis", e)
+        self.txt_chat.insert("end", "Isis a Bruxinha:\n")
+        self.inserir_texto_com_links_isis(resposta)
+        self.txt_chat.insert("end", "\n\n" + "-" * 56 + "\n\n")
         self.txt_chat.configure(state="disabled")
         self.txt_chat.see("end")
         self.ent_pergunta.delete(0, 'end')
