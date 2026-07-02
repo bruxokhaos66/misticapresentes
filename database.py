@@ -7,7 +7,7 @@ from pathlib import Path
 from config import BACKUP_DIR, DB_PATH, DOCS_PATH, hash_password_pbkdf2
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def get_connection():
@@ -58,12 +58,16 @@ def _criar_tabelas(conn):
         CREATE TABLE IF NOT EXISTS usuarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome TEXT NOT NULL,
+            cpf TEXT,
+            endereco TEXT,
+            telefone TEXT,
             perfil TEXT NOT NULL DEFAULT 'operador',
             login TEXT NOT NULL UNIQUE,
             senha_hash TEXT NOT NULL,
             senha_salt TEXT,
             ativo INTEGER NOT NULL DEFAULT 1,
-            criado_em TEXT
+            criado_em TEXT,
+            excluido_em TEXT
         );
 
         CREATE TABLE IF NOT EXISTS login_tentativas (
@@ -248,9 +252,13 @@ def _criar_tabelas(conn):
 def _migrar_colunas(conn):
     colunas = {
         "usuarios": {
+            "cpf": "TEXT",
+            "endereco": "TEXT",
+            "telefone": "TEXT",
             "senha_salt": "TEXT",
             "ativo": "INTEGER NOT NULL DEFAULT 1",
             "criado_em": "TEXT",
+            "excluido_em": "TEXT",
         },
         "produtos": {
             "ativo": "INTEGER NOT NULL DEFAULT 1",
@@ -341,7 +349,7 @@ def init_db():
         _migrar_colunas(conn)
         _criar_indices(conn)
         _seed_inicial(conn)
-        conn.execute("PRAGMA user_version = ?", (SCHEMA_VERSION,))
+        conn.execute(f"PRAGMA user_version = {int(SCHEMA_VERSION)}")
         conn.commit()
     except Exception:
         conn.rollback()
@@ -350,12 +358,17 @@ def init_db():
         conn.close()
 
 
-def realizar_backup():
-    """Cria backup simples do banco atual, quando existir."""
+def realizar_backup(rotulo=None):
+    """Cria backup simples do banco atual, quando existir.
+
+    `rotulo` é opcional para manter compatibilidade com chamadas antigas da interface.
+    """
     if not os.path.exists(DB_PATH):
         return None
     os.makedirs(BACKUP_DIR, exist_ok=True)
-    nome = f"mistica_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+    sufixo = f"_{str(rotulo).strip()}" if rotulo else ""
+    sufixo = "".join(ch for ch in sufixo if ch.isalnum() or ch in {"_", "-"})
+    nome = f"mistica_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}{sufixo}.db"
     destino = os.path.join(BACKUP_DIR, nome)
     shutil.copy2(DB_PATH, destino)
     return destino
