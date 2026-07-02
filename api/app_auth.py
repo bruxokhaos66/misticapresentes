@@ -9,6 +9,7 @@ from database import query_db
 
 SESSOES_APP = {}
 DURACAO_SESSAO_HORAS = 12
+SENHA_MINIMA_APP = 4
 
 
 def _perfil_app(perfil: str | None) -> str:
@@ -41,6 +42,8 @@ def login_app(login: str, senha: str) -> dict:
     senha = str(senha or "")
     if not login or not senha:
         return {"ok": False, "erro": "Informe login e senha."}
+    if len(senha) < SENHA_MINIMA_APP:
+        return {"ok": False, "erro": "A senha precisa ter no mínimo 4 dígitos/caracteres."}
 
     linhas = query_db(
         """
