@@ -3,13 +3,15 @@
 Esta primeira fase não grava vendas nem estoque pela rede. O objetivo é
 acompanhar em tempo real sem quebrar o sistema desktop atual.
 """
-from datetime import datetime
+from datetime import date, datetime
+import os
 
 from database import query_db
 from reports.estoque_report import estoque_baixo
 from reports.financeiro_report import contas_para_alerta
 from services.caixa_service import status_caixa_aberto, resumo_fechamento_caixa
 from services.isis_service import alertas_operacionais
+from api.security import resumo_seguranca_api
 
 ANDROID_APP_VERSION = "1.1.0"
 ANDROID_APP_VERSION_CODE = 2
@@ -38,19 +40,38 @@ def app_android_info():
     }
 
 
+def server_status_api():
+    seguranca = resumo_seguranca_api()
+    return {
+        "ok": True,
+        "servico": "Mística Presentes API Local",
+        "gerado_em": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+        "app_android": app_android_info(),
+        "seguranca": seguranca,
+        "ambiente": {
+            "porta": os.getenv("MISTICA_SERVER_PORT", "8000"),
+            "modo_externo_recomendado": seguranca["token_forte_configurado"],
+        },
+    }
+
+
 def vendas_do_dia():
-    hoje = datetime.now().strftime("%d/%m/%Y")
+    hoje_br = datetime.now().strftime("%d/%m/%Y")
+    hoje_iso = date.today().strftime("%Y-%m-%d")
     res = query_db(
         """
         SELECT COUNT(*), COALESCE(SUM(total_final),0)
         FROM vendas
         WHERE COALESCE(status,'Concluído') != 'Cancelado'
-          AND data_venda LIKE ?
+          AND (
+              data_iso LIKE ?
+              OR (COALESCE(data_iso,'')='' AND data_venda LIKE ?)
+          )
         """,
-        (f"%{hoje}%",),
+        (f"{hoje_iso}%", f"%{hoje_br}%"),
     )
     qtd, total = res[0] if res else (0, 0.0)
-    return {"data": hoje, "quantidade": int(qtd or 0), "faturamento": _moeda(total)}
+    return {"data": hoje_br, "quantidade": int(qtd or 0), "faturamento": _moeda(total)}
 
 
 def ultimas_vendas(limite=10):
@@ -136,6 +157,7 @@ def alertas_isis_api():
 def dashboard_api():
     return {
         "gerado_em": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+        "seguranca": resumo_seguranca_api(),
         "vendas_hoje": vendas_do_dia(),
         "caixa": caixa_status(),
         "ultimas_vendas": ultimas_vendas(8),
