@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 720" role="img" aria-labelledby="title desc">
+  <title id="title">Isis, assistente virtual da Mística Presentes</title>
+  <desc id="desc">Ilustração de uma bruxinha simpática com elementos de lua, folhas, luz e proteção.</desc>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="44%" r="70%">
+      <stop offset="0" stop-color="#7e3ff2" stop-opacity="0.35"/>
+      <stop offset="0.45" stop-color="#314326" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#080812"/>
+    </radialGradient>
+    <linearGradient id="robe" x1="310" x2="640" y1="330" y2="690">
+      <stop stop-color="#231035"/>
+      <stop offset="0.52" stop-color="#4b173f"/>
+      <stop offset="1" stop-color="#314326"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" x2="1">
+      <stop stop-color="#f6d989"/>
+      <stop offset="1" stop-color="#c98d36"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="920" height="720" rx="54" fill="url(#bg)"/>
+  <circle cx="725" cy="105" r="62" fill="#f6d989" opacity="0.92"/>
+  <circle cx="748" cy="90" r="61" fill="#15101f" opacity="0.95"/>
+
+  <g opacity="0.42" stroke="#f0c56a" stroke-width="3" fill="none">
+    <path d="M110 520c85-40 140-104 166-190"/>
+    <path d="M812 540c-68-37-112-90-132-162"/>
+    <path d="M170 190c48 24 94 27 142 8"/>
+    <path d="M646 205c50 22 96 18 138-13"/>
+  </g>
+
+  <g filter="url(#glow)">
+    <circle cx="460" cy="380" r="205" fill="#0b0b12" opacity="0.34"/>
+    <path d="M292 625c32-126 82-196 168-196s138 70 168 196H292Z" fill="url(#robe)" stroke="#f0c56a" stroke-width="5"/>
+    <path d="M305 430c18-48 53-76 97-86l-42 180c-42-3-73-31-55-94Z" fill="#231035" stroke="#b37cff" stroke-width="4"/>
+    <path d="M615 430c-18-48-53-76-97-86l42 180c42-3 73-31 55-94Z" fill="#314326" stroke="#c5d58f" stroke-width="4"/>
+
+    <circle cx="460" cy="315" r="102" fill="#f0c9a6" stroke="#f0c56a" stroke-width="5"/>
+    <path d="M360 306c20-70 70-110 118-107 66 4 103 56 103 118-44-50-96-64-155-36-25 12-46 20-66 25Z" fill="#251329"/>
+    <path d="M318 232c74-96 178-140 300-124-26 22-40 50-42 84 64 13 113 42 146 86-153-26-286-20-404-46Z" fill="#231035" stroke="#b37cff" stroke-width="5"/>
+    <path d="M356 228c58-22 126-29 204-20" stroke="#f0c56a" stroke-width="8" stroke-linecap="round"/>
+
+    <circle cx="421" cy="326" r="10" fill="#241407"/>
+    <circle cx="501" cy="326" r="10" fill="#241407"/>
+    <path d="M430 370c20 18 44 18 64 0" stroke="#8d5132" stroke-width="7" stroke-linecap="round" fill="none"/>
+    <circle cx="392" cy="356" r="14" fill="#eaa0b8" opacity="0.5"/>
+    <circle cx="530" cy="356" r="14" fill="#eaa0b8" opacity="0.5"/>
+
+    <path d="M460 430l34 58-34 38-34-38 34-58Z" fill="url(#gold)" stroke="#fff2c7" stroke-width="3"/>
+    <path d="M460 430v96" stroke="#fff2c7" stroke-width="3" opacity="0.7"/>
+
+    <g transform="translate(250 120)">
+      <path d="M0 80c35-48 82-74 142-80-20 30-28 60-23 91-43-20-82-24-119-11Z" fill="#314326" stroke="#c5d58f" stroke-width="4"/>
+      <path d="M34 71c35-23 63-36 91-47" stroke="#c5d58f" stroke-width="3" fill="none"/>
+    </g>
+    <g transform="translate(590 430) rotate(14)">
+      <path d="M0 80c35-48 82-74 142-80-20 30-28 60-23 91-43-20-82-24-119-11Z" fill="#314326" stroke="#c5d58f" stroke-width="4"/>
+      <path d="M34 71c35-23 63-36 91-47" stroke="#c5d58f" stroke-width="3" fill="none"/>
+    </g>
+  </g>
+
+  <g fill="#f6d989" opacity="0.95">
+    <path d="M165 310l11 24 25 9-25 9-11 24-11-24-25-9 25-9 11-24Z"/>
+    <path d="M744 330l9 19 20 7-20 7-9 19-9-19-20-7 20-7 9-19Z"/>
+    <path d="M690 170l7 15 16 6-16 6-7 15-7-15-16-6 16-6 7-15Z"/>
+  </g>
+
+  <g stroke="#f6d989" stroke-width="7" stroke-linecap="round" opacity="0.92">
+    <path d="M456 116v-46"/>
+    <path d="M433 93h46"/>
+  </g>
+  <text x="460" y="665" text-anchor="middle" font-family="Cinzel, Georgia, serif" font-size="40" font-weight="700" fill="#f0c56a">Isis</text>
+  <text x="460" y="698" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="18" fill="#d8c9b7">assistente virtual da Mística Presentes</text>
+</svg>
