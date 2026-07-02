@@ -21,17 +21,23 @@
     table { width:100%; border-collapse:collapse; font-size:13px; }
     th,td { padding:8px 6px; border-bottom:1px solid rgba(255,255,255,.08); text-align:left; }
     th { color:var(--gold); font-weight:700; }
+    input,select { width:100%; padding:12px; border-radius:14px; border:1px solid rgba(216,181,109,.35); background:#120f18; color:#fff; font-size:15px; margin-top:8px; }
+    button { border:0; border-radius:14px; padding:12px; background:var(--gold); color:#1d1727; font-weight:800; font-size:15px; cursor:pointer; }
     .pill { display:inline-block; padding:3px 8px; border-radius:999px; background:rgba(216,181,109,.13); color:var(--gold); font-size:12px; }
     .alerta { line-height:1.45; white-space:pre-wrap; color:#fff4d0; }
     .footer { text-align:center; color:var(--muted); padding:18px; font-size:12px; }
     .security { display:none; margin-bottom:14px; border-color:rgba(224,112,112,.55); background:rgba(80,28,36,.72); }
     .security strong { color:#ffd0d0; }
+    .login { max-width:520px; margin:18px auto; }
+    .login-actions { display:grid; grid-template-columns:1fr auto; gap:8px; align-items:end; margin-top:8px; }
+    .progress { width:100%; height:14px; background:#120f18; border-radius:999px; overflow:hidden; border:1px solid rgba(216,181,109,.22); margin:10px 0 8px; }
+    .progress span { display:block; height:100%; width:0%; background:linear-gradient(90deg,#6fbf9b,#d8b56d); border-radius:999px; }
+    .meta-line { color:var(--muted); font-size:13px; line-height:1.45; }
     #saleToast { position:fixed; left:14px; right:14px; top:76px; z-index:9; display:none; background:linear-gradient(135deg,rgba(34,91,66,.98),rgba(29,23,39,.98)); border:1px solid rgba(216,181,109,.55); color:#fff; border-radius:18px; padding:14px 16px; box-shadow:0 18px 40px rgba(0,0,0,.38); }
     #saleToast .title { color:var(--gold); font-weight:800; margin-bottom:4px; }
     #saleToast .desc { font-size:14px; line-height:1.35; }
-    #notifBtn { margin-top:8px; border:0; border-radius:999px; padding:8px 12px; background:var(--gold); color:#1d1727; font-weight:700; }
     @media (max-width:850px){ .grid{grid-template-columns:repeat(2,minmax(0,1fr));} .value{font-size:22px;} }
-    @media (max-width:520px){ .grid{grid-template-columns:1fr;} header{padding:14px;} main{padding:10px;} table{font-size:12px;} th:nth-child(2), td:nth-child(2){display:none;} #saleToast{top:68px;} }
+    @media (max-width:520px){ .grid{grid-template-columns:1fr;} header{padding:14px;} main{padding:10px;} table{font-size:12px;} th:nth-child(2), td:nth-child(2){display:none;} #saleToast{top:68px;} .login-actions{grid-template-columns:1fr;} }
   </style>
 </head>
 <body>
@@ -41,122 +47,121 @@
   <div class="sub">Painel mobile em tempo real da loja • <span id="status">conectando...</span></div>
 </header>
 <main>
-  <div id="securityWarning" class="card security"><strong>Atenção:</strong> servidor usando token padrão/fraco. Para Cloudflare ou domínio público, configure MISTICA_API_TOKEN com um token forte.</div>
-
-  <div class="grid">
-    <div class="card"><h2>Vendas hoje</h2><div class="value" id="qtdHoje">0</div></div>
-    <div class="card"><h2>Faturamento hoje</h2><div class="value gold" id="fatHoje">R$ 0,00</div></div>
-    <div class="card"><h2>Caixa</h2><div class="value" id="caixaStatus">--</div></div>
-    <div class="card"><h2>Estoque baixo</h2><div class="value red" id="estoqueQtd">0</div></div>
+  <div id="loginBox" class="card login">
+    <h2>Acesso do app</h2>
+    <div class="meta-line">Escolha como deseja visualizar o painel neste aparelho.</div>
+    <input id="loginNome" placeholder="Nome do usuário" autocomplete="name" />
+    <select id="loginPerfil">
+      <option value="vendedor">Vendedor</option>
+      <option value="adm">Administrador</option>
+    </select>
+    <div class="login-actions">
+      <button onclick="entrarApp()">Entrar</button>
+      <button style="background:#3f3351;color:#fff" onclick="limparLogin()">Limpar</button>
+    </div>
   </div>
 
-  <div class="section card">
-    <h2>Alertas da Isis</h2>
-    <div class="alerta" id="alertas">Carregando...</div>
-  </div>
+  <div id="painelConteudo" style="display:none">
+    <div id="securityWarning" class="card security"><strong>Atenção:</strong> servidor usando token padrão/fraco. Para Cloudflare ou domínio público, configure MISTICA_API_TOKEN com um token forte.</div>
+    <div class="card" style="margin-bottom:14px"><span class="pill" id="perfilAtual">-</span> <button style="float:right;padding:7px 10px;font-size:12px;background:#3f3351;color:#fff" onclick="limparLogin()">Sair</button></div>
 
-  <div class="section card">
-    <h2>Últimas vendas</h2>
-    <table><thead><tr><th>Nº</th><th>Data</th><th>Cliente</th><th>Total</th><th>Vendedor</th><th>Status</th></tr></thead><tbody id="vendas"></tbody></table>
-  </div>
+    <div class="grid admin-only">
+      <div class="card"><h2>Vendas hoje</h2><div class="value" id="qtdHoje">0</div></div>
+      <div class="card"><h2>Faturamento hoje</h2><div class="value gold" id="fatHoje">R$ 0,00</div></div>
+      <div class="card"><h2>Caixa</h2><div class="value" id="caixaStatus">--</div></div>
+      <div class="card"><h2>Estoque baixo</h2><div class="value red" id="estoqueQtd">0</div></div>
+    </div>
 
-  <div class="section card">
-    <h2>Produtos com estoque baixo</h2>
-    <table><thead><tr><th>Produto</th><th>Qtd</th><th>Mínimo</th></tr></thead><tbody id="estoque"></tbody></table>
-  </div>
+    <div class="section card">
+      <h2>Meta e total de vendas</h2>
+      <div class="grid">
+        <div><div class="meta-line">Hoje</div><div class="value gold" id="metaDia">R$ 0,00</div></div>
+        <div><div class="meta-line">Semana</div><div class="value green" id="metaSemana">R$ 0,00</div></div>
+        <div><div class="meta-line">Mês</div><div class="value" id="metaMes">R$ 0,00</div></div>
+        <div><div class="meta-line">Total</div><div class="value" id="metaTotal">R$ 0,00</div></div>
+      </div>
+      <div class="progress"><span id="metaBarra"></span></div>
+      <div class="meta-line" id="metaTexto">Meta semanal: R$ 1.000,00</div>
+      <div class="meta-line" id="metaBonus">Bônus de comissão: R$ 0,00</div>
+    </div>
 
-  <div class="section card">
-    <h2>Contas e cancelamentos</h2>
-    <div id="contas"></div>
-    <div id="cancelamentos" style="margin-top:10px"></div>
+    <div class="section card admin-only"><h2>Alertas da Isis</h2><div class="alerta" id="alertas">Carregando...</div></div>
+    <div class="section card admin-only"><h2>Últimas vendas</h2><table><thead><tr><th>Nº</th><th>Data</th><th>Cliente</th><th>Total</th><th>Vendedor</th><th>Status</th></tr></thead><tbody id="vendas"></tbody></table></div>
+    <div class="section card admin-only"><h2>Produtos com estoque baixo</h2><table><thead><tr><th>Produto</th><th>Qtd</th><th>Mínimo</th></tr></thead><tbody id="estoque"></tbody></table></div>
+    <div class="section card admin-only"><h2>Contas e cancelamentos</h2><div id="contas"></div><div id="cancelamentos" style="margin-top:10px"></div></div>
   </div>
 </main>
 <div class="footer">Atualiza automaticamente a cada poucos segundos. Avisa no app quando uma venda nova entra.</div>
 <script>
 const params = new URLSearchParams(location.search);
 const tokenUrl = params.get('app_token') || params.get('token');
-if(tokenUrl){
-  localStorage.setItem('MISTICA_API_TOKEN', tokenUrl);
-  params.delete('app_token'); params.delete('token');
-  const clean = location.pathname + (params.toString() ? '?' + params.toString() : '') + location.hash;
-  history.replaceState({}, document.title, clean);
-}
+if(tokenUrl){ localStorage.setItem('MISTICA_API_TOKEN', tokenUrl); params.delete('app_token'); params.delete('token'); const clean = location.pathname + (params.toString() ? '?' + params.toString() : '') + location.hash; history.replaceState({}, document.title, clean); }
 const TOKEN = localStorage.getItem('MISTICA_API_TOKEN') || 'mistica-local';
 let ultimaVendaNotificada = Number(localStorage.getItem('MISTICA_ULTIMA_VENDA_ID') || 0);
 let primeiraCargaVendas = true;
 function moeda(v){ return Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
 function txt(v){ return (v===null || v===undefined || v==='') ? '-' : String(v); }
 function esc(v){ return txt(v).replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch])); }
-function setText(id, value){ document.getElementById(id).textContent = value; }
-function avisoSeguranca(data){
-  const warn = document.getElementById('securityWarning');
-  const seg = data && data.seguranca;
-  warn.style.display = seg && !seg.token_forte_configurado ? 'block' : 'none';
+function setText(id, value){ const el=document.getElementById(id); if(el) el.textContent = value; }
+function perfil(){ return localStorage.getItem('MISTICA_APP_PERFIL') || ''; }
+function aplicarPerfil(){
+  const p = perfil();
+  const nome = localStorage.getItem('MISTICA_APP_NOME') || 'Usuário';
+  document.getElementById('loginBox').style.display = p ? 'none' : 'block';
+  document.getElementById('painelConteudo').style.display = p ? 'block' : 'none';
+  setText('perfilAtual', `${p === 'adm' ? 'Administrador' : 'Vendedor'} • ${nome}`);
+  document.querySelectorAll('.admin-only').forEach(el => el.style.display = p === 'adm' ? '' : 'none');
 }
-function solicitarPermissaoNotificacao(){
-  try{
-    if('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
-  }catch(e){}
+function entrarApp(){
+  const nome = (document.getElementById('loginNome').value || 'Usuário').trim();
+  const p = document.getElementById('loginPerfil').value;
+  localStorage.setItem('MISTICA_APP_NOME', nome);
+  localStorage.setItem('MISTICA_APP_PERFIL', p);
+  aplicarPerfil(); carregar(); websocket();
 }
+function limparLogin(){ localStorage.removeItem('MISTICA_APP_NOME'); localStorage.removeItem('MISTICA_APP_PERFIL'); aplicarPerfil(); }
+function avisoSeguranca(data){ const warn = document.getElementById('securityWarning'); const seg = data && data.seguranca; if(warn) warn.style.display = seg && !seg.token_forte_configurado ? 'block' : 'none'; }
+function solicitarPermissaoNotificacao(){ try{ if('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); }catch(e){} }
 function avisoVenda(venda){
-  const vendaId = Number(venda && venda.id || 0);
-  if(!vendaId) return;
-  if(primeiraCargaVendas){
-    primeiraCargaVendas = false;
-    if(!ultimaVendaNotificada || vendaId > ultimaVendaNotificada){
-      ultimaVendaNotificada = vendaId;
-      localStorage.setItem('MISTICA_ULTIMA_VENDA_ID', String(vendaId));
-    }
-    return;
-  }
+  if(perfil() !== 'adm') return;
+  const vendaId = Number(venda && venda.id || 0); if(!vendaId) return;
+  if(primeiraCargaVendas){ primeiraCargaVendas=false; if(!ultimaVendaNotificada || vendaId>ultimaVendaNotificada){ ultimaVendaNotificada=vendaId; localStorage.setItem('MISTICA_ULTIMA_VENDA_ID', String(vendaId)); } return; }
   if(vendaId <= ultimaVendaNotificada) return;
-  ultimaVendaNotificada = vendaId;
-  localStorage.setItem('MISTICA_ULTIMA_VENDA_ID', String(vendaId));
+  ultimaVendaNotificada = vendaId; localStorage.setItem('MISTICA_ULTIMA_VENDA_ID', String(vendaId));
   const mensagem = `Venda ${vendaId} • ${moeda(venda.total_final)} • ${txt(venda.cliente)}`;
-  const toast = document.getElementById('saleToast');
-  document.getElementById('saleToastText').textContent = mensagem;
-  toast.style.display = 'block';
-  setTimeout(()=>{ toast.style.display = 'none'; }, 7000);
+  const toast = document.getElementById('saleToast'); document.getElementById('saleToastText').textContent = mensagem; toast.style.display = 'block'; setTimeout(()=>{ toast.style.display='none'; }, 7000);
   try{ if(navigator.vibrate) navigator.vibrate([180,80,180]); }catch(e){}
-  try{
-    if('Notification' in window && Notification.permission === 'granted'){
-      new Notification('Nova venda na Mística', { body: mensagem, tag: 'mistica-venda-'+vendaId });
-    }
-  }catch(e){}
+  try{ if('Notification' in window && Notification.permission === 'granted') new Notification('Nova venda na Mística', { body: mensagem, tag: 'mistica-venda-'+vendaId }); }catch(e){}
+}
+function renderMetas(m){
+  m = m || {}; setText('metaDia', moeda(m.vendas_dia)); setText('metaSemana', moeda(m.vendas_semana)); setText('metaMes', moeda(m.vendas_mes)); setText('metaTotal', moeda(m.vendas_total));
+  const pctReal = Number(m.percentual_meta_semana || 0); const pct = Math.min(pctReal, 100); const barra = document.getElementById('metaBarra'); if(barra) barra.style.width = pct + '%';
+  const falta = moeda(m.falta_meta_semana); const meta = moeda(m.meta_semana || 1000);
+  setText('metaTexto', m.meta_batida ? `Meta semanal batida! ${pctReal.toFixed(1)}% da meta.` : `Meta semanal: ${meta} • Falta: ${falta} • ${pctReal.toFixed(1)}%`);
+  setText('metaBonus', m.meta_batida ? `Meta batida! Comissão extra: ${moeda(m.bonus_comissao || 100)}` : 'Comissão extra ao bater a meta: R$ 100,00');
 }
 function render(data){
-  avisoSeguranca(data);
-  const ultimas = data.ultimas_vendas || [];
-  if(ultimas.length) avisoVenda(ultimas[0]);
-  setText('qtdHoje', data.vendas_hoje.quantidade);
-  setText('fatHoje', moeda(data.vendas_hoje.faturamento));
-  setText('caixaStatus', data.caixa.aberto ? 'Aberto' : 'Fechado');
-  document.getElementById('caixaStatus').className = data.caixa.aberto ? 'value green' : 'value red';
-  setText('estoqueQtd', data.estoque_baixo.length);
-  setText('alertas', data.alertas_isis.texto || 'Sem alertas.');
-  document.getElementById('vendas').innerHTML = ultimas.map(v=>`<tr><td>${esc(v.id)}</td><td>${esc(v.data_venda)}</td><td>${esc(v.cliente)}</td><td>${esc(moeda(v.total_final))}</td><td>${esc(v.vendedor)}</td><td><span class="pill">${esc(v.status)}</span></td></tr>`).join('') || '<tr><td colspan="6">Sem vendas ainda.</td></tr>';
-  document.getElementById('estoque').innerHTML = data.estoque_baixo.map(p=>`<tr><td>${esc(p.produto)}</td><td>${esc(p.quantidade)}</td><td>${esc(p.estoque_minimo)}</td></tr>`).join('') || '<tr><td colspan="3">Nenhum produto crítico.</td></tr>';
-  document.getElementById('contas').innerHTML = '<b>Contas:</b><br>' + (data.contas_alerta.map(c=>`${esc(c.descricao)} • ${esc(moeda(c.valor))} • ${esc(c.vencimento)}`).join('<br>') || 'Sem contas em alerta.');
-  document.getElementById('cancelamentos').innerHTML = '<b>Cancelamentos recentes:</b><br>' + (data.cancelamentos.map(c=>`Venda ${esc(c.id)} • ${esc(moeda(c.total_final))} • ${esc(c.vendedor)}`).join('<br>') || 'Nenhum cancelamento recente.');
+  avisoSeguranca(data); const ultimas = data.ultimas_vendas || []; if(ultimas.length) avisoVenda(ultimas[0]); renderMetas(data.metas_vendas);
+  if(perfil() === 'adm'){
+    setText('qtdHoje', data.vendas_hoje.quantidade); setText('fatHoje', moeda(data.vendas_hoje.faturamento)); setText('caixaStatus', data.caixa.aberto ? 'Aberto' : 'Fechado');
+    document.getElementById('caixaStatus').className = data.caixa.aberto ? 'value green' : 'value red'; setText('estoqueQtd', data.estoque_baixo.length); setText('alertas', data.alertas_isis.texto || 'Sem alertas.');
+    document.getElementById('vendas').innerHTML = ultimas.map(v=>`<tr><td>${esc(v.id)}</td><td>${esc(v.data_venda)}</td><td>${esc(v.cliente)}</td><td>${esc(moeda(v.total_final))}</td><td>${esc(v.vendedor)}</td><td><span class="pill">${esc(v.status)}</span></td></tr>`).join('') || '<tr><td colspan="6">Sem vendas ainda.</td></tr>';
+    document.getElementById('estoque').innerHTML = data.estoque_baixo.map(p=>`<tr><td>${esc(p.produto)}</td><td>${esc(p.quantidade)}</td><td>${esc(p.estoque_minimo)}</td></tr>`).join('') || '<tr><td colspan="3">Nenhum produto crítico.</td></tr>';
+    document.getElementById('contas').innerHTML = '<b>Contas:</b><br>' + (data.contas_alerta.map(c=>`${esc(c.descricao)} • ${esc(moeda(c.valor))} • ${esc(c.vencimento)}`).join('<br>') || 'Sem contas em alerta.');
+    document.getElementById('cancelamentos').innerHTML = '<b>Cancelamentos recentes:</b><br>' + (data.cancelamentos.map(c=>`Venda ${esc(c.id)} • ${esc(moeda(c.total_final))} • ${esc(c.vendedor)}`).join('<br>') || 'Nenhum cancelamento recente.');
+  }
 }
 async function carregar(){
-  try{
-    const r = await fetch('/api/dashboard',{headers:{'X-Mistica-Token':TOKEN}});
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    const data = await r.json();
-    render(data); document.getElementById('status').textContent = 'online • '+data.gerado_em;
-  }catch(e){ document.getElementById('status').textContent = 'offline / sem acesso'; }
+  if(!perfil()) return;
+  try{ const r = await fetch('/api/dashboard?_=' + Date.now(),{headers:{'X-Mistica-Token':TOKEN}, cache:'no-store'}); if(!r.ok) throw new Error('HTTP '+r.status); const data = await r.json(); render(data); document.getElementById('status').textContent = 'online • '+data.gerado_em; }
+  catch(e){ document.getElementById('status').textContent = 'offline / sem acesso'; }
 }
 function websocket(){
-  try{
-    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const ws = new WebSocket(`${proto}://${location.host}/ws/dashboard?token=${encodeURIComponent(TOKEN)}`);
-    ws.onmessage = ev => { render(JSON.parse(ev.data)); document.getElementById('status').textContent='online em tempo real'; };
-    ws.onerror = () => carregar();
-    ws.onclose = () => setTimeout(websocket, 6000);
-  }catch(e){ setInterval(carregar,5000); }
+  if(!perfil()) return;
+  try{ const proto = location.protocol === 'https:' ? 'wss' : 'ws'; const ws = new WebSocket(`${proto}://${location.host}/ws/dashboard?token=${encodeURIComponent(TOKEN)}`); ws.onmessage = ev => { render(JSON.parse(ev.data)); document.getElementById('status').textContent='online em tempo real'; }; ws.onerror = () => carregar(); ws.onclose = () => setTimeout(websocket, 6000); }
+  catch(e){ setInterval(carregar,5000); }
 }
-solicitarPermissaoNotificacao(); carregar(); websocket(); setInterval(carregar,15000);
+solicitarPermissaoNotificacao(); aplicarPerfil(); carregar(); websocket(); setInterval(carregar,15000);
 </script>
 </body>
 </html>
