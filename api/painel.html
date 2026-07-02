@@ -24,6 +24,8 @@
     .pill { display:inline-block; padding:3px 8px; border-radius:999px; background:rgba(216,181,109,.13); color:var(--gold); font-size:12px; }
     .alerta { line-height:1.45; white-space:pre-wrap; color:#fff4d0; }
     .footer { text-align:center; color:var(--muted); padding:18px; font-size:12px; }
+    .security { display:none; margin-bottom:14px; border-color:rgba(224,112,112,.55); background:rgba(80,28,36,.72); }
+    .security strong { color:#ffd0d0; }
     @media (max-width:850px){ .grid{grid-template-columns:repeat(2,minmax(0,1fr));} .value{font-size:22px;} }
     @media (max-width:520px){ .grid{grid-template-columns:1fr;} header{padding:14px;} main{padding:10px;} table{font-size:12px;} th:nth-child(2), td:nth-child(2){display:none;} }
   </style>
@@ -34,6 +36,8 @@
   <div class="sub">Painel mobile em tempo real da loja • <span id="status">conectando...</span></div>
 </header>
 <main>
+  <div id="securityWarning" class="card security"><strong>Atenção:</strong> servidor usando token padrão/fraco. Para Cloudflare ou domínio público, configure MISTICA_API_TOKEN com um token forte.</div>
+
   <div class="grid">
     <div class="card"><h2>Vendas hoje</h2><div class="value" id="qtdHoje">0</div></div>
     <div class="card"><h2>Faturamento hoje</h2><div class="value gold" id="fatHoje">R$ 0,00</div></div>
@@ -64,20 +68,36 @@
 </main>
 <div class="footer">Atualiza automaticamente a cada poucos segundos. Primeira fase: somente leitura.</div>
 <script>
+const params = new URLSearchParams(location.search);
+const tokenUrl = params.get('app_token') || params.get('token');
+if(tokenUrl){
+  localStorage.setItem('MISTICA_API_TOKEN', tokenUrl);
+  params.delete('app_token'); params.delete('token');
+  const clean = location.pathname + (params.toString() ? '?' + params.toString() : '') + location.hash;
+  history.replaceState({}, document.title, clean);
+}
 const TOKEN = localStorage.getItem('MISTICA_API_TOKEN') || 'mistica-local';
 function moeda(v){ return Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
-function txt(v){ return (v===null || v===undefined || v==='') ? '-' : v; }
+function txt(v){ return (v===null || v===undefined || v==='') ? '-' : String(v); }
+function esc(v){ return txt(v).replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch])); }
+function setText(id, value){ document.getElementById(id).textContent = value; }
+function avisoSeguranca(data){
+  const warn = document.getElementById('securityWarning');
+  const seg = data && data.seguranca;
+  warn.style.display = seg && !seg.token_forte_configurado ? 'block' : 'none';
+}
 function render(data){
-  document.getElementById('qtdHoje').textContent = data.vendas_hoje.quantidade;
-  document.getElementById('fatHoje').textContent = moeda(data.vendas_hoje.faturamento);
-  document.getElementById('caixaStatus').textContent = data.caixa.aberto ? 'Aberto' : 'Fechado';
+  avisoSeguranca(data);
+  setText('qtdHoje', data.vendas_hoje.quantidade);
+  setText('fatHoje', moeda(data.vendas_hoje.faturamento));
+  setText('caixaStatus', data.caixa.aberto ? 'Aberto' : 'Fechado');
   document.getElementById('caixaStatus').className = data.caixa.aberto ? 'value green' : 'value red';
-  document.getElementById('estoqueQtd').textContent = data.estoque_baixo.length;
-  document.getElementById('alertas').textContent = data.alertas_isis.texto || 'Sem alertas.';
-  document.getElementById('vendas').innerHTML = data.ultimas_vendas.map(v=>`<tr><td>${v.id}</td><td>${txt(v.data_venda)}</td><td>${txt(v.cliente)}</td><td>${moeda(v.total_final)}</td><td>${txt(v.vendedor)}</td><td><span class="pill">${txt(v.status)}</span></td></tr>`).join('') || '<tr><td colspan="6">Sem vendas ainda.</td></tr>';
-  document.getElementById('estoque').innerHTML = data.estoque_baixo.map(p=>`<tr><td>${txt(p.produto)}</td><td>${p.quantidade}</td><td>${p.estoque_minimo}</td></tr>`).join('') || '<tr><td colspan="3">Nenhum produto crítico.</td></tr>';
-  document.getElementById('contas').innerHTML = '<b>Contas:</b><br>' + (data.contas_alerta.map(c=>`${txt(c.descricao)} • ${moeda(c.valor)} • ${txt(c.vencimento)}`).join('<br>') || 'Sem contas em alerta.');
-  document.getElementById('cancelamentos').innerHTML = '<b>Cancelamentos recentes:</b><br>' + (data.cancelamentos.map(c=>`Venda ${c.id} • ${moeda(c.total_final)} • ${txt(c.vendedor)}`).join('<br>') || 'Nenhum cancelamento recente.');
+  setText('estoqueQtd', data.estoque_baixo.length);
+  setText('alertas', data.alertas_isis.texto || 'Sem alertas.');
+  document.getElementById('vendas').innerHTML = data.ultimas_vendas.map(v=>`<tr><td>${esc(v.id)}</td><td>${esc(v.data_venda)}</td><td>${esc(v.cliente)}</td><td>${esc(moeda(v.total_final))}</td><td>${esc(v.vendedor)}</td><td><span class="pill">${esc(v.status)}</span></td></tr>`).join('') || '<tr><td colspan="6">Sem vendas ainda.</td></tr>';
+  document.getElementById('estoque').innerHTML = data.estoque_baixo.map(p=>`<tr><td>${esc(p.produto)}</td><td>${esc(p.quantidade)}</td><td>${esc(p.estoque_minimo)}</td></tr>`).join('') || '<tr><td colspan="3">Nenhum produto crítico.</td></tr>';
+  document.getElementById('contas').innerHTML = '<b>Contas:</b><br>' + (data.contas_alerta.map(c=>`${esc(c.descricao)} • ${esc(moeda(c.valor))} • ${esc(c.vencimento)}`).join('<br>') || 'Sem contas em alerta.');
+  document.getElementById('cancelamentos').innerHTML = '<b>Cancelamentos recentes:</b><br>' + (data.cancelamentos.map(c=>`Venda ${esc(c.id)} • ${esc(moeda(c.total_final))} • ${esc(c.vendedor)}`).join('<br>') || 'Nenhum cancelamento recente.');
 }
 async function carregar(){
   try{
@@ -90,7 +110,7 @@ async function carregar(){
 function websocket(){
   try{
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const ws = new WebSocket(`${proto}://${location.host}/ws/dashboard`);
+    const ws = new WebSocket(`${proto}://${location.host}/ws/dashboard?token=${encodeURIComponent(TOKEN)}`);
     ws.onmessage = ev => { render(JSON.parse(ev.data)); document.getElementById('status').textContent='online em tempo real'; };
     ws.onerror = () => carregar();
     ws.onclose = () => setTimeout(websocket, 6000);
