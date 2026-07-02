@@ -4,7 +4,8 @@ Uso recomendado no começo do dia:
     python scripts\painel_inicio_servidor.py
 
 A janela inicia a API local, mostra o endereço para o celular/app e permite
-copiar o token salvo localmente. O token nunca é salvo no GitHub; ele fica em:
+copiar ou enviar por WhatsApp o endereço e token salvo localmente.
+O token nunca é salvo no GitHub; ele fica em:
     Documents\Mistica_Servidor_Dedicado\api_token.txt
 """
 from __future__ import annotations
@@ -17,6 +18,7 @@ import sys
 import threading
 import time
 import tkinter as tk
+import urllib.parse
 import webbrowser
 from pathlib import Path
 from tkinter import messagebox
@@ -32,8 +34,8 @@ class PainelServidor(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Mística Presentes - Servidor do App")
-        self.geometry("720x500")
-        self.minsize(680, 460)
+        self.geometry("760x540")
+        self.minsize(720, 500)
         self.configure(bg="#151018")
         self.processo: subprocess.Popen | None = None
         self.token = gerar_ou_ler_token()
@@ -101,7 +103,7 @@ class PainelServidor(tk.Tk):
         self.token_entry = self._entry_readonly(self.token)
         self.token_entry.pack(fill="x", pady=(6, 8))
 
-        aviso = "Não envie print com o token. Use o botão Copiar token para configurar o app."
+        aviso = "Não envie print com o token. Envie somente para pessoas autorizadas da loja."
         tk.Label(quadro, text=aviso, bg="#201724", fg="#e8b86d", font=("Segoe UI", 9), anchor="w").pack(fill="x")
 
         botoes = tk.Frame(self, bg="#151018")
@@ -116,6 +118,11 @@ class PainelServidor(tk.Tk):
         self._botao("Abrir status", lambda: webbrowser.open(f"{self.url_rede}/api/server/status")).pack(side="left", padx=(0, 8))
         self._botao("Abrir docs", lambda: webbrowser.open(f"{self.url_rede}/docs")).pack(side="left", padx=8)
         self._botao("Abrir painel", lambda: webbrowser.open(self.url_rede)).pack(side="left", padx=8)
+        self._botao("Enviar WhatsApp", self.enviar_whatsapp, cor="#6fbf9b").pack(side="left", padx=8)
+
+        botoes3 = tk.Frame(self, bg="#151018")
+        botoes3.pack(fill="x", padx=24, pady=(0, 10))
+        self._botao("Copiar mensagem WhatsApp", lambda: self.copiar(self.mensagem_whatsapp()), cor="#b7d8a8").pack(side="left", padx=(0, 8))
 
         instrucoes = (
             "Para começar o dia:\n"
@@ -130,6 +137,27 @@ class PainelServidor(tk.Tk):
         self.clipboard_clear()
         self.clipboard_append(texto)
         self.status_var.set("Copiado para a área de transferência.")
+
+    def mensagem_whatsapp(self) -> str:
+        return (
+            "🌙 Mística Presentes - acesso ao app\n\n"
+            f"Servidor: {self.url_rede}\n"
+            f"Status: {self.url_rede}/api/server/status\n"
+            f"Token: {self.token}\n\n"
+            "Use estes dados somente no app Mística Painel.\n"
+            "Não encaminhe este token para pessoas não autorizadas."
+        )
+
+    def enviar_whatsapp(self):
+        confirmar = messagebox.askyesno(
+            "Enviar para WhatsApp",
+            "A mensagem contém o token do app. Envie somente para pessoas autorizadas. Deseja abrir o WhatsApp?",
+        )
+        if not confirmar:
+            return
+        texto = urllib.parse.quote(self.mensagem_whatsapp())
+        webbrowser.open(f"https://wa.me/?text={texto}")
+        self.status_var.set("WhatsApp aberto com a mensagem pronta para enviar.")
 
     def iniciar_servidor(self):
         if self.processo and self.processo.poll() is None:
