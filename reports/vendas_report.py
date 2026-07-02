@@ -1,4 +1,5 @@
 from database import query_db
+from reports.date_filters import filtro_data_iso_sql, intervalo_por_filtro_texto
 
 
 def _custo_vendas(vendas_ids):
@@ -12,20 +13,24 @@ def _custo_vendas(vendas_ids):
     return float(res[0][0] or 0.0) if res else 0.0
 
 
-def _filtro_data_sql(coluna='data_venda'):
-    return f"(COALESCE({coluna}, '') LIKE ? OR COALESCE(data_iso, '') LIKE ?)"
+def _where_periodo(filtro, coluna_data_texto="data_venda", coluna_iso="data_iso"):
+    intervalo = intervalo_por_filtro_texto(filtro)
+    if intervalo:
+        return f"{filtro_data_iso_sql(coluna_iso)}", intervalo
+    return f"(COALESCE({coluna_data_texto}, '') LIKE ? OR COALESCE({coluna_iso}, '') LIKE ?)", (f"%{filtro}%", f"%{filtro}%")
 
 
 def vendas_por_filtro(filtro):
+    where_data, params_data = _where_periodo(filtro)
     vendas = query_db(
         f"""
         SELECT id, data_venda, cliente, total_final, vendedor
         FROM vendas
         WHERE COALESCE(status,'Concluído') != 'Cancelado'
-          AND {_filtro_data_sql()}
+          AND {where_data}
         ORDER BY id DESC
         """,
-        (f"%{filtro}%", f"%{filtro}%"),
+        tuple(params_data),
     )
     total = sum(float(v[3] or 0) for v in vendas)
     ids = [v[0] for v in vendas]
@@ -35,14 +40,15 @@ def vendas_por_filtro(filtro):
 
 def lucro_liquido_periodo(mes, ano):
     filtro = f"/{mes}/{ano}"
+    where_data, params_data = _where_periodo(filtro)
     vendas = query_db(
         f"""
         SELECT id, total_final, COALESCE(taxa,0), COALESCE(desconto,0)
         FROM vendas
         WHERE COALESCE(status,'Concluído') != 'Cancelado'
-          AND {_filtro_data_sql()}
+          AND {where_data}
         """,
-        (f"%{filtro}%", f"%{filtro}%"),
+        tuple(params_data),
     )
     receitas = sum(float(v[1] or 0) for v in vendas)
     taxas = sum(float(v[2] or 0) for v in vendas)
@@ -88,19 +94,21 @@ def ranking_clientes(limite=10):
 
 
 def resumo_vendas_periodo(filtro):
+    where_data, params_data = _where_periodo(filtro)
     res = query_db(
         f"""
         SELECT COUNT(*), COALESCE(SUM(total_final),0)
         FROM vendas
         WHERE COALESCE(status,'Concluído') != 'Cancelado'
-          AND {_filtro_data_sql()}
+          AND {where_data}
         """,
-        (f"%{filtro}%", f"%{filtro}%"),
+        tuple(params_data),
     )
     return res[0] if res else (0, 0.0)
 
 
 def lucro_bruto_itens_periodo(filtro):
+    where_data, params_data = _where_periodo(filtro, "v.data_venda", "v.data_iso")
     res = query_db(
         f"""
         SELECT COALESCE(SUM(vi.quantidade * (vi.valor_unitario - vi.custo_unitario)),0),
@@ -109,9 +117,9 @@ def lucro_bruto_itens_periodo(filtro):
         FROM vendas_itens vi
         JOIN vendas v ON vi.venda_id = v.id
         WHERE COALESCE(v.status,'Concluído') != 'Cancelado'
-          AND {_filtro_data_sql('v.data_venda')}
+          AND {where_data}
         """,
-        (f"%{filtro}%", f"%{filtro}%"),
+        tuple(params_data),
     )
     return res[0] if res else (0.0, 0.0, 0.0)
 
