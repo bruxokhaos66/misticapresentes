@@ -2,7 +2,19 @@
 
 Aplicativo Android para acompanhar o painel da loja pelo celular.
 
-Esta primeira versão é um app nativo simples com WebView. Ele abre o painel local criado pela API do Mística Presentes.
+Esta versão usa um app nativo com WebView e tela de configuração premium. Ele abre o painel local criado pela API do Mística Presentes.
+
+## Visual e experiência
+
+- Tela inicial mais bonita e fácil de entender.
+- Identidade visual escura, dourada e mística.
+- Cartão de conexão com instruções claras.
+- Campo para endereço do servidor.
+- Campo para token da API.
+- Botão de atualizar painel.
+- Botão de configuração sempre visível.
+- Status de conexão: CONFIG, ABRINDO, ONLINE ou ERRO.
+- Botão para limpar configuração.
 
 ## O que o app faz
 
@@ -30,7 +42,7 @@ python scripts/iniciar_servidor_local.py
 2. Anotar o endereço mostrado no terminal, por exemplo:
 
 ```text
-http://192.168.1.50:8000
+http://192.168.0.115:8000
 ```
 
 3. Abrir o app no celular.
@@ -82,5 +94,6 @@ Para acompanhar fora da loja, use uma solução segura como VPN, Tailscale ou Cl
 
 - Tela de login visual no app.
 - Notificações de venda nova.
+- Atalho para favoritos.
 - Versão PWA instalável.
 - Futuramente, operações autorizadas como estoque e caixa.
