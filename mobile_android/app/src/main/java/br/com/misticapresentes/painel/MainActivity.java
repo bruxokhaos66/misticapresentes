@@ -29,6 +29,7 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLEncoder;
 
 public class MainActivity extends Activity {
     private static final String PREFS = "mistica_painel_prefs";
@@ -170,7 +171,7 @@ public class MainActivity extends Activity {
         Button atualizarBtn = botao("Atualizar", Color.rgb(72, 113, 92), Color.WHITE);
         atualizarBtn.setOnClickListener(v -> {
             if (webView != null && ultimaUrl != null && !ultimaUrl.isEmpty()) {
-                webView.reload();
+                webView.loadUrl(montarUrlComToken(ultimaUrl, ultimoToken));
                 statusText.setText("Atualizando painel...");
             }
         });
@@ -389,6 +390,16 @@ public class MainActivity extends Activity {
         return url;
     }
 
+    private String montarUrlComToken(String baseUrl, String token) {
+        try {
+            String separador = baseUrl.contains("?") ? "&" : "?";
+            String tokenEncoded = URLEncoder.encode(token == null ? "" : token, "UTF-8");
+            return baseUrl + separador + "app_token=" + tokenEncoded + "&_app_ts=" + System.currentTimeMillis();
+        } catch (Exception e) {
+            return baseUrl;
+        }
+    }
+
     private void mostrarConfig() {
         configContainer.setVisibility(View.VISIBLE);
         webView.setVisibility(View.GONE);
@@ -406,9 +417,7 @@ public class MainActivity extends Activity {
         chipText.setText("ABRINDO");
         chipText.setTextColor(COR_OURO);
         statusText.setText("Abrindo painel da loja...");
-        String safeToken = ultimoToken.replace("'", "\\'");
-        webView.loadUrl(ultimaUrl);
-        webView.postDelayed(() -> webView.evaluateJavascript("localStorage.setItem('MISTICA_API_TOKEN','" + safeToken + "');", null), 700);
+        webView.loadUrl(montarUrlComToken(ultimaUrl, ultimoToken));
     }
 
     private boolean isOnline() {
