@@ -15,6 +15,23 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 HOST = os.getenv("MISTICA_SERVER_HOST", "0.0.0.0")
 PORT = os.getenv("MISTICA_SERVER_PORT", "8000")
+CONFIG_DIR = Path.home() / "Documents" / "Mistica_Servidor_Dedicado"
+TOKEN_FILE = CONFIG_DIR / "api_token.txt"
+TOKEN_PADRAO = "mistica-local"
+
+
+def carregar_token_seguro():
+    if os.getenv("MISTICA_API_TOKEN"):
+        return os.getenv("MISTICA_API_TOKEN")
+    try:
+        if TOKEN_FILE.exists():
+            token = TOKEN_FILE.read_text(encoding="utf-8").strip()
+            if token:
+                os.environ["MISTICA_API_TOKEN"] = token
+                return token
+    except Exception:
+        pass
+    return TOKEN_PADRAO
 
 
 def ip_local():
@@ -30,6 +47,7 @@ def ip_local():
 
 def main():
     os.chdir(ROOT)
+    token_atual = carregar_token_seguro()
     ip = ip_local()
     print("=" * 68)
     print("Mística Presentes - Servidor dedicado")
@@ -39,6 +57,11 @@ def main():
     print(f"Local:      http://127.0.0.1:{PORT}")
     print(f"Rede loja:  http://{ip}:{PORT}")
     print("Externo: use Tailscale, VPN ou Cloudflare Tunnel apontando para este servidor.")
+    if token_atual == TOKEN_PADRAO:
+        print("ATENÇÃO: usando token padrão. Para internet/Cloudflare, configure um token forte.")
+        print("Rode: python scripts/configurar_inicio_servidor_windows.py")
+    else:
+        print("Token forte carregado para a API.")
     print("Para parar: CTRL+C")
     print("=" * 68)
     subprocess.run([
