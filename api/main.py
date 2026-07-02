@@ -10,6 +10,7 @@ from database import init_db
 from api.security import validar_token
 from api.service import (
     alertas_isis_api,
+    app_android_info,
     caixa_status,
     cancelamentos_recentes,
     contas_alerta_api,
@@ -52,6 +53,11 @@ def painel():
 @app.get("/health")
 def health():
     return {"ok": True, "servico": "Mística Presentes API Local"}
+
+
+@app.get("/api/app/android", dependencies=[Depends(validar_token)])
+def api_app_android():
+    return app_android_info()
 
 
 @app.get("/api/dashboard", dependencies=[Depends(validar_token)])
