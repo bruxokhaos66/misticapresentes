@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Mística Presentes - produtos místicos, incensos, velas, pedras, aromatizantes e presentes especiais." />
+  <meta name="description" content="Mística Presentes em Pinhalzinho/SC - produtos místicos, incensos, velas, pedras, aromatizantes e presentes especiais." />
+  <meta name="theme-color" content="#172012" />
   <title>Mística Presentes | Produtos Místicos e Especiais</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -25,7 +26,8 @@
         <a href="#produtos">Produtos</a>
         <a href="#cliente">Cliente</a>
         <a href="#checkout">Venda Pix</a>
-        <a class="btn btn-small" href="https://wa.me/5500000000000" target="_blank" rel="noopener">WhatsApp</a>
+        <a href="#historico">Histórico</a>
+        <a class="btn btn-small" href="#" data-whatsapp-link target="_blank" rel="noopener">WhatsApp</a>
       </div>
     </nav>
   </header>
@@ -63,7 +65,7 @@
           <p class="eyebrow">Sobre a loja</p>
           <h2>Um espaço comercial com alma mística.</h2>
         </div>
-        <p>A Mística Presentes nasceu para conectar pessoas a produtos que carregam significado. O site foi preparado para apresentar a loja, exibir produtos, registrar clientes e facilitar vendas com Pix de forma simples e organizada.</p>
+        <p>A Mística Presentes nasceu para conectar pessoas a produtos que carregam significado. O site apresenta a loja, exibe produtos, registra clientes, controla estoque simples e facilita vendas com Pix e WhatsApp.</p>
       </div>
       <div class="container feature-grid">
         <article class="feature-card">
@@ -74,17 +76,17 @@
         <article class="feature-card">
           <span>🛒</span>
           <h3>Venda rápida</h3>
-          <p>Escolha produtos, quantidade e acompanhe o total da venda em tempo real.</p>
+          <p>Escolha produtos, quantidade, acompanhe total e envie resumo para o WhatsApp.</p>
         </article>
         <article class="feature-card">
           <span>🔮</span>
           <h3>Cadastro de clientes</h3>
-          <p>Registre nome, CPF, endereço e WhatsApp para organizar o atendimento.</p>
+          <p>Registre nome, CPF, endereço e WhatsApp com validação básica.</p>
         </article>
         <article class="feature-card">
           <span>💠</span>
-          <h3>QR Code Pix</h3>
-          <p>Gere Pix copia e cola e QR Code para o cliente finalizar a compra.</p>
+          <h3>Pix e histórico</h3>
+          <p>Gere Pix, salve venda, baixe CSV e acompanhe últimas movimentações.</p>
         </article>
       </div>
     </section>
@@ -93,7 +95,7 @@
       <div class="container section-title">
         <p class="eyebrow">Catálogo comercial</p>
         <h2>Produtos da Mística</h2>
-        <p>Selecione itens para montar a venda. Os valores podem ser alterados no arquivo <strong>app.js</strong>.</p>
+        <p>Selecione itens para montar a venda ou envie um produto direto pelo WhatsApp. Produtos, preços e estoque ficam no arquivo <strong>app.js</strong>.</p>
       </div>
       <div class="container product-grid" data-product-grid></div>
     </section>
@@ -103,22 +105,27 @@
         <div class="form-panel">
           <p class="eyebrow">Cadastro</p>
           <h2>Dados do cliente</h2>
+          <p class="privacy-note">Use o cadastro apenas com autorização do cliente. CPF e endereço são dados pessoais e devem ser tratados com cuidado.</p>
           <form id="clientForm" class="form">
             <label>
               Nome completo
-              <input id="clientName" type="text" placeholder="Ex.: Maria Aparecida" required />
+              <input id="clientName" type="text" placeholder="Ex.: Maria Aparecida" minlength="3" required />
             </label>
             <label>
               CPF
-              <input id="clientCpf" type="text" placeholder="000.000.000-00" maxlength="14" required />
+              <input id="clientCpf" type="text" placeholder="000.000.000-00" maxlength="14" inputmode="numeric" required />
             </label>
             <label>
               Endereço
-              <input id="clientAddress" type="text" placeholder="Rua, número, bairro e cidade" required />
+              <input id="clientAddress" type="text" placeholder="Rua, número, bairro e cidade" minlength="5" required />
             </label>
             <label>
               WhatsApp
-              <input id="clientWhatsapp" type="text" placeholder="(49) 99999-9999" maxlength="15" required />
+              <input id="clientWhatsapp" type="text" placeholder="(49) 99999-9999" maxlength="15" inputmode="numeric" required />
+            </label>
+            <label class="check-row">
+              <input id="privacyConsent" type="checkbox" required />
+              <span>Tenho autorização do cliente para salvar estes dados neste navegador.</span>
             </label>
             <button class="btn" type="submit">Salvar cliente</button>
           </form>
@@ -129,6 +136,7 @@
           <p class="eyebrow">Clientes salvos</p>
           <h2>Últimos cadastros</h2>
           <div id="clientList" class="client-list"></div>
+          <button class="btn btn-ghost btn-full" type="button" data-export-clients>Exportar clientes CSV</button>
         </aside>
       </div>
     </section>
@@ -145,6 +153,7 @@
           </div>
           <div class="checkout-actions">
             <button class="btn btn-ghost" type="button" data-clear-cart>Limpar carrinho</button>
+            <button class="btn btn-ghost" type="button" data-send-sale-whatsapp>Enviar resumo WhatsApp</button>
             <button class="btn" type="button" data-generate-pix>Gerar QR Code Pix</button>
           </div>
         </div>
@@ -152,24 +161,45 @@
         <div class="form-panel pix-panel">
           <p class="eyebrow">Pagamento</p>
           <h2>Pix da venda</h2>
+          <div class="warning-box">
+            <strong>Antes de pagar:</strong> confira no aplicativo do banco se o valor e o nome do recebedor estão corretos.
+          </div>
           <label class="pix-key-label">
             Chave Pix da loja
-            <input id="pixKey" type="text" value="misticapresentes@email.com" />
+            <input id="pixKey" type="text" readonly />
           </label>
           <label class="pix-key-label">
             Nome do recebedor
-            <input id="merchantName" type="text" value="MISTICA PRESENTES" maxlength="25" />
+            <input id="merchantName" type="text" readonly />
           </label>
           <label class="pix-key-label">
             Cidade
-            <input id="merchantCity" type="text" value="PINHALZINHO" maxlength="15" />
+            <input id="merchantCity" type="text" readonly />
           </label>
+          <div id="publishWarning" class="warning-box warning-danger" hidden></div>
           <div class="qr-wrap">
             <canvas id="pixQr" width="220" height="220" aria-label="QR Code Pix"></canvas>
             <p id="pixStatus">Adicione produtos ao carrinho e gere o Pix.</p>
           </div>
           <textarea id="pixPayload" readonly placeholder="Pix copia e cola aparecerá aqui"></textarea>
           <button class="btn btn-full" type="button" data-copy-pix>Copiar Pix copia e cola</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="historico" class="section history-section">
+      <div class="container checkout-grid">
+        <div class="form-panel">
+          <p class="eyebrow">Histórico</p>
+          <h2>Últimas vendas</h2>
+          <div id="salesHistory" class="history-list"></div>
+          <button class="btn btn-ghost btn-full" type="button" data-export-sales>Exportar vendas CSV</button>
+        </div>
+        <div class="form-panel dark-panel">
+          <p class="eyebrow">Estoque</p>
+          <h2>Controle simples</h2>
+          <p class="privacy-note">O estoque é salvo neste navegador. Para operação com mais de um computador, será necessário backend com banco de dados.</p>
+          <div id="stockList" class="stock-list"></div>
         </div>
       </div>
     </section>
@@ -184,12 +214,12 @@
       </div>
       <div>
         <h3>Contato</h3>
-        <p>WhatsApp: atualize o link no arquivo index.html</p>
+        <p>WhatsApp: configure em <strong>app.js</strong></p>
         <p>Instagram: @misticaprodutos</p>
       </div>
       <div>
         <h3>Publicação</h3>
-        <p>Site pronto para GitHub Pages. Basta publicar a branch ou mesclar no main.</p>
+        <p>Antes de publicar, troque WhatsApp, chave Pix, nome do recebedor e revise os produtos.</p>
       </div>
     </div>
   </footer>
