@@ -78,9 +78,24 @@ def iniciar_cloudflare() -> str | None:
             CLOUDFLARE_LOG.unlink()
     except Exception:
         pass
-    comando = f"cloudflared tunnel --url {LOCAL} 2>&1 | Tee-Object -FilePath '{CLOUDFLARE_LOG}'"
-    abrir_janela("Mistica Presentes - Cloudflare", comando)
-    print("[OK] Cloudflare iniciado.")
+
+    try:
+        log = open(CLOUDFLARE_LOG, "w", encoding="utf-8", errors="ignore")
+        subprocess.Popen(
+            ["cloudflared", "tunnel", "--url", LOCAL],
+            cwd=str(ROOT),
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0),
+        )
+    except FileNotFoundError:
+        print("[ERRO] cloudflared nao encontrado. Instale ou inicie manualmente.")
+        return None
+    except Exception as exc:
+        print(f"[ERRO] Falha ao iniciar Cloudflare: {exc}")
+        return None
+
+    print("[OK] Cloudflare iniciado sem erro vermelho do PowerShell.")
     print("[INFO] Aguardando endereco trycloudflare...")
 
     padrao = re.compile(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com")
