@@ -74,6 +74,10 @@ public class MainActivity extends Activity {
         return (int) (valor * getResources().getDisplayMetrics().density + 0.5f);
     }
 
+    private boolean urlValida(String url) {
+        return url != null && (url.startsWith("http://") || url.startsWith("https://"));
+    }
+
     private GradientDrawable fundo(int cor, float raioDp) {
         GradientDrawable g = new GradientDrawable();
         g.setColor(cor);
@@ -214,8 +218,8 @@ public class MainActivity extends Activity {
 
         LinearLayout configCard = card();
         configCard.addView(texto("Conectar ao servidor", 18, COR_OURO, Typeface.BOLD));
-        configCard.addView(label("Digite o endereço que apareceu no computador principal da loja.", 13, COR_MUTED));
-        urlInput = campo("http://IP-DO-SERVIDOR:8000", prefs.getString(KEY_URL, "http://"));
+        configCard.addView(label("Digite o endereço que apareceu no computador principal da loja ou o endereço externo seguro em https://.", 13, COR_MUTED));
+        urlInput = campo("http://IP:8000 ou https://seu-endereco-seguro", prefs.getString(KEY_URL, "http://"));
         LinearLayout.LayoutParams campoLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         campoLp.setMargins(0, dp(8), 0, dp(10));
         configCard.addView(urlInput, campoLp);
@@ -269,7 +273,7 @@ public class MainActivity extends Activity {
 
         LinearLayout dica = card();
         dica.addView(texto("Como conectar", 17, COR_OURO, Typeface.BOLD));
-        dica.addView(label("1. No computador da loja, rode o servidor local.\n2. Use o endereço da rede, por exemplo: http://192.168.0.115:8000\n3. O celular precisa estar no mesmo Wi‑Fi da loja.", 14, COR_TEXTO));
+        dica.addView(label("1. No computador da loja, rode o servidor dedicado.\n2. Na loja, use o endereço da rede local.\n3. Fora da loja, use um endereço externo seguro em https://.", 14, COR_TEXTO));
         dica.addView(label("Para acesso fora da loja, use uma solução segura como VPN, Tailscale ou Cloudflare Tunnel.", 13, COR_MUTED));
         conteudo.addView(dica);
 
@@ -300,7 +304,7 @@ public class MainActivity extends Activity {
             public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
                 chipText.setText("ERRO");
                 chipText.setTextColor(Color.rgb(224, 112, 112));
-                statusText.setText("Falha ao conectar. Confira servidor ligado, Wi‑Fi e firewall.");
+                statusText.setText("Falha ao conectar. Confira servidor ligado, Wi‑Fi, internet ou firewall.");
                 super.onReceivedError(view, errorCode, description, failingUrl);
             }
         });
@@ -319,7 +323,7 @@ public class MainActivity extends Activity {
     private void verificarAtualizacao() {
         String urlBase = normalizarUrl(urlInput != null ? urlInput.getText().toString() : prefs.getString(KEY_URL, ""));
         String token = tokenInput != null ? tokenInput.getText().toString().trim() : prefs.getString(KEY_TOKEN, "mistica-local");
-        if (urlBase.isEmpty() || !urlBase.startsWith("http://")) {
+        if (urlBase.isEmpty() || !urlValida(urlBase)) {
             sobreStatusText.setText("Configure primeiro o endereço do servidor da loja.");
             return;
         }
@@ -360,7 +364,7 @@ public class MainActivity extends Activity {
             } catch (Exception e) {
                 runOnUiThread(() -> {
                     versaoServidorText.setText("Versão disponível no servidor: não verificada");
-                    sobreStatusText.setText("Não consegui verificar. Confira servidor ligado, Wi‑Fi, firewall e token.");
+                    sobreStatusText.setText("Não consegui verificar. Confira servidor ligado, Wi‑Fi, internet, firewall e token.");
                 });
             }
         }).start();
@@ -369,8 +373,8 @@ public class MainActivity extends Activity {
     private void salvarEAbrir() {
         String url = normalizarUrl(urlInput.getText().toString());
         String token = tokenInput.getText().toString().trim();
-        if (url.isEmpty() || !url.startsWith("http://")) {
-            Toast.makeText(this, "Informe um endereço válido começando com http://", Toast.LENGTH_LONG).show();
+        if (url.isEmpty() || !urlValida(url)) {
+            Toast.makeText(this, "Informe um endereço válido começando com http:// ou https://", Toast.LENGTH_LONG).show();
             return;
         }
         if (token.isEmpty()) token = "mistica-local";
@@ -390,7 +394,7 @@ public class MainActivity extends Activity {
         webView.setVisibility(View.GONE);
         chipText.setText("CONFIG");
         chipText.setTextColor(COR_OURO);
-        statusText.setText(isOnline() ? "Configuração, servidor e atualização." : "Sem rede. Conecte no Wi‑Fi da loja.");
+        statusText.setText(isOnline() ? "Configuração, servidor e atualização." : "Sem rede. Conecte no Wi‑Fi ou internet.");
         atualizarInfoSobre();
     }
 
