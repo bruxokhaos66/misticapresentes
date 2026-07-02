@@ -50,17 +50,19 @@ def verificar_arquivo(caminho, obrigatorio=True):
 
 
 def verificar_imports():
-    for modulo in [
-        "customtkinter",
-        "fastapi",
-        "uvicorn",
-        "pyinstaller",
-    ]:
+    # Nome do pacote no pip: pyinstaller. Nome importavel no Python: PyInstaller.
+    modulos = [
+        ("customtkinter", "customtkinter"),
+        ("fastapi", "fastapi"),
+        ("uvicorn", "uvicorn"),
+        ("PyInstaller", "pyinstaller"),
+    ]
+    for modulo_import, nome_exibicao in modulos:
         try:
-            importlib.import_module(modulo)
-            ok(f"Dependencia OK: {modulo}")
+            importlib.import_module(modulo_import)
+            ok(f"Dependencia OK: {nome_exibicao}")
         except Exception as exc:
-            erro(f"Dependencia com problema: {modulo} - {exc}")
+            erro(f"Dependencia com problema: {nome_exibicao} - {exc}")
 
 
 def verificar_banco():
