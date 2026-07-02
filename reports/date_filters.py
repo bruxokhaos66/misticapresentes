@@ -5,7 +5,7 @@ def intervalo_dia(data=None):
     data = data or datetime.now()
     inicio = data.replace(hour=0, minute=0, second=0, microsecond=0)
     fim = inicio + timedelta(days=1)
-    return inicio.strftime("%Y-%m-%d %H:%M:%S"), fim.strftime("%Y-%m-%d %H:%M:%S")
+    return inicio.strftime("%Y-%m-%d"), fim.strftime("%Y-%m-%d")
 
 
 def intervalo_mes(mes=None, ano=None):
@@ -17,11 +17,12 @@ def intervalo_mes(mes=None, ano=None):
         fim = datetime(ano + 1, 1, 1)
     else:
         fim = datetime(ano, mes + 1, 1)
-    return inicio.strftime("%Y-%m-%d %H:%M:%S"), fim.strftime("%Y-%m-%d %H:%M:%S")
+    return inicio.strftime("%Y-%m-%d"), fim.strftime("%Y-%m-%d")
 
 
 def filtro_data_iso_sql(coluna="data_iso"):
-    return f"COALESCE({coluna}, '') >= ? AND COALESCE({coluna}, '') < ?"
+    """Filtro compatível com data_iso salvo como YYYY-MM-DD ou YYYY-MM-DD HH:MM:SS."""
+    return f"substr(COALESCE({coluna}, ''), 1, 10) >= ? AND substr(COALESCE({coluna}, ''), 1, 10) < ?"
 
 
 def intervalo_por_filtro_texto(filtro):
