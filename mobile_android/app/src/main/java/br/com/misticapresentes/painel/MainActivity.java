@@ -23,6 +23,13 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+
 public class MainActivity extends Activity {
     private static final String PREFS = "mistica_painel_prefs";
     private static final String KEY_URL = "server_url";
@@ -37,12 +44,14 @@ public class MainActivity extends Activity {
     private final int COR_MUTED = Color.rgb(184, 172, 148);
 
     private LinearLayout configContainer;
-    private LinearLayout configCard;
     private WebView webView;
     private EditText urlInput;
     private EditText tokenInput;
     private TextView statusText;
     private TextView chipText;
+    private TextView sobreStatusText;
+    private TextView versaoServidorText;
+    private TextView servidorAtualText;
     private SharedPreferences prefs;
     private String ultimaUrl = "";
     private String ultimoToken = "mistica-local";
@@ -150,6 +159,10 @@ public class MainActivity extends Activity {
         titulos.addView(sub);
         top.addView(titulos, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
 
+        Button sobreBtn = botao("Sobre", Color.rgb(61, 50, 77), COR_OURO);
+        sobreBtn.setOnClickListener(v -> mostrarConfig());
+        top.addView(sobreBtn, new LinearLayout.LayoutParams(dp(82), dp(46)));
+
         Button atualizarBtn = botao("Atualizar", Color.rgb(72, 113, 92), Color.WHITE);
         atualizarBtn.setOnClickListener(v -> {
             if (webView != null && ultimaUrl != null && !ultimaUrl.isEmpty()) {
@@ -157,7 +170,9 @@ public class MainActivity extends Activity {
                 statusText.setText("Atualizando painel...");
             }
         });
-        top.addView(atualizarBtn, new LinearLayout.LayoutParams(dp(104), dp(46)));
+        LinearLayout.LayoutParams atualizarLp = new LinearLayout.LayoutParams(dp(104), dp(46));
+        atualizarLp.setMargins(dp(8), 0, 0, 0);
+        top.addView(atualizarBtn, atualizarLp);
 
         Button configBtn = botao("⚙", Color.rgb(61, 50, 77), COR_OURO);
         configBtn.setOnClickListener(v -> mostrarConfig());
@@ -193,13 +208,11 @@ public class MainActivity extends Activity {
 
         LinearLayout hero = card();
         hero.setBackground(fundoComBorda(COR_CARD_2, 24, Color.argb(100, 216, 181, 109)));
-        TextView heroTitle = texto("Painel da loja no celular", 23, COR_OURO, Typeface.BOLD);
-        TextView heroText = label("Acompanhe vendas, caixa, estoque baixo, cancelamentos e alertas da Isis em uma tela simples e bonita.", 14, COR_TEXTO);
-        hero.addView(heroTitle);
-        hero.addView(heroText);
+        hero.addView(texto("Painel da loja no celular", 23, COR_OURO, Typeface.BOLD));
+        hero.addView(label("Acompanhe vendas, caixa, estoque baixo, cancelamentos e alertas da Isis em uma tela simples e bonita.", 14, COR_TEXTO));
         conteudo.addView(hero);
 
-        configCard = card();
+        LinearLayout configCard = card();
         configCard.addView(texto("Conectar ao servidor", 18, COR_OURO, Typeface.BOLD));
         configCard.addView(label("Digite o endereço que apareceu no computador principal da loja.", 13, COR_MUTED));
         urlInput = campo("http://IP-DO-SERVIDOR:8000", prefs.getString(KEY_URL, "http://"));
@@ -227,6 +240,7 @@ public class MainActivity extends Activity {
             prefs.edit().remove(KEY_URL).remove(KEY_TOKEN).apply();
             urlInput.setText("http://");
             tokenInput.setText("mistica-local");
+            atualizarInfoSobre();
             Toast.makeText(this, "Configuração limpa.", Toast.LENGTH_SHORT).show();
         });
         linhaBotoes.addView(exemplo, new LinearLayout.LayoutParams(0, dp(46), 1));
@@ -235,6 +249,23 @@ public class MainActivity extends Activity {
         linhaBotoes.addView(limpar, limparLp);
         configCard.addView(linhaBotoes);
         conteudo.addView(configCard);
+
+        LinearLayout sobreCard = card();
+        sobreCard.setBackground(fundoComBorda(Color.rgb(26, 31, 43), 22, Color.argb(90, 106, 190, 150)));
+        sobreCard.addView(texto("Sobre / Atualização", 19, COR_OURO, Typeface.BOLD));
+        sobreCard.addView(label("Versão instalada: " + BuildConfig.VERSION_NAME + " (" + BuildConfig.VERSION_CODE + ")", 14, COR_TEXTO));
+        servidorAtualText = label("Servidor configurado: -", 14, COR_TEXTO);
+        versaoServidorText = label("Versão disponível no servidor: ainda não verificada", 14, COR_MUTED);
+        sobreStatusText = label("Toque em verificar atualização para consultar a API da loja.", 13, COR_MUTED);
+        sobreCard.addView(servidorAtualText);
+        sobreCard.addView(versaoServidorText);
+        sobreCard.addView(sobreStatusText);
+        Button verificar = botao("Verificar atualização", COR_VERDE, Color.rgb(18, 16, 24));
+        verificar.setOnClickListener(v -> verificarAtualizacao());
+        LinearLayout.LayoutParams verificarLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(50));
+        verificarLp.setMargins(0, dp(10), 0, 0);
+        sobreCard.addView(verificar, verificarLp);
+        conteudo.addView(sobreCard);
 
         LinearLayout dica = card();
         dica.addView(texto("Como conectar", 17, COR_OURO, Typeface.BOLD));
@@ -275,6 +306,64 @@ public class MainActivity extends Activity {
         });
         root.addView(webView, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
         setContentView(root);
+        atualizarInfoSobre();
+    }
+
+    private void atualizarInfoSobre() {
+        if (servidorAtualText != null) {
+            String servidor = prefs.getString(KEY_URL, "");
+            servidorAtualText.setText("Servidor configurado: " + (servidor == null || servidor.trim().isEmpty() ? "não configurado" : servidor));
+        }
+    }
+
+    private void verificarAtualizacao() {
+        String urlBase = normalizarUrl(urlInput != null ? urlInput.getText().toString() : prefs.getString(KEY_URL, ""));
+        String token = tokenInput != null ? tokenInput.getText().toString().trim() : prefs.getString(KEY_TOKEN, "mistica-local");
+        if (urlBase.isEmpty() || !urlBase.startsWith("http://")) {
+            sobreStatusText.setText("Configure primeiro o endereço do servidor da loja.");
+            return;
+        }
+        if (token.isEmpty()) token = "mistica-local";
+        final String finalUrl = urlBase + "/api/app/android";
+        final String finalToken = token;
+        sobreStatusText.setText("Verificando atualização...");
+        versaoServidorText.setText("Versão disponível no servidor: consultando...");
+        new Thread(() -> {
+            try {
+                URL url = new URL(finalUrl);
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("GET");
+                conn.setConnectTimeout(5000);
+                conn.setReadTimeout(5000);
+                conn.setRequestProperty("X-Mistica-Token", finalToken);
+                int code = conn.getResponseCode();
+                BufferedReader br = new BufferedReader(new InputStreamReader(code >= 200 && code < 300 ? conn.getInputStream() : conn.getErrorStream(), "UTF-8"));
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = br.readLine()) != null) sb.append(line);
+                br.close();
+                if (code < 200 || code >= 300) {
+                    throw new Exception("Servidor respondeu HTTP " + code);
+                }
+                JSONObject obj = new JSONObject(sb.toString());
+                String latest = obj.optString("latest_version", "-");
+                int latestCode = obj.optInt("latest_version_code", 0);
+                String msg = obj.optString("message", "");
+                runOnUiThread(() -> {
+                    versaoServidorText.setText("Versão disponível no servidor: " + latest + " (" + latestCode + ")");
+                    if (latestCode > BuildConfig.VERSION_CODE) {
+                        sobreStatusText.setText("Existe atualização disponível. Gere um novo APK no computador e instale por cima do atual. " + msg);
+                    } else {
+                        sobreStatusText.setText("Seu app está atualizado. " + msg);
+                    }
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    versaoServidorText.setText("Versão disponível no servidor: não verificada");
+                    sobreStatusText.setText("Não consegui verificar. Confira servidor ligado, Wi‑Fi, firewall e token.");
+                });
+            }
+        }).start();
     }
 
     private void salvarEAbrir() {
@@ -286,6 +375,7 @@ public class MainActivity extends Activity {
         }
         if (token.isEmpty()) token = "mistica-local";
         prefs.edit().putString(KEY_URL, url).putString(KEY_TOKEN, token).apply();
+        atualizarInfoSobre();
         abrirPainel(url, token);
     }
 
@@ -300,7 +390,8 @@ public class MainActivity extends Activity {
         webView.setVisibility(View.GONE);
         chipText.setText("CONFIG");
         chipText.setTextColor(COR_OURO);
-        statusText.setText(isOnline() ? "Configure o servidor da loja." : "Sem rede. Conecte no Wi‑Fi da loja.");
+        statusText.setText(isOnline() ? "Configuração, servidor e atualização." : "Sem rede. Conecte no Wi‑Fi da loja.");
+        atualizarInfoSobre();
     }
 
     private void abrirPainel(String url, String token) {
