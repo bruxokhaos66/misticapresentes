@@ -43,9 +43,10 @@ def registrar_log_manutencao(usuario, acao, detalhes):
 
 
 def reiniciar_dashboard(usuario):
-    """Reinicia apenas o estado visual/configurável do dashboard.
+    """Reinicia o dashboard visual/configurável sem apagar dados reais.
 
-    Não apaga vendas, caixa, estoque ou financeiro.
+    A ação limpa somente a mensagem personalizada do dashboard e registra log.
+    A remontagem visual da aba é feita pela camada de interface.
     """
     exigir_adm(usuario)
     removeu_msg = False
@@ -62,7 +63,7 @@ def reiniciar_dashboard(usuario):
         "area": "dashboard",
         "acao": "reiniciar_visual",
         "removeu_mensagem_personalizada": removeu_msg,
-        "mensagem": "Dashboard reiniciado visualmente sem apagar dados reais.",
+        "mensagem": "Dashboard reiniciado e recarregado na tela. Nenhum dado real foi apagado.",
     }
 
 
