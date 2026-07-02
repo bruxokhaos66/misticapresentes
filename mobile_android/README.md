@@ -4,6 +4,42 @@ Aplicativo Android para acompanhar o painel da loja pelo celular.
 
 Esta versão usa um app nativo com WebView, tela de configuração premium, seção Sobre / Atualização e suporte a endereço externo seguro em HTTPS.
 
+## Atualização online
+
+O app funciona como um container que abre o painel web do servidor da loja.
+
+Por isso, várias melhorias passam a ser atualizadas online, sem reinstalar APK:
+
+- layout do painel;
+- cards;
+- textos;
+- indicadores;
+- alertas;
+- dashboard;
+- novas seções web.
+
+Essas mudanças ficam no arquivo:
+
+```text
+api/painel.html
+```
+
+Depois de atualizar o GitHub, basta rodar no computador da loja:
+
+```bash
+git pull origin main
+```
+
+E reiniciar o servidor dedicado:
+
+```bash
+python scripts/iniciar_servidor_dedicado.py
+```
+
+Ao abrir o app no celular, ele carrega o painel atualizado.
+
+Mudanças nativas do Android, como ícone, permissões, nome do app e tela nativa de configuração, ainda exigem gerar um novo APK. Isso é uma regra de segurança do Android.
+
 ## Visual e experiência
 
 - Tela inicial mais bonita e fácil de entender.
@@ -28,7 +64,7 @@ A seção mostra:
 - versão disponível informada pela API da loja;
 - botão Verificar atualização.
 
-Quando houver nova versão, o app avisa para gerar um novo APK no computador e instalar por cima do app atual.
+Quando houver nova versão nativa, o app avisa para gerar um novo APK no computador e instalar por cima do app atual.
 
 ## O que o app faz
 
@@ -121,5 +157,5 @@ Para acompanhar fora da loja, use uma solução segura como VPN, Tailscale ou Cl
 - Tela de login visual no app.
 - Notificações de venda nova.
 - Atalho para favoritos.
-- Versão PWA instalável.
+- Melhorias no painel web online.
 - Futuramente, operações autorizadas como estoque e caixa.
