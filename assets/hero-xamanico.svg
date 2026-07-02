@@ -1,0 +1,28 @@
+<svg width="900" height="900" viewBox="0 0 900 900" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Arte xamânica da Mística Presentes</title>
+  <desc id="desc">Composição com lua, folhas, cristais, estrelas e fumaça de incenso.</desc>
+  <rect width="900" height="900" rx="72" fill="#11170D"/>
+  <circle cx="450" cy="450" r="370" fill="#182311" stroke="#E0B35B" stroke-width="8"/>
+  <circle cx="450" cy="450" r="300" stroke="#798B48" stroke-width="3" stroke-dasharray="12 18"/>
+  <path d="M579 153C488 181 422 267 422 368C422 493 524 595 649 595C665 595 681 593 697 590C646 658 565 702 474 702C318 702 191 575 191 419C191 281 291 166 423 143C476 134 529 138 579 153Z" fill="#E0B35B"/>
+  <path d="M588 208C526 235 484 296 484 368C484 463 561 540 656 540C677 540 697 536 715 529C680 576 624 606 560 606C453 606 366 519 366 412C366 314 439 233 534 221C554 219 571 216 588 208Z" fill="#182311"/>
+  <path d="M448 227L512 390L449 590L385 390L448 227Z" fill="#F6D58E" stroke="#FFF2C2" stroke-width="8"/>
+  <path d="M385 390H512" stroke="#8D5132" stroke-width="8" stroke-linecap="round"/>
+  <path d="M449 590L350 704H548L449 590Z" fill="#798B48" stroke="#E0B35B" stroke-width="8"/>
+  <path d="M217 591C309 579 369 526 389 439C292 451 235 503 217 591Z" fill="#B7C98A"/>
+  <path d="M691 351C604 362 548 414 529 499C620 487 674 434 691 351Z" fill="#B7C98A"/>
+  <path d="M224 588C295 565 346 517 386 443" stroke="#41512B" stroke-width="10" stroke-linecap="round"/>
+  <path d="M536 495C592 450 640 402 689 353" stroke="#41512B" stroke-width="10" stroke-linecap="round"/>
+  <path d="M297 674C278 633 282 595 309 559C323 604 319 642 297 674Z" fill="#8D5132"/>
+  <path d="M606 654C584 617 586 581 614 546C631 586 628 623 606 654Z" fill="#8D5132"/>
+  <path d="M318 744C357 704 383 665 398 624" stroke="#D5C8A7" stroke-width="8" stroke-linecap="round" opacity="0.45"/>
+  <path d="M583 743C544 704 520 666 508 628" stroke="#D5C8A7" stroke-width="8" stroke-linecap="round" opacity="0.45"/>
+  <circle cx="241" cy="251" r="9" fill="#F6D58E"/>
+  <circle cx="663" cy="230" r="8" fill="#F6D58E"/>
+  <circle cx="715" cy="459" r="10" fill="#F6D58E"/>
+  <circle cx="207" cy="448" r="7" fill="#F6D58E"/>
+  <path d="M449 95V135" stroke="#E0B35B" stroke-width="8" stroke-linecap="round"/>
+  <path d="M449 765V805" stroke="#E0B35B" stroke-width="8" stroke-linecap="round"/>
+  <path d="M95 450H135" stroke="#E0B35B" stroke-width="8" stroke-linecap="round"/>
+  <path d="M765 450H805" stroke="#E0B35B" stroke-width="8" stroke-linecap="round"/>
+</svg>
