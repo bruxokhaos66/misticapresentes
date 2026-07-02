@@ -7,7 +7,6 @@ from services.period_maintenance_service import (
     listar_vendas_periodo,
     zerar_vendas_e_caixa_periodo,
 )
-from database import query_db
 
 
 def _fmt_moeda(valor):
@@ -44,7 +43,7 @@ def _valores_periodo(tipo, dia, mes, ano):
 def _criar_tree(parent, columns, headings, widths):
     frame = ctk.CTkFrame(parent, fg_color="#18121f", corner_radius=10)
     frame.pack(fill="both", expand=True, padx=12, pady=8)
-    tree = ttk.Treeview(frame, columns=columns, show="headings", selectmode="extended", height=12)
+    tree = ttk.Treeview(frame, columns=columns, show="headings", selectmode="extended", height=13)
     vsb = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
     hsb = ttk.Scrollbar(frame, orient="horizontal", command=tree.xview)
     tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
@@ -66,25 +65,25 @@ def abrir_central_manutencao(app):
 
     win = ctk.CTkToplevel(app)
     win.title("Central de Manutenção - Mística Presentes")
-    win.geometry("1120x720")
+    win.geometry("1120x680")
     win.grab_set()
 
     header = ctk.CTkFrame(win, fg_color="#1a1621", corner_radius=14)
     header.pack(fill="x", padx=14, pady=12)
     ctk.CTkLabel(header, text="CENTRAL DE MANUTENÇÃO", font=("Arial", 22, "bold"), text_color="#d8b56d").pack(pady=(14, 4))
-    ctk.CTkLabel(header, text="Ferramentas administrativas com filtro por dia, mês e ano. Ações críticas geram backup e log.", font=("Arial", 13), wraplength=980).pack(pady=(0, 14))
+    ctk.CTkLabel(
+        header,
+        text="Manutenção de vendas e caixa por período. Auditoria completa agora fica na aba própria 'Auditoria Logs'.",
+        font=("Arial", 13),
+        wraplength=980,
+    ).pack(pady=(0, 14))
 
-    tabs = ctk.CTkTabview(win)
-    tabs.pack(fill="both", expand=True, padx=14, pady=(0, 14))
-    tab_periodo = tabs.add("Vendas e Caixa por Período")
-    tab_logs = tabs.add("Auditoria / Logs")
+    tipo, dia, mes, ano = _periodo_widgets(win)
+    resumo_lbl = ctk.CTkLabel(win, text="Selecione o período e clique em Carregar.", font=("Arial", 14, "bold"), text_color="#f0e6d2")
+    resumo_lbl.pack(fill="x", padx=20, pady=(0, 6))
 
-    tipo, dia, mes, ano = _periodo_widgets(tab_periodo)
-    resumo_lbl = ctk.CTkLabel(tab_periodo, text="Selecione o período e clique em Carregar.", font=("Arial", 14, "bold"), text_color="#f0e6d2")
-    resumo_lbl.pack(fill="x", padx=12, pady=(0, 6))
-
-    grid = ctk.CTkFrame(tab_periodo, fg_color="transparent")
-    grid.pack(fill="both", expand=True, padx=4, pady=4)
+    grid = ctk.CTkFrame(win, fg_color="transparent")
+    grid.pack(fill="both", expand=True, padx=8, pady=4)
     grid.columnconfigure((0, 1), weight=1)
     grid.rowconfigure(0, weight=1)
 
@@ -142,30 +141,12 @@ def abrir_central_manutencao(app):
         except Exception as exc:
             messagebox.showerror("Central de Manutenção", f"Erro ao zerar período: {exc}")
 
-    botoes = ctk.CTkFrame(tab_periodo, fg_color="transparent")
-    botoes.pack(fill="x", padx=12, pady=8)
+    botoes = ctk.CTkFrame(win, fg_color="transparent")
+    botoes.pack(fill="x", padx=20, pady=10)
     ctk.CTkButton(botoes, text="CARREGAR PERÍODO", height=40, fg_color="#3c7bb9", command=carregar_periodo).pack(side="left", padx=5)
     ctk.CTkButton(botoes, text="ZERAR VENDAS E CAIXA DO PERÍODO", height=40, fg_color="#8a4c4c", command=zerar_periodo).pack(side="right", padx=5)
 
-    # Logs com barras de rolagem
-    log_bar = ctk.CTkFrame(tab_logs, fg_color="#18121f", corner_radius=12)
-    log_bar.pack(fill="x", padx=12, pady=10)
-    ctk.CTkLabel(log_bar, text="Auditoria administrativa", font=("Arial", 14, "bold"), text_color="#d8b56d").pack(side="left", padx=12, pady=10)
-    tree_logs = _criar_tree(tab_logs, ("usuario", "acao", "detalhes", "data"), ("Usuário", "Ação", "Detalhes", "Data/Hora"), (150, 220, 560, 150))
-
-    def carregar_logs():
-        for item in tree_logs.get_children():
-            tree_logs.delete(item)
-        try:
-            rows = query_db("SELECT usuario, acao, detalhes, data_hora FROM logs ORDER BY id DESC LIMIT 300")
-            for r in rows:
-                tree_logs.insert("", "end", values=r)
-        except Exception as exc:
-            messagebox.showerror("Logs", f"Erro ao carregar logs: {exc}")
-
-    ctk.CTkButton(log_bar, text="RECARREGAR LOGS", height=34, command=carregar_logs).pack(side="right", padx=12, pady=10)
     carregar_periodo()
-    carregar_logs()
 
 
 def patch_maintenance_center(MisticaApp):
