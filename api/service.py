@@ -15,6 +15,8 @@ from api.security import resumo_seguranca_api
 
 ANDROID_APP_VERSION = "1.1.0"
 ANDROID_APP_VERSION_CODE = 2
+META_SEMANAL_VENDAS = 1000.0
+BONUS_META_SEMANAL = 100.0
 
 
 def _moeda(valor):
@@ -22,6 +24,16 @@ def _moeda(valor):
         return float(valor or 0.0)
     except Exception:
         return 0.0
+
+
+def _data_venda_iso(data_iso, data_venda):
+    data_iso = str(data_iso or "").strip()
+    if data_iso:
+        return data_iso[:10]
+    try:
+        return datetime.strptime(str(data_venda or "")[:10], "%d/%m/%Y").strftime("%Y-%m-%d")
+    except Exception:
+        return ""
 
 
 def app_android_info():
@@ -72,6 +84,56 @@ def vendas_do_dia():
     )
     qtd, total = res[0] if res else (0, 0.0)
     return {"data": hoje_br, "quantidade": int(qtd or 0), "faturamento": _moeda(total)}
+
+
+def metas_vendas_api():
+    hoje = datetime.now()
+    hoje_iso = hoje.strftime("%Y-%m-%d")
+    mes_iso = hoje.strftime("%Y-%m")
+    inicio_semana_ord = hoje.date().toordinal() - hoje.weekday()
+    linhas = query_db(
+        """
+        SELECT COALESCE(data_iso,''), COALESCE(data_venda,''), COALESCE(total_final,0), COALESCE(status,'Concluído')
+        FROM vendas
+        WHERE COALESCE(status,'Concluído') != 'Cancelado'
+        """
+    )
+    vendas_dia = vendas_semana = vendas_mes = vendas_total = 0.0
+    qtd_dia = qtd_semana = qtd_mes = qtd_total = 0
+    for data_iso, data_venda, total_final, _status in linhas:
+        valor = _moeda(total_final)
+        data_ref = _data_venda_iso(data_iso, data_venda)
+        vendas_total += valor
+        qtd_total += 1
+        if data_ref.startswith(hoje_iso):
+            vendas_dia += valor
+            qtd_dia += 1
+        if data_ref.startswith(mes_iso):
+            vendas_mes += valor
+            qtd_mes += 1
+        try:
+            if datetime.strptime(data_ref, "%Y-%m-%d").date().toordinal() >= inicio_semana_ord:
+                vendas_semana += valor
+                qtd_semana += 1
+        except Exception:
+            pass
+    meta_batida = vendas_semana >= META_SEMANAL_VENDAS
+    percentual = round((vendas_semana / META_SEMANAL_VENDAS) * 100, 2) if META_SEMANAL_VENDAS else 0.0
+    return {
+        "vendas_dia": vendas_dia,
+        "qtd_dia": qtd_dia,
+        "vendas_semana": vendas_semana,
+        "qtd_semana": qtd_semana,
+        "vendas_mes": vendas_mes,
+        "qtd_mes": qtd_mes,
+        "vendas_total": vendas_total,
+        "qtd_total": qtd_total,
+        "meta_semana": META_SEMANAL_VENDAS,
+        "percentual_meta_semana": percentual,
+        "falta_meta_semana": max(META_SEMANAL_VENDAS - vendas_semana, 0.0),
+        "meta_batida": meta_batida,
+        "bonus_comissao": BONUS_META_SEMANAL if meta_batida else 0.0,
+    }
 
 
 def ultimas_vendas(limite=10):
@@ -159,6 +221,7 @@ def dashboard_api():
         "gerado_em": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
         "seguranca": resumo_seguranca_api(),
         "vendas_hoje": vendas_do_dia(),
+        "metas_vendas": metas_vendas_api(),
         "caixa": caixa_status(),
         "ultimas_vendas": ultimas_vendas(8),
         "estoque_baixo": estoque_baixo_api(8),
