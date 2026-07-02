@@ -1,7 +1,7 @@
 """Configura inicializacao automatica do servidor dedicado no Windows.
 
 Cria um token forte para a API, salva no perfil do usuario e cria um arquivo
-.bat na pasta Startup do Windows para iniciar o servidor ao fazer login.
+.bat na pasta Startup do Windows para abrir a janela do servidor ao fazer login.
 """
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ def criar_bat(token: str):
     conteudo = f"""@echo off
 cd /d "{ROOT}"
 set MISTICA_API_TOKEN={token}
-python scripts\iniciar_servidor_dedicado.py
+python scripts\painel_inicio_servidor.py
 """
     BAT_FILE.write_text(conteudo, encoding="ascii")
 
@@ -43,6 +43,7 @@ def main():
     print("Configuração concluída.")
     print("Token salvo em:", TOKEN_FILE)
     print("Inicialização criada em:", BAT_FILE)
+    print("Ao entrar no Windows, a janela do servidor do app será aberta automaticamente.")
     print("Use este token no app Mística Painel:")
     print(token)
     print("Reinicie o Windows ou execute o arquivo .bat para testar.")
