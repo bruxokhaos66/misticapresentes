@@ -86,17 +86,24 @@ def vendas_do_dia():
     return {"data": hoje_br, "quantidade": int(qtd or 0), "faturamento": _moeda(total)}
 
 
-def metas_vendas_api():
+def metas_vendas_api(vendedor=None):
     hoje = datetime.now()
     hoje_iso = hoje.strftime("%Y-%m-%d")
     mes_iso = hoje.strftime("%Y-%m")
     inicio_semana_ord = hoje.date().toordinal() - hoje.weekday()
+    params = []
+    filtro_vendedor = ""
+    if vendedor:
+        filtro_vendedor = " AND vendedor=?"
+        params.append(vendedor)
     linhas = query_db(
-        """
+        f"""
         SELECT COALESCE(data_iso,''), COALESCE(data_venda,''), COALESCE(total_final,0), COALESCE(status,'Concluído')
         FROM vendas
         WHERE COALESCE(status,'Concluído') != 'Cancelado'
-        """
+        {filtro_vendedor}
+        """,
+        tuple(params),
     )
     vendas_dia = vendas_semana = vendas_mes = vendas_total = 0.0
     qtd_dia = qtd_semana = qtd_mes = qtd_total = 0
@@ -120,6 +127,7 @@ def metas_vendas_api():
     meta_batida = vendas_semana >= META_SEMANAL_VENDAS
     percentual = round((vendas_semana / META_SEMANAL_VENDAS) * 100, 2) if META_SEMANAL_VENDAS else 0.0
     return {
+        "vendedor": vendedor or "Todos",
         "vendas_dia": vendas_dia,
         "qtd_dia": qtd_dia,
         "vendas_semana": vendas_semana,
@@ -214,6 +222,34 @@ def contas_alerta_api():
 def alertas_isis_api():
     texto = alertas_operacionais(formatador=lambda v: f"R$ {float(v or 0):.2f}".replace(".", ","))
     return {"texto": texto}
+
+
+def dashboard_app(sessao_app):
+    perfil = sessao_app.get("perfil")
+    nome = sessao_app.get("nome")
+    base = {
+        "gerado_em": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+        "usuario": {
+            "nome": nome,
+            "login": sessao_app.get("login"),
+            "perfil": perfil,
+        },
+        "metas_vendas": metas_vendas_api(nome if perfil == "vendedor" else None),
+    }
+    if perfil == "adm":
+        base.update(
+            {
+                "seguranca": resumo_seguranca_api(),
+                "vendas_hoje": vendas_do_dia(),
+                "caixa": caixa_status(),
+                "ultimas_vendas": ultimas_vendas(8),
+                "estoque_baixo": estoque_baixo_api(8),
+                "cancelamentos": cancelamentos_recentes(5),
+                "contas_alerta": contas_alerta_api(),
+                "alertas_isis": alertas_isis_api(),
+            }
+        )
+    return base
 
 
 def dashboard_api():
