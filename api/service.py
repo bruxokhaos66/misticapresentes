@@ -8,9 +8,11 @@ from datetime import datetime
 from database import query_db
 from reports.estoque_report import estoque_baixo
 from reports.financeiro_report import contas_para_alerta
-from reports.vendas_report import vendas_recentes
 from services.caixa_service import status_caixa_aberto, resumo_fechamento_caixa
 from services.isis_service import alertas_operacionais
+
+ANDROID_APP_VERSION = "1.1.0"
+ANDROID_APP_VERSION_CODE = 2
 
 
 def _moeda(valor):
@@ -18,6 +20,22 @@ def _moeda(valor):
         return float(valor or 0.0)
     except Exception:
         return 0.0
+
+
+def app_android_info():
+    return {
+        "app": "Mística Painel Android",
+        "latest_version": ANDROID_APP_VERSION,
+        "latest_version_code": ANDROID_APP_VERSION_CODE,
+        "apk_name": "app-debug.apk",
+        "message": "Versão com tela Sobre / Atualização, status de conexão e visual premium.",
+        "manual_update": True,
+        "instructions": [
+            "Atualize o repositório com git pull origin main.",
+            "Gere um novo APK no Android Studio.",
+            "Instale o APK novo por cima do antigo no celular.",
+        ],
+    }
 
 
 def vendas_do_dia():
