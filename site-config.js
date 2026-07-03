@@ -1,0 +1,9 @@
+window.misticaSiteConfig = {
+  domain: "misticaesotericos.com.br",
+  instagram: "@misticaprodutos",
+  whatsappNumber: "554999172137",
+  whatsappDisplay: "(49) 99917-2137",
+  headerTitle: "Mística Presentes",
+  headerSubtitle: "Incensos • Cristais • Velas Ritualísticas • Aromaterapia • Banhos de Ervas • Artigos Espiritualistas",
+  promoText: "Encontre tudo para espiritualidade, bem-estar e energias positivas."
+};
