@@ -3,6 +3,7 @@ from datetime import datetime
 from database import get_connection
 from repositories import estoque as estoque_repo
 from repositories import vendas as vendas_repo
+from services.dia_operacional_service import etiqueta_dia_operacional
 from services.estoque_service import validar_estoque_carrinho
 
 
@@ -32,6 +33,12 @@ def registrar_venda_service(carrinho, cliente, data_venda, data_iso, calculo, fo
     if not caixa_id:
         raise ValueError("Abra o caixa antes de registrar uma venda.")
     validar_estoque_carrinho(carrinho)
+    try:
+        momento_venda = datetime.strptime(str(data_iso), "%Y-%m-%d %H:%M:%S")
+    except Exception:
+        momento_venda = datetime.now()
+    dia_operacional = etiqueta_dia_operacional(momento_venda)
+
     conn = get_connection()
     cur = conn.cursor()
     try:
@@ -47,6 +54,7 @@ def registrar_venda_service(carrinho, cliente, data_venda, data_iso, calculo, fo
             forma_pagamento,
             vendedor,
             "Concluído",
+            dia_operacional,
         )
 
         for item in carrinho:
@@ -82,7 +90,7 @@ def registrar_venda_service(carrinho, cliente, data_venda, data_iso, calculo, fo
         vendas_repo.inserir_fluxo_cursor(
             cur,
             "Entrada",
-            f"Venda no {venda_id} ({forma_pagamento})",
+            f"Venda no {venda_id} ({forma_pagamento}) - Dia operacional {dia_operacional}",
             calculo["tot"],
             data_venda,
             data_iso,
