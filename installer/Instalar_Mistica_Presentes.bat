@@ -42,11 +42,17 @@ if exist "%DESTINO%\ServidorMisticaApp\ServidorMisticaApp.exe" (
   copy /Y "%DESTINO%\ServidorMisticaApp\ServidorMisticaApp.exe" "%DESKTOP%\ServidorMisticaApp.exe"
 )
 
+if exist "%ORIGEM%Atualizar_Mistica_Online.bat" (
+  copy /Y "%ORIGEM%Atualizar_Mistica_Online.bat" "%DESTINO%\Atualizar_Mistica_Online.bat"
+  copy /Y "%ORIGEM%Atualizar_Mistica_Online.bat" "%DESKTOP%\Atualizar_Mistica_Online.bat"
+)
+
 echo.
 echo Instalacao concluida.
 echo Arquivos criados na Area de Trabalho:
 echo - MisticaPresentes.exe
 echo - ServidorMisticaApp.exe
+echo - Atualizar_Mistica_Online.bat
 echo.
 pause
 endlocal
