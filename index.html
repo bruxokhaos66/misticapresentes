@@ -3,15 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Mística Presentes em Pinhalzinho/SC - presentes com fé, luz, proteção, incensos, velas, pedras, aromatizantes e artigos especiais." />
+  <meta name="description" content="Mística Presentes - incensos, cristais, velas ritualísticas, aromaterapia, banhos de ervas e artigos espiritualistas." />
   <meta name="theme-color" content="#172012" />
-  <title>Mística Presentes | Fé, Luz e Produtos Especiais</title>
+  <title>Mística Presentes | Artigos Místicos e Xamânicos</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css" />
   <script defer src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+  <script defer src="site-config.js"></script>
   <script defer src="app.js"></script>
+  <script defer src="commercial-layer.js"></script>
 </head>
 <body>
   <header class="site-header">
@@ -24,10 +26,7 @@
       <div class="nav-links" data-nav-links>
         <a href="#sobre">Sobre</a>
         <a href="#produtos">Produtos</a>
-        <a href="#cliente">Cliente</a>
-        <a href="#checkout">Venda Pix</a>
-        <a href="#historico">Histórico</a>
-        <a href="#admin">Admin</a>
+        <a href="#checkout">Carrinho</a>
         <a href="#isis">Isis</a>
         <a class="btn btn-small" href="#" data-whatsapp-link target="_blank" rel="noopener">WhatsApp</a>
       </div>
@@ -38,25 +37,25 @@
     <section id="inicio" class="hero">
       <div class="container hero-grid">
         <div class="hero-copy">
-          <p class="eyebrow">Fé • Luz • Proteção • Presentes especiais</p>
-          <h1>Produtos para abençoar, acolher e transformar o seu dia.</h1>
-          <p class="hero-text">Incensos, velas, pedras, aromatizadores, banhos de ervas e artigos especiais escolhidos com carinho para quem busca paz, boas energias, beleza e significado.</p>
+          <p class="eyebrow">Xamanismo • Cristais • Aromas • Proteção</p>
+          <h1>Artigos místicos e xamânicos para transformar o seu ambiente.</h1>
+          <p class="hero-text">Incensos, cristais, velas ritualísticas, aromaterapia, banhos de ervas e artigos espiritualistas escolhidos para espiritualidade, bem-estar e energias positivas.</p>
           <div class="hero-actions">
-            <a class="btn" href="#produtos">Ver produtos em destaque</a>
+            <a class="btn" href="#produtos">Ver produtos</a>
             <a class="btn btn-ghost" href="#checkout">Montar pedido</a>
           </div>
-          <div class="trust-row" aria-label="Destaques da loja">
-            <span>Atendimento acolhedor</span>
-            <span>Presentes com significado</span>
-            <span>Itens para fé e proteção</span>
-            <span>Pagamento via Pix</span>
+          <div class="trust-row">
+            <span>Loja física e virtual</span>
+            <span>Atendimento pelo WhatsApp</span>
+            <span>Pix com QR Code</span>
+            <span>@misticaprodutos</span>
           </div>
         </div>
         <div class="hero-card hero-card-isis">
           <img src="assets/isis-bruxinha.svg" alt="Isis, assistente virtual da Mística Presentes" />
           <div class="floating-card">
-            <strong>Isis, assistente da loja</strong>
-            <span>Ela ajuda a encontrar produtos, montar pedidos e destacar novidades com mais encanto.</span>
+            <strong>Assistente Isis</strong>
+            <span>Ajuda com produtos, carrinho e dúvidas de compra.</span>
           </div>
         </div>
       </div>
@@ -65,203 +64,55 @@
     <section id="sobre" class="section about">
       <div class="container split">
         <div>
-          <p class="eyebrow">Sobre a loja</p>
-          <h2>Um espaço de fé, energia e presentes especiais.</h2>
+          <p class="eyebrow">Mística Presentes</p>
+          <h2>Espiritualidade, bem-estar e presentes com significado.</h2>
         </div>
-        <p>A Mística Presentes conecta pessoas a artigos que carregam significado, beleza e intenção. A proposta une acolhimento, espiritualidade, elementos naturais, fé, luz e proteção em uma experiência comercial simples, elegante e fácil de usar.</p>
+        <p>Encontre artigos para proteção, equilíbrio, aromas, cristais, velas, banhos de ervas, incensos e presentes especiais. Escolha os produtos, adicione ao carrinho e finalize pelo WhatsApp ou Pix.</p>
       </div>
-      <div class="container feature-grid feature-grid-products">
-        <article class="feature-card">
-          <span>🕯️</span>
-          <h3>Velas e luz</h3>
-          <p>Velas decorativas e ritualísticas para oração, intenção, ambiente e momentos especiais.</p>
-        </article>
-        <article class="feature-card">
-          <span>🌿</span>
-          <h3>Incensos e ervas</h3>
-          <p>Aromas, banhos e defumações para limpeza, acolhimento, bem-estar e harmonia.</p>
-        </article>
-        <article class="feature-card">
-          <span>💎</span>
-          <h3>Pedras e proteção</h3>
-          <p>Cristais, pedras energéticas, guias e artigos de proteção para presentear ou usar no dia a dia.</p>
-        </article>
-        <article class="feature-card">
-          <span>✝️</span>
-          <h3>Fé e significado</h3>
-          <p>Itens especiais para quem busca paz, esperança, bênçãos e uma conexão espiritual mais acolhedora.</p>
-        </article>
+      <div class="container feature-grid">
+        <article class="feature-card"><span>🌿</span><h3>Incensos</h3><p>Aromas para limpeza energética, conexão e harmonização do ambiente.</p></article>
+        <article class="feature-card"><span>💎</span><h3>Cristais</h3><p>Pedras e cristais para proteção, equilíbrio e presentes especiais.</p></article>
+        <article class="feature-card"><span>🕯️</span><h3>Velas ritualísticas</h3><p>Velas para intenção, proteção, decoração e momentos de fé.</p></article>
+        <article class="feature-card"><span>🪶</span><h3>Artigos xamânicos</h3><p>Elementos naturais, símbolos, aromas e produtos espiritualistas.</p></article>
       </div>
     </section>
 
     <section id="produtos" class="section products-section">
       <div class="container section-title">
-        <p class="eyebrow">Catálogo comercial</p>
-        <h2>Itens e artigos em destaque</h2>
-        <p>Monte pedidos com incensos, velas, pedras, aromas, banhos, kits de presente e artigos de fé. As fotos reais podem ser configuradas no campo <strong>imageUrl</strong> de cada produto, no arquivo <strong>app.js</strong>.</p>
+        <p class="eyebrow">Produtos em destaque</p>
+        <h2>Escolha seus artigos favoritos</h2>
+        <p>Adicione produtos ao carrinho e envie o pedido pelo WhatsApp. Produtos com fotos reais podem ser adicionados no painel interno.</p>
       </div>
-      <div class="container highlight-strip" aria-label="Categorias em destaque">
-        <span>🕯️ Velas</span>
-        <span>🌿 Incensos</span>
-        <span>💎 Pedras</span>
-        <span>🙏 Fé e proteção</span>
-        <span>✨ Aromas</span>
-        <span>🎁 Kits para presente</span>
+      <div class="container highlight-strip">
+        <span>🌿 Incensos</span><span>💎 Cristais</span><span>🕯️ Velas</span><span>✨ Aromaterapia</span><span>🍃 Banhos de ervas</span><span>🎁 Presentes</span>
       </div>
       <div class="container product-grid" data-product-grid></div>
-    </section>
-
-    <section id="cliente" class="section client-section">
-      <div class="container checkout-grid">
-        <div class="form-panel">
-          <p class="eyebrow">Cadastro</p>
-          <h2>Dados do cliente</h2>
-          <p class="privacy-note">Use o cadastro apenas com autorização do cliente. CPF e endereço são dados pessoais e devem ser tratados com cuidado.</p>
-          <form id="clientForm" class="form">
-            <label>Nome completo<input id="clientName" type="text" placeholder="Ex.: Maria Aparecida" minlength="3" required /></label>
-            <label>CPF<input id="clientCpf" type="text" placeholder="000.000.000-00" maxlength="14" inputmode="numeric" required /></label>
-            <label>Endereço<input id="clientAddress" type="text" placeholder="Rua, número, bairro e cidade" minlength="5" required /></label>
-            <label>WhatsApp<input id="clientWhatsapp" type="text" placeholder="(49) 99999-9999" maxlength="15" inputmode="numeric" required /></label>
-            <label class="check-row"><input id="privacyConsent" type="checkbox" required /><span>Tenho autorização do cliente para salvar estes dados neste navegador.</span></label>
-            <button class="btn" type="submit">Salvar cliente</button>
-          </form>
-          <div id="clientSaved" class="saved-box" hidden></div>
-        </div>
-
-        <aside class="form-panel dark-panel">
-          <p class="eyebrow">Clientes salvos</p>
-          <h2>Últimos cadastros</h2>
-          <div id="clientList" class="client-list"></div>
-          <button class="btn btn-ghost btn-full" type="button" data-export-clients>Exportar clientes CSV</button>
-        </aside>
-      </div>
     </section>
 
     <section id="checkout" class="section checkout-section">
       <div class="container checkout-grid">
         <div class="form-panel">
           <p class="eyebrow">Carrinho</p>
-          <h2>Venda em andamento</h2>
+          <h2>Seu pedido</h2>
           <div id="cartList" class="cart-list"></div>
           <div class="total-box"><span>Total</span><strong id="cartTotal">R$ 0,00</strong></div>
           <div class="checkout-actions">
             <button class="btn btn-ghost" type="button" data-clear-cart>Limpar carrinho</button>
             <button class="btn btn-ghost" type="button" data-send-sale-whatsapp>Enviar pedido pelo WhatsApp</button>
-            <button class="btn" type="button" data-generate-pix>Gerar QR Code Pix</button>
+            <button class="btn" type="button" data-generate-pix>Gerar Pix</button>
           </div>
         </div>
-
         <div class="form-panel pix-panel">
           <p class="eyebrow">Pagamento</p>
-          <h2>Pix da venda</h2>
-          <div class="warning-box"><strong>Antes de pagar:</strong> confira no aplicativo do banco se o valor e o nome do recebedor estão corretos.</div>
+          <h2>Pix com QR Code</h2>
+          <div class="warning-box"><strong>Antes de pagar:</strong> confira no banco se o valor e o recebedor estão corretos.</div>
           <label class="pix-key-label">Chave Pix da loja<input id="pixKey" type="text" readonly /></label>
           <label class="pix-key-label">Nome do recebedor<input id="merchantName" type="text" readonly /></label>
           <label class="pix-key-label">Cidade<input id="merchantCity" type="text" readonly /></label>
           <div id="publishWarning" class="warning-box warning-danger" hidden></div>
-          <div class="qr-wrap">
-            <canvas id="pixQr" width="220" height="220" aria-label="QR Code Pix"></canvas>
-            <p id="pixStatus">Adicione produtos ao carrinho e gere o Pix.</p>
-          </div>
+          <div class="qr-wrap"><canvas id="pixQr" width="220" height="220" aria-label="QR Code Pix"></canvas><p id="pixStatus">Adicione produtos ao carrinho e gere o Pix.</p></div>
           <textarea id="pixPayload" readonly placeholder="Pix copia e cola aparecerá aqui"></textarea>
           <button class="btn btn-full" type="button" data-copy-pix>Copiar Pix copia e cola</button>
-        </div>
-      </div>
-    </section>
-
-    <section id="historico" class="section history-section">
-      <div class="container checkout-grid">
-        <div class="form-panel">
-          <p class="eyebrow">Histórico</p>
-          <h2>Últimas vendas</h2>
-          <div id="salesHistory" class="history-list"></div>
-          <div class="stack-actions">
-            <button class="btn btn-ghost btn-full" type="button" data-export-sales>Exportar vendas CSV</button>
-            <button class="btn btn-ghost btn-full" type="button" data-print-last-receipt>Imprimir último cupom</button>
-            <button class="btn btn-ghost btn-full" type="button" data-send-last-receipt-whatsapp>Enviar comprovante pelo WhatsApp</button>
-          </div>
-        </div>
-        <div class="form-panel dark-panel">
-          <p class="eyebrow">Estoque</p>
-          <h2>Controle simples</h2>
-          <p class="privacy-note">O estoque é salvo neste navegador. Para operar em mais de um computador, será necessário usar backend com banco de dados.</p>
-          <div id="stockList" class="stock-list"></div>
-        </div>
-      </div>
-    </section>
-
-    <section id="admin" class="section admin-section">
-      <div class="container section-title">
-        <p class="eyebrow">Administração</p>
-        <h2>Painel interno da Mística</h2>
-        <p>Área protegida por senha local para dashboard, fornecedores, backup, estoque mínimo e planejamento de banco de dados.</p>
-      </div>
-
-      <div class="container form-panel" id="adminLoginPanel">
-        <h3>Entrar no painel administrativo</h3>
-        <p class="privacy-note">Proteção simples para site estático. Para segurança real, use login com backend.</p>
-        <form id="adminLoginForm" class="form inline-form">
-          <label>Senha administrativa<input id="adminPassword" type="password" placeholder="Digite a senha" required /></label>
-          <button class="btn" type="submit">Entrar</button>
-        </form>
-        <div id="adminLoginStatus" class="saved-box" hidden></div>
-      </div>
-
-      <div class="container admin-content" id="adminContent" hidden>
-        <div class="dashboard-grid">
-          <article class="metric-card"><span>Hoje</span><strong id="revenueToday">R$ 0,00</strong></article>
-          <article class="metric-card"><span>Semana</span><strong id="revenueWeek">R$ 0,00</strong></article>
-          <article class="metric-card"><span>Mês</span><strong id="revenueMonth">R$ 0,00</strong></article>
-          <article class="metric-card"><span>Vendas</span><strong id="salesCount">0</strong></article>
-        </div>
-
-        <div class="checkout-grid admin-grid">
-          <div class="form-panel">
-            <p class="eyebrow">Alertas</p>
-            <h2>Estoque mínimo</h2>
-            <div id="lowStockAlerts" class="history-list"></div>
-          </div>
-
-          <div class="form-panel dark-panel">
-            <p class="eyebrow">Backup</p>
-            <h2>Dados locais</h2>
-            <p class="privacy-note">Baixe um backup JSON de clientes, vendas, estoque e fornecedores. O backup automático salva uma cópia no próprio navegador.</p>
-            <div class="stack-actions">
-              <button class="btn btn-full" type="button" data-download-backup>Baixar backup JSON</button>
-              <button class="btn btn-ghost btn-full" type="button" data-restore-backup>Como restaurar backup</button>
-            </div>
-            <small id="backupStatus" class="privacy-note"></small>
-          </div>
-        </div>
-
-        <div class="checkout-grid admin-grid">
-          <div class="form-panel">
-            <p class="eyebrow">Fornecedores</p>
-            <h2>Cadastro de fornecedores</h2>
-            <form id="supplierForm" class="form">
-              <label>Nome do fornecedor<input id="supplierName" type="text" placeholder="Ex.: Distribuidora de Incensos" required /></label>
-              <label>Categoria<input id="supplierCategory" type="text" placeholder="Incensos, pedras, velas..." required /></label>
-              <label>WhatsApp<input id="supplierWhatsapp" type="text" placeholder="(49) 99999-9999" maxlength="15" inputmode="numeric" /></label>
-              <label>Observação<textarea id="supplierNotes" placeholder="Prazos, marcas, condições, contato..."></textarea></label>
-              <button class="btn" type="submit">Salvar fornecedor</button>
-            </form>
-          </div>
-          <div class="form-panel dark-panel">
-            <p class="eyebrow">Lista</p>
-            <h2>Fornecedores salvos</h2>
-            <div id="supplierList" class="history-list"></div>
-          </div>
-        </div>
-
-        <div class="form-panel database-plan">
-          <p class="eyebrow">Próxima evolução</p>
-          <h2>Integração futura com banco de dados</h2>
-          <div class="timeline-grid">
-            <div><strong>1. Backend</strong><span>API para produtos, clientes, vendas, estoque e fornecedores.</span></div>
-            <div><strong>2. Banco</strong><span>SQLite/PostgreSQL para dados centralizados e backup real.</span></div>
-            <div><strong>3. Login</strong><span>Usuários com senha segura, permissões e trilha de auditoria.</span></div>
-            <div><strong>4. Pix oficial</strong><span>Confirmação automática de pagamento por provedor bancário.</span></div>
-          </div>
         </div>
       </div>
     </section>
@@ -269,46 +120,27 @@
     <section id="isis" class="section isis-section">
       <div class="container checkout-grid">
         <div class="form-panel">
-          <p class="eyebrow">IA Isis</p>
-          <h2>Assistente da loja</h2>
-          <p class="privacy-note">Versão inicial local para atendimento, resumo da loja e pesquisa de produtos. Futuramente, pode ser integrada a uma API de IA e busca na internet.</p>
+          <p class="eyebrow">Assistente virtual</p>
+          <h2>Isis</h2>
+          <p class="privacy-note">A Isis ajuda com produtos, pedidos, carrinho, estoque e pesquisas.</p>
           <div id="isisChat" class="isis-chat"></div>
-          <form id="isisForm" class="form inline-form">
-            <label>Mensagem para a Isis<input id="isisInput" type="text" placeholder="Ex.: resumo das vendas, produtos com estoque baixo, pesquisar incensos..." required /></label>
-            <button class="btn" type="submit">Perguntar</button>
-          </form>
+          <form id="isisForm" class="form inline-form"><label>Mensagem para a Isis<input id="isisInput" type="text" placeholder="Ex.: quero um presente xamânico" required /></label><button class="btn" type="submit">Perguntar</button></form>
         </div>
-        <div class="form-panel dark-panel">
-          <p class="eyebrow">Ações rápidas</p>
-          <h2>Comandos úteis</h2>
-          <div class="quick-actions">
-            <button class="btn btn-ghost" type="button" data-isis-command="vendas hoje">Vendas de hoje</button>
-            <button class="btn btn-ghost" type="button" data-isis-command="estoque baixo">Estoque baixo</button>
-            <button class="btn btn-ghost" type="button" data-isis-command="fornecedores">Fornecedores</button>
-            <button class="btn btn-ghost" type="button" data-isis-command="pesquisar incensos atacado">Pesquisar incensos</button>
-          </div>
-        </div>
+        <div class="form-panel dark-panel"><p class="eyebrow">Ações rápidas</p><h2>Comandos úteis</h2><div class="quick-actions"><button class="btn btn-ghost" type="button" data-isis-command="produtos xamânicos">Produtos xamânicos</button><button class="btn btn-ghost" type="button" data-isis-command="estoque baixo">Estoque baixo</button><button class="btn btn-ghost" type="button" data-isis-command="pesquisar incensos atacado">Pesquisar incensos</button><button class="btn btn-ghost" type="button" data-isis-command="vendas hoje">Vendas de hoje</button></div></div>
       </div>
     </section>
-  </main>
 
-  <footer class="footer">
-    <div class="container footer-grid">
-      <div>
-        <img src="assets/logo-mistica.svg" alt="Logo Mística Presentes" />
-        <strong>Mística Presentes</strong>
-        <p>Presentes com fé, luz, proteção e boas energias.</p>
+    <section id="cliente" class="section client-section internal-section">
+      <div class="container checkout-grid">
+        <div class="form-panel"><p class="eyebrow">Cliente</p><h2>Cadastro interno</h2><form id="clientForm" class="form"><label>Nome completo<input id="clientName" type="text" placeholder="Ex.: Maria Aparecida" minlength="3" required /></label><label>CPF<input id="clientCpf" type="text" placeholder="000.000.000-00" maxlength="14" inputmode="numeric" required /></label><label>Endereço<input id="clientAddress" type="text" placeholder="Rua, número, bairro e cidade" minlength="5" required /></label><label>WhatsApp<input id="clientWhatsapp" type="text" placeholder="(49) 99999-9999" maxlength="15" inputmode="numeric" required /></label><label class="check-row"><input id="privacyConsent" type="checkbox" required /><span>Tenho autorização do cliente para salvar estes dados.</span></label><button class="btn" type="submit">Salvar cliente</button></form><div id="clientSaved" class="saved-box" hidden></div></div>
+        <aside class="form-panel dark-panel"><p class="eyebrow">Clientes</p><h2>Últimos cadastros</h2><div id="clientList" class="client-list"></div><button class="btn btn-ghost btn-full" type="button" data-export-clients>Exportar clientes CSV</button></aside>
       </div>
-      <div>
-        <h3>Contato</h3>
-        <p>WhatsApp: (49) 98409-0802</p>
-        <p>Instagram: @misticaprodutos</p>
-      </div>
-      <div>
-        <h3>Publicação</h3>
-        <p>Pix CPF configurado para o titular Fredinei Jean Bach. Confira os dados no banco antes de divulgar.</p>
-      </div>
-    </div>
-  </footer>
+    </section>
+
+    <section id="historico" class="section history-section internal-section"><div class="container checkout-grid"><div class="form-panel"><p class="eyebrow">Histórico</p><h2>Últimas vendas</h2><div id="salesHistory" class="history-list"></div><div class="stack-actions"><button class="btn btn-ghost btn-full" type="button" data-export-sales>Exportar vendas CSV</button><button class="btn btn-ghost btn-full" type="button" data-print-last-receipt>Imprimir último cupom</button><button class="btn btn-ghost btn-full" type="button" data-send-last-receipt-whatsapp>Enviar comprovante pelo WhatsApp</button></div></div><div class="form-panel dark-panel"><p class="eyebrow">Estoque</p><h2>Controle simples</h2><div id="stockList" class="stock-list"></div></div></div></section>
+
+    <section id="admin" class="section admin-section"><div class="container section-title"><p class="eyebrow">Administração</p><h2>Painel interno da Mística</h2><p>Área interna para produtos, vendas, estoque, fornecedores e backup.</p></div><div class="container form-panel" id="adminLoginPanel"><h3>Entrar no painel administrativo</h3><p class="privacy-note">Proteção simples para site estático. Para segurança real, use backend.</p><form id="adminLoginForm" class="form inline-form"><label>Senha administrativa<input id="adminPassword" type="password" placeholder="Digite a senha" required /></label><button class="btn" type="submit">Entrar</button></form><div id="adminLoginStatus" class="saved-box" hidden></div></div><div class="container admin-content" id="adminContent" hidden><div class="dashboard-grid"><article class="metric-card"><span>Hoje</span><strong id="revenueToday">R$ 0,00</strong></article><article class="metric-card"><span>Semana</span><strong id="revenueWeek">R$ 0,00</strong></article><article class="metric-card"><span>Mês</span><strong id="revenueMonth">R$ 0,00</strong></article><article class="metric-card"><span>Vendas</span><strong id="salesCount">0</strong></article></div><div class="checkout-grid admin-grid"><div class="form-panel"><p class="eyebrow">Alertas</p><h2>Estoque mínimo</h2><div id="lowStockAlerts" class="history-list"></div></div><div class="form-panel dark-panel"><p class="eyebrow">Backup</p><h2>Dados locais</h2><div class="stack-actions"><button class="btn btn-full" type="button" data-download-backup>Baixar backup JSON</button><button class="btn btn-ghost btn-full" type="button" data-restore-backup>Como restaurar backup</button></div><small id="backupStatus" class="privacy-note"></small></div></div><div class="checkout-grid admin-grid"><div class="form-panel"><p class="eyebrow">Fornecedores</p><h2>Cadastro de fornecedores</h2><form id="supplierForm" class="form"><label>Nome do fornecedor<input id="supplierName" type="text" placeholder="Ex.: Distribuidora de Incensos" required /></label><label>Categoria<input id="supplierCategory" type="text" placeholder="Incensos, cristais, velas" required /></label><label>WhatsApp<input id="supplierWhatsapp" type="text" placeholder="(49) 99999-9999" maxlength="15" inputmode="numeric" /></label><label>Observação<textarea id="supplierNotes" placeholder="Prazos, marcas, condições"></textarea></label><button class="btn" type="submit">Salvar fornecedor</button></form></div><div class="form-panel dark-panel"><p class="eyebrow">Lista</p><h2>Fornecedores salvos</h2><div id="supplierList" class="history-list"></div></div></div></div></section>
+  </main>
+  <footer class="footer"><div class="container footer-grid"><div><img src="assets/logo-mistica.svg" alt="Logo Mística Presentes" /><strong>Mística Presentes</strong><p>Encontre tudo para espiritualidade, bem-estar e energias positivas.</p></div><div><h3>Contato</h3><p>WhatsApp: (49) 99917-2137</p><p>Instagram: @misticaprodutos</p><p>Site: misticaesotericos.com.br</p></div><div><h3>Divulgação</h3><p>Em breve: misticaesotericos.com.br</p><p><a href="#admin">Área interna</a></p></div></div></footer>
 </body>
 </html>
