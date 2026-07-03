@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 from typing import Optional
 
@@ -13,7 +14,7 @@ from database.migrations import init_db
 app = FastAPI(
     title="Mística Presentes API",
     description="API oficial para sincronização do app Mística Presentes.",
-    version="0.3.0",
+    version="0.3.1",
 )
 
 app.add_middleware(
@@ -84,6 +85,7 @@ class LoginIn(BaseModel):
 def startup():
     init_db()
     garantir_colunas_sync_backend()
+    garantir_admin_api()
 
 
 def garantir_colunas_sync_backend():
@@ -98,6 +100,37 @@ def garantir_colunas_sync_backend():
                 conn.execute(sql)
             except Exception:
                 pass
+
+
+def garantir_admin_api():
+    """Garante um admin conhecido para acesso do Mística Painel via celular.
+
+    A senha pode ser alterada no Render pela variável MISTICA_ADMIN_PASSWORD.
+    Enquanto a variável não existir, usa a senha provisória Mistica@123.
+    """
+    senha_admin = os.environ.get("MISTICA_ADMIN_PASSWORD", "Mistica@123").strip()
+    if not senha_admin:
+        return
+    salt = "mistica_api_admin"
+    senha_hash = hash_password_pbkdf2(senha_admin, salt.encode("utf-8"))
+    existente = obter("SELECT id FROM usuarios WHERE login='admin'")
+    if existente:
+        executar(
+            """
+            UPDATE usuarios
+            SET nome=?, senha_hash=?, senha_salt=?, perfil=?, ativo=1
+            WHERE login='admin'
+            """,
+            ("Administrador", senha_hash, salt, "adm"),
+        )
+    else:
+        executar(
+            """
+            INSERT INTO usuarios (nome, login, senha_hash, senha_salt, perfil, ativo)
+            VALUES (?,?,?,?,?,1)
+            """,
+            ("Administrador", "admin", senha_hash, salt, "adm"),
+        )
 
 
 def _normalizar_perfil(perfil: str | None):
