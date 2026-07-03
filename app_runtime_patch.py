@@ -1,6 +1,52 @@
 def aplicar_patches_runtime(fonte):
     """Aplica painel simples e seguro de vendas/sincronização no dashboard."""
 
+    # Sincronizacao automatica de usuarios com a API, sem travar a tela.
+    if "def sincronizar_usuarios_online(self" not in fonte:
+        marcador_sync = "    def adicionar_barra_rolagem_tree(self, tree):"
+        metodos_sync = r'''
+    def sincronizar_usuarios_online(self, contexto="automatico"):
+        try:
+            import threading
+            def executar():
+                try:
+                    from services.usuario_sync_service import sincronizar_usuarios_com_api
+                    retorno = sincronizar_usuarios_com_api(timeout=4)
+                    try:
+                        registrar_log("Sistema", "Sync usuarios", f"{contexto}: {retorno}")
+                    except Exception:
+                        pass
+                except Exception as exc:
+                    try:
+                        registrar_erro_sistema(f"sync_usuarios_{contexto}", exc)
+                    except Exception:
+                        pass
+            threading.Thread(target=executar, daemon=True).start()
+        except Exception as exc:
+            try:
+                registrar_erro_sistema("sync_usuarios_agendar", exc)
+            except Exception:
+                pass
+
+'''
+        if marcador_sync in fonte:
+            fonte = fonte.replace(marcador_sync, metodos_sync + marcador_sync, 1)
+
+    if "self.sincronizar_usuarios_online(\"abertura\")" not in fonte:
+        fonte = fonte.replace("        self.configurar_tabelas()\n        self.tela_login()", "        self.configurar_tabelas()\n        self.sincronizar_usuarios_online(\"abertura\")\n        self.tela_login()", 1)
+
+    if "self.sincronizar_usuarios_online(\"login\")" not in fonte:
+        fonte = fonte.replace("            self.montar_abas()", "            self.montar_abas()\n            self.sincronizar_usuarios_online(\"login\")", 1)
+
+    if "self.sincronizar_usuarios_online(\"usuario_atualizado\")" not in fonte:
+        fonte = fonte.replace("        messagebox.showinfo(\"Sucesso\", \"Usuário atualizado!\")", "        self.sincronizar_usuarios_online(\"usuario_atualizado\")\n        messagebox.showinfo(\"Sucesso\", \"Usuário atualizado!\")", 1)
+
+    if "self.sincronizar_usuarios_online(\"usuario_desativado\")" not in fonte:
+        fonte = fonte.replace("                atualizar_lista()\n        \n        ctk.CTkButton(f_btns, text=\"SALVAR ALTERAÇÕES\"", "                atualizar_lista()\n                self.sincronizar_usuarios_online(\"usuario_desativado\")\n        \n        ctk.CTkButton(f_btns, text=\"SALVAR ALTERAÇÕES\"", 1)
+
+    if "self.sincronizar_usuarios_online(\"usuario_criado\")" not in fonte:
+        fonte = fonte.replace("            self.up_u.delete(0, 'end')", "            self.up_u.delete(0, 'end')\n            self.sincronizar_usuarios_online(\"usuario_criado\")", 1)
+
     if "def montar_painel_vendas_dia(self" in fonte:
         return fonte
 
