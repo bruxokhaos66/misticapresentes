@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: write
-  actions: read
 
 env:
   APP_VERSION: 1.1.${{ github.run_number }}
@@ -29,8 +28,7 @@ jobs:
       - name: Instalar dependencias
         run: |
           python -m pip install --upgrade pip
-          if exist requirements.txt python -m pip install -r requirements.txt
-          python -m pip install pyinstaller fastapi uvicorn customtkinter Pillow ddgs httpx SpeechRecognition pyttsx3
+          python -m pip install pyinstaller fastapi uvicorn customtkinter
 
       - name: Gerar programa principal
         run: |
@@ -57,7 +55,7 @@ jobs:
         shell: pwsh
         run: |
           $manifest = @{
-            app = "Mistica Presentes"
+            app = "Mística Presentes"
             status = "online"
             latestVersion = $env:APP_VERSION
             latestBuild = [int]$env:APP_BUILD
@@ -83,7 +81,7 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           tag: mistica-latest
-          name: Mistica Presentes - Instalador Online
+          name: Mística Presentes - Instalador Online
           body: "Instalador online mais recente gerado automaticamente a partir da branch main."
           artifacts: "Instalador_Mistica_Presentes.zip,update-manifest.json"
           allowUpdates: true
