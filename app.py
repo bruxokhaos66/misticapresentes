@@ -23,6 +23,12 @@ if __name__ == "__main__":
         raise FileNotFoundError(f"Arquivo principal nao encontrado: {MAIN_FILE}")
 
     fonte = MAIN_FILE.read_text(encoding="utf-8-sig")
+    try:
+        from app_runtime_patch import aplicar_patches_runtime
+        fonte = aplicar_patches_runtime(fonte)
+    except Exception as exc:
+        print(f"[Aviso] Nao foi possivel aplicar complementos do app: {exc}")
+
     globais = {
         "__name__": "__main__",
         "__file__": str(MAIN_FILE),
