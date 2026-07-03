@@ -1,10 +1,10 @@
 window.misticaSiteConfig = {
   domain: "misticaesotericos.com.br",
   publicBaseUrl: "https://misticaesotericos.com.br",
-  apiBaseUrl: "https://misticaesotericos.com.br",
+  apiBaseUrl: "https://api.misticaesotericos.com.br",
   serverMode: "production",
   usePublicDomainAccess: true,
-  storageMode: "local_first",
+  storageMode: "api_first",
   instagram: "@misticaprodutos",
   whatsappNumber: "554999172137",
   whatsappDisplay: "(49) 99917-2137",
