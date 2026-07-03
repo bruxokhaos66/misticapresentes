@@ -2,10 +2,10 @@
   "appName": "Mística Painel",
   "company": "Mística Presentes",
   "status": "online",
-  "serverUrl": "https://misticaesotericos.com.br/painel/",
+  "serverUrl": "https://api.misticaesotericos.com.br/painel/",
   "apiBaseUrl": "https://api.misticaesotericos.com.br",
   "siteUrl": "https://misticaesotericos.com.br",
-  "panelUrl": "https://misticaesotericos.com.br/painel/",
+  "panelUrl": "https://api.misticaesotericos.com.br/painel/",
   "syncIntervalSeconds": 5,
-  "message": "Mística Painel atualizado."
+  "message": "Abrir o painel direto pelo servidor da API, com login de vendedor ou administrador."
 }
