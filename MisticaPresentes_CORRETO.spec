@@ -27,6 +27,7 @@ for pacote in [
 datas = [
     ('mistica_presentes.py', '.'),
     ('app_runtime_patch.py', '.'),
+    ('app_frajola_patch.py', '.'),
     ('app_sync_status_patch.py', '.'),
     ('app_scroll_patch.py', '.'),
     ('config.py', '.'),
@@ -51,7 +52,6 @@ a = Analysis(
     optimize=0,
 )
 pyz = PYZ(a.pure)
-
 exe = EXE(
     pyz,
     a.scripts,
