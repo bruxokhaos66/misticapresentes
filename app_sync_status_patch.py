@@ -1,28 +1,53 @@
 def aplicar_sync_status_runtime(fonte):
-    """Injeta o status de sincronização online no dashboard do app."""
-    if "def montar_status_sincronizacao(self" in fonte:
-        return fonte
+    """Ajusta o dashboard para sincronização automática sem botões manuais."""
 
-    alvo_dashboard = "        self.montar_painel_vendas_dia(f)"
-    if alvo_dashboard in fonte:
+    # Remove botão manual do painel principal. O dashboard passa a atualizar sozinho.
+    fonte = fonte.replace(
+        """ctk.CTkButton(f_info, text=\"RECARREGAR INFORMACOES DO PAINEL\", height=40, font=self.font_button, fg_color=self.cor_botao, command=self.montar_dashboard).pack(pady=15)""",
+        """ctk.CTkLabel(f_info, text=\"Painel atualizado automaticamente.\", font=(\"Arial\", 12, \"bold\"), text_color=self.cor_ouro).pack(pady=8)""",
+    )
+
+    # Remove botão manual da tabela de vendas em tempo real.
+    fonte = fonte.replace(
+        """        ctk.CTkButton(topo, text=\"ATUALIZAR\", width=130, height=34, font=self.font_button, fg_color=self.cor_botao, command=self.atualizar_painel_vendas_dia).pack(side=\"right\")\n""",
+        """""",
+    )
+
+    # Atualiza o painel de vendas automaticamente a cada 5 segundos.
+    fonte = fonte.replace(
+        """self.after(30000, lambda: (self.atualizar_painel_vendas_dia(), self.agendar_atualizacao_painel_vendas_dia()))""",
+        """self.after(5000, lambda: (self.atualizar_painel_vendas_dia(), self.agendar_atualizacao_painel_vendas_dia()))""",
+    )
+
+    # Garante barra de rolagem vertical na tabela de vendas em tempo real.
+    fonte = fonte.replace(
+        """        self.tree_vendas_dia = ttk.Treeview(bloco, columns=(\"hora\", \"usuario\", \"produto\", \"qtd\", \"valor\", \"venda\"), show=\"headings\", height=8)""",
+        """        frame_tree_vendas = ctk.CTkFrame(bloco, fg_color=\"transparent\")
+        frame_tree_vendas.pack(fill=\"both\", expand=True, padx=8, pady=(0, 8))
+        self.tree_vendas_dia = ttk.Treeview(frame_tree_vendas, columns=(\"hora\", \"usuario\", \"produto\", \"qtd\", \"valor\", \"venda\"), show=\"headings\", height=8)
+        scroll_vendas_y = ttk.Scrollbar(frame_tree_vendas, orient=\"vertical\", command=self.tree_vendas_dia.yview)
+        self.tree_vendas_dia.configure(yscrollcommand=scroll_vendas_y.set)""",
+    )
+    fonte = fonte.replace(
+        """        self.tree_vendas_dia.pack(fill=\"both\", expand=True, padx=8, pady=(0, 8))""",
+        """        self.tree_vendas_dia.pack(side=\"left\", fill=\"both\", expand=True)
+        scroll_vendas_y.pack(side=\"right\", fill=\"y\")""",
+    )
+
+    # Insere o status de sincronização dentro do painel de vendas, logo no topo.
+    if "def montar_status_sincronizacao(self" not in fonte:
+        alvo_topo_painel = """        nome_usuario = self.current_user.get(\"nome\", \"Sistema\") if isinstance(self.current_user, dict) else \"Sistema\""" 
         fonte = fonte.replace(
-            alvo_dashboard,
-            alvo_dashboard + "\n        self.montar_status_sincronizacao(f)",
+            alvo_topo_painel,
+            """        self.montar_status_sincronizacao(self.frame_vendas_dia)\n\n""" + alvo_topo_painel,
             1,
         )
-    else:
-        botao = """ctk.CTkButton(f_info, text=\"RECARREGAR INFORMACOES DO PAINEL\", height=40, font=self.font_button, fg_color=self.cor_botao, command=self.montar_dashboard).pack(pady=15)"""
-        fonte = fonte.replace(
-            botao,
-            botao + "\n        self.montar_status_sincronizacao(f)",
-            1,
-        )
 
-    marcador = "    # --- CONTROLE DINÂMICO DE PREÇOS (ESTOQUE) ---"
-    metodos = r'''
+        marcador = "    # --- CONTROLE DINÂMICO DE PREÇOS (ESTOQUE) ---"
+        metodos = r'''
     def montar_status_sincronizacao(self, parent=None):
         if parent is None:
-            parent = getattr(self, "tab_d", None)
+            parent = getattr(self, "frame_vendas_dia", None) or getattr(self, "tab_d", None)
         if parent is None:
             return
 
@@ -32,20 +57,17 @@ def aplicar_sync_status_runtime(fonte):
             except Exception:
                 pass
 
-        self.frame_sync_status = ctk.CTkFrame(parent, fg_color="#18121f", corner_radius=12)
-        try:
-            self.frame_sync_status.grid(row=3, column=0, columnspan=5, padx=10, pady=(0, 10), sticky="ew")
-        except Exception:
-            self.frame_sync_status.pack(fill="x", padx=10, pady=(0, 10))
+        self.frame_sync_status = ctk.CTkFrame(parent, fg_color="#101820", corner_radius=10)
+        self.frame_sync_status.pack(fill="x", padx=10, pady=(2, 8))
 
         self.lbl_sync_status = ctk.CTkLabel(
             self.frame_sync_status,
             text="Sincronização: verificando... | Pendências: 0 | Última sincronização: --",
             font=("Arial", 14, "bold"),
             text_color=self.cor_ouro,
-            anchor="w",
+            anchor="center",
         )
-        self.lbl_sync_status.pack(fill="x", padx=14, pady=10)
+        self.lbl_sync_status.pack(fill="x", padx=14, pady=8)
 
         self.atualizar_status_sincronizacao()
         self.agendar_status_sincronizacao()
@@ -93,6 +115,6 @@ def aplicar_sync_status_runtime(fonte):
             pass
 
 '''
-    if marcador in fonte:
-        fonte = fonte.replace(marcador, metodos + marcador, 1)
+        if marcador in fonte:
+            fonte = fonte.replace(marcador, metodos + marcador, 1)
     return fonte
