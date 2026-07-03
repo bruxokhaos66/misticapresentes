@@ -40,9 +40,10 @@ def _tentar_sincronizar_venda_sem_bloquear(venda_id):
     try:
         from services.sync_service import enfileirar_e_tentar_sincronizar_venda
 
-        enfileirar_e_tentar_sincronizar_venda(venda_id)
+        return enfileirar_e_tentar_sincronizar_venda(venda_id)
     except Exception as exc:
         print(f"[Sync] Venda {venda_id} ficou pendente: {exc}")
+        return None
 
 
 
@@ -144,7 +145,7 @@ def cancelar_venda_service(venda_id, usuario, caixa_id=None):
     if not status_total:
         raise ValueError("Venda nao localizada.")
     status, valor_estorno, forma_original = status_total
-    if status == "Cancelado":
+    if str(status or "").lower() in ("cancelado", "cancelada"):
         raise ValueError("Venda ja cancelada.")
 
     forma_estorno = forma_original or "Estorno"
@@ -158,7 +159,8 @@ def cancelar_venda_service(venda_id, usuario, caixa_id=None):
             produto = estoque_repo.buscar_produto_movimento_cursor(cur, codigo_p)
             estoque_anterior = int(produto[2] if produto else 0)
             estoque_posterior = estoque_anterior + quantidade
-            estoque_repo.somar_estoque_cursor(cur, codigo_p, quantidade)
+            if estoque_repo.somar_estoque_cursor(cur, codigo_p, quantidade) != 1:
+                raise ValueError(f"Nao consegui devolver estoque do produto {codigo_p}.")
             estoque_repo.registrar_movimentacao_cursor(
                 cur,
                 codigo_p,
@@ -187,9 +189,12 @@ def cancelar_venda_service(venda_id, usuario, caixa_id=None):
             forma_estorno,
         )
         conn.commit()
-        return valor_estorno
     except Exception:
         conn.rollback()
         raise
     finally:
         conn.close()
+
+    # Garante que o app/painel online receba a mudança de status da venda.
+    _tentar_sincronizar_venda_sem_bloquear(venda_id)
+    return valor_estorno
