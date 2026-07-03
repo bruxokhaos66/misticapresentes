@@ -1,18 +1,25 @@
 def aplicar_patches_runtime(fonte):
     """Aplica complementos de UI no app desktop sem alterar o arquivo principal gigante."""
 
+    # Remove o botão manual antigo do dashboard e coloca uma indicação simples.
+    chamada_dashboard = """ctk.CTkButton(f_info, text=\"RECARREGAR INFORMACOES DO PAINEL\", height=40, font=self.font_button, fg_color=self.cor_botao, command=self.montar_dashboard).pack(pady=15)"""
+    fonte = fonte.replace(
+        chamada_dashboard,
+        """ctk.CTkLabel(f_info, text=\"Painel atualizado automaticamente.\", font=(\"Arial\", 12, \"bold\"), text_color=self.cor_ouro).pack(pady=8)""",
+    )
+
     # --- PAINEL DE VENDAS DO DIA ---
     if "def montar_painel_vendas_dia(self):" not in fonte:
-        chamada_dashboard = """ctk.CTkButton(f_info, text=\"RECARREGAR INFORMACOES DO PAINEL\", height=40, font=self.font_button, fg_color=self.cor_botao, command=self.montar_dashboard).pack(pady=15)"""
+        indicador_dashboard = """ctk.CTkLabel(f_info, text=\"Painel atualizado automaticamente.\", font=(\"Arial\", 12, \"bold\"), text_color=self.cor_ouro).pack(pady=8)"""
         fonte = fonte.replace(
-            chamada_dashboard,
-            chamada_dashboard + "\n        self.montar_painel_vendas_dia(f)",
+            indicador_dashboard,
+            indicador_dashboard + "\n        self.montar_painel_vendas_dia(f)",
         )
 
         chamada_pos_venda = """registrar_log(self.current_user['nome'], \"Venda\", f\"N {vid} - {format_moeda(self.v_calc['tot'])}\")"""
         fonte = fonte.replace(
             chamada_pos_venda,
-            chamada_pos_venda + "\n        try:\n            self.atualizar_painel_vendas_dia()\n        except Exception:\n            pass",
+            chamada_pos_venda + "\n        try:\n            self.atualizar_painel_vendas_dia()\n            self.atualizar_status_sincronizacao()\n        except Exception:\n            pass",
         )
 
         marcador = "    # --- CONTROLE DINÂMICO DE PREÇOS (ESTOQUE) ---"
@@ -50,6 +57,8 @@ def aplicar_patches_runtime(fonte):
             text_color=self.cor_ouro,
         ).pack(pady=(10, 4))
 
+        self.montar_status_sincronizacao(self.frame_vendas_dia)
+
         nome_usuario = self.current_user.get("nome", "Sistema") if isinstance(self.current_user, dict) else "Sistema"
         resumo_user = resumo_vendedor_atual(nome_usuario)
         texto_meta = (
@@ -73,9 +82,12 @@ def aplicar_patches_runtime(fonte):
         topo = ctk.CTkFrame(bloco, fg_color="transparent")
         topo.pack(fill="x", padx=8, pady=6)
         ctk.CTkLabel(topo, text="Vendas em tempo real por usuário", font=self.font_label, text_color=self.cor_ouro).pack(side="left")
-        ctk.CTkButton(topo, text="ATUALIZAR", width=130, height=34, font=self.font_button, fg_color=self.cor_botao, command=self.atualizar_painel_vendas_dia).pack(side="right")
 
-        self.tree_vendas_dia = ttk.Treeview(bloco, columns=("hora", "usuario", "produto", "qtd", "valor", "venda"), show="headings", height=8)
+        frame_tree_vendas = ctk.CTkFrame(bloco, fg_color="transparent")
+        frame_tree_vendas.pack(fill="both", expand=True, padx=8, pady=(0, 8))
+        self.tree_vendas_dia = ttk.Treeview(frame_tree_vendas, columns=("hora", "usuario", "produto", "qtd", "valor", "venda"), show="headings", height=8)
+        scroll_vendas_y = ttk.Scrollbar(frame_tree_vendas, orient="vertical", command=self.tree_vendas_dia.yview)
+        self.tree_vendas_dia.configure(yscrollcommand=scroll_vendas_y.set)
         cabecalhos = {
             "hora": "Data/Hora",
             "usuario": "Usuário/Vendedor",
@@ -88,7 +100,8 @@ def aplicar_patches_runtime(fonte):
         for col, titulo in cabecalhos.items():
             self.tree_vendas_dia.heading(col, text=titulo)
             self.tree_vendas_dia.column(col, width=larguras[col], anchor="center" if col in ("qtd", "valor", "venda") else "w")
-        self.tree_vendas_dia.pack(fill="both", expand=True, padx=8, pady=(0, 8))
+        self.tree_vendas_dia.pack(side="left", fill="both", expand=True)
+        scroll_vendas_y.pack(side="right", fill="y")
 
         self.tree_meta_vendedores = ttk.Treeview(bloco, columns=("vendedor", "periodo", "vendido", "meta", "falta", "bonus"), show="headings", height=5)
         meta_heads = {
@@ -106,6 +119,58 @@ def aplicar_patches_runtime(fonte):
 
         self.atualizar_painel_vendas_dia()
         self.agendar_atualizacao_painel_vendas_dia()
+
+    def montar_status_sincronizacao(self, parent=None):
+        if parent is None:
+            parent = getattr(self, "frame_vendas_dia", None) or getattr(self, "tab_d", None)
+        if parent is None:
+            return
+
+        if hasattr(self, "frame_sync_status"):
+            try:
+                self.frame_sync_status.destroy()
+            except Exception:
+                pass
+
+        self.frame_sync_status = ctk.CTkFrame(parent, fg_color="#101820", corner_radius=10)
+        self.frame_sync_status.pack(fill="x", padx=10, pady=(2, 8))
+        self.lbl_sync_status = ctk.CTkLabel(
+            self.frame_sync_status,
+            text="Sincronização: verificando... | Pendências: 0 | Última sincronização: --",
+            font=("Arial", 14, "bold"),
+            text_color=self.cor_ouro,
+            anchor="center",
+        )
+        self.lbl_sync_status.pack(fill="x", padx=14, pady=8)
+        self.atualizar_status_sincronizacao()
+        self.agendar_status_sincronizacao()
+
+    def atualizar_status_sincronizacao(self):
+        try:
+            from services.sync_service import estado_sincronizacao
+            estado = estado_sincronizacao(tentar_enviar=True)
+            status = estado.get("status", "Offline")
+            pendencias = estado.get("pendencias", 0)
+            ultima = estado.get("ultima_sincronizacao") or "Nunca"
+            cor = "#7CFC98" if estado.get("online") and int(pendencias or 0) == 0 else "#ffcc66"
+            if not estado.get("online"):
+                cor = "#ff6b6b"
+            texto = f"Sincronização: {status} | Pendências: {pendencias} | Última sincronização: {ultima}"
+            if hasattr(self, "lbl_sync_status"):
+                self.lbl_sync_status.configure(text=texto, text_color=cor)
+        except Exception as exc:
+            try:
+                if hasattr(self, "lbl_sync_status"):
+                    self.lbl_sync_status.configure(
+                        text="Sincronização: Offline | Pendências: verificar | Última sincronização: indisponível",
+                        text_color="#ff6b6b",
+                    )
+            except Exception:
+                pass
+            try:
+                registrar_erro_sistema("status_sincronizacao", exc)
+            except Exception:
+                pass
 
     def atualizar_painel_vendas_dia(self):
         try:
@@ -141,7 +206,24 @@ def aplicar_patches_runtime(fonte):
     def agendar_atualizacao_painel_vendas_dia(self):
         try:
             if hasattr(self, "frame_vendas_dia") and self.frame_vendas_dia.winfo_exists():
-                self.after(30000, lambda: (self.atualizar_painel_vendas_dia(), self.agendar_atualizacao_painel_vendas_dia()))
+                if getattr(self, "_painel_vendas_after_id", None):
+                    try:
+                        self.after_cancel(self._painel_vendas_after_id)
+                    except Exception:
+                        pass
+                self._painel_vendas_after_id = self.after(5000, lambda: (self.atualizar_painel_vendas_dia(), self.atualizar_status_sincronizacao(), self.agendar_atualizacao_painel_vendas_dia()))
+        except Exception:
+            pass
+
+    def agendar_status_sincronizacao(self):
+        try:
+            if hasattr(self, "frame_sync_status") and self.frame_sync_status.winfo_exists():
+                if getattr(self, "_sync_status_after_id", None):
+                    try:
+                        self.after_cancel(self._sync_status_after_id)
+                    except Exception:
+                        pass
+                self._sync_status_after_id = self.after(5000, lambda: (self.atualizar_status_sincronizacao(), self.agendar_status_sincronizacao()))
         except Exception:
             pass
 
