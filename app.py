@@ -28,6 +28,11 @@ if __name__ == "__main__":
         fonte = aplicar_patches_runtime(fonte)
     except Exception as exc:
         print(f"[Aviso] Nao foi possivel aplicar complementos do app: {exc}")
+    try:
+        from app_scroll_patch import aplicar_scrollbars_runtime
+        fonte = aplicar_scrollbars_runtime(fonte)
+    except Exception as exc:
+        print(f"[Aviso] Nao foi possivel aplicar barras de rolagem: {exc}")
 
     globais = {
         "__name__": "__main__",
