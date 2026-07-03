@@ -8,6 +8,7 @@ from database.connection import query_db
 
 
 SYNC_TIMEOUT = 6
+STATUS_TIMEOUT = 2
 
 
 def garantir_tabela_sync():
@@ -191,3 +192,43 @@ def resumo_sync():
         """
     )
     return {status or "Pendente": total for status, total in rows}
+
+
+def ultima_sincronizacao():
+    garantir_tabela_sync()
+    row = query_db(
+        """
+        SELECT MAX(sincronizado_em)
+        FROM sync_pendencias
+        WHERE status='Sincronizado'
+        """
+    )
+    return row[0][0] if row and row[0] else "Nunca"
+
+
+def api_online():
+    try:
+        with httpx.Client(timeout=STATUS_TIMEOUT) as client:
+            resp = client.get(f"{API_URL.rstrip('/')}/api/health")
+            return resp.status_code == 200
+    except Exception:
+        return False
+
+
+def estado_sincronizacao(tentar_enviar=True):
+    garantir_tabela_sync()
+    if tentar_enviar:
+        try:
+            sincronizar_pendencias(limite=10)
+        except Exception:
+            pass
+    resumo = resumo_sync()
+    pendencias = int(resumo.get("Pendente", 0) or 0) + int(resumo.get("Erro", 0) or 0)
+    online = api_online()
+    return {
+        "online": online,
+        "status": "Online" if online else "Offline",
+        "pendencias": pendencias,
+        "ultima_sincronizacao": ultima_sincronizacao(),
+        "api_url": API_URL,
+    }
