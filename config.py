@@ -142,6 +142,33 @@ DASHBOARD_DAILY_MSGS = [
 ]
 
 
+def mensagem_dashboard_do_dia():
+    """Retorna a mensagem motivacional exibida no dashboard.
+
+    Prioridade:
+    1. Arquivo local Documents/mistica_mensagem_dashboard.txt, quando existir e tiver texto.
+    2. Frase diária automática baseada no dia do ano.
+    3. Mensagem padrão.
+    """
+    try:
+        if os.path.exists(DASHBOARD_MSG_PATH):
+            with open(DASHBOARD_MSG_PATH, "r", encoding="utf-8") as f:
+                texto = f.read().strip()
+            if texto:
+                return texto
+    except Exception:
+        pass
+
+    try:
+        if DASHBOARD_DAILY_MSGS:
+            indice = datetime.now().timetuple().tm_yday % len(DASHBOARD_DAILY_MSGS)
+            return DASHBOARD_DAILY_MSGS[indice]
+    except Exception:
+        pass
+
+    return DEFAULT_DASHBOARD_MSG
+
+
 def hash_password_pbkdf2(senha, salt=b"mistica_presentes"):
     return hashlib.pbkdf2_hmac("sha256", senha.encode("utf-8"), salt, 120000).hex()
 
