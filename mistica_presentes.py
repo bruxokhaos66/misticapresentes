@@ -2257,7 +2257,7 @@ class MisticaApp(ctk.CTk):
             botoes.pack(fill="x", padx=18, pady=(6, 14))
             ctk.CTkButton(botoes, text="Abrir Isis", height=38, font=self.font_button, fg_color=self.cor_botao, command=lambda: [self.tabs.set("Isis a Bruxinha"), win.destroy()]).pack(side="left", expand=True, fill="x", padx=5)
             ctk.CTkButton(botoes, text="Depois", height=38, font=self.font_button, fg_color="#4c4c4c", command=win.destroy).pack(side="left", expand=True, fill="x", padx=5)
-            win.after(45000, win.destroy)
+            win.after(4000, win.destroy)
         except Exception:
             pass
 
