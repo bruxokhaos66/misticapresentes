@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from backend.database import conectar, executar, listar, obter
+from backend.user_sync_routes import router as user_sync_router
 from config import API_URL, DB_PATH, DEFAULT_API_URL, DEFAULT_SERVER_URL, OFFICIAL_DOMAIN, SERVER_URL, hash_password_pbkdf2
 from database.migrations import init_db
 
@@ -14,7 +15,7 @@ from database.migrations import init_db
 app = FastAPI(
     title="Mística Presentes API",
     description="API oficial para sincronização do app Mística Presentes.",
-    version="0.3.1",
+    version="0.3.2",
 )
 
 app.add_middleware(
@@ -30,6 +31,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(user_sync_router)
 
 
 class ProdutoIn(BaseModel):
