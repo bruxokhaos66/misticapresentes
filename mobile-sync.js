@@ -6,6 +6,15 @@
   let syncRunning = false;
   let lastSyncAt = null;
 
+  function carregarPainelAuth() {
+    if (document.getElementById("painelAuthScript")) return;
+    const script = document.createElement("script");
+    script.id = "painelAuthScript";
+    script.src = "painel-auth.js";
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+
   function statusEl() {
     let el = document.getElementById("mobileSyncStatus");
     if (!el) {
@@ -186,6 +195,7 @@
   };
 
   window.addEventListener("load", () => {
+    carregarPainelAuth();
     instalarEnvioVendas();
     sincronizarAgora();
     setInterval(sincronizarAgora, SYNC_INTERVAL_MS);
