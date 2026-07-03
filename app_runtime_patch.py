@@ -1,6 +1,18 @@
 def aplicar_patches_runtime(fonte):
     """Aplica painel simples e seguro de vendas/sincronização no dashboard."""
 
+    # Venda deve registrar direto: sem popup extra e sem backup travando a tela.
+    fonte = fonte.replace(
+        '        realizar_backup()\n        registrar_log(self.current_user[\'nome\'], "Venda", f"N {vid} - {format_moeda(self.v_calc[\'tot\'])}")',
+        '        try:\n            import threading\n            threading.Thread(target=realizar_backup, daemon=True).start()\n        except Exception:\n            pass\n        registrar_log(self.current_user[\'nome\'], "Venda", f"N {vid} - {format_moeda(self.v_calc[\'tot\'])}")',
+        1,
+    )
+    fonte = fonte.replace(
+        '        messagebox.showinfo("Venda salva", f"Venda no {vid} salva com sucesso.")\n',
+        '',
+        1,
+    )
+
     # Sincronizacao automatica de usuarios com a API, sem travar a tela.
     if "def sincronizar_usuarios_online(self" not in fonte:
         marcador_sync = "    def adicionar_barra_rolagem_tree(self, tree):"
