@@ -1,4 +1,7 @@
+from datetime import datetime
+
 from database import query_db
+from services.dia_operacional_service import intervalo_vendas_hoje
 
 
 def _custo_vendas(vendas_ids):
@@ -14,6 +17,10 @@ def _custo_vendas(vendas_ids):
 
 def _filtro_data_sql(coluna='data_venda'):
     return f"(COALESCE({coluna}, '') LIKE ? OR COALESCE(data_iso, '') LIKE ?)"
+
+
+def _filtro_intervalo_iso_sql():
+    return "(datetime(data_iso) >= datetime(?) AND datetime(data_iso) < datetime(?))"
 
 
 def vendas_por_filtro(filtro):
@@ -87,7 +94,27 @@ def ranking_clientes(limite=10):
     )
 
 
+def resumo_vendas_hoje_operacional():
+    inicio, fim, dia_operacional = intervalo_vendas_hoje()
+    res = query_db(
+        f"""
+        SELECT COUNT(*), COALESCE(SUM(total_final),0)
+        FROM vendas
+        WHERE COALESCE(status,'Concluído') != 'Cancelado'
+          AND (
+              COALESCE(dia_operacional,'') = ?
+              OR {_filtro_intervalo_iso_sql()}
+          )
+        """,
+        (dia_operacional, inicio, fim),
+    )
+    return res[0] if res else (0, 0.0)
+
+
 def resumo_vendas_periodo(filtro):
+    hoje = datetime.now().strftime("%d/%m/%Y")
+    if str(filtro or "") == hoje:
+        return resumo_vendas_hoje_operacional()
     res = query_db(
         f"""
         SELECT COUNT(*), COALESCE(SUM(total_final),0)
