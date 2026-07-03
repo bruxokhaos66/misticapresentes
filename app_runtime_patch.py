@@ -32,6 +32,34 @@ def aplicar_patches_runtime(fonte):
         if marcador_sync in fonte:
             fonte = fonte.replace(marcador_sync, metodos_sync + marcador_sync, 1)
 
+    if "def montar_barra_frajola(self" not in fonte:
+        marcador_frajola = "    def adicionar_barra_rolagem_tree(self, tree):"
+        metodo_frajola = r'''
+    def montar_barra_frajola(self, parent=None):
+        try:
+            if parent is None:
+                parent = getattr(self, "tab_d", None)
+            if parent is None:
+                return
+            barra = ctk.CTkFrame(parent, fg_color="#120d18", corner_radius=14, border_width=1, border_color="#4f835f")
+            barra.pack(fill="x", padx=22, pady=(4, 10))
+            ctk.CTkLabel(barra, text="🐾 Frajola Online", font=("Arial", 15, "bold"), text_color=self.cor_ouro).pack(side="left", padx=12, pady=8)
+            ctk.CTkLabel(barra, text="Humor: Feliz  •  Energia: 100%  •  Pet virtual da Mística", font=("Arial", 13, "bold"), text_color="#f0e6d2").pack(side="left", padx=8, pady=8)
+            ctk.CTkButton(barra, text="Abrir Frajola", width=130, height=32, font=("Arial", 12, "bold"), fg_color="#4f835f", command=lambda: messagebox.showinfo("Frajola", "🐾 Miau! O Frajola está online e acompanhando a loja.")).pack(side="right", padx=12, pady=8)
+        except Exception as exc:
+            try:
+                registrar_erro_sistema("montar_barra_frajola", exc)
+            except Exception:
+                pass
+
+'''
+        if marcador_frajola in fonte:
+            fonte = fonte.replace(marcador_frajola, metodo_frajola + marcador_frajola, 1)
+
+    if "self.montar_barra_frajola(f_info)" not in fonte:
+        alvo_frajola = "        self.dashboard_msg_lbl.pack(pady=10)"
+        fonte = fonte.replace(alvo_frajola, alvo_frajola + "\n        self.montar_barra_frajola(f_info)", 1)
+
     if "self.sincronizar_usuarios_online(\"abertura\")" not in fonte:
         fonte = fonte.replace("        self.configurar_tabelas()\n        self.tela_login()", "        self.configurar_tabelas()\n        self.sincronizar_usuarios_online(\"abertura\")\n        self.tela_login()", 1)
 
