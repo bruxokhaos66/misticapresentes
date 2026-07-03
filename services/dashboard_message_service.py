@@ -27,6 +27,29 @@ MENSAGENS = [
     "Aviso operacional: se notar produto com baixo estoque, já registre para reposição antes de faltar.",
 ]
 
+FRASES_MOTIVACIONAIS = [
+    "Acredite em si mesmo e você será imparável.",
+    "Cada atendimento é uma nova chance de encantar alguém.",
+    "Faça o simples com excelência e o resultado aparece.",
+    "Confiança, simpatia e constância transformam atendimento em venda.",
+    "Quem atende com verdade cria clientes que voltam.",
+    "Organização no balcão traz clareza para vender melhor.",
+]
+
+AVISOS_IMPORTANTES = [
+    "Confira preços, estoque e vitrine antes do movimento aumentar.",
+    "Mantenha os produtos mais procurados visíveis e fáceis de encontrar.",
+    "Responda o cliente com rapidez, mesmo que seja para dizer que já está verificando.",
+    "Produto sem etiqueta gera dúvida; produto bem apresentado facilita a venda.",
+]
+
+PIADAS_LEVES = [
+    "A vela não resolveu o problema, mas pelo menos iluminou a situação.",
+    "O cristal não fofoca, mas vive refletindo sobre tudo.",
+    "O incenso foi promovido porque sempre elevava o clima da loja.",
+    "O difusor evita discussão: prefere espalhar boas essências.",
+]
+
 
 def slot_atual():
     agora = datetime.now()
@@ -63,6 +86,25 @@ def _limpar_frase_online(texto):
     return texto
 
 
+def _parece_titulo_de_pagina(texto):
+    t = str(texto or "").lower()
+    palavras_titulo = [
+        "frases motivacionais", "frases de motivação", "mensagens motivacionais",
+        "poderosas", "impulsionar vendas", "confira", "lista de", "melhores frases",
+        "exemplos de", "dicas para", "blog", "site", "loja"
+    ]
+    return any(p in t for p in palavras_titulo)
+
+
+def _frase_gerada_pela_isis(titulo_pesquisa, idx):
+    titulo = str(titulo_pesquisa or "").lower()
+    if "piada" in titulo or "humor" in titulo:
+        return PIADAS_LEVES[idx % len(PIADAS_LEVES)]
+    if "dica" in titulo or "atendimento" in titulo or "varejo" in titulo or "comércio" in titulo or "comercio" in titulo:
+        return AVISOS_IMPORTANTES[idx % len(AVISOS_IMPORTANTES)]
+    return FRASES_MOTIVACIONAIS[idx % len(FRASES_MOTIVACIONAIS)]
+
+
 def mensagem_atual():
     try:
         if os.path.exists(FIXO_PATH):
@@ -75,16 +117,21 @@ def mensagem_atual():
     chave, idx = slot_atual()
     dados = _cache()
     online = _limpar_frase_online(dados.get(chave))
-    return online or MENSAGENS[idx]
+    if online and not _parece_titulo_de_pagina(online):
+        return online
+    if online:
+        frase = _frase_gerada_pela_isis(online, idx)
+        dados[chave] = frase
+        _salvar(dados)
+        return frase
+    return MENSAGENS[idx]
 
 
 def buscar_online_e_salvar():
     chave, idx = slot_atual()
     dados = _cache()
     frase_cache = _limpar_frase_online(dados.get(chave))
-    if frase_cache:
-        dados[chave] = frase_cache
-        _salvar(dados)
+    if frase_cache and not _parece_titulo_de_pagina(frase_cache):
         return frase_cache
     consultas = [
         "frase motivacional curta atendimento vendas loja",
@@ -96,10 +143,13 @@ def buscar_online_e_salvar():
         resultados = pesquisar(consultas[idx % len(consultas)], limite=3)
         for item in resultados:
             titulo = _limpar_frase_online(item.get("titulo", ""))
-            if 35 <= len(titulo) <= 150:
-                dados[chave] = titulo
+            if 20 <= len(titulo) <= 160:
+                frase = titulo
+                if _parece_titulo_de_pagina(titulo):
+                    frase = _frase_gerada_pela_isis(titulo, idx)
+                dados[chave] = frase
                 _salvar(dados)
-                return titulo
+                return frase
     except Exception:
         pass
     return None
