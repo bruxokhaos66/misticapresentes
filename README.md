@@ -12,6 +12,20 @@ Sistema desktop em Python para gestão da loja Mística Presentes.
 - Administração de usuários e logs de auditoria.
 - Isis a Bruxinha com comandos operacionais, memória local e pesquisa web.
 
+## Site e domínio oficial
+
+O domínio oficial configurado para publicação é:
+
+```text
+misticaesotericos.com.br
+```
+
+O arquivo `CNAME` mantém o domínio configurado para o GitHub Pages.
+
+O arquivo `site-config.js` centraliza os dados públicos do site, incluindo domínio oficial, URL pública, modo de produção, Instagram e WhatsApp.
+
+Enquanto o DNS do Registro.br propaga, o site continua funcionando pelo endereço padrão do GitHub Pages. Depois da propagação, o acesso deve ser feito pelo domínio oficial.
+
 ## Requisitos
 
 - Windows 10 ou 11.
