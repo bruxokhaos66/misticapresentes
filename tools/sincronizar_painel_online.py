@@ -1,5 +1,6 @@
 import json
 import sys
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -14,7 +15,7 @@ from database import init_db, query_db
 from services.sync_service import montar_payload_venda
 
 
-REQ_TIMEOUT = httpx.Timeout(connect=5, read=8, write=8, pool=5)
+REQ_TIMEOUT = httpx.Timeout(connect=4, read=4, write=4, pool=4)
 
 
 def _api():
@@ -42,7 +43,7 @@ def listar_produtos_locais():
 
 
 def listar_vendas_locais():
-    corte = datetime.now() - timedelta(days=120)
+    corte = datetime.now() - timedelta(days=35)
     rows = query_db("SELECT id, data_venda, data_iso FROM vendas ORDER BY id") or []
     filtradas = []
     for venda_id, data_venda, data_iso in rows:
@@ -93,8 +94,21 @@ def sync_produtos(client):
             chaves_remotas.add(nome_chave)
         except Exception as exc:
             erros += 1
-            print(f"Erro produto {nome}: {exc}", flush=True)
+            print(f"Erro produto {nome}: {type(exc).__name__}: {exc}", flush=True)
     return {"criados": criados, "ignorados": ignorados, "erros": erros}
+
+
+def _enviar_venda_com_tentativa(client, payload):
+    ultimo_erro = None
+    for tentativa in range(1, 3):
+        try:
+            resp = client.post(f"{_api()}/api/sync/venda", json=payload)
+            resp.raise_for_status()
+            return True, None
+        except Exception as exc:
+            ultimo_erro = exc
+            time.sleep(0.5)
+    return False, ultimo_erro
 
 
 def sync_vendas(client):
@@ -104,31 +118,36 @@ def sync_vendas(client):
     erros = 0
     print(f"Vendas locais para enviar: {total}", flush=True)
     for idx, (venda_id,) in enumerate(vendas, start=1):
-        try:
-            payload = montar_payload_venda(venda_id)
-            resp = client.post(f"{_api()}/api/sync/venda", json=payload)
-            resp.raise_for_status()
+        payload = montar_payload_venda(venda_id)
+        sucesso, erro = _enviar_venda_com_tentativa(client, payload)
+        if sucesso:
             ok += 1
-        except Exception as exc:
+        else:
             erros += 1
-            print(f"Erro venda {venda_id}: {type(exc).__name__}: {exc}", flush=True)
-        if idx == 1 or idx % 10 == 0 or idx == total:
-            print(f"Progresso vendas: {idx}/{total} | ok={ok} | erros={erros}", flush=True)
+            print(f"Erro venda {venda_id}: {type(erro).__name__}: {erro}", flush=True)
+        print(f"Progresso vendas: {idx}/{total} | ok={ok} | erros={erros}", flush=True)
     return {"enviadas": ok, "erros": erros, "total_local": total}
 
 
 def main():
     init_db()
     print("API:", _api(), flush=True)
-    with httpx.Client(timeout=REQ_TIMEOUT) as client:
+    limits = httpx.Limits(max_keepalive_connections=0, max_connections=3)
+    with httpx.Client(timeout=REQ_TIMEOUT, limits=limits) as client:
         health = client.get(f"{_api()}/api/health")
         print("Health:", health.status_code, flush=True)
         produtos = sync_produtos(client)
         print("Produtos:", json.dumps(produtos, ensure_ascii=False), flush=True)
         vendas = sync_vendas(client)
         print("Vendas:", json.dumps(vendas, ensure_ascii=False), flush=True)
-        status = client.get(f"{_api()}/api/status").json()
-        resumo = client.get(f"{_api()}/api/painel/resumo").json()
+        try:
+            status = client.get(f"{_api()}/api/status").json()
+        except Exception as exc:
+            status = {"erro": str(exc)}
+        try:
+            resumo = client.get(f"{_api()}/api/painel/resumo").json()
+        except Exception as exc:
+            resumo = {"erro": str(exc)}
     print("Status API:", json.dumps(status, ensure_ascii=False), flush=True)
     print("Resumo API:", json.dumps(resumo, ensure_ascii=False), flush=True)
     print("Concluido. Abra o painel no celular e toque em Atualizar.", flush=True)
