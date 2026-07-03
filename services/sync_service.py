@@ -1,0 +1,193 @@
+import json
+from datetime import datetime
+
+import httpx
+
+from config import API_URL
+from database.connection import query_db
+
+
+SYNC_TIMEOUT = 6
+
+
+def garantir_tabela_sync():
+    query_db(
+        """
+        CREATE TABLE IF NOT EXISTS sync_pendencias (
+            id INTEGER PRIMARY KEY,
+            tipo TEXT NOT NULL,
+            referencia_id INTEGER,
+            payload TEXT NOT NULL,
+            status TEXT DEFAULT 'Pendente',
+            tentativas INTEGER DEFAULT 0,
+            ultimo_erro TEXT,
+            data_criacao TEXT,
+            data_atualizacao TEXT,
+            sincronizado_em TEXT
+        )
+        """,
+        commit=True,
+    )
+    for sql in [
+        "CREATE INDEX IF NOT EXISTS idx_sync_status ON sync_pendencias(status)",
+        "CREATE INDEX IF NOT EXISTS idx_sync_tipo_ref ON sync_pendencias(tipo, referencia_id)",
+    ]:
+        try:
+            query_db(sql, commit=True)
+        except Exception:
+            pass
+
+
+def montar_payload_venda(venda_id):
+    venda = query_db(
+        """
+        SELECT id, cliente, data_venda, subtotal, desconto, taxa, total_final,
+               forma_pagamento, vendedor, status, data_iso, dia_operacional
+        FROM vendas
+        WHERE id=?
+        """,
+        (venda_id,),
+    )
+    if not venda:
+        raise ValueError(f"Venda {venda_id} nao encontrada para sincronizacao.")
+
+    v = venda[0]
+    itens = query_db(
+        """
+        SELECT codigo_p, nome_p, quantidade, custo_unitario, valor_unitario, valor_total
+        FROM vendas_itens
+        WHERE venda_id=?
+        ORDER BY id
+        """,
+        (venda_id,),
+    )
+    return {
+        "local_id": v[0],
+        "cliente": v[1],
+        "data_venda": v[2],
+        "subtotal": float(v[3] or 0),
+        "desconto": float(v[4] or 0),
+        "taxa": float(v[5] or 0),
+        "total_final": float(v[6] or 0),
+        "forma_pagamento": v[7],
+        "vendedor": v[8],
+        "status": v[9] or "Concluído",
+        "data_iso": v[10],
+        "dia_operacional": v[11],
+        "itens": [
+            {
+                "codigo_p": item[0],
+                "nome_p": item[1],
+                "quantidade": int(item[2] or 0),
+                "custo_unitario": float(item[3] or 0),
+                "valor_unitario": float(item[4] or 0),
+                "valor_total": float(item[5] or 0),
+            }
+            for item in itens
+        ],
+    }
+
+
+def enfileirar_venda_para_sync(venda_id):
+    garantir_tabela_sync()
+    payload = montar_payload_venda(venda_id)
+    agora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    existente = query_db(
+        "SELECT id FROM sync_pendencias WHERE tipo='venda' AND referencia_id=? AND status!='Sincronizado'",
+        (venda_id,),
+    )
+    payload_json = json.dumps(payload, ensure_ascii=False)
+    if existente:
+        query_db(
+            """
+            UPDATE sync_pendencias
+               SET payload=?, status='Pendente', data_atualizacao=?
+             WHERE id=?
+            """,
+            (payload_json, agora, existente[0][0]),
+            commit=True,
+        )
+        return existente[0][0]
+    return query_db(
+        """
+        INSERT INTO sync_pendencias
+        (tipo, referencia_id, payload, status, tentativas, data_criacao, data_atualizacao)
+        VALUES ('venda', ?, ?, 'Pendente', 0, ?, ?)
+        """,
+        (venda_id, payload_json, agora, agora),
+        commit=True,
+    )
+
+
+def _enviar_pendencia(pendencia_id, tipo, payload_json):
+    endpoint = f"{API_URL.rstrip('/')}/api/sync/{tipo}"
+    payload = json.loads(payload_json)
+    with httpx.Client(timeout=SYNC_TIMEOUT) as client:
+        resp = client.post(endpoint, json=payload)
+        resp.raise_for_status()
+        return resp.json()
+
+
+def sincronizar_pendencias(limite=20):
+    garantir_tabela_sync()
+    pendencias = query_db(
+        """
+        SELECT id, tipo, payload
+        FROM sync_pendencias
+        WHERE status IN ('Pendente', 'Erro')
+        ORDER BY id
+        LIMIT ?
+        """,
+        (limite,),
+    )
+    resultado = {"sincronizados": 0, "erros": 0, "detalhes": []}
+    for pendencia_id, tipo, payload_json in pendencias:
+        agora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        try:
+            retorno = _enviar_pendencia(pendencia_id, tipo, payload_json)
+            query_db(
+                """
+                UPDATE sync_pendencias
+                   SET status='Sincronizado', ultimo_erro=NULL, data_atualizacao=?, sincronizado_em=?
+                 WHERE id=?
+                """,
+                (agora, agora, pendencia_id),
+                commit=True,
+            )
+            resultado["sincronizados"] += 1
+            resultado["detalhes"].append({"id": pendencia_id, "ok": True, "retorno": retorno})
+        except Exception as exc:
+            erro = str(exc)[:500]
+            query_db(
+                """
+                UPDATE sync_pendencias
+                   SET status='Erro', tentativas=COALESCE(tentativas,0)+1,
+                       ultimo_erro=?, data_atualizacao=?
+                 WHERE id=?
+                """,
+                (erro, agora, pendencia_id),
+                commit=True,
+            )
+            resultado["erros"] += 1
+            resultado["detalhes"].append({"id": pendencia_id, "ok": False, "erro": erro})
+    return resultado
+
+
+def enfileirar_e_tentar_sincronizar_venda(venda_id):
+    enfileirar_venda_para_sync(venda_id)
+    try:
+        return sincronizar_pendencias(limite=10)
+    except Exception as exc:
+        return {"sincronizados": 0, "erros": 1, "detalhes": [{"erro": str(exc)}]}
+
+
+def resumo_sync():
+    garantir_tabela_sync()
+    rows = query_db(
+        """
+        SELECT status, COUNT(*)
+        FROM sync_pendencias
+        GROUP BY status
+        """
+    )
+    return {status or "Pendente": total for status, total in rows}
