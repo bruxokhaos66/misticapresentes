@@ -5,15 +5,17 @@ import time
 import webbrowser
 from pathlib import Path
 
+from config import DEFAULT_API_URL, DEFAULT_SERVER_URL
+
 
 def _base_dir() -> Path:
     return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 
 
-def abrir_pagina_status():
-    time.sleep(2)
+def abrir_painel_oficial():
+    time.sleep(1)
     try:
-        webbrowser.open("http://127.0.0.1:8000/docs")
+        webbrowser.open(DEFAULT_SERVER_URL)
     except Exception:
         pass
 
@@ -23,27 +25,27 @@ def main():
     if str(base) not in sys.path:
         sys.path.insert(0, str(base))
 
-    os.environ.setdefault("MISTICA_SERVER_MODE", "local")
+    os.environ.setdefault("MISTICA_SERVER_MODE", "production")
 
     print("==============================================")
-    print(" Mística Presentes - Servidor do Aplicativo")
+    print(" Mistica Presentes - Painel Online Oficial")
     print("==============================================")
-    print("Servidor local: http://127.0.0.1:8000")
-    print("Documentação:   http://127.0.0.1:8000/docs")
-    print("Para encerrar, feche esta janela.")
+    print(f"Painel: {DEFAULT_SERVER_URL}")
+    print(f"API:    {DEFAULT_API_URL}")
+    print("Local auxiliar: http://127.0.0.1:8000")
     print("==============================================")
+
+    threading.Thread(target=abrir_painel_oficial, daemon=True).start()
 
     try:
         import uvicorn
     except Exception as exc:
-        print("Erro: uvicorn não encontrado.")
-        print("Instale as dependências com: pip install fastapi uvicorn")
+        print("Uvicorn nao encontrado.")
         print(exc)
         input("Pressione ENTER para sair...")
         return
 
-    threading.Thread(target=abrir_pagina_status, daemon=True).start()
-    uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=False, log_level="info")
+    uvicorn.run("backend.main:app", host="127.0.0.1", port=8000, reload=False, log_level="info")
 
 
 if __name__ == "__main__":
