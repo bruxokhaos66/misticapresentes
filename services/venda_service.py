@@ -7,6 +7,7 @@ from services.dia_operacional_service import etiqueta_dia_operacional
 from services.estoque_service import validar_estoque_carrinho
 
 
+
 def calcular_total_venda(carrinho, desconto_percentual=0, forma_pagamento="Dinheiro"):
     subtotal = sum(float(item.get("t", 0) or 0) for item in carrinho)
     try:
@@ -27,6 +28,22 @@ def calcular_total_venda(carrinho, desconto_percentual=0, forma_pagamento="Dinhe
     elif "Credito 3x" in forma:
         taxa = base * 0.025
     return {"s": subtotal, "d": desconto, "tx": taxa, "tot": base + taxa}
+
+
+
+def _tentar_sincronizar_venda_sem_bloquear(venda_id):
+    """Envia a venda para a API quando houver internet.
+
+    A venda nunca deixa de ser salva localmente por falha de internet/API.
+    Se o envio falhar, fica registrada em sync_pendencias para nova tentativa.
+    """
+    try:
+        from services.sync_service import enfileirar_e_tentar_sincronizar_venda
+
+        enfileirar_e_tentar_sincronizar_venda(venda_id)
+    except Exception as exc:
+        print(f"[Sync] Venda {venda_id} ficou pendente: {exc}")
+
 
 
 def registrar_venda_service(carrinho, cliente, data_venda, data_iso, calculo, forma_pagamento, vendedor, caixa_id):
@@ -98,20 +115,25 @@ def registrar_venda_service(carrinho, cliente, data_venda, data_iso, calculo, fo
             forma_pagamento,
         )
         conn.commit()
-        return venda_id
     except Exception:
         conn.rollback()
         raise
     finally:
         conn.close()
 
+    _tentar_sincronizar_venda_sem_bloquear(venda_id)
+    return venda_id
+
+
 
 def obter_resumo_venda(venda_id):
     return vendas_repo.obter_status_total(venda_id)
 
 
+
 def consultar_venda_salva(venda_id):
     return vendas_repo.buscar_venda(venda_id)
+
 
 
 def cancelar_venda_service(venda_id, usuario, caixa_id=None):
