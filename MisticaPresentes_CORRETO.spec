@@ -5,11 +5,24 @@ from PyInstaller.utils.hooks import collect_submodules
 block_cipher = None
 
 hiddenimports = []
-hiddenimports += collect_submodules('customtkinter')
-hiddenimports += collect_submodules('database')
-hiddenimports += collect_submodules('services')
-hiddenimports += collect_submodules('isis')
-hiddenimports += collect_submodules('backend')
+for pacote in [
+    'customtkinter',
+    'database',
+    'services',
+    'isis',
+    'backend',
+    'PIL',
+    'ddgs',
+    'httpx',
+    'speech_recognition',
+    'pyttsx3',
+    'uvicorn',
+    'fastapi',
+]:
+    try:
+        hiddenimports += collect_submodules(pacote)
+    except Exception:
+        pass
 
 datas = [
     ('mistica_presentes.py', '.'),
