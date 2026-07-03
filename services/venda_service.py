@@ -1,4 +1,5 @@
 from datetime import datetime
+import threading
 
 from database import get_connection
 from repositories import estoque as estoque_repo
@@ -32,18 +33,29 @@ def calcular_total_venda(carrinho, desconto_percentual=0, forma_pagamento="Dinhe
 
 
 def _tentar_sincronizar_venda_sem_bloquear(venda_id):
-    """Envia a venda para a API quando houver internet.
+    """Registra pendência e tenta enviar em segundo plano.
 
-    A venda nunca deixa de ser salva localmente por falha de internet/API.
-    Se o envio falhar, fica registrada em sync_pendencias para nova tentativa.
+    A tela de venda nunca deve esperar internet/API, porque isso trava o caixa.
     """
     try:
-        from services.sync_service import enfileirar_e_tentar_sincronizar_venda
+        from services.sync_service import enfileirar_venda_para_sync
+        enfileirar_venda_para_sync(venda_id)
+    except Exception as exc:
+        print(f"[Sync] Nao consegui enfileirar venda {venda_id}: {exc}")
+        return None
 
-        return enfileirar_e_tentar_sincronizar_venda(venda_id)
+    def executar():
+        try:
+            from services.sync_service import sincronizar_pendencias
+            sincronizar_pendencias(limite=3)
+        except Exception as exc:
+            print(f"[Sync] Venda {venda_id} ficou pendente: {exc}")
+
+    try:
+        threading.Thread(target=executar, daemon=True).start()
     except Exception as exc:
         print(f"[Sync] Venda {venda_id} ficou pendente: {exc}")
-        return None
+    return None
 
 
 
@@ -195,6 +207,5 @@ def cancelar_venda_service(venda_id, usuario, caixa_id=None):
     finally:
         conn.close()
 
-    # Garante que o app/painel online receba a mudança de status da venda.
     _tentar_sincronizar_venda_sem_bloquear(venda_id)
     return valor_estorno
