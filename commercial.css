@@ -1,0 +1,71 @@
+.internal-section { display: none; }
+
+.nav-links a[href="#cliente"],
+.nav-links a[href="#historico"],
+.nav-links a[href="#admin"] {
+  display: none !important;
+}
+
+.hero-copy .eyebrow::before {
+  content: "✨ ";
+}
+
+.products-section .section-title p {
+  max-width: 760px;
+  margin-inline: auto;
+}
+
+.product-card {
+  border-color: rgba(240, 197, 106, 0.26) !important;
+}
+
+.product-card::after {
+  content: "Produto disponível";
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  border: 1px solid rgba(240, 197, 106, 0.38);
+  border-radius: 999px;
+  background: rgba(10, 9, 18, 0.72);
+  color: #f0c56a;
+  padding: 5px 10px;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.product-image {
+  min-height: 170px;
+  font-size: 4rem;
+  background:
+    radial-gradient(circle at 50% 30%, rgba(240, 197, 106, 0.32), transparent 42%),
+    radial-gradient(circle at 20% 90%, rgba(113, 138, 70, 0.28), transparent 36%),
+    linear-gradient(135deg, rgba(35, 16, 53, 0.48), rgba(49, 67, 38, 0.42));
+}
+
+.highlight-strip span {
+  text-transform: none;
+  letter-spacing: 0.01em;
+}
+
+.footer a {
+  color: #f0c56a;
+  font-weight: 800;
+}
+
+@media (max-width: 560px) {
+  .hero-copy h1 {
+    font-size: 2.55rem;
+  }
+
+  .trust-row span,
+  .highlight-strip span {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .product-card::after {
+    top: 12px;
+    right: 12px;
+  }
+}
