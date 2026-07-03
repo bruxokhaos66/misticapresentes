@@ -5,7 +5,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from backend.database import executar, listar, obter
+from backend.database import conectar, executar, listar, obter
 from config import API_URL, DB_PATH, DEFAULT_API_URL, DEFAULT_SERVER_URL, OFFICIAL_DOMAIN, SERVER_URL
 from database.migrations import init_db
 
@@ -13,7 +13,7 @@ from database.migrations import init_db
 app = FastAPI(
     title="Mística Presentes API",
     description="API oficial para sincronização do app Mística Presentes.",
-    version="0.1.0",
+    version="0.2.0",
 )
 
 app.add_middleware(
@@ -50,7 +50,17 @@ class ClienteIn(BaseModel):
     nascimento: Optional[str] = None
 
 
+class VendaItemIn(BaseModel):
+    codigo_p: Optional[str] = None
+    nome_p: Optional[str] = None
+    quantidade: int = 0
+    custo_unitario: float = 0.0
+    valor_unitario: float = 0.0
+    valor_total: float = 0.0
+
+
 class VendaIn(BaseModel):
+    local_id: Optional[int] = None
     cliente: Optional[str] = "Cliente não informado"
     subtotal: float = 0.0
     desconto: float = 0.0
@@ -58,14 +68,31 @@ class VendaIn(BaseModel):
     total_final: float = 0.0
     forma_pagamento: Optional[str] = None
     vendedor: Optional[str] = None
+    status: Optional[str] = "Concluído"
     data_venda: Optional[str] = None
     data_iso: Optional[str] = None
     dia_operacional: Optional[str] = None
+    itens: list[VendaItemIn] = Field(default_factory=list)
 
 
 @app.on_event("startup")
 def startup():
     init_db()
+    garantir_colunas_sync_backend()
+
+
+def garantir_colunas_sync_backend():
+    comandos = [
+        "ALTER TABLE vendas ADD COLUMN origem_sync TEXT",
+        "ALTER TABLE vendas ADD COLUMN local_id INTEGER",
+        "CREATE INDEX IF NOT EXISTS idx_vendas_local_id ON vendas(local_id)",
+    ]
+    with conectar() as conn:
+        for sql in comandos:
+            try:
+                conn.execute(sql)
+            except Exception:
+                pass
 
 
 @app.get("/")
@@ -219,34 +246,75 @@ def listar_vendas(limite: int = Query(100, ge=1, le=500)):
     )
 
 
-@app.post("/api/vendas")
-def criar_venda(venda: VendaIn):
+def salvar_venda_online(venda: VendaIn, origem_sync="api"):
+    garantir_colunas_sync_backend()
     agora = datetime.now()
     data_venda = venda.data_venda or agora.strftime("%d/%m/%Y %H:%M:%S")
     data_iso = venda.data_iso or agora.isoformat(timespec="seconds")
     dia_operacional = venda.dia_operacional or agora.strftime("%Y-%m-%d")
-    novo_id = executar(
-        """
-        INSERT INTO vendas (
-            cliente, data_venda, subtotal, desconto, taxa, total_final,
-            forma_pagamento, vendedor, status, data_iso, dia_operacional
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
-        """,
-        (
-            venda.cliente,
-            data_venda,
-            venda.subtotal,
-            venda.desconto,
-            venda.taxa,
-            venda.total_final,
-            venda.forma_pagamento,
-            venda.vendedor,
-            "Concluído",
-            data_iso,
-            dia_operacional,
-        ),
-    )
-    return {"id": novo_id, "status": "criado"}
+
+    if venda.local_id:
+        existente = obter(
+            "SELECT id FROM vendas WHERE local_id=? AND origem_sync='desktop'",
+            (venda.local_id,),
+        )
+        if existente:
+            return {"id": existente["id"], "local_id": venda.local_id, "status": "ja_sincronizado"}
+
+    with conectar() as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO vendas (
+                cliente, data_venda, subtotal, desconto, taxa, total_final,
+                forma_pagamento, vendedor, status, data_iso, dia_operacional,
+                origem_sync, local_id
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """,
+            (
+                venda.cliente,
+                data_venda,
+                venda.subtotal,
+                venda.desconto,
+                venda.taxa,
+                venda.total_final,
+                venda.forma_pagamento,
+                venda.vendedor,
+                venda.status or "Concluído",
+                data_iso,
+                dia_operacional,
+                origem_sync,
+                venda.local_id,
+            ),
+        )
+        venda_id = int(cur.lastrowid)
+        for item in venda.itens:
+            conn.execute(
+                """
+                INSERT INTO vendas_itens
+                (venda_id, codigo_p, nome_p, quantidade, custo_unitario, valor_unitario, valor_total)
+                VALUES (?,?,?,?,?,?,?)
+                """,
+                (
+                    venda_id,
+                    item.codigo_p,
+                    item.nome_p,
+                    int(item.quantidade or 0),
+                    item.custo_unitario,
+                    item.valor_unitario,
+                    item.valor_total,
+                ),
+            )
+    return {"id": venda_id, "local_id": venda.local_id, "status": "criado"}
+
+
+@app.post("/api/vendas")
+def criar_venda(venda: VendaIn):
+    return salvar_venda_online(venda, origem_sync="api")
+
+
+@app.post("/api/sync/venda")
+def sincronizar_venda(venda: VendaIn):
+    return salvar_venda_online(venda, origem_sync="desktop")
 
 
 @app.get("/api/estoque/baixo")
