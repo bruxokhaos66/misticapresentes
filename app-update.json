@@ -1,0 +1,14 @@
+{
+  "app": "Mística Painel",
+  "status": "online",
+  "latestVersion": "1.1.1",
+  "latestBuild": 3,
+  "minBuild": 2,
+  "serverUrl": "https://api.misticaesotericos.com.br",
+  "siteUrl": "https://misticaesotericos.com.br",
+  "apiUrl": "https://api.misticaesotericos.com.br",
+  "panelUrl": "https://misticaesotericos.com.br/#admin",
+  "storageMode": "api_first",
+  "syncIntervalSeconds": 5,
+  "message": "Conexão oficial configurada para a API da Mística Presentes em tempo real."
+}
