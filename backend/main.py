@@ -6,14 +6,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from backend.database import conectar, executar, listar, obter
-from config import API_URL, DB_PATH, DEFAULT_API_URL, DEFAULT_SERVER_URL, OFFICIAL_DOMAIN, SERVER_URL
+from config import API_URL, DB_PATH, DEFAULT_API_URL, DEFAULT_SERVER_URL, OFFICIAL_DOMAIN, SERVER_URL, hash_password_pbkdf2
 from database.migrations import init_db
 
 
 app = FastAPI(
     title="Mística Presentes API",
     description="API oficial para sincronização do app Mística Presentes.",
-    version="0.2.0",
+    version="0.3.0",
 )
 
 app.add_middleware(
@@ -75,6 +75,11 @@ class VendaIn(BaseModel):
     itens: list[VendaItemIn] = Field(default_factory=list)
 
 
+class LoginIn(BaseModel):
+    login: str = Field(min_length=1)
+    senha: str = Field(min_length=1)
+
+
 @app.on_event("startup")
 def startup():
     init_db()
@@ -93,6 +98,35 @@ def garantir_colunas_sync_backend():
                 conn.execute(sql)
             except Exception:
                 pass
+
+
+def _normalizar_perfil(perfil: str | None):
+    texto = str(perfil or "vendedor").strip().lower()
+    if texto in ("adm", "admin", "administrador"):
+        return "adm"
+    return "vendedor"
+
+
+def _permissoes_por_perfil(perfil: str):
+    if perfil == "adm":
+        return {
+            "produtos": True,
+            "estoque": True,
+            "vendas": True,
+            "clientes": True,
+            "fornecedores": True,
+            "backup": True,
+            "admin": True,
+        }
+    return {
+        "produtos": True,
+        "estoque": True,
+        "vendas": True,
+        "clientes": False,
+        "fornecedores": False,
+        "backup": False,
+        "admin": False,
+    }
 
 
 @app.get("/")
@@ -128,6 +162,56 @@ def status():
         "produtos": total_produtos["total"],
         "clientes": total_clientes["total"],
         "vendas": total_vendas["total"],
+        "data_hora": datetime.now().isoformat(timespec="seconds"),
+    }
+
+
+@app.post("/api/auth/login")
+def login_painel(entrada: LoginIn):
+    login = entrada.login.strip()
+    usuario = obter(
+        """
+        SELECT id, nome, login, senha_hash, senha_salt, perfil, ativo
+        FROM usuarios
+        WHERE login=? AND COALESCE(ativo,1)=1
+        """,
+        (login,),
+    )
+    if not usuario:
+        raise HTTPException(status_code=401, detail="Login ou senha inválidos")
+
+    salt = str(usuario.get("senha_salt") or "").encode("utf-8") if usuario.get("senha_salt") else b"mistica_presentes"
+    senha_hash = hash_password_pbkdf2(entrada.senha, salt)
+    if senha_hash != usuario.get("senha_hash"):
+        raise HTTPException(status_code=401, detail="Login ou senha inválidos")
+
+    perfil = _normalizar_perfil(usuario.get("perfil"))
+    return {
+        "status": "ok",
+        "usuario": {
+            "id": usuario.get("id"),
+            "nome": usuario.get("nome") or usuario.get("login"),
+            "login": usuario.get("login"),
+            "perfil": perfil,
+        },
+        "permissoes": _permissoes_por_perfil(perfil),
+        "data_hora": datetime.now().isoformat(timespec="seconds"),
+    }
+
+
+@app.get("/api/painel/resumo")
+def painel_resumo():
+    total_produtos = obter("SELECT COUNT(*) AS total FROM produtos WHERE COALESCE(ativo,1)=1") or {"total": 0}
+    total_clientes = obter("SELECT COUNT(*) AS total FROM clientes WHERE COALESCE(ativo,1)=1") or {"total": 0}
+    total_vendas = obter("SELECT COUNT(*) AS total FROM vendas WHERE COALESCE(status,'Concluído')!='Cancelada'") or {"total": 0}
+    venda_total = obter("SELECT COALESCE(SUM(total_final),0) AS total FROM vendas WHERE COALESCE(status,'Concluído')!='Cancelada'") or {"total": 0}
+    estoque_total = obter("SELECT COALESCE(SUM(quantidade),0) AS total FROM produtos WHERE COALESCE(ativo,1)=1") or {"total": 0}
+    return {
+        "produtos": total_produtos["total"],
+        "clientes": total_clientes["total"],
+        "vendas": total_vendas["total"],
+        "faturamento_total": venda_total["total"],
+        "pecas_estoque": estoque_total["total"],
         "data_hora": datetime.now().isoformat(timespec="seconds"),
     }
 
