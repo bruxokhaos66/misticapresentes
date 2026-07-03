@@ -1,15 +1,15 @@
 {
   "app": "Mística Painel",
   "status": "online",
-  "latestVersion": "1.1.4",
-  "latestBuild": 6,
+  "latestVersion": "1.1.5",
+  "latestBuild": 7,
   "minBuild": 2,
-  "serverUrl": "https://misticaesotericos.com.br/painel/",
+  "serverUrl": "https://api.misticaesotericos.com.br/painel/",
   "siteUrl": "https://misticaesotericos.com.br",
   "apiUrl": "https://api.misticaesotericos.com.br",
-  "panelUrl": "https://misticaesotericos.com.br/painel/",
+  "panelUrl": "https://api.misticaesotericos.com.br/painel/",
   "configUrl": "https://misticaesotericos.com.br/mistica-painel-config.json",
   "storageMode": "api_first",
   "syncIntervalSeconds": 5,
-  "message": "Mística Painel atualizado para vendedores e administradores."
+  "message": "Mística Painel deve abrir direto pelo servidor da API, sem abrir o site comercial."
 }
