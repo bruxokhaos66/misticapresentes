@@ -10,7 +10,7 @@ OFFICIAL_DOMAIN = "misticaesotericos.com.br"
 OFFICIAL_API_DOMAIN = "api.misticaesotericos.com.br"
 DEFAULT_SITE_URL = f"https://{OFFICIAL_DOMAIN}"
 DEFAULT_API_URL = f"https://{OFFICIAL_API_DOMAIN}"
-DEFAULT_SERVER_URL = f"https://{OFFICIAL_API_DOMAIN}/painel/"
+DEFAULT_SERVER_URL = f"https://{OFFICIAL_DOMAIN}/painel/"
 DEFAULT_SERVER_MODE = "production"
 DEFAULT_STORAGE_MODE = "api_first"
 DEFAULT_AUTH_MODE = "domain"
@@ -28,8 +28,8 @@ def _normalizar_url(url):
 def carregar_server_config():
     """Carrega a configuração oficial do Mística Painel.
 
-    O app de celular deve abrir o painel direto no servidor da API:
-    https://api.misticaesotericos.com.br/painel/
+    O app de celular deve abrir a área interna do site:
+    https://misticaesotericos.com.br/painel/
 
     A API de dados fica em:
     https://api.misticaesotericos.com.br
@@ -64,7 +64,7 @@ def carregar_server_config():
 
 
 def salvar_server_config(server_url=DEFAULT_SERVER_URL, api_url=None, storage_mode=DEFAULT_STORAGE_MODE):
-    # Força o painel direto da API e não grava tokens antigos no arquivo local.
+    # Força o painel interno oficial e não grava tokens antigos no arquivo local.
     cfg = {
         "server_url": DEFAULT_SERVER_URL,
         "api_url": DEFAULT_API_URL,
