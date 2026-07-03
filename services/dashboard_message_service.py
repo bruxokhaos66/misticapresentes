@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import threading
 from datetime import datetime
 
@@ -52,6 +53,16 @@ def _salvar(dados):
         pass
 
 
+def _limpar_frase_online(texto):
+    texto = str(texto or "").strip()
+    texto = re.sub(r"^Isis pesquisou agora:\s*", "", texto, flags=re.I).strip()
+    texto = re.sub(r"\s+[-|]\s+.*$", "", texto).strip()
+    texto = re.sub(r"\s+", " ", texto).strip()
+    if texto and not texto.endswith((".", "!", "?")):
+        texto += "."
+    return texto
+
+
 def mensagem_atual():
     try:
         if os.path.exists(FIXO_PATH):
@@ -63,14 +74,18 @@ def mensagem_atual():
         pass
     chave, idx = slot_atual()
     dados = _cache()
-    return str(dados.get(chave) or MENSAGENS[idx]).strip()
+    online = _limpar_frase_online(dados.get(chave))
+    return online or MENSAGENS[idx]
 
 
 def buscar_online_e_salvar():
     chave, idx = slot_atual()
     dados = _cache()
-    if dados.get(chave):
-        return dados[chave]
+    frase_cache = _limpar_frase_online(dados.get(chave))
+    if frase_cache:
+        dados[chave] = frase_cache
+        _salvar(dados)
+        return frase_cache
     consultas = [
         "frase motivacional curta atendimento vendas loja",
         "dica importante atendimento comercio varejo loja",
@@ -80,12 +95,11 @@ def buscar_online_e_salvar():
         from isis.web_search import pesquisar
         resultados = pesquisar(consultas[idx % len(consultas)], limite=3)
         for item in resultados:
-            titulo = str(item.get("titulo", "")).strip()
+            titulo = _limpar_frase_online(item.get("titulo", ""))
             if 35 <= len(titulo) <= 150:
-                msg = f"Isis pesquisou agora: {titulo}"
-                dados[chave] = msg
+                dados[chave] = titulo
                 _salvar(dados)
-                return msg
+                return titulo
     except Exception:
         pass
     return None
