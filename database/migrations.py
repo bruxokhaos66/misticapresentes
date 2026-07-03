@@ -85,13 +85,13 @@ def init_db():
             query_db(f"ALTER TABLE produtos ADD COLUMN {col} {typ}", commit=True)
         except Exception:
             pass
-    for tabela, col, typ in [("vendas", "status", "TEXT DEFAULT 'Concluído'"), ("vendas", "data_iso", "TEXT"), ("fluxo_caixa", "data_iso", "TEXT"), ("fluxo_caixa", "forma_pagamento", "TEXT"), ("fluxo_caixa", "caixa_id", "INTEGER"), ("contas_a_pagar", "categoria", "TEXT DEFAULT 'Outros'")]:
+    for tabela, col, typ in [("vendas", "status", "TEXT DEFAULT 'Concluído'"), ("vendas", "data_iso", "TEXT"), ("vendas", "dia_operacional", "TEXT"), ("fluxo_caixa", "data_iso", "TEXT"), ("fluxo_caixa", "forma_pagamento", "TEXT"), ("fluxo_caixa", "caixa_id", "INTEGER"), ("contas_a_pagar", "categoria", "TEXT DEFAULT 'Outros'")]:
         try:
             query_db(f"ALTER TABLE {tabela} ADD COLUMN {col} {typ}", commit=True)
         except Exception:
             pass
 
-    for tabela, colunas in {"categorias": [("ativo", "INTEGER DEFAULT 1"), ("excluido_em", "TEXT")], "clientes": [("ativo", "INTEGER DEFAULT 1"), ("excluido_em", "TEXT")], "usuarios": [("cpf", "TEXT"), ("endereco", "TEXT"), ("telefone", "TEXT"), ("perfil", "TEXT"), ("ativo", "INTEGER DEFAULT 1"), ("excluido_em", "TEXT"), ("senha_salt", "TEXT")], "fornecedores": [("whatsapp", "TEXT"), ("cidade", "TEXT"), ("observacoes", "TEXT"), ("ativo", "INTEGER DEFAULT 1"), ("excluido_em", "TEXT")], "contas_a_pagar": [("categoria", "TEXT DEFAULT 'Outros'"), ("cancelado_em", "TEXT")], "vendas_itens": [("custo_unitario", "REAL DEFAULT 0.0"), ("valor_unitario", "REAL DEFAULT 0.0"), ("valor_total", "REAL DEFAULT 0.0")], "fluxo_caixa": [("data_iso", "TEXT"), ("forma_pagamento", "TEXT"), ("caixa_id", "INTEGER")]}.items():
+    for tabela, colunas in {"categorias": [("ativo", "INTEGER DEFAULT 1"), ("excluido_em", "TEXT")], "clientes": [("ativo", "INTEGER DEFAULT 1"), ("excluido_em", "TEXT")], "usuarios": [("cpf", "TEXT"), ("endereco", "TEXT"), ("telefone", "TEXT"), ("perfil", "TEXT"), ("ativo", "INTEGER DEFAULT 1"), ("excluido_em", "TEXT"), ("senha_salt", "TEXT")], "fornecedores": [("whatsapp", "TEXT"), ("cidade", "TEXT"), ("observacoes", "TEXT"), ("ativo", "INTEGER DEFAULT 1"), ("excluido_em", "TEXT")], "contas_a_pagar": [("categoria", "TEXT DEFAULT 'Outros'"), ("cancelado_em", "TEXT")], "vendas": [("status", "TEXT DEFAULT 'Concluído'"), ("data_iso", "TEXT"), ("dia_operacional", "TEXT")], "vendas_itens": [("custo_unitario", "REAL DEFAULT 0.0"), ("valor_unitario", "REAL DEFAULT 0.0"), ("valor_total", "REAL DEFAULT 0.0")], "fluxo_caixa": [("data_iso", "TEXT"), ("forma_pagamento", "TEXT"), ("caixa_id", "INTEGER")]}.items():
         for col, typ in colunas:
             try:
                 query_db(f"ALTER TABLE {tabela} ADD COLUMN {col} {typ}", commit=True)
@@ -102,8 +102,12 @@ def init_db():
         query_db("UPDATE vendas SET status='Concluído' WHERE status IS NULL OR status=''", commit=True)
     except Exception:
         pass
+    try:
+        query_db("UPDATE vendas SET dia_operacional=substr(data_venda,1,10) WHERE COALESCE(dia_operacional,'')='' AND length(COALESCE(data_venda,'')) >= 10", commit=True)
+    except Exception:
+        pass
 
-    for sql_idx in ["CREATE INDEX IF NOT EXISTS idx_produtos_codigo ON produtos(codigo_p)", "CREATE UNIQUE INDEX IF NOT EXISTS ux_produtos_codigo_unico ON produtos(codigo_p) WHERE codigo_p IS NOT NULL AND codigo_p != ''", "CREATE INDEX IF NOT EXISTS idx_mov_estoque_codigo ON movimentacao_estoque(codigo_p)", "CREATE INDEX IF NOT EXISTS idx_produtos_nome ON produtos(nome)", "CREATE INDEX IF NOT EXISTS idx_clientes_nome ON clientes(nome)", "CREATE INDEX IF NOT EXISTS idx_vendas_data ON vendas(data_venda)", "CREATE INDEX IF NOT EXISTS idx_vendas_data_iso ON vendas(data_iso)", "CREATE INDEX IF NOT EXISTS idx_vendas_status ON vendas(status)", "CREATE INDEX IF NOT EXISTS idx_vendas_itens_venda ON vendas_itens(venda_id)", "CREATE INDEX IF NOT EXISTS idx_fluxo_caixa_id ON fluxo_caixa(caixa_id)", "CREATE INDEX IF NOT EXISTS idx_fluxo_caixa_forma ON fluxo_caixa(forma_pagamento)", "CREATE INDEX IF NOT EXISTS idx_isis_memoria_tipo ON isis_memoria(tipo)", "CREATE INDEX IF NOT EXISTS idx_isis_memoria_chave ON isis_memoria(chave)"]:
+    for sql_idx in ["CREATE INDEX IF NOT EXISTS idx_produtos_codigo ON produtos(codigo_p)", "CREATE UNIQUE INDEX IF NOT EXISTS ux_produtos_codigo_unico ON produtos(codigo_p) WHERE codigo_p IS NOT NULL AND codigo_p != ''", "CREATE INDEX IF NOT EXISTS idx_mov_estoque_codigo ON movimentacao_estoque(codigo_p)", "CREATE INDEX IF NOT EXISTS idx_produtos_nome ON produtos(nome)", "CREATE INDEX IF NOT EXISTS idx_clientes_nome ON clientes(nome)", "CREATE INDEX IF NOT EXISTS idx_vendas_data ON vendas(data_venda)", "CREATE INDEX IF NOT EXISTS idx_vendas_data_iso ON vendas(data_iso)", "CREATE INDEX IF NOT EXISTS idx_vendas_dia_operacional ON vendas(dia_operacional)", "CREATE INDEX IF NOT EXISTS idx_vendas_status ON vendas(status)", "CREATE INDEX IF NOT EXISTS idx_vendas_itens_venda ON vendas_itens(venda_id)", "CREATE INDEX IF NOT EXISTS idx_fluxo_caixa_id ON fluxo_caixa(caixa_id)", "CREATE INDEX IF NOT EXISTS idx_fluxo_caixa_forma ON fluxo_caixa(forma_pagamento)", "CREATE INDEX IF NOT EXISTS idx_isis_memoria_tipo ON isis_memoria(tipo)", "CREATE INDEX IF NOT EXISTS idx_isis_memoria_chave ON isis_memoria(chave)"]:
         try:
             query_db(sql_idx, commit=True)
         except Exception:
