@@ -1,14 +1,14 @@
 from database import query_db
 
 
-def inserir_venda_cursor(cur, cliente, data_venda, data_iso, subtotal, desconto, taxa, total_final, forma_pagamento, vendedor, status="Concluído"):
+def inserir_venda_cursor(cur, cliente, data_venda, data_iso, subtotal, desconto, taxa, total_final, forma_pagamento, vendedor, status="Concluído", dia_operacional=None):
     cur.execute(
         """
         INSERT INTO vendas
-        (cliente, data_venda, data_iso, subtotal, desconto, taxa, total_final, forma_pagamento, vendedor, status)
-        VALUES (?,?,?,?,?,?,?,?,?,?)
+        (cliente, data_venda, data_iso, dia_operacional, subtotal, desconto, taxa, total_final, forma_pagamento, vendedor, status)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?)
         """,
-        (cliente, data_venda, data_iso, subtotal, desconto, taxa, total_final, forma_pagamento, vendedor, status),
+        (cliente, data_venda, data_iso, dia_operacional, subtotal, desconto, taxa, total_final, forma_pagamento, vendedor, status),
     )
     return cur.lastrowid
 
@@ -59,7 +59,7 @@ def marcar_cancelada_cursor(cur, venda_id):
 def buscar_venda(venda_id):
     res = query_db(
         """
-        SELECT id, cliente, data_venda, subtotal, desconto, taxa, total_final, forma_pagamento, vendedor, status
+        SELECT id, cliente, data_venda, subtotal, desconto, taxa, total_final, forma_pagamento, vendedor, status, COALESCE(dia_operacional,'')
         FROM vendas
         WHERE id=?
         """,
