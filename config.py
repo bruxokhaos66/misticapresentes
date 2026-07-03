@@ -6,10 +6,12 @@ from datetime import datetime
 DOCS_PATH = os.path.join(os.path.expanduser("~"), "Documents")
 CONFIG_REDE_PATH = os.path.join(DOCS_PATH, "mistica_config_rede.json")
 SERVER_CONFIG_PATH = os.path.join(DOCS_PATH, "mistica_servidor_config.json")
-DEFAULT_SERVER_URL = "https://misticaesotericos.com.br"
-DEFAULT_API_URL = "https://misticaesotericos.com.br"
+OFFICIAL_DOMAIN = "misticaesotericos.com.br"
+DEFAULT_SERVER_URL = f"https://{OFFICIAL_DOMAIN}"
+DEFAULT_API_URL = f"https://{OFFICIAL_DOMAIN}"
 DEFAULT_SERVER_MODE = "production"
 DEFAULT_STORAGE_MODE = "local_first"
+DEFAULT_AUTH_MODE = "domain"
 
 
 def _normalizar_url(url):
@@ -22,45 +24,62 @@ def _normalizar_url(url):
 
 
 def carregar_server_config():
-    """Carrega a configuração do servidor oficial da Mística.
+    """Carrega a configuração oficial do servidor da Mística.
 
-    O aplicativo passa a conhecer o domínio público misticaesotericos.com.br,
-    mas continua funcionando localmente caso o DNS ou backend ainda não estejam disponíveis.
+    O aplicativo usa o domínio público misticaesotericos.com.br como referência
+    do site/API e ignora tokens antigos de acesso local. Enquanto não existir
+    backend publicado no domínio, o app segue em modo local_first para não parar
+    a operação da loja.
     """
     cfg = {
         "server_url": DEFAULT_SERVER_URL,
         "api_url": DEFAULT_API_URL,
         "server_mode": DEFAULT_SERVER_MODE,
         "storage_mode": DEFAULT_STORAGE_MODE,
+        "auth_mode": DEFAULT_AUTH_MODE,
         "use_public_domain_access": True,
+        "use_token_access": False,
     }
     try:
         if os.path.exists(SERVER_CONFIG_PATH):
             with open(SERVER_CONFIG_PATH, "r", encoding="utf-8") as f:
                 local_cfg = json.load(f)
             if isinstance(local_cfg, dict):
-                cfg.update({k: v for k, v in local_cfg.items() if v not in (None, "")})
+                # Mantém apenas opções seguras. Não reaproveita tokens antigos.
+                if local_cfg.get("storage_mode"):
+                    cfg["storage_mode"] = local_cfg.get("storage_mode")
     except Exception:
         pass
 
-    cfg["server_url"] = _normalizar_url(cfg.get("server_url") or DEFAULT_SERVER_URL)
-    cfg["api_url"] = _normalizar_url(cfg.get("api_url") or cfg["server_url"])
+    cfg["server_url"] = DEFAULT_SERVER_URL
+    cfg["api_url"] = DEFAULT_API_URL
+    cfg["auth_mode"] = DEFAULT_AUTH_MODE
+    cfg["use_public_domain_access"] = True
+    cfg["use_token_access"] = False
     return cfg
 
 
 def salvar_server_config(server_url=DEFAULT_SERVER_URL, api_url=None, storage_mode=DEFAULT_STORAGE_MODE):
+    # Força o domínio oficial e não grava tokens no arquivo local.
     cfg = {
-        "server_url": _normalizar_url(server_url or DEFAULT_SERVER_URL),
-        "api_url": _normalizar_url(api_url or server_url or DEFAULT_API_URL),
+        "server_url": DEFAULT_SERVER_URL,
+        "api_url": DEFAULT_API_URL,
         "server_mode": DEFAULT_SERVER_MODE,
         "storage_mode": storage_mode or DEFAULT_STORAGE_MODE,
+        "auth_mode": DEFAULT_AUTH_MODE,
         "use_public_domain_access": True,
+        "use_token_access": False,
         "updated_at": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
     }
     os.makedirs(DOCS_PATH, exist_ok=True)
     with open(SERVER_CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(cfg, f, ensure_ascii=False, indent=2)
     return cfg
+
+
+def resetar_server_config_oficial():
+    """Recria a configuração local do servidor usando somente o domínio oficial."""
+    return salvar_server_config(DEFAULT_SERVER_URL, DEFAULT_API_URL, DEFAULT_STORAGE_MODE)
 
 
 def carregar_db_path():
@@ -84,6 +103,7 @@ SERVER_URL = SERVER_CONFIG["server_url"]
 API_URL = SERVER_CONFIG["api_url"]
 SERVER_MODE = SERVER_CONFIG.get("server_mode", DEFAULT_SERVER_MODE)
 STORAGE_MODE = SERVER_CONFIG.get("storage_mode", DEFAULT_STORAGE_MODE)
+AUTH_MODE = SERVER_CONFIG.get("auth_mode", DEFAULT_AUTH_MODE)
 DB_PATH = carregar_db_path()
 BACKUP_DIR = os.path.join(DOCS_PATH, "Mística_Backups")
 ISSIS_IMG_PATH = os.path.join(DOCS_PATH, "issis_a_bruxinha.png")
@@ -127,11 +147,11 @@ DASHBOARD_DAILY_MSGS = [
 def ensure_directories():
     os.makedirs(BACKUP_DIR, exist_ok=True)
     os.makedirs(ERROR_LOG_DIR, exist_ok=True)
-    if not os.path.exists(SERVER_CONFIG_PATH):
-        try:
-            salvar_server_config(DEFAULT_SERVER_URL, DEFAULT_API_URL)
-        except Exception:
-            pass
+    try:
+        # Sempre atualiza o arquivo local para o domínio oficial e remove dependência de token antigo.
+        resetar_server_config_oficial()
+    except Exception:
+        pass
 
 
 def mensagem_dashboard_do_dia():
@@ -142,5 +162,5 @@ def mensagem_dashboard_do_dia():
         return DEFAULT_DASHBOARD_MSG
 
 
-def hash_password_pbkdf2(password, salt=b"mistica_presentes_salt_secret"):
-    return hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 100000).hex()
+def hash_password_pbkdf2(senha, salt):
+    return hashlib.pbkdf2_hmac("sha256", senha.encode("utf-8"), salt, 120000).hex()
