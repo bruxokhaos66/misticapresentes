@@ -256,6 +256,15 @@ class MisticaApp(ctk.CTk):
         self.configurar_tabelas()
         self.tela_login()
 
+    def adicionar_barra_rolagem_tree(self, tree):
+        try:
+            parent = tree.master
+            yscroll = ttk.Scrollbar(parent, orient='vertical', command=tree.yview)
+            tree.configure(yscrollcommand=yscroll.set)
+            yscroll.pack(side='right', fill='y')
+        except Exception:
+            pass
+
     def configurar_tabelas(self):
         style = ttk.Style()
         try:
