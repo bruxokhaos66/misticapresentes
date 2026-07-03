@@ -7,8 +7,9 @@ DOCS_PATH = os.path.join(os.path.expanduser("~"), "Documents")
 CONFIG_REDE_PATH = os.path.join(DOCS_PATH, "mistica_config_rede.json")
 SERVER_CONFIG_PATH = os.path.join(DOCS_PATH, "mistica_servidor_config.json")
 OFFICIAL_DOMAIN = "misticaesotericos.com.br"
+OFFICIAL_API_DOMAIN = "api.misticaesotericos.com.br"
 DEFAULT_SERVER_URL = f"https://{OFFICIAL_DOMAIN}"
-DEFAULT_API_URL = f"https://{OFFICIAL_DOMAIN}"
+DEFAULT_API_URL = f"https://{OFFICIAL_API_DOMAIN}"
 DEFAULT_SERVER_MODE = "production"
 DEFAULT_STORAGE_MODE = "local_first"
 DEFAULT_AUTH_MODE = "domain"
@@ -26,10 +27,10 @@ def _normalizar_url(url):
 def carregar_server_config():
     """Carrega a configuração oficial do servidor da Mística.
 
-    O aplicativo usa o domínio público misticaesotericos.com.br como referência
-    do site/API e ignora tokens antigos de acesso local. Enquanto não existir
-    backend publicado no domínio, o app segue em modo local_first para não parar
-    a operação da loja.
+    O aplicativo usa o domínio público misticaesotericos.com.br para o site
+    e api.misticaesotericos.com.br para a API. Tokens antigos de acesso local
+    são ignorados. Enquanto a API online ainda não estiver publicada, o app
+    segue em modo local_first para não parar a operação da loja.
     """
     cfg = {
         "server_url": DEFAULT_SERVER_URL,
@@ -60,7 +61,7 @@ def carregar_server_config():
 
 
 def salvar_server_config(server_url=DEFAULT_SERVER_URL, api_url=None, storage_mode=DEFAULT_STORAGE_MODE):
-    # Força o domínio oficial e não grava tokens no arquivo local.
+    # Força os domínios oficiais e não grava tokens no arquivo local.
     cfg = {
         "server_url": DEFAULT_SERVER_URL,
         "api_url": DEFAULT_API_URL,
@@ -78,7 +79,7 @@ def salvar_server_config(server_url=DEFAULT_SERVER_URL, api_url=None, storage_mo
 
 
 def resetar_server_config_oficial():
-    """Recria a configuração local do servidor usando somente o domínio oficial."""
+    """Recria a configuração local do servidor usando somente os domínios oficiais."""
     return salvar_server_config(DEFAULT_SERVER_URL, DEFAULT_API_URL, DEFAULT_STORAGE_MODE)
 
 
@@ -138,29 +139,19 @@ DASHBOARD_DAILY_MSGS = [
     "A energia da loja também vem da equipe. Trabalhe com leveza, responsabilidade e orgulho do que está construindo.",
     "Cada atendimento é uma oportunidade de encantar. Faça o simples bem feito e o resultado aparece.",
     "Hoje é um bom dia para vender com propósito: resolver, orientar e criar uma boa lembrança para cada cliente.",
-    "Cliente bem atendido percebe o cuidado. Seja claro, educado e prestativo em cada conversa.",
-    "Vendas fortes nascem de constância: manter a loja organizada, conhecer os produtos e atender com entusiasmo.",
-    "A Mística Presentes cresce quando todos cuidam do mesmo objetivo: atendimento bonito, loja organizada e cliente satisfeito.",
 ]
 
 
+def hash_password_pbkdf2(senha, salt=b"mistica_presentes"):
+    return hashlib.pbkdf2_hmac("sha256", senha.encode("utf-8"), salt, 120000).hex()
+
+
 def ensure_directories():
-    os.makedirs(BACKUP_DIR, exist_ok=True)
-    os.makedirs(ERROR_LOG_DIR, exist_ok=True)
+    for pasta in [DOCS_PATH, BACKUP_DIR, ERROR_LOG_DIR]:
+        os.makedirs(pasta, exist_ok=True)
     try:
-        # Sempre atualiza o arquivo local para o domínio oficial e remove dependência de token antigo.
         resetar_server_config_oficial()
     except Exception:
         pass
 
-
-def mensagem_dashboard_do_dia():
-    try:
-        indice = int(datetime.now().strftime("%j")) % len(DASHBOARD_DAILY_MSGS)
-        return DASHBOARD_DAILY_MSGS[indice]
-    except Exception:
-        return DEFAULT_DASHBOARD_MSG
-
-
-def hash_password_pbkdf2(senha, salt):
-    return hashlib.pbkdf2_hmac("sha256", senha.encode("utf-8"), salt, 120000).hex()
+ensure_directories()
