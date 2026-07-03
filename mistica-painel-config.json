@@ -2,10 +2,10 @@
   "appName": "Mística Painel",
   "company": "Mística Presentes",
   "status": "online",
-  "serverUrl": "https://misticaesotericos.com.br",
+  "serverUrl": "https://misticaesotericos.com.br/%23admin",
   "apiBaseUrl": "https://api.misticaesotericos.com.br",
   "siteUrl": "https://misticaesotericos.com.br",
-  "adminPanelUrl": "https://misticaesotericos.com.br/#admin",
+  "panelUrl": "https://misticaesotericos.com.br/%23admin",
   "healthEndpoint": "/api/health",
   "statusEndpoint": "/api/status",
   "summaryEndpoint": "/api/painel/resumo",
@@ -14,6 +14,5 @@
   "clientsEndpoint": "/api/clientes?limite=50",
   "loginEndpoint": "/api/auth/login",
   "syncIntervalSeconds": 5,
-  "roles": ["adm", "vendedor"],
-  "message": "Configure o servidor do app como https://misticaesotericos.com.br. A API será usada internamente em https://api.misticaesotericos.com.br."
+  "message": "Mística Painel atualizado."
 }
