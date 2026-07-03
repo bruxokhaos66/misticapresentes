@@ -1,0 +1,38 @@
+document.addEventListener("DOMContentLoaded", () => {
+  const cfg = window.misticaSiteConfig || {};
+
+  const whatsapp = cfg.whatsappNumber || "554999172137";
+  const whatsappDisplay = cfg.whatsappDisplay || "(49) 99917-2137";
+  const instagram = cfg.instagram || "@misticaprodutos";
+  const domain = cfg.domain || "misticaesotericos.com.br";
+
+  document.querySelectorAll("[data-whatsapp-link]").forEach(link => {
+    link.href = `https://wa.me/${whatsapp}?text=${encodeURIComponent("Olá, vim pelo site da Mística Presentes e gostaria de atendimento.")}`;
+    link.textContent = "Comprar pelo WhatsApp";
+  });
+
+  const heroTitle = document.querySelector(".hero-copy h1");
+  if (heroTitle) heroTitle.textContent = "Artigos místicos e xamânicos para transformar o seu ambiente.";
+
+  const heroText = document.querySelector(".hero-text");
+  if (heroText) heroText.textContent = "Incensos, cristais, velas ritualísticas, aromaterapia, banhos de ervas e artigos espiritualistas escolhidos para espiritualidade, bem-estar e energias positivas.";
+
+  const heroEyebrow = document.querySelector(".hero-copy .eyebrow");
+  if (heroEyebrow) heroEyebrow.textContent = "Xamanismo • Cristais • Aromas • Proteção";
+
+  const productTitle = document.querySelector("#produtos .section-title h2");
+  if (productTitle) productTitle.textContent = "Produtos em destaque";
+
+  const productText = document.querySelector("#produtos .section-title p:last-child");
+  if (productText) productText.textContent = "Escolha seus artigos favoritos, adicione ao carrinho e envie o pedido pelo WhatsApp. Promoções e novidades podem ser atualizadas no painel interno.";
+
+  const footerContact = document.querySelector(".footer-grid div:nth-child(2)");
+  if (footerContact) {
+    footerContact.innerHTML = `<h3>Contato</h3><p>WhatsApp: ${whatsappDisplay}</p><p>Instagram: ${instagram}</p><p>Site: ${domain}</p>`;
+  }
+
+  const footerPublish = document.querySelector(".footer-grid div:nth-child(3)");
+  if (footerPublish) {
+    footerPublish.innerHTML = `<h3>Divulgação</h3><p>Encontre tudo para espiritualidade, bem-estar e energias positivas.</p><p>Em breve: ${domain}</p>`;
+  }
+});
