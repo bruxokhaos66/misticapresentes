@@ -42,3 +42,9 @@ Thumbs.db
 # Arquivos temporarios
 *.tmp
 *.bak
+
+# Executaveis gerados localmente
+build/
+dist/
+*.exe
+*.pkg
