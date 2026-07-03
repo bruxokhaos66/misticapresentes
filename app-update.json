@@ -1,15 +1,15 @@
 {
   "app": "Mística Painel",
   "status": "online",
-  "latestVersion": "1.1.2",
-  "latestBuild": 4,
+  "latestVersion": "1.1.3",
+  "latestBuild": 5,
   "minBuild": 2,
-  "serverUrl": "https://misticaesotericos.com.br",
+  "serverUrl": "https://misticaesotericos.com.br/%23admin",
   "siteUrl": "https://misticaesotericos.com.br",
   "apiUrl": "https://api.misticaesotericos.com.br",
-  "panelUrl": "https://misticaesotericos.com.br/#admin",
+  "panelUrl": "https://misticaesotericos.com.br/%23admin",
   "configUrl": "https://misticaesotericos.com.br/mistica-painel-config.json",
   "storageMode": "api_first",
   "syncIntervalSeconds": 5,
-  "message": "Use o servidor https://misticaesotericos.com.br. A API de dados fica em https://api.misticaesotericos.com.br."
+  "message": "Mística Painel atualizado."
 }
