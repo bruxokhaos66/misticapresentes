@@ -8,10 +8,11 @@ CONFIG_REDE_PATH = os.path.join(DOCS_PATH, "mistica_config_rede.json")
 SERVER_CONFIG_PATH = os.path.join(DOCS_PATH, "mistica_servidor_config.json")
 OFFICIAL_DOMAIN = "misticaesotericos.com.br"
 OFFICIAL_API_DOMAIN = "api.misticaesotericos.com.br"
-DEFAULT_SERVER_URL = f"https://{OFFICIAL_DOMAIN}"
+DEFAULT_SITE_URL = f"https://{OFFICIAL_DOMAIN}"
 DEFAULT_API_URL = f"https://{OFFICIAL_API_DOMAIN}"
+DEFAULT_SERVER_URL = f"https://{OFFICIAL_API_DOMAIN}/painel/"
 DEFAULT_SERVER_MODE = "production"
-DEFAULT_STORAGE_MODE = "local_first"
+DEFAULT_STORAGE_MODE = "api_first"
 DEFAULT_AUTH_MODE = "domain"
 
 
@@ -25,16 +26,18 @@ def _normalizar_url(url):
 
 
 def carregar_server_config():
-    """Carrega a configuração oficial do servidor da Mística.
+    """Carrega a configuração oficial do Mística Painel.
 
-    O aplicativo usa o domínio público misticaesotericos.com.br para o site
-    e api.misticaesotericos.com.br para a API. Tokens antigos de acesso local
-    são ignorados. Enquanto a API online ainda não estiver publicada, o app
-    segue em modo local_first para não parar a operação da loja.
+    O app de celular deve abrir o painel direto no servidor da API:
+    https://api.misticaesotericos.com.br/painel/
+
+    A API de dados fica em:
+    https://api.misticaesotericos.com.br
     """
     cfg = {
         "server_url": DEFAULT_SERVER_URL,
         "api_url": DEFAULT_API_URL,
+        "site_url": DEFAULT_SITE_URL,
         "server_mode": DEFAULT_SERVER_MODE,
         "storage_mode": DEFAULT_STORAGE_MODE,
         "auth_mode": DEFAULT_AUTH_MODE,
@@ -46,7 +49,6 @@ def carregar_server_config():
             with open(SERVER_CONFIG_PATH, "r", encoding="utf-8") as f:
                 local_cfg = json.load(f)
             if isinstance(local_cfg, dict):
-                # Mantém apenas opções seguras. Não reaproveita tokens antigos.
                 if local_cfg.get("storage_mode"):
                     cfg["storage_mode"] = local_cfg.get("storage_mode")
     except Exception:
@@ -54,6 +56,7 @@ def carregar_server_config():
 
     cfg["server_url"] = DEFAULT_SERVER_URL
     cfg["api_url"] = DEFAULT_API_URL
+    cfg["site_url"] = DEFAULT_SITE_URL
     cfg["auth_mode"] = DEFAULT_AUTH_MODE
     cfg["use_public_domain_access"] = True
     cfg["use_token_access"] = False
@@ -61,10 +64,11 @@ def carregar_server_config():
 
 
 def salvar_server_config(server_url=DEFAULT_SERVER_URL, api_url=None, storage_mode=DEFAULT_STORAGE_MODE):
-    # Força os domínios oficiais e não grava tokens no arquivo local.
+    # Força o painel direto da API e não grava tokens antigos no arquivo local.
     cfg = {
         "server_url": DEFAULT_SERVER_URL,
         "api_url": DEFAULT_API_URL,
+        "site_url": DEFAULT_SITE_URL,
         "server_mode": DEFAULT_SERVER_MODE,
         "storage_mode": storage_mode or DEFAULT_STORAGE_MODE,
         "auth_mode": DEFAULT_AUTH_MODE,
@@ -143,13 +147,7 @@ DASHBOARD_DAILY_MSGS = [
 
 
 def mensagem_dashboard_do_dia():
-    """Retorna a mensagem motivacional exibida no dashboard.
-
-    Prioridade:
-    1. Arquivo local Documents/mistica_mensagem_dashboard.txt, quando existir e tiver texto.
-    2. Frase diária automática baseada no dia do ano.
-    3. Mensagem padrão.
-    """
+    """Retorna a mensagem motivacional exibida no dashboard."""
     try:
         if os.path.exists(DASHBOARD_MSG_PATH):
             with open(DASHBOARD_MSG_PATH, "r", encoding="utf-8") as f:
@@ -180,5 +178,6 @@ def ensure_directories():
         resetar_server_config_oficial()
     except Exception:
         pass
+
 
 ensure_directories()
