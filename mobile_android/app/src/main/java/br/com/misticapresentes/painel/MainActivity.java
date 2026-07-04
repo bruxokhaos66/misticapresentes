@@ -35,7 +35,8 @@ public class MainActivity extends Activity {
     private static final String PREFS = "mistica_painel_prefs";
     private static final String KEY_URL = "server_url";
     private static final String KEY_TOKEN = "api_token";
-    private static final String DEFAULT_PANEL_URL = "https://misticaesotericos.com.br/painel";
+    private static final String DEFAULT_PANEL_URL = "https://misticaesotericos.com.br/painel-operacional.html";
+    private static final String OLD_PANEL_URL = "https://misticaesotericos.com.br/painel";
     private static final String DEFAULT_TOKEN = "mistica-local";
 
     private final int COR_FUNDO = Color.rgb(18, 16, 24);
@@ -76,7 +77,7 @@ public class MainActivity extends Activity {
 
     private void corrigirConfiguracaoAntiga() {
         String atual = prefs.getString(KEY_URL, "");
-        if (atual == null || atual.trim().isEmpty() || atual.contains("192.168.") || atual.contains("127.0.0.1") || atual.endsWith(":8000")) {
+        if (atual == null || atual.trim().isEmpty() || atual.contains("192.168.") || atual.contains("127.0.0.1") || atual.endsWith(":8000") || atual.equals(OLD_PANEL_URL) || atual.endsWith("/painel")) {
             prefs.edit().putString(KEY_URL, DEFAULT_PANEL_URL).putString(KEY_TOKEN, DEFAULT_TOKEN).apply();
         }
     }
@@ -105,7 +106,7 @@ public class MainActivity extends Activity {
         LinearLayout titulos = new LinearLayout(this);
         titulos.setOrientation(LinearLayout.VERTICAL);
         titulos.addView(texto("🌙 Mística Painel", 22, COR_OURO, Typeface.BOLD));
-        titulos.addView(texto("Acompanhamento da loja em tempo real", 12, COR_MUTED, Typeface.NORMAL));
+        titulos.addView(texto("Acompanhamento operacional da loja", 12, COR_MUTED, Typeface.NORMAL));
         top.addView(titulos, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
 
         Button sobreBtn = botao("Sobre", Color.rgb(61, 50, 77), COR_OURO);
@@ -116,7 +117,7 @@ public class MainActivity extends Activity {
             if (webView != null && ultimaUrl != null && !ultimaUrl.isEmpty()) {
                 webView.clearCache(true);
                 webView.loadUrl(montarUrlComToken(ultimaUrl, ultimoToken));
-                statusText.setText("Atualizando painel sem cache...");
+                statusText.setText("Atualizando painel operacional sem cache...");
             }
         });
         LinearLayout.LayoutParams atualizarLp = new LinearLayout.LayoutParams(dp(104), dp(46)); atualizarLp.setMargins(dp(8), 0, 0, 0); top.addView(atualizarBtn, atualizarLp);
@@ -132,35 +133,35 @@ public class MainActivity extends Activity {
 
         configContainer = new LinearLayout(this); configContainer.setOrientation(LinearLayout.VERTICAL); configContainer.setBackgroundColor(COR_FUNDO);
         ScrollView scroll = new ScrollView(this); LinearLayout conteudo = new LinearLayout(this); conteudo.setOrientation(LinearLayout.VERTICAL); conteudo.setPadding(0, dp(8), 0, dp(12));
-        LinearLayout hero = card(); hero.setBackground(fundoComBorda(COR_CARD_2, 24, Color.argb(100, 216, 181, 109))); hero.addView(texto("Painel da loja no celular", 23, COR_OURO, Typeface.BOLD)); hero.addView(label("Acompanhe vendas, caixa, estoque baixo, cancelamentos e alertas da Isis pelo painel oficial online.", 14, COR_TEXTO)); conteudo.addView(hero);
-        LinearLayout configCard = card(); configCard.addView(texto("Conectar ao servidor", 18, COR_OURO, Typeface.BOLD)); configCard.addView(label("Use o painel oficial seguro. Evite IP local 192.168 para não abrir tela antiga.", 13, COR_MUTED));
-        urlInput = campo("https://misticaesotericos.com.br/painel", prefs.getString(KEY_URL, DEFAULT_PANEL_URL)); LinearLayout.LayoutParams campoLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT); campoLp.setMargins(0, dp(8), 0, dp(10)); configCard.addView(urlInput, campoLp);
+        LinearLayout hero = card(); hero.setBackground(fundoComBorda(COR_CARD_2, 24, Color.argb(100, 216, 181, 109))); hero.addView(texto("Painel operacional da loja", 23, COR_OURO, Typeface.BOLD)); hero.addView(label("Esta versão força o painel operacional, que usa a mesma regra do desktop para Vendas Hoje.", 14, COR_TEXTO)); conteudo.addView(hero);
+        LinearLayout configCard = card(); configCard.addView(texto("Conectar ao servidor", 18, COR_OURO, Typeface.BOLD)); configCard.addView(label("Use o painel operacional oficial para evitar valor antigo em cache.", 13, COR_MUTED));
+        urlInput = campo("https://misticaesotericos.com.br/painel-operacional.html", prefs.getString(KEY_URL, DEFAULT_PANEL_URL)); LinearLayout.LayoutParams campoLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT); campoLp.setMargins(0, dp(8), 0, dp(10)); configCard.addView(urlInput, campoLp);
         tokenInput = campo("Token da API", prefs.getString(KEY_TOKEN, DEFAULT_TOKEN)); configCard.addView(tokenInput, campoLp);
         Button abrir = botao("Salvar e abrir painel", COR_OURO, Color.rgb(30, 24, 41)); abrir.setOnClickListener(v -> salvarEAbrir()); LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(50)); btnLp.setMargins(0, dp(10), 0, dp(6)); configCard.addView(abrir, btnLp);
         LinearLayout linhaBotoes = new LinearLayout(this); linhaBotoes.setOrientation(LinearLayout.HORIZONTAL);
-        Button exemplo = botao("Usar oficial", Color.rgb(61, 50, 77), COR_TEXTO); exemplo.setOnClickListener(v -> { urlInput.setText(DEFAULT_PANEL_URL); tokenInput.setText(DEFAULT_TOKEN); });
-        Button limpar = botao("Limpar cache", Color.rgb(92, 52, 58), Color.WHITE); limpar.setOnClickListener(v -> { if (webView != null) webView.clearCache(true); prefs.edit().putString(KEY_URL, DEFAULT_PANEL_URL).putString(KEY_TOKEN, DEFAULT_TOKEN).apply(); urlInput.setText(DEFAULT_PANEL_URL); tokenInput.setText(DEFAULT_TOKEN); atualizarInfoSobre(); Toast.makeText(this, "Cache limpo e painel oficial configurado.", Toast.LENGTH_SHORT).show(); });
+        Button exemplo = botao("Usar operacional", Color.rgb(61, 50, 77), COR_TEXTO); exemplo.setOnClickListener(v -> { urlInput.setText(DEFAULT_PANEL_URL); tokenInput.setText(DEFAULT_TOKEN); });
+        Button limpar = botao("Limpar cache", Color.rgb(92, 52, 58), Color.WHITE); limpar.setOnClickListener(v -> { if (webView != null) webView.clearCache(true); prefs.edit().putString(KEY_URL, DEFAULT_PANEL_URL).putString(KEY_TOKEN, DEFAULT_TOKEN).apply(); urlInput.setText(DEFAULT_PANEL_URL); tokenInput.setText(DEFAULT_TOKEN); atualizarInfoSobre(); Toast.makeText(this, "Cache limpo e painel operacional configurado.", Toast.LENGTH_SHORT).show(); });
         linhaBotoes.addView(exemplo, new LinearLayout.LayoutParams(0, dp(46), 1)); LinearLayout.LayoutParams limparLp = new LinearLayout.LayoutParams(0, dp(46), 1); limparLp.setMargins(dp(8), 0, 0, 0); linhaBotoes.addView(limpar, limparLp); configCard.addView(linhaBotoes); conteudo.addView(configCard);
-        LinearLayout sobreCard = card(); sobreCard.setBackground(fundoComBorda(Color.rgb(26, 31, 43), 22, Color.argb(90, 106, 190, 150))); sobreCard.addView(texto("Sobre / Atualização", 19, COR_OURO, Typeface.BOLD)); sobreCard.addView(label("Versão instalada: " + BuildConfig.VERSION_NAME + " (" + BuildConfig.VERSION_CODE + ")", 14, COR_TEXTO)); servidorAtualText = label("Servidor configurado: -", 14, COR_TEXTO); versaoServidorText = label("Versão disponível no servidor: ainda não verificada", 14, COR_MUTED); sobreStatusText = label("Esta versão força painel oficial e limpa cache da WebView.", 13, COR_MUTED); sobreCard.addView(servidorAtualText); sobreCard.addView(versaoServidorText); sobreCard.addView(sobreStatusText); Button verificar = botao("Verificar atualização", COR_VERDE, Color.rgb(18, 16, 24)); verificar.setOnClickListener(v -> verificarAtualizacao()); LinearLayout.LayoutParams verificarLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(50)); verificarLp.setMargins(0, dp(10), 0, 0); sobreCard.addView(verificar, verificarLp); conteudo.addView(sobreCard);
+        LinearLayout sobreCard = card(); sobreCard.setBackground(fundoComBorda(Color.rgb(26, 31, 43), 22, Color.argb(90, 106, 190, 150))); sobreCard.addView(texto("Sobre / Atualização", 19, COR_OURO, Typeface.BOLD)); sobreCard.addView(label("Versão instalada: " + BuildConfig.VERSION_NAME + " (" + BuildConfig.VERSION_CODE + ")", 14, COR_TEXTO)); servidorAtualText = label("Servidor configurado: -", 14, COR_TEXTO); versaoServidorText = label("Versão disponível no servidor: painel operacional", 14, COR_MUTED); sobreStatusText = label("Esta versão força painel operacional e limpa cache da WebView.", 13, COR_MUTED); sobreCard.addView(servidorAtualText); sobreCard.addView(versaoServidorText); sobreCard.addView(sobreStatusText); Button verificar = botao("Verificar atualização", COR_VERDE, Color.rgb(18, 16, 24)); verificar.setOnClickListener(v -> verificarAtualizacao()); LinearLayout.LayoutParams verificarLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(50)); verificarLp.setMargins(0, dp(10), 0, 0); sobreCard.addView(verificar, verificarLp); conteudo.addView(sobreCard);
         scroll.addView(conteudo); configContainer.addView(scroll, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT)); root.addView(configContainer, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
 
         webView = new WebView(this); webView.setVisibility(View.GONE); webView.setBackgroundColor(COR_FUNDO); webView.clearCache(true);
         WebSettings settings = webView.getSettings(); settings.setJavaScriptEnabled(true); settings.setDomStorageEnabled(true); settings.setDatabaseEnabled(true); settings.setLoadsImagesAutomatically(true); settings.setCacheMode(WebSettings.LOAD_NO_CACHE); settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         webView.setWebChromeClient(new WebChromeClient());
         webView.setWebViewClient(new WebViewClient() {
-            @Override public void onPageFinished(WebView view, String url) { chipText.setText("ONLINE"); chipText.setTextColor(COR_VERDE); statusText.setText("Conectado ao painel da loja."); super.onPageFinished(view, url); }
+            @Override public void onPageFinished(WebView view, String url) { chipText.setText("ONLINE"); chipText.setTextColor(COR_VERDE); statusText.setText("Conectado ao painel operacional."); super.onPageFinished(view, url); }
             @Override public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) { chipText.setText("ERRO"); chipText.setTextColor(Color.rgb(224, 112, 112)); statusText.setText("Falha ao conectar. Confira internet ou API."); super.onReceivedError(view, errorCode, description, failingUrl); }
         });
         root.addView(webView, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1)); setContentView(root); atualizarInfoSobre();
     }
 
     private void atualizarInfoSobre() { if (servidorAtualText != null) { String servidor = prefs.getString(KEY_URL, DEFAULT_PANEL_URL); servidorAtualText.setText("Servidor configurado: " + (servidor == null || servidor.trim().isEmpty() ? "não configurado" : servidor)); } }
-    private void verificarAtualizacao() { sobreStatusText.setText("Use o painel oficial. Atualize o APK quando houver nova versão."); versaoServidorText.setText("Versão disponível no servidor: consulte no GitHub/instalador."); }
+    private void verificarAtualizacao() { sobreStatusText.setText("Use o painel operacional. Atualize o APK quando houver nova versão."); versaoServidorText.setText("Versão disponível no servidor: painel operacional."); }
     private void salvarEAbrir() { String url = normalizarUrl(urlInput.getText().toString()); String token = tokenInput.getText().toString().trim(); if (url.isEmpty() || !urlValida(url)) { Toast.makeText(this, "Informe um endereço válido começando com http:// ou https://", Toast.LENGTH_LONG).show(); return; } if (token.isEmpty()) token = DEFAULT_TOKEN; prefs.edit().putString(KEY_URL, url).putString(KEY_TOKEN, token).apply(); atualizarInfoSobre(); abrirPainel(url, token); }
-    private String normalizarUrl(String raw) { String url = raw == null ? "" : raw.trim(); if (url.endsWith("/")) url = url.substring(0, url.length() - 1); return url; }
+    private String normalizarUrl(String raw) { String url = raw == null ? "" : raw.trim(); if (url.endsWith("/")) url = url.substring(0, url.length() - 1); if (url.endsWith("/painel")) return DEFAULT_PANEL_URL; return url; }
     private String montarUrlComToken(String baseUrl, String token) { try { String separador = baseUrl.contains("?") ? "&" : "?"; String tokenEncoded = URLEncoder.encode(token == null ? "" : token, "UTF-8"); return baseUrl + separador + "app_token=" + tokenEncoded + "&_app_ts=" + System.currentTimeMillis(); } catch (Exception e) { return baseUrl; } }
-    private void mostrarConfig() { configContainer.setVisibility(View.VISIBLE); webView.setVisibility(View.GONE); chipText.setText("CONFIG"); chipText.setTextColor(COR_OURO); statusText.setText(isOnline() ? "Configuração, servidor e atualização." : "Sem rede. Conecte no Wi‑Fi ou internet."); atualizarInfoSobre(); }
-    private void abrirPainel(String url, String token) { ultimaUrl = normalizarUrl(url); ultimoToken = token == null || token.trim().isEmpty() ? DEFAULT_TOKEN : token.trim(); configContainer.setVisibility(View.GONE); webView.setVisibility(View.VISIBLE); chipText.setText("ABRINDO"); chipText.setTextColor(COR_OURO); statusText.setText("Abrindo painel oficial atualizado..."); webView.clearCache(true); webView.loadUrl(montarUrlComToken(ultimaUrl, ultimoToken)); }
+    private void mostrarConfig() { configContainer.setVisibility(View.VISIBLE); webView.setVisibility(View.GONE); chipText.setText("CONFIG"); chipText.setTextColor(COR_OURO); statusText.setText(isOnline() ? "Configuração, servidor e atualização." : "Sem rede. Conecte no Wi-Fi ou internet."); atualizarInfoSobre(); }
+    private void abrirPainel(String url, String token) { ultimaUrl = normalizarUrl(url); ultimoToken = token == null || token.trim().isEmpty() ? DEFAULT_TOKEN : token.trim(); configContainer.setVisibility(View.GONE); webView.setVisibility(View.VISIBLE); chipText.setText("ABRINDO"); chipText.setTextColor(COR_OURO); statusText.setText("Abrindo painel operacional atualizado..."); webView.clearCache(true); webView.loadUrl(montarUrlComToken(ultimaUrl, ultimoToken)); }
     private boolean isOnline() { try { ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE); NetworkInfo info = cm.getActiveNetworkInfo(); return info != null && info.isConnected(); } catch (Exception e) { return true; } }
     @Override public void onBackPressed() { if (webView != null && webView.getVisibility() == View.VISIBLE && webView.canGoBack()) { webView.goBack(); } else if (webView != null && webView.getVisibility() == View.VISIBLE) { mostrarConfig(); } else { super.onBackPressed(); } }
 }
