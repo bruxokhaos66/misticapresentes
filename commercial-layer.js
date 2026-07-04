@@ -47,6 +47,14 @@ document.addEventListener("DOMContentLoaded", () => {
     document.head.appendChild(pedidos);
   }
 
+  if (!document.getElementById("adminAlertsScript")) {
+    const alerts = document.createElement("script");
+    alerts.id = "adminAlertsScript";
+    alerts.src = "admin-alerts.js";
+    alerts.defer = true;
+    document.head.appendChild(alerts);
+  }
+
   if (!document.getElementById("isisCommerceScript")) {
     const isis = document.createElement("script");
     isis.id = "isisCommerceScript";
