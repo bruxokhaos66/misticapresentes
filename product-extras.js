@@ -15,6 +15,7 @@
   function clean(value) {
     return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   }
+  function productLink(p) { return `produto.html?id=${encodeURIComponent(p.id)}`; }
   function textProduct(p) {
     return clean(`${p.name} ${p.category} ${p.description} ${p.tag || ""}`);
   }
@@ -111,7 +112,9 @@
     add.type = "button";
     add.disabled = available(produto) <= 0;
     add.addEventListener("click", () => adicionarProduto(produto.id));
-    info.appendChild(add);
+    const page = make("a", "btn btn-ghost", "Abrir página do produto");
+    page.href = productLink(produto);
+    info.append(add, page);
     box.append(foto, info);
     content.appendChild(box);
 
@@ -121,9 +124,8 @@
       area.appendChild(make("h3", "", "Produtos relacionados"));
       const list = make("div", "related-grid");
       rel.forEach(p => {
-        const b = make("button", "related-item", `${p.icon || "✨"} ${p.name} • ${money(p.price)}`);
-        b.type = "button";
-        b.addEventListener("click", () => abrirDetalhe(p.id));
+        const b = make("a", "related-item", `${p.icon || "✨"} ${p.name} • ${money(p.price)}`);
+        b.href = productLink(p);
         list.appendChild(b);
       });
       area.appendChild(list);
@@ -142,8 +144,11 @@
       btn.type = "button";
       btn.dataset.openDetail = produto.id;
       btn.addEventListener("click", () => abrirDetalhe(produto.id));
+      const link = make("a", "btn btn-ghost btn-full", "Página do produto");
+      link.href = productLink(produto);
       const whats = [...card.querySelectorAll("button")].find(b => b.textContent.includes("WhatsApp"));
       card.insertBefore(btn, whats || null);
+      card.insertBefore(link, whats || null);
     });
   }
 
