@@ -76,13 +76,15 @@
 
 .pedidos-admin-panel { margin-bottom: 22px; }
 .pedidos-admin-list { display: grid; gap: 14px; }
+.pedido-toolbar { border: 1px solid rgba(240, 197, 106, 0.22); border-radius: 16px; background: rgba(240, 197, 106, 0.08); padding: 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; color: #f7e8bd; font-weight: 800; }
 .pedido-card { border: 1px solid rgba(240, 197, 106, 0.24); border-radius: 18px; background: rgba(255, 255, 255, 0.045); padding: 16px; display: grid; gap: 10px; }
 .pedido-card-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
 .pedido-card-head div, .pedido-status-select, .pedido-timeline { display: grid; gap: 5px; }
 .pedido-status { border-radius: 999px; padding: 5px 9px; font-size: 0.74rem; font-weight: 900; border: 1px solid rgba(240, 197, 106, 0.30); color: #f0c56a; background: rgba(240, 197, 106, 0.12); white-space: nowrap; }
 .status-cancelado { color: #ffd6d6; border-color: rgba(255, 166, 166, 0.32); background: rgba(255, 166, 166, 0.10); }
 .status-entregue, .status-pagamento-confirmado { color: #dff5d8; border-color: rgba(172, 219, 164, 0.32); background: rgba(172, 219, 164, 0.10); }
-.pedido-status-select select { border: 1px solid rgba(240, 197, 106, 0.28); border-radius: 12px; background: rgba(8, 10, 10, 0.74); color: #fff8e7; padding: 10px 12px; }
+.pedido-status-select select, .pedido-status-select textarea { border: 1px solid rgba(240, 197, 106, 0.28); border-radius: 12px; background: rgba(8, 10, 10, 0.74); color: #fff8e7; padding: 10px 12px; font: inherit; }
+.pedido-status-select textarea { min-height: 76px; resize: vertical; }
 .pedido-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .pedido-timeline { border-top: 1px solid rgba(240, 197, 106, 0.14); padding-top: 10px; color: #d9cfad; font-size: 0.86rem; }
 
