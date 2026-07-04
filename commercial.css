@@ -108,12 +108,28 @@
 .pedido-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .pedido-timeline { border-top: 1px solid rgba(240, 197, 106, 0.14); padding-top: 10px; color: #d9cfad; font-size: 0.86rem; }
 
+.admin-report-panel { margin-bottom: 22px; }
+.admin-report-content { display: grid; gap: 18px; margin-top: 14px; }
+.report-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.report-card { border: 1px solid rgba(240, 197, 106, 0.22); border-radius: 16px; background: rgba(255, 255, 255, 0.045); padding: 14px; display: grid; gap: 6px; }
+.report-card span { color: #d9cfad; font-size: 0.82rem; font-weight: 800; }
+.report-card strong { color: #f0c56a; font-size: 1.35rem; }
+.report-card small { color: #dff5d8; }
+.report-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.report-columns section { border: 1px solid rgba(240, 197, 106, 0.20); border-radius: 18px; background: rgba(255, 255, 255, 0.035); padding: 14px; }
+.report-columns h3 { margin: 0 0 12px; color: #fff8e7; }
+.report-list { display: grid; gap: 8px; }
+.report-row { display: flex; justify-content: space-between; gap: 10px; border-top: 1px solid rgba(240, 197, 106, 0.12); padding-top: 8px; color: #d9cfad; }
+.report-row strong { color: #fff8e7; }
+
 .highlight-strip span { text-transform: none; letter-spacing: 0.01em; }
 .footer a { color: #f0c56a; font-weight: 800; }
 
 @media (max-width: 900px) {
   .product-page-card,
-  .related-product-cards { grid-template-columns: 1fr; }
+  .related-product-cards,
+  .report-grid,
+  .report-columns { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 760px) {
