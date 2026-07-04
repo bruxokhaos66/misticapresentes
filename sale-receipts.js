@@ -25,6 +25,15 @@
     document.head.appendChild(script);
   }
 
+  function carregarRestauracaoBackup() {
+    if (document.getElementById("backupRestoreScript")) return;
+    const script = document.createElement("script");
+    script.id = "backupRestoreScript";
+    script.src = "backup-restore.js";
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+
   function vendaPorId(vendaId) {
     if (typeof sales === "undefined" || !Array.isArray(sales)) return null;
     return sales.find(item => String(item.id) === String(vendaId));
@@ -107,5 +116,6 @@
     inserirAcoesComprovante();
     carregarFiltrosHistorico();
     carregarRelatorioVendas();
+    carregarRestauracaoBackup();
   });
 })();
