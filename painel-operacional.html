@@ -1,1 +1,495 @@
-<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mística Painel</title><style>body{margin:0;background:#0d0812;color:#f7eedc;font-family:Arial,sans-serif}.wrap{padding:18px;max-width:900px;margin:auto}.card{background:#1b1222;border:1px solid #4b354e;border-radius:20px;padding:18px;margin:12px 0}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.metric{background:#261832;border-radius:16px;padding:16px;text-align:center}.metric b{display:block;color:#e0bd6a;font-size:22px;margin-top:8px}.btn{border:0;border-radius:16px;padding:13px 18px;font-weight:800;background:#e0bd6a;color:#1a1320}.green{background:#4f835f;color:#fff}.red{background:#7b3940;color:#fff}.inp{width:100%;padding:14px;border-radius:14px;border:1px solid #4e3b58;background:#100a17;color:#fff;font-size:16px}.hide{display:none}.pill{display:inline-block;border:1px solid #846747;border-radius:99px;padding:7px 12px;color:#72d498;font-weight:800}.row{display:grid;grid-template-columns:1fr 1fr 1fr;padding:10px;border-bottom:1px solid #34223e}@media(max-width:700px){.grid{grid-template-columns:1fr}.row{grid-template-columns:1fr}}</style></head><body><main class="wrap"><section class="card"><h1>🌙 Mística Painel</h1><p><span id="netPill" class="pill">CONFIG</span> <span id="netText">Faça login.</span></p><button class="btn green" onclick="sincronizar()">Atualizar</button> <button class="btn red hide" id="logoutBtn" onclick="sair()">Sair</button></section><section class="card" id="loginBox"><h2>Entrar no painel</h2><p>Usuário</p><input id="login" class="inp"><p>Senha</p><input id="senha" class="inp" type="password"><p><button class="btn" onclick="entrar()">Entrar</button></p><p id="loginMsg" style="color:#ffb4b4"></p></section><section id="painel" class="hide"><section class="card"><h2 id="boasVindas">Painel</h2><p id="origemDados">Origem: aguardando sincronização.</p></section><section class="grid"><div class="metric">VENDAS HOJE<b id="vHoje">R$ 0,00</b></div><div class="metric">VENDAS MÊS<b id="vMes">R$ 0,00</b></div><div class="metric">META<b id="meta">R$ 1.500,00</b></div><div class="metric">FALTA<b id="falta">R$ 1.500,00</b></div><div class="metric">PRODUTOS<b id="produtos">0</b></div></section><section class="card"><h2>Vendas do dia</h2><div id="vendasList"></div></section></section></main><script>const API='https://api.misticaesotericos.com.br',META=1500,VERSAO='painel-operacional-20260704-01';let sessao=null,sincronizando=false;const $=id=>document.getElementById(id);const brl=n=>(Number(n)||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});const pad=n=>String(n).padStart(2,'0');function hojeKey(d=new Date()){return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`}function mesKey(d=new Date()){return hojeKey(d).slice(0,7)}function brDateKey(d=new Date()){return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}`}function parseBrDateKey(txt){const m=String(txt||'').match(/(\d{2})\/(\d{2})\/(\d{4})/);return m?`${m[3]}-${m[2]}-${m[1]}`:''}function inicioDiaOperacional(agora=new Date()){const ini=new Date(agora);if(agora.getHours()>=23){ini.setHours(23,0,0,0)}else{ini.setHours(0,0,0,0)}return ini}function fimDiaOperacional(agora=new Date()){const ini=inicioDiaOperacional(agora),fim=new Date(ini);if(ini.getHours()===23){fim.setDate(fim.getDate()+1);fim.setHours(23,0,0,0)}else{fim.setHours(23,0,0,0)}return fim}function etiquetaDiaOperacional(agora=new Date()){const d=new Date(agora);if(d.getHours()>=23)d.setDate(d.getDate()+1);return brDateKey(d)}function normalizar(t){return String(t||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')}function dataVenda(v){const s=String(v.data_iso||v.data_venda||'').replace('T',' ');let m=s.match(/(\d{4})-(\d{2})-(\d{2})[ T]?(\d{2})?:?(\d{2})?/);if(m)return new Date(+m[1],+m[2]-1,+m[3],+(m[4]||0),+(m[5]||0));m=s.match(/(\d{2})\/(\d{2})\/(\d{4})\s*(\d{2})?:?(\d{2})?/);if(m)return new Date(+m[3],+m[2]-1,+m[1],+(m[4]||0),+(m[5]||0));return new Date()}function usuarioAtual(){return sessao&&sessao.usuario?sessao.usuario:{}}function isAdmin(){return ['adm','admin','administrador'].includes(normalizar(usuarioAtual().perfil))}function vendaDoUsuario(v){if(isAdmin())return true;const u=usuarioAtual(),vend=normalizar(v.vendedor);return vend===normalizar(u.nome)||vend===normalizar(u.login)}function vendaAtiva(v){return !['cancelado','cancelada'].includes(normalizar(v.status||'Concluído'))}async function api(path,opt={}){const sep=path.includes('?')?'&':'?';const r=await fetch(API+path+sep+'_='+Date.now(),{cache:'no-store',...opt,headers:{'Content-Type':'application/json',...(opt.headers||{})}});const txt=await r.text();if(!r.ok)throw new Error(txt||('HTTP '+r.status));try{return JSON.parse(txt)}catch{return txt}}async function entrar(){try{$('loginMsg').textContent='Conectando...';const res=await api('/api/auth/login',{method:'POST',body:JSON.stringify({login:$('login').value.trim(),senha:$('senha').value})});sessao=res;sessionStorage.setItem('misticaPainelSessao',JSON.stringify(res));abrirPainel();await sincronizar()}catch(e){$('loginMsg').textContent='Falha no login/API: '+String(e.message||e).slice(0,90)}}function abrirPainel(){$('loginBox').classList.add('hide');$('painel').classList.remove('hide');$('logoutBtn').classList.remove('hide');$('boasVindas').textContent=`Bem-vindo, ${usuarioAtual().nome||''} • ${isAdmin()?'Administrador':'Vendedor'}`;$('netPill').textContent='ONLINE';$('netText').textContent='Conectado.'}function sair(){sessionStorage.removeItem('misticaPainelSessao');location.reload()}function calcularResumo(vendas){const agora=new Date(),ini=inicioDiaOperacional(agora),fim=fimDiaOperacional(agora),et=etiquetaDiaOperacional(agora),mes=mesKey(agora);let totalHoje=0,totalMes=0,prodHoje=0;const todas=Array.isArray(vendas)?vendas:[],escopo=todas.filter(v=>vendaAtiva(v)&&vendaDoUsuario(v));$('vendasList').innerHTML='';escopo.forEach(v=>{const d=dataVenda(v),total=Number(v.total_final||0),diaOp=String(v.dia_operacional||'').trim(),diaIso=parseBrDateKey(diaOp);const ehHoje=diaOp===et||(d>=ini&&d<fim),ehMes=mesKey(d)===mes||diaIso.slice(0,7)===mes;if(ehHoje){totalHoje+=total;prodHoje++;const row=document.createElement('div');row.className='row';row.innerHTML=`<span>${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</span><span>${v.vendedor||'-'}</span><span>${brl(total)}</span>`;$('vendasList').appendChild(row)}if(ehMes)totalMes+=total});return{todas,escopo,totalHoje,totalMes,prodHoje,et}}async function sincronizar(){if(sincronizando)return;sincronizando=true;try{$('netText').textContent='Atualizando...';let st={},resumo={},vendas=[],produtos=[];try{st=await api('/api/status')}catch{}try{resumo=await api('/api/painel/resumo')}catch{}try{vendas=await api('/api/vendas?limite=500')}catch{}try{produtos=await api('/api/produtos?limite=500')}catch{}const d=calcularResumo(vendas),qtd=Array.isArray(produtos)&&produtos.length?produtos.length:Number(st.produtos||resumo.produtos||0);$('vHoje').textContent=brl(d.totalHoje);$('vMes').textContent=brl(d.totalMes);$('meta').textContent=brl(META);$('falta').textContent=brl(Math.max(0,META-d.totalMes));$('produtos').textContent=isAdmin()?qtd:d.prodHoje;$('origemDados').textContent=`Origem: API online • versão ${VERSAO} • dia operacional ${d.et} • status vendas API: ${st.vendas||0} • recebidas: ${d.todas.length} • acesso: ${d.escopo.length} • produtos: ${qtd}`;$('netPill').textContent='ONLINE';$('netText').textContent='Atualizado agora: '+new Date().toLocaleTimeString('pt-BR')}catch(e){$('netPill').textContent='OFFLINE';$('netText').textContent='Falha: '+String(e.message||e).slice(0,120)}finally{sincronizando=false}}function sobre(){alert('Vendas Hoje usa a mesma regra do desktop: zera às 23:00. '+VERSAO)}window.addEventListener('load',()=>{try{sessao=JSON.parse(sessionStorage.getItem('misticaPainelSessao')||'null');if(sessao){abrirPainel();sincronizar()}}catch{}setInterval(()=>{if(sessao)sincronizar()},30000)})</script></body></html>
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <title>Mistica Painel</title>
+  <style>
+    :root {
+      --bg: #0d0a12;
+      --panel: #17121f;
+      --panel-2: #21182b;
+      --line: #3f314b;
+      --gold: #dfbd72;
+      --text: #fff8ea;
+      --muted: #cfc2d6;
+      --green: #80d9a2;
+      --red: #ff9a9a;
+      --blue: #9cc7ff;
+      --shadow: 0 14px 34px rgba(0, 0, 0, .28);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--text);
+      font-family: Arial, Helvetica, sans-serif;
+      background:
+        radial-gradient(circle at 12% 0%, rgba(223,189,114,.18), transparent 30%),
+        linear-gradient(180deg, #100b17, var(--bg));
+    }
+    button, input { font: inherit; }
+    .wrap { width: min(1080px, 100%); margin: 0 auto; padding: 16px 14px 86px; }
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      backdrop-filter: blur(16px);
+      background: rgba(13, 10, 18, .88);
+      border-bottom: 1px solid rgba(223, 189, 114, .16);
+    }
+    .topbar-inner {
+      width: min(1080px, 100%);
+      margin: 0 auto;
+      padding: 13px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .brand h1 { margin: 0; color: var(--gold); font-size: 23px; letter-spacing: .2px; }
+    .brand p { margin: 3px 0 0; color: var(--muted); font-size: 13px; }
+    .status-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 6px 11px;
+      border-radius: 999px;
+      border: 1px solid rgba(223,189,114,.45);
+      color: var(--gold);
+      background: rgba(223,189,114,.08);
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .pill.ok { border-color: rgba(128,217,162,.5); color: var(--green); background: rgba(128,217,162,.1); }
+    .pill.bad { border-color: rgba(255,154,154,.5); color: var(--red); background: rgba(255,154,154,.1); }
+    .mini-status { color: var(--muted); font-size: 12px; text-align: right; }
+    .card {
+      background: linear-gradient(180deg, rgba(33,24,43,.96), rgba(23,18,31,.96));
+      border: 1px solid rgba(223,189,114,.16);
+      border-radius: 18px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+    .login { max-width: 520px; margin: 18px auto 0; }
+    .login h2, .section-title { margin: 0 0 8px; color: var(--gold); }
+    .hint { color: var(--muted); margin: 0 0 14px; line-height: 1.4; }
+    label { display: block; color: var(--muted); font-weight: 700; margin: 13px 0 6px; }
+    input {
+      width: 100%;
+      height: 48px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #0f0b15;
+      color: var(--text);
+      padding: 0 13px;
+      outline: none;
+    }
+    input:focus { border-color: var(--gold); }
+    .btn {
+      border: 0;
+      border-radius: 12px;
+      min-height: 46px;
+      padding: 0 15px;
+      font-weight: 800;
+      background: var(--gold);
+      color: #1b1421;
+      cursor: pointer;
+    }
+    .btn.ghost { background: #30243b; color: var(--text); border: 1px solid var(--line); }
+    .btn.danger { background: #6a3038; color: white; }
+    .login .btn { width: 100%; margin-top: 16px; }
+    .hide { display: none !important; }
+    .hero {
+      display: grid;
+      grid-template-columns: 1.5fr .9fr;
+      gap: 12px;
+      align-items: stretch;
+      margin-top: 14px;
+    }
+    .welcome h2 { margin: 0 0 7px; color: var(--gold); font-size: 24px; }
+    .welcome p { margin: 0; color: var(--muted); line-height: 1.4; }
+    .refresh-box { display: grid; gap: 8px; align-content: center; }
+    .refresh-box strong { font-size: 16px; color: var(--text); }
+    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 12px 0; }
+    .metric {
+      background: rgba(15,11,21,.72);
+      border: 1px solid rgba(255,255,255,.07);
+      border-radius: 16px;
+      padding: 13px;
+      min-height: 104px;
+    }
+    .metric small { display: block; color: var(--muted); font-weight: 800; font-size: 12px; }
+    .metric strong { display: block; margin-top: 8px; color: var(--gold); font-size: 21px; }
+    .metric.ok strong { color: var(--green); }
+    .content-grid { display: grid; grid-template-columns: 1.55fr .75fr; gap: 12px; }
+    .sales-list { display: grid; gap: 10px; max-height: 520px; overflow: auto; padding-right: 2px; }
+    .sale {
+      background: #100c17;
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 15px;
+      padding: 13px;
+    }
+    .sale-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+    .sale-title { margin: 0; color: var(--text); font-weight: 800; line-height: 1.3; }
+    .sale-time { color: var(--blue); font-weight: 800; white-space: nowrap; font-size: 12px; }
+    .items { margin: 9px 0 0; padding-left: 18px; color: var(--muted); line-height: 1.45; }
+    .sale-foot {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      color: var(--text);
+      font-weight: 800;
+    }
+    .sale-foot span { color: var(--gold); }
+    .side-card { display: grid; gap: 10px; align-content: start; }
+    .future {
+      border-style: dashed;
+      border-color: rgba(156,199,255,.42);
+      background: rgba(156,199,255,.08);
+    }
+    .future h3, .side-card h3 { margin: 0; color: var(--gold); }
+    .future p, .side-card p { margin: 0; color: var(--muted); line-height: 1.4; }
+    .empty { color: var(--muted); padding: 14px; border: 1px dashed var(--line); border-radius: 14px; }
+    .footer {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+      background: rgba(13,10,18,.9);
+      border-top: 1px solid rgba(223,189,114,.14);
+      color: rgba(255,248,234,.7);
+      font-size: 12px;
+      text-align: center;
+      backdrop-filter: blur(12px);
+    }
+    @media (max-width: 820px) {
+      .topbar-inner, .hero, .content-grid { grid-template-columns: 1fr; }
+      .topbar-inner { display: grid; }
+      .status-line { justify-content: flex-start; }
+      .mini-status { text-align: left; }
+      .grid { grid-template-columns: repeat(2, 1fr); }
+      .metric strong { font-size: 18px; }
+      .sale-foot { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <h1>Mistica Painel</h1>
+        <p>Resumo mobile da loja, atualizado automaticamente</p>
+      </div>
+      <div class="status-line">
+        <span id="apiPill" class="pill">CONFIG</span>
+        <span id="freshPill" class="pill">Aguardando</span>
+        <span id="netText" class="mini-status">Faca login.</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="card login" id="loginBox">
+      <h2>Entrar no painel</h2>
+      <p class="hint">Use o mesmo login do programa da loja. Bruxo e Bruxa continuam funcionando pela API.</p>
+      <label for="login">Usuario</label>
+      <input id="login" autocomplete="username" placeholder="bruxo, bruxa ou vendedor">
+      <label for="senha">Senha</label>
+      <input id="senha" type="password" autocomplete="current-password" placeholder="Senha">
+      <button class="btn" type="button" onclick="entrar()">Entrar</button>
+      <p id="loginMsg" class="hint" style="color:var(--red); margin-top:12px"></p>
+    </section>
+
+    <section id="painel" class="hide">
+      <section class="hero">
+        <article class="card welcome">
+          <h2 id="boasVindas">Bem-vindo</h2>
+          <p id="diaOperacional">Dia operacional: aguardando dados.</p>
+        </article>
+        <article class="card refresh-box">
+          <strong>Status do painel</strong>
+          <span id="lastUpdate" class="hint">Ultima atualizacao: aguardando.</span>
+          <span id="refreshInfo" class="hint">Atualizacao automatica a cada 5 segundos.</span>
+          <button class="btn danger" type="button" onclick="sair()">Sair</button>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="metric"><small>VENDAS HOJE</small><strong id="vHoje">R$ 0,00</strong></article>
+        <article class="metric"><small>VENDAS DO MES</small><strong id="vMes">R$ 0,00</strong></article>
+        <article class="metric"><small>META DO MES</small><strong id="meta">R$ 1.500,00</strong></article>
+        <article class="metric" id="faltaCard"><small>FALTA PARA META</small><strong id="falta">R$ 1.500,00</strong></article>
+      </section>
+
+      <section class="content-grid">
+        <article class="card">
+          <h2 class="section-title">Vendas do Dia</h2>
+          <div id="vendasList" class="sales-list">
+            <div class="empty">Aguardando atualizacao.</div>
+          </div>
+        </article>
+        <aside class="side-card">
+          <article class="card">
+            <h3>Leitura rapida</h3>
+            <p id="origemDados">Origem: aguardando API.</p>
+          </article>
+          <article class="card future">
+            <h3>Nova Venda em breve</h3>
+            <p>Espaco reservado para uma futura venda pelo aplicativo. A etapa atual e somente leitura e nao altera venda, estoque ou baixa de estoque.</p>
+          </article>
+        </aside>
+      </section>
+    </section>
+  </main>
+
+  <footer class="footer">Aplicativo criado por Bruxo</footer>
+
+  <script>
+    const API = "https://api.misticaesotericos.com.br";
+    const META_MES = 1500;
+    const VERSAO = "painel-mobile-20260704-automatico";
+    const AUTO_REFRESH_MS = 5000;
+    const MIN_REFRESH_GAP_MS = 4000;
+    const ERROR_RETRY_MS = 6000;
+
+    let sessao = null;
+    let sincronizando = false;
+    let ultimaTentativa = 0;
+    let timerAtualizacao = null;
+
+    const $ = (id) => document.getElementById(id);
+    const brl = (n) => (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    const pad = (n) => String(n).padStart(2, "0");
+    const normalizar = (txt) => String(txt || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+    function hojeKey(d = new Date()) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+    function mesKey(d = new Date()) { return hojeKey(d).slice(0, 7); }
+    function brDateKey(d = new Date()) { return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`; }
+    function parseBrDateKey(txt) {
+      const m = String(txt || "").match(/(\d{2})\/(\d{2})\/(\d{4})/);
+      return m ? `${m[3]}-${m[2]}-${m[1]}` : "";
+    }
+    function inicioDiaOperacional(agora = new Date()) {
+      const ini = new Date(agora);
+      if (agora.getHours() >= 23) ini.setHours(23, 0, 0, 0);
+      else ini.setHours(0, 0, 0, 0);
+      return ini;
+    }
+    function fimDiaOperacional(agora = new Date()) {
+      const ini = inicioDiaOperacional(agora);
+      const fim = new Date(ini);
+      if (ini.getHours() === 23) {
+        fim.setDate(fim.getDate() + 1);
+        fim.setHours(23, 0, 0, 0);
+      } else {
+        fim.setHours(23, 0, 0, 0);
+      }
+      return fim;
+    }
+    function etiquetaDiaOperacional(agora = new Date()) {
+      const d = new Date(agora);
+      if (d.getHours() >= 23) d.setDate(d.getDate() + 1);
+      return brDateKey(d);
+    }
+    function dataVenda(v) {
+      const bruto = String(v.data_iso || v.data_venda || "").replace("T", " ");
+      let m = bruto.match(/(\d{4})-(\d{2})-(\d{2})[ T]?(\d{2})?:?(\d{2})?/);
+      if (m) return new Date(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0));
+      m = bruto.match(/(\d{2})\/(\d{2})\/(\d{4})\s*(\d{2})?:?(\d{2})?/);
+      if (m) return new Date(+m[3], +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0));
+      return new Date();
+    }
+    function usuarioAtual() { return sessao && sessao.usuario ? sessao.usuario : {}; }
+    function isAdmin() { return ["adm", "admin", "administrador"].includes(normalizar(usuarioAtual().perfil)); }
+    function vendaAtiva(v) { return !["cancelado", "cancelada"].includes(normalizar(v.status || "Concluido")); }
+    function vendaDoUsuario(v) {
+      if (isAdmin()) return true;
+      const u = usuarioAtual();
+      const vendedor = normalizar(v.vendedor);
+      return vendedor === normalizar(u.nome) || vendedor === normalizar(u.login);
+    }
+    function comTimeout(promise, ms, nome) {
+      let timer;
+      const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${nome} demorou para responder`)), ms);
+      });
+      return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+    }
+    async function api(path, options = {}, ms = 12000) {
+      const sep = path.includes("?") ? "&" : "?";
+      const response = await comTimeout(fetch(`${API}${path}${sep}_=${Date.now()}`, {
+        cache: "no-store",
+        ...options,
+        headers: { "Content-Type": "application/json", ...(options.headers || {}) }
+      }), ms, path);
+      const text = await response.text();
+      if (!response.ok) throw new Error(text || `HTTP ${response.status}`);
+      try { return JSON.parse(text); } catch { return text; }
+    }
+    async function entrar() {
+      try {
+        $("loginMsg").textContent = "Conectando...";
+        setStatus("CONFIG", "Entrando", "Verificando login na API.");
+        const res = await api("/api/auth/login", {
+          method: "POST",
+          body: JSON.stringify({ login: $("login").value.trim(), senha: $("senha").value })
+        }, 12000);
+        sessao = res;
+        sessionStorage.setItem("misticaPainelSessao", JSON.stringify(res));
+        abrirPainel();
+        await sincronizar("login");
+        iniciarAtualizacaoAutomatica();
+      } catch (error) {
+        $("loginMsg").textContent = `Falha no login/API: ${String(error.message || error).slice(0, 100)}`;
+        setStatus("OFFLINE", "Sem conexao", "Nao foi possivel entrar.");
+      }
+    }
+    function abrirPainel() {
+      const perfil = isAdmin() ? "Adm" : "Vendedor(a)";
+      $("loginBox").classList.add("hide");
+      $("painel").classList.remove("hide");
+      $("boasVindas").textContent = `Bem-vindo, ${perfil}`;
+      $("diaOperacional").textContent = `Dia operacional: ${etiquetaDiaOperacional()}`;
+      setStatus("ONLINE", "Atualizando", "Conectado.");
+    }
+    function sair() {
+      pararAtualizacaoAutomatica();
+      sessionStorage.removeItem("misticaPainelSessao");
+      location.reload();
+    }
+    function setStatus(apiTxt, freshTxt, detail) {
+      $("apiPill").textContent = apiTxt;
+      $("apiPill").className = `pill ${apiTxt === "ONLINE" ? "ok" : apiTxt === "OFFLINE" ? "bad" : ""}`;
+      $("freshPill").textContent = freshTxt;
+      $("freshPill").className = `pill ${freshTxt === "Atualizado" ? "ok" : freshTxt === "Sem conexao" ? "bad" : ""}`;
+      $("netText").textContent = detail;
+    }
+    function renderVendas(vendasHoje) {
+      const lista = $("vendasList");
+      lista.innerHTML = "";
+      if (!vendasHoje.length) {
+        lista.innerHTML = '<div class="empty">Nenhuma venda do dia recebida ainda.</div>';
+        return;
+      }
+      vendasHoje.forEach(({ venda, data }) => {
+        const cliente = venda.cliente && String(venda.cliente).trim() ? venda.cliente : "Consumidor";
+        const itens = Array.isArray(venda.itens) ? venda.itens : [];
+        const itensHtml = itens.length
+          ? itens.map((item) => `<li>${Number(item.quantidade || 0)} ${item.nome_p || "produto"}</li>`).join("")
+          : "<li>Itens nao enviados pela API</li>";
+        const card = document.createElement("article");
+        card.className = "sale";
+        card.innerHTML = `
+          <div class="sale-head">
+            <p class="sale-title">Cliente ${cliente} comprou:</p>
+            <span class="sale-time">${data.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
+          </div>
+          <ul class="items">${itensHtml}</ul>
+          <div class="sale-foot">
+            <div>Total: <span>${brl(venda.total_final)}</span></div>
+            <div>Pagamento: <span>${venda.forma_pagamento || "Nao informado"}</span></div>
+          </div>
+        `;
+        lista.appendChild(card);
+      });
+    }
+    function calcular(vendas) {
+      const agora = new Date();
+      const ini = inicioDiaOperacional(agora);
+      const fim = fimDiaOperacional(agora);
+      const etiqueta = etiquetaDiaOperacional(agora);
+      const mes = mesKey(agora);
+      let totalHoje = 0;
+      let totalMes = 0;
+      const vendasHoje = [];
+      const escopo = (Array.isArray(vendas) ? vendas : []).filter((v) => vendaAtiva(v) && vendaDoUsuario(v));
+
+      escopo.forEach((venda) => {
+        const data = dataVenda(venda);
+        const total = Number(venda.total_final || 0);
+        const diaOp = String(venda.dia_operacional || "").trim();
+        const diaIso = parseBrDateKey(diaOp);
+        const ehHoje = diaOp === etiqueta || (data >= ini && data < fim);
+        const ehMes = mesKey(data) === mes || diaIso.slice(0, 7) === mes;
+        if (ehHoje) {
+          totalHoje += total;
+          vendasHoje.push({ venda, data });
+        }
+        if (ehMes) totalMes += total;
+      });
+
+      vendasHoje.sort((a, b) => b.data - a.data);
+      return { totalHoje, totalMes, vendasHoje, escopo };
+    }
+    function aplicarResumo(dados, totalRecebidas) {
+      const falta = Math.max(0, META_MES - dados.totalMes);
+      $("vHoje").textContent = brl(dados.totalHoje);
+      $("vMes").textContent = brl(dados.totalMes);
+      $("meta").textContent = brl(META_MES);
+      $("falta").textContent = falta <= 0 ? "Meta completa" : brl(falta);
+      $("faltaCard").classList.toggle("ok", falta <= 0);
+      $("diaOperacional").textContent = `Dia operacional: ${etiquetaDiaOperacional()}`;
+      $("origemDados").textContent = `API online. Versao ${VERSAO}. Vendas recebidas: ${totalRecebidas}. Vendas no acesso atual: ${dados.escopo.length}.`;
+      renderVendas(dados.vendasHoje);
+    }
+    async function sincronizar(motivo = "auto") {
+      const agora = Date.now();
+      if (sincronizando) return;
+      if (motivo === "auto" && agora - ultimaTentativa < MIN_REFRESH_GAP_MS) return;
+      sincronizando = true;
+      ultimaTentativa = agora;
+      try {
+        setStatus("ONLINE", "Atualizando", "Buscando dados em segundo plano...");
+        const [status, vendas] = await Promise.all([
+          api("/api/status", {}, 8000).catch(() => ({})),
+          api("/api/vendas?limite=500", {}, 12000)
+        ]);
+        const dados = calcular(vendas);
+        aplicarResumo(dados, Array.isArray(vendas) ? vendas.length : 0);
+        const hora = new Date().toLocaleTimeString("pt-BR");
+        $("lastUpdate").textContent = `Ultima atualizacao: ${hora}`;
+        setStatus("ONLINE", "Atualizado", `Online. Atualizado as ${hora}. API vendas: ${status.vendas || 0}.`);
+        reagendar(AUTO_REFRESH_MS);
+      } catch (error) {
+        $("lastUpdate").textContent = "Ultima atualizacao: sem conexao.";
+        setStatus("OFFLINE", "Sem conexao", String(error.message || error).slice(0, 130));
+        reagendar(ERROR_RETRY_MS);
+      } finally {
+        sincronizando = false;
+      }
+    }
+    function reagendar(ms) {
+      if (!sessao) return;
+      clearTimeout(timerAtualizacao);
+      timerAtualizacao = setTimeout(() => sincronizar("auto"), ms);
+    }
+    function iniciarAtualizacaoAutomatica() {
+      clearTimeout(timerAtualizacao);
+      reagendar(AUTO_REFRESH_MS);
+    }
+    function pararAtualizacaoAutomatica() {
+      clearTimeout(timerAtualizacao);
+      timerAtualizacao = null;
+      sincronizando = false;
+    }
+    window.addEventListener("load", () => {
+      try {
+        sessao = JSON.parse(sessionStorage.getItem("misticaPainelSessao") || "null");
+        if (sessao) {
+          abrirPainel();
+          sincronizar("load");
+          iniciarAtualizacaoAutomatica();
+        }
+      } catch {
+        sessao = null;
+      }
+    });
+  </script>
+</body>
+</html>

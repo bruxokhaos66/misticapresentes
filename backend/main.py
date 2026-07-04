@@ -452,7 +452,7 @@ def criar_cliente(cliente: ClienteIn):
 
 @app.get("/api/vendas")
 def listar_vendas(limite: int = Query(100, ge=1, le=500)):
-    return listar(
+    vendas = listar(
         """
         SELECT id, cliente, data_venda, subtotal, desconto, taxa, total_final,
                forma_pagamento, vendedor, status, data_iso, dia_operacional,
@@ -463,6 +463,39 @@ def listar_vendas(limite: int = Query(100, ge=1, le=500)):
         """,
         (limite,),
     )
+    if not vendas:
+        return vendas
+
+    ids = [int(venda["id"]) for venda in vendas if venda.get("id") is not None]
+    if not ids:
+        return vendas
+
+    placeholders = ",".join("?" for _ in ids)
+    itens_por_venda = {venda_id: [] for venda_id in ids}
+    with conectar() as conn:
+        itens = conn.execute(
+            f"""
+            SELECT venda_id, codigo_p, nome_p, quantidade, valor_unitario, valor_total
+            FROM vendas_itens
+            WHERE venda_id IN ({placeholders})
+            ORDER BY id
+            """,
+            ids,
+        ).fetchall()
+        for item in itens:
+            itens_por_venda.setdefault(int(item["venda_id"]), []).append(
+                {
+                    "codigo_p": item["codigo_p"],
+                    "nome_p": item["nome_p"],
+                    "quantidade": int(item["quantidade"] or 0),
+                    "valor_unitario": float(item["valor_unitario"] or 0),
+                    "valor_total": float(item["valor_total"] or 0),
+                }
+            )
+
+    for venda in vendas:
+        venda["itens"] = itens_por_venda.get(int(venda.get("id") or 0), [])
+    return vendas
 
 
 def _buscar_produto_para_baixa(conn, item: VendaItemIn):

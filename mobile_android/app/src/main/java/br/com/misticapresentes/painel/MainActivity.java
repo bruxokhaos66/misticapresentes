@@ -112,15 +112,6 @@ public class MainActivity extends Activity {
         Button sobreBtn = botao("Sobre", Color.rgb(61, 50, 77), COR_OURO);
         sobreBtn.setOnClickListener(v -> mostrarConfig());
         top.addView(sobreBtn, new LinearLayout.LayoutParams(dp(82), dp(46)));
-        Button atualizarBtn = botao("Atualizar", Color.rgb(72, 113, 92), Color.WHITE);
-        atualizarBtn.setOnClickListener(v -> {
-            if (webView != null && ultimaUrl != null && !ultimaUrl.isEmpty()) {
-                webView.clearCache(true);
-                webView.loadUrl(montarUrlComToken(ultimaUrl, ultimoToken));
-                statusText.setText("Atualizando painel operacional sem cache...");
-            }
-        });
-        LinearLayout.LayoutParams atualizarLp = new LinearLayout.LayoutParams(dp(104), dp(46)); atualizarLp.setMargins(dp(8), 0, 0, 0); top.addView(atualizarBtn, atualizarLp);
         Button configBtn = botao("⚙", Color.rgb(61, 50, 77), COR_OURO);
         configBtn.setOnClickListener(v -> mostrarConfig());
         LinearLayout.LayoutParams cfgLp = new LinearLayout.LayoutParams(dp(52), dp(46)); cfgLp.setMargins(dp(8), 0, 0, 0); top.addView(configBtn, cfgLp);
