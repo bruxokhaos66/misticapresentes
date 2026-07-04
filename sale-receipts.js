@@ -7,6 +7,15 @@
     return textoSeguro(value).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
   }
 
+  function carregarFiltrosHistorico() {
+    if (document.getElementById("salesHistoryFiltersScript")) return;
+    const script = document.createElement("script");
+    script.id = "salesHistoryFiltersScript";
+    script.src = "sales-history-filters.js";
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+
   function vendaPorId(vendaId) {
     if (typeof sales === "undefined" || !Array.isArray(sales)) return null;
     return sales.find(item => String(item.id) === String(vendaId));
@@ -85,5 +94,8 @@
     message: mensagemComprovante,
   };
 
-  window.addEventListener("load", inserirAcoesComprovante);
+  window.addEventListener("load", () => {
+    inserirAcoesComprovante();
+    carregarFiltrosHistorico();
+  });
 })();
