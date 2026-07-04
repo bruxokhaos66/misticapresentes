@@ -34,6 +34,15 @@
     document.head.appendChild(script);
   }
 
+  function carregarReposicaoEstoque() {
+    if (document.getElementById("restockListScript")) return;
+    const script = document.createElement("script");
+    script.id = "restockListScript";
+    script.src = "restock-list.js";
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+
   function vendaPorId(vendaId) {
     if (typeof sales === "undefined" || !Array.isArray(sales)) return null;
     return sales.find(item => String(item.id) === String(vendaId));
@@ -117,5 +126,6 @@
     carregarFiltrosHistorico();
     carregarRelatorioVendas();
     carregarRestauracaoBackup();
+    carregarReposicaoEstoque();
   });
 })();
