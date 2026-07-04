@@ -1,13 +1,16 @@
 import os
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from backend.database import conectar, executar, listar, obter
 from backend.order_status_routes import router as order_status_router
+from backend.upload_routes import router as upload_router
 from backend.user_sync_routes import router as user_sync_router
 from backend.site_stock_routes import router as site_stock_router
 from config import API_URL, DB_PATH, DEFAULT_API_URL, DEFAULT_SERVER_URL, OFFICIAL_DOMAIN, SERVER_URL, hash_password_pbkdf2
@@ -17,7 +20,7 @@ from database.migrations import init_db
 app = FastAPI(
     title="Mística Presentes API",
     description="API oficial para sincronização do app Mística Presentes.",
-    version="0.3.5",
+    version="0.3.6",
 )
 
 app.add_middleware(
@@ -35,9 +38,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+UPLOADS_DIR = Path(__file__).resolve().parent / "uploads"
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
+
 app.include_router(user_sync_router)
 app.include_router(site_stock_router)
 app.include_router(order_status_router)
+app.include_router(upload_router)
 
 
 class ProdutoIn(BaseModel):
