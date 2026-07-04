@@ -10,6 +10,15 @@
     "Baixar backup JSON"
   ];
 
+  function loadAdminMemo() {
+    if (document.getElementById("adminMemoScript")) return;
+    const script = document.createElement("script");
+    script.id = "adminMemoScript";
+    script.src = "admin-memo.js";
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+
   function todayKey() {
     return new Date().toISOString().slice(0, 10);
   }
@@ -84,5 +93,8 @@
     reset: resetTasks,
   };
 
-  window.addEventListener("load", mountTasks);
+  window.addEventListener("load", () => {
+    mountTasks();
+    loadAdminMemo();
+  });
 })();
