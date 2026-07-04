@@ -2,16 +2,25 @@ from pathlib import Path
 import sys
 
 BASE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
-MAIN_FILE = BASE_DIR / "mistica_presentes.py"
-
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
-if __name__ == "__main__":
-    if not MAIN_FILE.exists():
-        raise FileNotFoundError(f"Arquivo principal nao encontrado: {MAIN_FILE}")
+UPDATE_DIR = None
+try:
+    from auto_updater import desativar_atualizacao_com_erro, preparar_atualizacao
+    UPDATE_DIR = preparar_atualizacao()
+except Exception as exc:
+    print(f"[Aviso] atualizador automatico: {exc}")
 
-    fonte = MAIN_FILE.read_text(encoding="utf-8-sig")
+
+def executar_app(app_dir: Path) -> None:
+    main_file = app_dir / "mistica_presentes.py"
+    if not main_file.exists():
+        raise FileNotFoundError(f"Arquivo principal nao encontrado: {main_file}")
+    if str(app_dir) not in sys.path:
+        sys.path.insert(0, str(app_dir))
+
+    fonte = main_file.read_text(encoding="utf-8-sig")
 
     try:
         from app_runtime_patch import aplicar_patches_runtime
@@ -33,9 +42,26 @@ if __name__ == "__main__":
 
     globais = {
         "__name__": "__main__",
-        "__file__": str(MAIN_FILE),
+        "__file__": str(main_file),
         "__package__": None,
         "__cached__": None,
     }
-    codigo = compile(fonte, str(MAIN_FILE), "exec")
+    codigo = compile(fonte, str(main_file), "exec")
     eval(codigo, globais)
+
+
+if __name__ == "__main__":
+    app_dir = Path(UPDATE_DIR) if UPDATE_DIR else BASE_DIR
+    try:
+        executar_app(app_dir)
+    except Exception as exc:
+        if UPDATE_DIR:
+            try:
+                desativar_atualizacao_com_erro(str(exc))
+            except Exception:
+                pass
+            executar_app(BASE_DIR)
+        else:
+            raise
+
+

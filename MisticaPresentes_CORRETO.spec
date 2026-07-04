@@ -26,6 +26,8 @@ for pacote in [
 
 datas = [
     ('mistica_presentes.py', '.'),
+    ('auto_updater.py', '.'),
+    ('app_version.py', '.'),
     ('app_runtime_patch.py', '.'),
     ('app_frajola_patch.py', '.'),
     ('app_sync_status_patch.py', '.'),
@@ -72,3 +74,4 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
 )
+
