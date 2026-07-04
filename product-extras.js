@@ -47,6 +47,10 @@
     carregarScript("isisKitShareScript", "isis-kit-share.js");
   }
 
+  function carregarIsisOrderApi() {
+    carregarScript("isisOrderApiScript", "isis-order-api.js");
+  }
+
   function produtosDoKit(kit) {
     const achados = [];
     kit.termos.forEach(t => {
@@ -178,6 +182,7 @@
     carregarAdminImageUpload();
     carregarAdminProductApi();
     carregarIsisKitShare();
+    carregarIsisOrderApi();
     montarKits();
     inserirBotoesDetalhe();
   }
