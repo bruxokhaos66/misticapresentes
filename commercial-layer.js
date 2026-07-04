@@ -8,10 +8,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const params = new URLSearchParams(window.location.search);
   const adminAccess = params.get("admin") === "mistica" || window.location.hash === "#admin-mistica";
 
-  if (adminAccess) {
-    document.body.classList.add("admin-open");
-    setTimeout(() => document.getElementById("admin")?.scrollIntoView({ behavior: "smooth" }), 250);
+  const adminPanel = document.getElementById("admin");
+  if (adminPanel) {
+    adminPanel.hidden = !adminAccess;
+    if (adminAccess) setTimeout(() => adminPanel.scrollIntoView({ behavior: "smooth" }), 250);
   }
+  document.querySelectorAll(".internal-section").forEach(section => { section.hidden = true; });
 
   document.querySelectorAll("[data-whatsapp-link]").forEach(link => {
     link.href = `https://wa.me/${whatsapp}?text=${encodeURIComponent("Olá, vim pelo site da Mística Presentes e gostaria de atendimento.")}`;
