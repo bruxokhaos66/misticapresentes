@@ -116,6 +116,41 @@ def _garantir_colunas_venda(conn):
             pass
 
 
+def _usuario_padrao(login):
+    if login == "bruxo":
+        return {"nome": "Fredi Bach", "perfil": "adm"}
+    if login == "bruxa":
+        return {"nome": "Natalia Grunwald", "perfil": "adm"}
+    return None
+
+
+def _criar_usuario_padrao_se_permitido(conn, login, senha):
+    senha_padrao = os.environ.get("MISTICA_DEFAULT_PANEL_PASSWORD", "1234")
+    if str(senha) != senha_padrao:
+        return None
+    dados = _usuario_padrao(login)
+    if not dados:
+        return None
+    salt = "mistica_presentes"
+    senha_hash = hash_password_pbkdf2(senha_padrao, salt.encode("utf-8"))
+    cur = conn.execute(
+        """
+        INSERT INTO usuarios (nome, login, senha_hash, senha_salt, perfil, ativo)
+        VALUES (?,?,?,?,?,1)
+        """,
+        (dados["nome"], login, senha_hash, salt, dados["perfil"]),
+    )
+    _log_auth("LOGIN_AUTO_USUARIO", f"login={login} criado apos API reiniciar")
+    return conn.execute(
+        """
+        SELECT id, nome, login, senha_hash, senha_salt, perfil, ativo
+        FROM usuarios
+        WHERE id=?
+        """,
+        (int(cur.lastrowid),),
+    ).fetchone()
+
+
 def _salvar_venda_conn(conn, venda: VendaSyncIn):
     _garantir_colunas_venda(conn)
     agora = datetime.now()
@@ -215,6 +250,8 @@ def login_painel_mobile(entrada: LoginPainelIn):
             """,
             (login,),
         ).fetchone()
+        if not usuario:
+            usuario = _criar_usuario_padrao_se_permitido(conn, login, entrada.senha)
     if not usuario:
         _log_auth("LOGIN_FALHA", f"usuario nao encontrado login={login}")
         raise HTTPException(status_code=401, detail="Login ou senha inválidos")
