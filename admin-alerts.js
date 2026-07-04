@@ -23,9 +23,28 @@
     return origem.includes("isis") || vendedor.includes("isis") || cliente.includes("isis");
   }
 
-  function alerta(tipo, titulo, texto, acao = "") {
+  function prioridadeLabel(nivel) {
+    if (nivel === "critico") return "Crítico";
+    if (nivel === "atencao") return "Atenção";
+    if (nivel === "info") return "Info";
+    return "OK";
+  }
+
+  function alerta(tipo, titulo, texto, acao = "", prioridade = "info") {
     const botao = acao ? `<button class="btn btn-ghost" type="button" data-admin-alert-action="${acao}">Ver agora</button>` : "";
-    return `<article class="admin-alert-card admin-alert-${tipo}"><strong>${titulo}</strong><span>${texto}</span>${botao}</article>`;
+    return `<article class="admin-alert-card admin-alert-${tipo} admin-alert-priority-${prioridade}"><small>${prioridadeLabel(prioridade)}</small><strong>${titulo}</strong><span>${texto}</span>${botao}</article>`;
+  }
+
+  function painelPrioridade(contagens) {
+    const criticos = contagens.semBaixa;
+    const atencao = contagens.pendentes + contagens.isisPendentes + contagens.estoqueBaixo;
+    return `
+      <div class="admin-alert-summary">
+        <span><strong>${criticos}</strong> crítico(s)</span>
+        <span><strong>${atencao}</strong> atenção</span>
+        <span><strong>${contagens.totalPedidos}</strong> pedido(s)</span>
+      </div>
+    `;
   }
 
   function irParaPedidos(filtro = "todos") {
@@ -58,16 +77,24 @@
       const isisPendentes = pendentes.filter(origemIsis);
       const semBaixa = listaPedidos.filter(p => ["Pagamento confirmado", "Separando pedido"].includes(p.status) && Number(p.estoque_baixado || 0) !== 1);
 
-      const cards = [];
-      if (pendentes.length) cards.push(alerta("warn", "Pedidos pendentes", `${pendentes.length} pedido(s) aguardando pagamento.`, "pendentes"));
-      if (isisPendentes.length) cards.push(alerta("isis", "Isis aguardando", `${isisPendentes.length} pedido(s) da Isis precisam de confirmação.`, "isis"));
-      if (semBaixa.length) cards.push(alerta("danger", "Estoque pendente", `${semBaixa.length} pedido(s) pagos/separados ainda sem baixa de estoque.`, "sem-baixa"));
-      if (listaEstoque.length) cards.push(alerta("stock", "Estoque baixo", `${listaEstoque.length} item(ns) abaixo ou no mínimo definido.`, "estoque"));
-      if (!cards.length) cards.push(alerta("ok", "Tudo em ordem", "Nenhum alerta importante no momento."));
+      const contagens = {
+        totalPedidos: listaPedidos.length,
+        pendentes: pendentes.length,
+        isisPendentes: isisPendentes.length,
+        semBaixa: semBaixa.length,
+        estoqueBaixo: listaEstoque.length,
+      };
 
-      root.innerHTML = cards.join("");
+      const cards = [];
+      if (semBaixa.length) cards.push(alerta("danger", "Estoque pendente", `${semBaixa.length} pedido(s) pagos/separados ainda sem baixa de estoque.`, "sem-baixa", "critico"));
+      if (isisPendentes.length) cards.push(alerta("isis", "Isis aguardando", `${isisPendentes.length} pedido(s) da Isis precisam de confirmação.`, "isis", "atencao"));
+      if (pendentes.length) cards.push(alerta("warn", "Pedidos pendentes", `${pendentes.length} pedido(s) aguardando pagamento.`, "pendentes", "atencao"));
+      if (listaEstoque.length) cards.push(alerta("stock", "Estoque baixo", `${listaEstoque.length} item(ns) abaixo ou no mínimo definido.`, "estoque", "atencao"));
+      if (!cards.length) cards.push(alerta("ok", "Tudo em ordem", "Nenhum alerta importante no momento.", "", "ok"));
+
+      root.innerHTML = painelPrioridade(contagens) + cards.join("");
     } catch (error) {
-      root.innerHTML = alerta("danger", "Falha nos alertas", `Não foi possível carregar: ${error.message}`);
+      root.innerHTML = alerta("danger", "Falha nos alertas", `Não foi possível carregar: ${error.message}`, "", "critico");
     }
   }
 
@@ -80,7 +107,7 @@
     panel.innerHTML = `
       <p class="eyebrow">Alertas</p>
       <h2>Atenção rápida da loja</h2>
-      <p class="privacy-note">Avisos automáticos sobre pedidos, Isis e estoque.</p>
+      <p class="privacy-note">Avisos automáticos sobre pedidos, Isis e estoque, ordenados por prioridade.</p>
       <div id="adminAlertsContent" class="admin-alerts-content"></div>
     `;
     const report = document.getElementById("adminReportPanel");
