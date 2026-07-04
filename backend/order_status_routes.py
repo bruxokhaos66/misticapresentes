@@ -125,7 +125,7 @@ def buscar_produto_para_baixa(conn, item):
     return None
 
 
-def baixar_estoque_do_pedido(conn, venda_id: int, usuario: str, agora: str):
+def baixar_estoque_do_pedido(conn, venda_id: int, usuario: str, agora: str, motivo: str = "Baixa automática ao confirmar/separar pedido"):
     venda = conn.execute("SELECT id, estoque_baixado FROM vendas WHERE id=?", (venda_id,)).fetchone()
     if not venda:
         raise HTTPException(status_code=404, detail="Pedido não encontrado")
@@ -168,7 +168,7 @@ def baixar_estoque_do_pedido(conn, venda_id: int, usuario: str, agora: str):
         INSERT INTO pedido_status_log (venda_id, status, usuario, observacao, data_hora)
         VALUES (?,?,?,?,?)
         """,
-        (venda_id, "Estoque baixado", usuario or "Admin", "Baixa automática ao confirmar/separar pedido", agora),
+        (venda_id, "Estoque baixado", usuario or "Admin", motivo, agora),
     )
     return True
 
@@ -288,6 +288,17 @@ def atualizar_status_pedido(venda_id: int, payload: PedidoStatusIn, x_mistica_ap
         "estoque_baixado_agora": estoque_baixado_agora,
         "data_hora": agora,
     }
+
+
+@router.post("/pedidos/{venda_id}/baixar-estoque")
+def baixar_estoque_manual(venda_id: int, x_mistica_api_key: str | None = Header(default=None)):
+    validar_site_api_key(x_mistica_api_key)
+    agora = datetime.now().isoformat(timespec="seconds")
+    with conectar() as conn:
+        garantir_tabela_status(conn)
+        baixado = baixar_estoque_do_pedido(conn, venda_id, "Admin", agora, "Baixa manual pelo painel")
+        conn.commit()
+    return {"ok": True, "venda_id": venda_id, "estoque_baixado_agora": baixado, "data_hora": agora}
 
 
 @router.post("/pedidos/{venda_id}/observacao")
