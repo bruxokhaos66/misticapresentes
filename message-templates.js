@@ -1,0 +1,3 @@
+(() => {
+  window.misticaMessageTemplates = window.misticaMessageTemplates || {};
+})();
