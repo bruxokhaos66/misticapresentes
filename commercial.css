@@ -42,6 +42,35 @@
     linear-gradient(135deg, rgba(35, 16, 53, 0.48), rgba(49, 67, 38, 0.42));
 }
 
+.product-gallery {
+  display: grid;
+  gap: 10px;
+}
+
+.gallery-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.gallery-dots button {
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(240, 197, 106, 0.7);
+  background: rgba(240, 197, 106, 0.34);
+  cursor: pointer;
+}
+
+.product-card a.btn {
+  text-align: center;
+}
+
+.stock-low {
+  background: rgba(255, 179, 167, 0.13) !important;
+}
+
 .highlight-strip span {
   text-transform: none;
   letter-spacing: 0.01em;
