@@ -1,14 +1,36 @@
 import argparse
+import json
 import secrets
 import sys
 from pathlib import Path
+
+import httpx
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from config import DB_PATH, hash_password_pbkdf2
+from config import API_URL, DB_PATH, hash_password_pbkdf2
 from database import init_db, query_db
+
+
+def testar_login_api(login, senha):
+    try:
+        url = f"{(API_URL or 'https://api.misticaesotericos.com.br').rstrip('/')}/api/auth/login"
+        resp = httpx.post(url, json={"login": login, "senha": senha}, timeout=10)
+        if resp.status_code == 200:
+            dados = resp.json()
+            usuario = dados.get("usuario", {}) if isinstance(dados, dict) else {}
+            print("Teste login API: OK")
+            print("Usuario API:", json.dumps(usuario, ensure_ascii=False))
+            return True
+        print("Teste login API: FALHOU")
+        print("Status:", resp.status_code)
+        print("Resposta:", resp.text[:500])
+        return False
+    except Exception as exc:
+        print("Teste login API: ERRO", exc)
+        return False
 
 
 def resetar_senha(login, nova_senha):
@@ -48,11 +70,13 @@ def resetar_senha(login, nova_senha):
 
     try:
         from services.usuario_sync_service import sincronizar_usuarios_com_api
-        retorno = sincronizar_usuarios_com_api(timeout=8)
+        retorno = sincronizar_usuarios_com_api(timeout=10)
         print("Sincronizacao com API:", retorno)
     except Exception as exc:
         print("Aviso: senha local foi atualizada, mas a sincronizacao com a API falhou:", exc)
         print("Abra o desktop ou rode a sincronizacao manual depois.")
+
+    testar_login_api(login, nova_senha)
 
 
 def listar_usuarios():
