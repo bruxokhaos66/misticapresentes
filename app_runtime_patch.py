@@ -66,15 +66,14 @@ def aplicar_patches_runtime(fonte):
     fonte = fonte.replace(botao, '        self.montar_painel_vendas_dia(f)')
 
     pos_venda = 'registrar_log(self.current_user[\'nome\'], "Venda", f"N {vid} - {format_moeda(self.v_calc[\'tot\'])}")'
-    fonte = fonte.replace(pos_venda, pos_venda + '\n        try:\n            self.atualizar_painel_vendas_dia()\n        except Exception:\n            pass')
+    fonte = fonte.replace(pos_venda, pos_venda + '\n        try:\n            self.atualizar_painel_vendas_dia(apos_venda=True)\n        except Exception:\n            pass')
 
     marcador = '    # --- CONTROLE DINÂMICO DE PREÇOS (ESTOQUE) ---'
     metodos = r'''
     def montar_painel_vendas_dia(self, parent=None):
         try:
-            from services.vendedor_meta_service import resumo_meta_vendedores, vendas_dia_operacional_detalhadas, resumo_vendedor_atual
+            from services.vendedor_meta_service import resumo_vendedor_atual
             from services.dia_operacional_service import intervalo_vendas_hoje
-            from services.sync_service import estado_sincronizacao
         except Exception as exc:
             registrar_erro_sistema("painel_vendas_import", exc)
             return
@@ -104,26 +103,20 @@ def aplicar_patches_runtime(fonte):
         self.lbl_sync_status = ctk.CTkLabel(topo, text="Sincronização: verificando...", font=("Arial", 12, "bold"), text_color=self.cor_ouro)
         self.lbl_sync_status.pack(side="right", padx=12, pady=8)
 
-        nome_usuario = self.current_user.get("nome", "Sistema") if isinstance(self.current_user, dict) else "Sistema"
-        resumo_user = resumo_vendedor_atual(nome_usuario)
         cards = ctk.CTkFrame(self.frame_vendas_dia, fg_color="transparent")
         cards.pack(fill="x", padx=10, pady=(0, 6))
-
-        for titulo, valor in [
-            ("Vendido", format_moeda(resumo_user['total'])),
-            ("Meta", format_moeda(resumo_user['meta'])),
-            ("Falta", format_moeda(resumo_user['falta'])),
-            ("Mês", format_moeda(resumo_user['total_mes'])),
-            ("Bônus", format_moeda(resumo_user['bonus']) if resumo_user['bateu_meta'] else "Pendente"),
-        ]:
+        self.cards_painel_vendas = {}
+        for titulo in ["Vendido", "Meta", "Falta", "Mês", "Bônus"]:
             card = ctk.CTkFrame(cards, fg_color="#241d2b", corner_radius=10)
             card.pack(side="left", fill="x", expand=True, padx=4)
             ctk.CTkLabel(card, text=titulo.upper(), font=("Arial", 10, "bold"), text_color="#cbbdce").pack(pady=(5, 0))
-            ctk.CTkLabel(card, text=valor, font=("Arial", 13, "bold"), text_color=self.cor_ouro).pack(pady=(0, 5))
+            lbl = ctk.CTkLabel(card, text="...", font=("Arial", 13, "bold"), text_color=self.cor_ouro)
+            lbl.pack(pady=(0, 5))
+            self.cards_painel_vendas[titulo] = lbl
 
         bloco = ctk.CTkFrame(self.frame_vendas_dia, fg_color="#120d18", corner_radius=12)
         bloco.pack(fill="both", expand=True, padx=10, pady=(0, 10))
-        ctk.CTkLabel(bloco, text="Histórico do dia por vendedor e produto • atualiza a cada 5 segundos", font=("Arial", 13, "bold"), text_color=self.cor_ouro).pack(anchor="w", padx=10, pady=(8, 4))
+        ctk.CTkLabel(bloco, text="Histórico do dia por vendedor e produto • painel leve, sem travar a venda", font=("Arial", 13, "bold"), text_color=self.cor_ouro).pack(anchor="w", padx=10, pady=(8, 4))
 
         area = ctk.CTkFrame(bloco, fg_color="transparent")
         area.pack(fill="both", expand=True, padx=10, pady=(0, 8))
@@ -141,22 +134,75 @@ def aplicar_patches_runtime(fonte):
         self.atualizar_painel_vendas_dia()
         self.agendar_atualizacao_painel_vendas_dia()
 
-    def atualizar_painel_vendas_dia(self):
+    def _atualizar_status_sync_leve(self):
         try:
-            from services.vendedor_meta_service import vendas_dia_operacional_detalhadas
             from services.sync_service import estado_sincronizacao
-            estado = estado_sincronizacao(tentar_enviar=True)
+            estado = estado_sincronizacao(tentar_enviar=False)
             pendencias = estado.get("pendencias", 0)
             ultima = estado.get("ultima_sincronizacao") or "Nunca"
             online = bool(estado.get("online"))
             txt = f"Sincronização: {'Online' if online else 'Offline'} | Pendências: {pendencias} | Última: {ultima}"
             if hasattr(self, "lbl_sync_status"):
                 self.lbl_sync_status.configure(text=txt, text_color="#7CFC98" if online and int(pendencias or 0) == 0 else "#ffcc66")
+        except Exception as exc:
+            try:
+                registrar_erro_sistema("painel_sync_status_leve", exc)
+            except Exception:
+                pass
+
+    def _sincronizar_pendencias_em_segundo_plano(self):
+        try:
+            import threading
+            if getattr(self, "_sync_painel_rodando", False):
+                return
+            self._sync_painel_rodando = True
+            def executar():
+                try:
+                    from services.sync_service import sincronizar_pendencias
+                    sincronizar_pendencias(limite=5)
+                except Exception as exc:
+                    try:
+                        registrar_erro_sistema("painel_sync_background", exc)
+                    except Exception:
+                        pass
+                finally:
+                    try:
+                        self._sync_painel_rodando = False
+                    except Exception:
+                        pass
+                    try:
+                        self.after(100, self._atualizar_status_sync_leve)
+                    except Exception:
+                        pass
+            threading.Thread(target=executar, daemon=True).start()
+        except Exception:
+            pass
+
+    def atualizar_painel_vendas_dia(self, apos_venda=False):
+        try:
+            from services.vendedor_meta_service import vendas_dia_operacional_detalhadas, resumo_vendedor_atual
+            nome_usuario = self.current_user.get("nome", "Sistema") if isinstance(self.current_user, dict) else "Sistema"
+            resumo_user = resumo_vendedor_atual(nome_usuario)
+            if hasattr(self, "cards_painel_vendas"):
+                valores = {
+                    "Vendido": format_moeda(resumo_user['total']),
+                    "Meta": format_moeda(resumo_user['meta']),
+                    "Falta": format_moeda(resumo_user['falta']),
+                    "Mês": format_moeda(resumo_user['total_mes']),
+                    "Bônus": format_moeda(resumo_user['bonus']) if resumo_user['bateu_meta'] else "Pendente",
+                }
+                for titulo, valor in valores.items():
+                    lbl = self.cards_painel_vendas.get(titulo)
+                    if lbl:
+                        lbl.configure(text=valor)
             if hasattr(self, "tree_vendas_dia"):
                 for item in self.tree_vendas_dia.get_children():
                     self.tree_vendas_dia.delete(item)
                 for venda_id, data_venda, data_iso, vendedor, produto, qtd, valor_item, total_venda, forma, dia_op in vendas_dia_operacional_detalhadas():
                     self.tree_vendas_dia.insert("", "end", values=(data_venda or data_iso, vendedor, produto, qtd, format_moeda(valor_item), venda_id))
+            self._atualizar_status_sync_leve()
+            if apos_venda:
+                self._sincronizar_pendencias_em_segundo_plano()
         except Exception as exc:
             registrar_erro_sistema("painel_vendas_update", exc)
 
@@ -168,7 +214,7 @@ def aplicar_patches_runtime(fonte):
                         self.after_cancel(self._painel_vendas_after_id)
                     except Exception:
                         pass
-                self._painel_vendas_after_id = self.after(5000, lambda: (self.atualizar_painel_vendas_dia(), self.agendar_atualizacao_painel_vendas_dia()))
+                self._painel_vendas_after_id = self.after(15000, lambda: (self.atualizar_painel_vendas_dia(), self.agendar_atualizacao_painel_vendas_dia()))
         except Exception:
             pass
 
