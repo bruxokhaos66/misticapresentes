@@ -108,6 +108,16 @@
 .pedido-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .pedido-timeline { border-top: 1px solid rgba(240, 197, 106, 0.14); padding-top: 10px; color: #d9cfad; font-size: 0.86rem; }
 
+.admin-alerts-panel { margin-bottom: 22px; }
+.admin-alerts-content { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.admin-alert-card { border: 1px solid rgba(240, 197, 106, 0.22); border-radius: 16px; padding: 14px; display: grid; gap: 6px; background: rgba(255, 255, 255, 0.045); }
+.admin-alert-card strong { color: #fff8e7; }
+.admin-alert-card span { color: #d9cfad; }
+.admin-alert-ok { border-color: rgba(172, 219, 164, 0.34); background: rgba(172, 219, 164, 0.09); }
+.admin-alert-warn, .admin-alert-stock { border-color: rgba(240, 197, 106, 0.38); background: rgba(240, 197, 106, 0.10); }
+.admin-alert-isis { border-color: rgba(172, 219, 164, 0.40); background: rgba(113, 138, 70, 0.14); }
+.admin-alert-danger { border-color: rgba(255, 166, 166, 0.36); background: rgba(255, 166, 166, 0.10); }
+
 .admin-report-panel { margin-bottom: 22px; }
 .admin-report-content { display: grid; gap: 18px; margin-top: 14px; }
 .report-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
@@ -134,7 +144,8 @@
   .related-product-cards,
   .report-grid,
   .report-columns,
-  .report-filters { grid-template-columns: 1fr; }
+  .report-filters,
+  .admin-alerts-content { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 760px) {
