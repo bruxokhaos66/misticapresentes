@@ -94,7 +94,10 @@
 .pedidos-admin-panel { margin-bottom: 22px; }
 .pedidos-admin-list { display: grid; gap: 14px; }
 .pedido-toolbar { border: 1px solid rgba(240, 197, 106, 0.22); border-radius: 16px; background: rgba(240, 197, 106, 0.08); padding: 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; color: #f7e8bd; font-weight: 800; }
+.pedido-filter-bar .btn.active { background: rgba(240, 197, 106, 0.22); border-color: rgba(240, 197, 106, 0.55); color: #fff8e7; }
 .pedido-card { border: 1px solid rgba(240, 197, 106, 0.24); border-radius: 18px; background: rgba(255, 255, 255, 0.045); padding: 16px; display: grid; gap: 10px; }
+.pedido-origem-isis { border-color: rgba(172, 219, 164, 0.42); background: linear-gradient(135deg, rgba(113, 138, 70, 0.14), rgba(255, 255, 255, 0.045)); }
+.pedido-origin { color: #dff5d8; font-weight: 900; }
 .pedido-card-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
 .pedido-card-head div, .pedido-status-select, .pedido-timeline { display: grid; gap: 5px; }
 .pedido-status { border-radius: 999px; padding: 5px 9px; font-size: 0.74rem; font-weight: 900; border: 1px solid rgba(240, 197, 106, 0.30); color: #f0c56a; background: rgba(240, 197, 106, 0.12); white-space: nowrap; }
