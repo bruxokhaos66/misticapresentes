@@ -12,6 +12,7 @@ if str(ROOT) not in sys.path:
 from config import API_URL
 from database import init_db, query_db
 from services.sync_service import montar_payload_venda
+from services.usuario_sync_service import sincronizar_usuarios_com_api
 
 
 REQ_TIMEOUT = httpx.Timeout(connect=6, read=30, write=30, pool=6)
@@ -29,6 +30,17 @@ def _parse_data(txt):
         except Exception:
             pass
     return None
+
+
+def sync_usuarios():
+    try:
+        retorno = sincronizar_usuarios_com_api(timeout=15)
+        print("Usuarios:", json.dumps(retorno, ensure_ascii=False), flush=True)
+        return retorno
+    except Exception as exc:
+        retorno = {"status": "erro", "erro": f"{type(exc).__name__}: {exc}"}
+        print("Usuarios:", json.dumps(retorno, ensure_ascii=False), flush=True)
+        return retorno
 
 
 def listar_produtos_locais():
@@ -138,6 +150,7 @@ def sync_vendas(client):
 def main():
     init_db()
     print("API:", _api(), flush=True)
+    usuarios = sync_usuarios()
     limits = httpx.Limits(max_keepalive_connections=0, max_connections=2)
     with httpx.Client(timeout=REQ_TIMEOUT, limits=limits) as client:
         health = client.get(f"{_api()}/api/health")
@@ -156,7 +169,8 @@ def main():
             resumo = {"erro": str(exc)}
     print("Status API:", json.dumps(status, ensure_ascii=False), flush=True)
     print("Resumo API:", json.dumps(resumo, ensure_ascii=False), flush=True)
-    print("Concluido. Abra o painel no celular e toque em Atualizar.", flush=True)
+    print("Usuarios API:", json.dumps(usuarios, ensure_ascii=False), flush=True)
+    print("Concluido. Abra o painel no celular, faca login e toque em Atualizar.", flush=True)
 
 
 if __name__ == "__main__":
