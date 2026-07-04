@@ -128,11 +128,18 @@
         date: v.data_iso || v.data_venda || new Date().toISOString(),
         total,
         items: Array.isArray(v.itens) && v.itens.length
-          ? v.itens.map(item => ({ qty: Number(item.quantidade || 1), name: item.nome_p || item.nome || "Item", price: Number(item.valor_unitario || 0) }))
+          ? v.itens.map(item => ({
+              id: item.produto_id ? `api-${item.produto_id}` : (item.id || item.codigo_p || ""),
+              qty: Number(item.quantidade || 1),
+              name: item.nome_p || item.nome || "Item",
+              price: Number(item.valor_unitario || 0),
+            }))
           : [{ qty: 1, name: v.cliente || "Venda sincronizada", price: total }],
         status: v.status || "Concluído",
         formaPagamento: v.forma_pagamento || "",
         vendedor: v.vendedor || "",
+        estoqueReposto: Boolean(v.estoque_reposto || v.estoqueReposto),
+        cancelledAt: v.cancelado_em || v.cancelledAt || "",
       };
     }).slice(0, 50);
   }
@@ -226,6 +233,7 @@
         items: saleItems,
         pixPayload: payload,
         status: "Aguardando pagamento",
+        estoqueReposto: false,
       };
       sales.unshift(venda);
       sales = sales.slice(0, 50);
@@ -249,15 +257,81 @@
     };
   }
 
+  function textoNormalizado(value) {
+    return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  }
+
+  function vendaCancelada(venda) {
+    return Boolean(venda?.estoqueReposto) || textoNormalizado(venda?.status).includes("cancelad");
+  }
+
+  function reporEstoqueDaVenda(venda) {
+    let totalReposto = 0;
+    (venda.items || []).forEach(item => {
+      if (!item.id) return;
+      const quantidade = Number(item.qty || item.quantidade || 0);
+      if (!Number.isFinite(quantidade) || quantidade <= 0) return;
+      stock[item.id] = getStock(item.id) + quantidade;
+      totalReposto += quantidade;
+    });
+    return totalReposto;
+  }
+
+  function cancelarVendaLocal(vendaId) {
+    const venda = sales.find(item => String(item.id) === String(vendaId));
+    if (!venda) return setSyncStatus("Venda não encontrada para cancelamento.", false);
+    if (vendaCancelada(venda)) return setSyncStatus("Venda já estava cancelada; estoque não será reposto novamente.", false);
+    if (!confirm(`Cancelar pedido ${venda.id} e devolver os itens ao estoque?`)) return;
+
+    const totalReposto = reporEstoqueDaVenda(venda);
+    venda.status = "Cancelado";
+    venda.cancelledAt = new Date().toISOString();
+    venda.estoqueReposto = true;
+    saveState();
+    renderAll();
+    setSyncStatus(totalReposto > 0 ? `Pedido ${venda.id} cancelado. ${totalReposto} item(ns) devolvido(s) ao estoque.` : `Pedido ${venda.id} cancelado. Sem itens vinculados para repor automaticamente.`, totalReposto > 0);
+  }
+
+  function instalarCancelamentoVendas() {
+    if (window.__misticaCancelSaleInstalled || typeof renderHistory !== "function") return;
+    window.__misticaCancelSaleInstalled = true;
+    window.cancelSale = cancelarVendaLocal;
+    renderHistory = function renderHistoryWithCancelActions() {
+      if (!sales.length) {
+        salesHistory.innerHTML = `<div class="history-item"><span>Nenhuma venda registrada ainda.</span></div>`;
+        return;
+      }
+      salesHistory.innerHTML = sales.slice(0, 10).map(sale => {
+        const cancelada = vendaCancelada(sale);
+        const cancelledInfo = sale.cancelledAt ? `<span>Cancelado em: ${new Date(sale.cancelledAt).toLocaleString("pt-BR")}</span>` : "";
+        const action = cancelada
+          ? `<span class="privacy-note">Estoque já reposto</span>`
+          : `<button class="btn btn-ghost btn-full" type="button" onclick="cancelSale('${String(sale.id).replace(/'/g, "\\'")}')">Cancelar e repor estoque</button>`;
+        return `
+          <div class="history-item">
+            <strong>${currency.format(sale.total)} • ${new Date(sale.date).toLocaleString("pt-BR")}</strong>
+            <span>${(sale.items || []).map(item => `${item.qty}x ${item.name}`).join(" | ")}</span>
+            <span>Status: ${sale.status}</span>
+            ${cancelledInfo}
+            ${action}
+          </div>
+        `;
+      }).join("");
+    };
+    renderHistory();
+  }
+
   window.misticaMobileSync = {
     apiBase: API_BASE,
     syncNow: sincronizarAgora,
     sendSale: enviarVendaApi,
+    cancelSale: cancelarVendaLocal,
   };
 
   window.addEventListener("load", () => {
     carregarPainelAuth();
     instalarEnvioVendas();
+    instalarCancelamentoVendas();
     sincronizarAgora();
     setInterval(sincronizarAgora, SYNC_INTERVAL_MS);
   });
