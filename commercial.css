@@ -15,30 +15,9 @@
   margin-inline: auto;
 }
 
-.catalog-tools {
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(170px, 240px) minmax(150px, 220px);
-  gap: 12px;
-  margin-bottom: 24px;
-}
-
-.catalog-tools input,
-.catalog-tools select {
-  width: 100%;
-  border: 1px solid rgba(240, 197, 106, 0.28);
-  border-radius: 16px;
-  background: rgba(8, 10, 10, 0.74);
-  color: #fff8e7;
-  padding: 14px 16px;
-  font: inherit;
-  outline: none;
-}
-
-.catalog-tools input:focus,
-.catalog-tools select:focus {
-  border-color: rgba(240, 197, 106, 0.72);
-  box-shadow: 0 0 0 4px rgba(240, 197, 106, 0.10);
-}
+.catalog-tools { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(170px, 240px) minmax(150px, 220px); gap: 12px; margin-bottom: 24px; }
+.catalog-tools input, .catalog-tools select { width: 100%; border: 1px solid rgba(240, 197, 106, 0.28); border-radius: 16px; background: rgba(8, 10, 10, 0.74); color: #fff8e7; padding: 14px 16px; font: inherit; outline: none; }
+.catalog-tools input:focus, .catalog-tools select:focus { border-color: rgba(240, 197, 106, 0.72); box-shadow: 0 0 0 4px rgba(240, 197, 106, 0.10); }
 
 .kits-section { margin-bottom: 28px; }
 .kits-section h3 { margin: 0 0 16px; color: #fff8e7; }
@@ -84,6 +63,16 @@
 .related-product-card { border: 1px solid rgba(240, 197, 106, 0.22); border-radius: 18px; background: rgba(255, 255, 255, 0.045); padding: 14px; display: grid; gap: 8px; color: #fff8e7; text-decoration: none; }
 .related-product-card span { font-size: 1.7rem; }
 .related-product-card small { color: #f0c56a; font-weight: 800; }
+
+.image-upload-panel { border: 1px solid rgba(240, 197, 106, 0.24); border-radius: 20px; padding: 16px; background: rgba(255, 255, 255, 0.04); display: grid; gap: 12px; }
+.image-upload-panel h3 { margin: 0; color: #fff8e7; }
+.image-upload-drop { border: 1px dashed rgba(240, 197, 106, 0.46); border-radius: 16px; padding: 16px; display: grid; gap: 8px; cursor: pointer; background: rgba(8, 10, 10, 0.45); }
+.image-upload-drop span { color: #f0c56a; font-weight: 900; }
+.image-upload-drop input { color: #fff8e7; }
+.image-preview-box { display: grid; gap: 8px; }
+.image-preview-box img { width: 100%; max-height: 230px; object-fit: cover; border-radius: 16px; border: 1px solid rgba(240, 197, 106, 0.2); }
+.image-preview-box span { color: #d9cfad; font-size: 0.9rem; }
+.image-upload-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 
 .pedidos-admin-panel { margin-bottom: 22px; }
 .pedidos-admin-list { display: grid; gap: 14px; }
