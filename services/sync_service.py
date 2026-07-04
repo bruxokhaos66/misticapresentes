@@ -129,18 +129,35 @@ def _enviar_pendencia(pendencia_id, tipo, payload_json):
         return resp.json()
 
 
-def sincronizar_pendencias(limite=20):
+def _buscar_pendencias(limite=20, referencia_id_prioritaria=None):
     garantir_tabela_sync()
-    pendencias = query_db(
+    if referencia_id_prioritaria is not None:
+        return query_db(
+            """
+            SELECT id, tipo, payload
+            FROM sync_pendencias
+            WHERE status IN ('Pendente', 'Erro')
+            ORDER BY
+                CASE WHEN tipo='venda' AND referencia_id=? THEN 0 ELSE 1 END,
+                id DESC
+            LIMIT ?
+            """,
+            (int(referencia_id_prioritaria), int(limite)),
+        )
+    return query_db(
         """
         SELECT id, tipo, payload
         FROM sync_pendencias
         WHERE status IN ('Pendente', 'Erro')
-        ORDER BY id
+        ORDER BY id DESC
         LIMIT ?
         """,
-        (limite,),
+        (int(limite),),
     )
+
+
+def sincronizar_pendencias(limite=20, referencia_id_prioritaria=None):
+    pendencias = _buscar_pendencias(limite=limite, referencia_id_prioritaria=referencia_id_prioritaria)
     resultado = {"sincronizados": 0, "erros": 0, "detalhes": []}
     for pendencia_id, tipo, payload_json in pendencias:
         agora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -174,10 +191,15 @@ def sincronizar_pendencias(limite=20):
     return resultado
 
 
-def enfileirar_e_tentar_sincronizar_venda(venda_id):
+def sincronizar_venda_agora(venda_id):
+    """Enfileira e tenta sincronizar a venda recem-salva antes de pendencias antigas."""
     enfileirar_venda_para_sync(venda_id)
+    return sincronizar_pendencias(limite=6, referencia_id_prioritaria=venda_id)
+
+
+def enfileirar_e_tentar_sincronizar_venda(venda_id):
     try:
-        return sincronizar_pendencias(limite=10)
+        return sincronizar_venda_agora(venda_id)
     except Exception as exc:
         return {"sincronizados": 0, "erros": 1, "detalhes": [{"erro": str(exc)}]}
 
