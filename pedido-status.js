@@ -74,6 +74,8 @@
       observacao: pedido.observacao_pedido || "",
       origem,
       origemRaw: pedido.origem || pedido.origem_sync || "api",
+      estoqueBaixado: Number(pedido.estoque_baixado || 0) === 1,
+      estoqueBaixadoEm: pedido.estoque_baixado_em || "",
       items: Array.isArray(pedido.itens) && pedido.itens.length
         ? pedido.itens.map(item => ({
             qty: Number(item.quantidade || 1),
@@ -98,7 +100,9 @@
   function pedidosAtuais() {
     if (apiOnline && pedidosApi.length) return pedidosApi;
     ensurePedidoFields();
-    return typeof sales !== "undefined" ? sales.map(sale => ({ ...sale, origem: origemDoPedido(sale) })) : [];
+    return typeof sales !== "undefined"
+      ? sales.map(sale => ({ ...sale, origem: origemDoPedido(sale), estoqueBaixado: Boolean(sale.estoqueBaixado || sale.estoque_baixado) }))
+      : [];
   }
 
   function aplicarFiltro(lista) {
@@ -113,6 +117,7 @@
       site: lista.filter(p => p.origem === "site").length,
       manual: lista.filter(p => p.origem === "manual").length,
       pendentes: lista.filter(p => p.status === "Aguardando pagamento").length,
+      estoqueBaixado: lista.filter(p => p.estoqueBaixado).length,
     };
   }
 
@@ -211,7 +216,8 @@
 
   function buildPedidoMessage(sale) {
     const items = (sale.items || []).map(item => `• ${item.qty}x ${item.name} - ${money(Number(item.price || 0) * Number(item.qty || 0))}`).join("\n");
-    return `Pedido ${sale.id} - Mística Presentes\n\nStatus: ${sale.status}\nOrigem: ${origemLabel(sale.origem)}\nCliente: ${sale.cliente || "Pedido site/celular"}\nData: ${datePt(sale.date)}\n\n${items}\n\nTotal: ${money(sale.total)}\n\nQualquer dúvida, estamos à disposição.`;
+    const estoque = sale.estoqueBaixado ? "Estoque já baixado" : "Estoque ainda pendente";
+    return `Pedido ${sale.id} - Mística Presentes\n\nStatus: ${sale.status}\nOrigem: ${origemLabel(sale.origem)}\n${estoque}\nCliente: ${sale.cliente || "Pedido site/celular"}\nData: ${datePt(sale.date)}\n\n${items}\n\nTotal: ${money(sale.total)}\n\nQualquer dúvida, estamos à disposição.`;
   }
 
   function sendPedidoWhatsapp(saleId) {
@@ -231,6 +237,14 @@
     return `<button class="btn btn-ghost ${filtroOrigem === key ? "active" : ""}" type="button" data-filter-origem="${key}">${label}: ${count}</button>`;
   }
 
+  function estoqueBadge(sale) {
+    if (sale.estoqueBaixado) {
+      const quando = sale.estoqueBaixadoEm ? ` em ${datePt(sale.estoqueBaixadoEm)}` : "";
+      return `<small class="pedido-stock pedido-stock-ok">Estoque baixado${quando}</small>`;
+    }
+    return `<small class="pedido-stock pedido-stock-pending">Estoque pendente</small>`;
+  }
+
   function renderPedidosAdmin() {
     const root = document.getElementById("pedidosAdminList");
     if (!root) return;
@@ -246,6 +260,7 @@
       <div class="pedido-toolbar">
         <span>${apiOnline ? "Pedidos carregados da API" : "Modo offline: pedidos locais"}</span>
         <strong>Pendentes: ${resumo.pendentes}</strong>
+        <strong>Estoque baixado: ${resumo.estoqueBaixado}</strong>
         <button class="btn btn-ghost" type="button" data-reload-pedidos>Recarregar API</button>
       </div>
       <div class="pedido-toolbar pedido-filter-bar">
@@ -266,6 +281,7 @@
                 <span>${sale.cliente || "Pedido site/celular"}</span>
                 <span>${datePt(sale.date)}</span>
                 <small class="pedido-origin">Origem: ${origemLabel(sale.origem)}</small>
+                ${estoqueBadge(sale)}
               </div>
               <span class="${statusClass(sale.status)}">${sale.status}</span>
             </div>
@@ -301,7 +317,7 @@
     panel.innerHTML = `
       <p class="eyebrow">Pedidos</p>
       <h2>Painel conectado ao backend</h2>
-      <p class="privacy-note">Pedidos, status, observações, histórico, Pix e origem são carregados da API quando ela está online.</p>
+      <p class="privacy-note">Pedidos, status, observações, histórico, Pix, origem e baixa de estoque são carregados da API quando ela está online.</p>
       <div id="pedidosAdminList" class="pedidos-admin-list"></div>
     `;
     admin.insertBefore(panel, admin.firstChild);
