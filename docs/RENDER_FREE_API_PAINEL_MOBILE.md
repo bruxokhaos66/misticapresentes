@@ -16,9 +16,26 @@ O desktop continua sendo a fonte confiavel dos dados. A API agora aceita reparo 
 
 As vendas usam `local_id` para evitar duplicidade. Se a mesma venda local for enviada mais de uma vez, a API atualiza o registro existente em vez de duplicar.
 
-O desktop tambem diagnostica automaticamente quando a API esta indisponivel, zerada ou incompleta e oferece o botao:
+O desktop diagnostica automaticamente quando a API esta indisponivel, zerada ou incompleta. A primeira verificacao roda ao abrir o programa e as proximas rodam a cada 10 minutos em segundo plano.
 
-`Reparar API / Painel Mobile`
+Se a API estiver zerada ou incompleta, o reparo roda sozinho:
+
+- sincroniza usuarios;
+- sincroniza produtos;
+- sincroniza vendas;
+- compara novamente depois.
+
+Se uma verificacao ainda estiver rodando, a proxima e ignorada. Se a API estiver indisponivel, o programa nao trava e tenta de novo na proxima rodada.
+
+O status aparece no painel como:
+
+- `Painel Mobile: OK`
+- `Painel Mobile: Verificando...`
+- `Painel Mobile: Sincronizando...`
+- `Painel Mobile: API zerada - reparando automaticamente`
+- `Painel Mobile: API incompleta - reparando automaticamente`
+- `Painel Mobile: API indisponivel`
+- `Ultima verificacao: HH:MM`
 
 ## Comandos simples
 
@@ -34,7 +51,7 @@ Comparar desktop com API/app:
 python tools/comparar_dashboard_app.py
 ```
 
-Reparar a API online quando o painel mobile ficar errado:
+Reparar a API online manualmente, apenas se quiser forcar um teste:
 
 ```bash
 python tools/reparar_api_painel_mobile.py
