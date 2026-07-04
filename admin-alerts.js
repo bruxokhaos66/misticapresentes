@@ -23,8 +23,25 @@
     return origem.includes("isis") || vendedor.includes("isis") || cliente.includes("isis");
   }
 
-  function alerta(tipo, titulo, texto) {
-    return `<article class="admin-alert-card admin-alert-${tipo}"><strong>${titulo}</strong><span>${texto}</span></article>`;
+  function alerta(tipo, titulo, texto, acao = "") {
+    const botao = acao ? `<button class="btn btn-ghost" type="button" data-admin-alert-action="${acao}">Ver agora</button>` : "";
+    return `<article class="admin-alert-card admin-alert-${tipo}"><strong>${titulo}</strong><span>${texto}</span>${botao}</article>`;
+  }
+
+  function irParaPedidos(filtro = "todos") {
+    const painel = document.getElementById("pedidosAdminPanel");
+    if (window.misticaPedidos?.setFilter && filtro) window.misticaPedidos.setFilter(filtro);
+    if (painel) painel.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function irParaRelatorio(status = "todos") {
+    const painel = document.getElementById("adminReportPanel");
+    const statusSelect = document.querySelector('[data-report-filter="status"]');
+    if (statusSelect) {
+      statusSelect.value = status;
+      statusSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    if (painel) painel.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   async function carregarAlertas() {
@@ -42,10 +59,10 @@
       const semBaixa = listaPedidos.filter(p => ["Pagamento confirmado", "Separando pedido"].includes(p.status) && Number(p.estoque_baixado || 0) !== 1);
 
       const cards = [];
-      if (pendentes.length) cards.push(alerta("warn", "Pedidos pendentes", `${pendentes.length} pedido(s) aguardando pagamento.`));
-      if (isisPendentes.length) cards.push(alerta("isis", "Isis aguardando", `${isisPendentes.length} pedido(s) da Isis precisam de confirmação.`));
-      if (semBaixa.length) cards.push(alerta("danger", "Estoque pendente", `${semBaixa.length} pedido(s) pagos/separados ainda sem baixa de estoque.`));
-      if (listaEstoque.length) cards.push(alerta("stock", "Estoque baixo", `${listaEstoque.length} item(ns) abaixo ou no mínimo definido.`));
+      if (pendentes.length) cards.push(alerta("warn", "Pedidos pendentes", `${pendentes.length} pedido(s) aguardando pagamento.`, "pendentes"));
+      if (isisPendentes.length) cards.push(alerta("isis", "Isis aguardando", `${isisPendentes.length} pedido(s) da Isis precisam de confirmação.`, "isis"));
+      if (semBaixa.length) cards.push(alerta("danger", "Estoque pendente", `${semBaixa.length} pedido(s) pagos/separados ainda sem baixa de estoque.`, "sem-baixa"));
+      if (listaEstoque.length) cards.push(alerta("stock", "Estoque baixo", `${listaEstoque.length} item(ns) abaixo ou no mínimo definido.`, "estoque"));
       if (!cards.length) cards.push(alerta("ok", "Tudo em ordem", "Nenhum alerta importante no momento."));
 
       root.innerHTML = cards.join("");
@@ -71,6 +88,15 @@
     admin.insertBefore(panel, report || pedidos || admin.firstChild);
     carregarAlertas();
   }
+
+  document.addEventListener("click", event => {
+    const acao = event.target?.dataset?.adminAlertAction;
+    if (!acao) return;
+    if (acao === "pendentes") irParaRelatorio("Aguardando pagamento");
+    if (acao === "isis") irParaPedidos("isis");
+    if (acao === "sem-baixa") irParaRelatorio("Pagamento confirmado");
+    if (acao === "estoque") irParaRelatorio("todos");
+  });
 
   window.misticaAdminAlerts = { reload: carregarAlertas };
 
