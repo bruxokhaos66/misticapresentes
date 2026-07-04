@@ -3,6 +3,7 @@
     busca: "",
     status: "todos",
   };
+  let renderizandoFiltro = false;
 
   function normalizar(value) {
     return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -59,24 +60,28 @@
     summary.textContent = `${lista.length} venda(s) encontrada(s) • Total filtrado: ${moeda}`;
   }
 
-  function aplicarFiltroVisual(lista) {
-    const history = document.getElementById("salesHistory");
-    if (!history) return;
-    const idsPermitidos = new Set(lista.slice(0, 10).map(venda => String(venda.id)));
-    Array.from(history.querySelectorAll(".history-item")).forEach((card, index) => {
-      const venda = sales[index];
-      card.hidden = venda ? !idsPermitidos.has(String(venda.id)) : false;
-    });
-    if (!lista.length) {
-      history.innerHTML = `<div class="history-item"><span>Nenhuma venda encontrada para este filtro.</span></div>`;
+  function comSalesTemporario(lista, callback) {
+    const original = sales;
+    try {
+      sales = lista.slice(0, 10);
+      return callback();
+    } finally {
+      sales = original;
     }
   }
 
-  function aplicarFiltros() {
+  function aplicarFiltros(renderOriginal) {
     montarFerramentas();
     const lista = listaFiltrada();
     atualizarResumo(lista);
-    aplicarFiltroVisual(lista);
+    if (!lista.length) {
+      const history = document.getElementById("salesHistory");
+      if (history) history.innerHTML = `<div class="history-item"><span>Nenhuma venda encontrada para este filtro.</span></div>`;
+      return;
+    }
+    renderizandoFiltro = true;
+    comSalesTemporario(lista, renderOriginal);
+    renderizandoFiltro = false;
   }
 
   function instalarFiltrosHistorico() {
@@ -85,8 +90,8 @@
     const renderOriginal = renderHistory;
 
     renderHistory = function renderHistoryWithFilters() {
-      renderOriginal();
-      aplicarFiltros();
+      if (renderizandoFiltro) return renderOriginal();
+      aplicarFiltros(renderOriginal);
     };
 
     document.addEventListener("input", event => {
@@ -105,7 +110,7 @@
   }
 
   window.misticaSalesHistoryFilters = {
-    apply: aplicarFiltros,
+    apply: () => aplicarFiltros(renderHistory),
     getFiltered: listaFiltrada,
   };
 
