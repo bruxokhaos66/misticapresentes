@@ -1,5 +1,6 @@
 const CUSTOM_PRODUCTS_KEY = "misticaCustomProducts";
 let customProducts = loadStorage(CUSTOM_PRODUCTS_KEY, []);
+let catalogFilters = { search: "", category: "todos", sort: "destaques" };
 
 function parseMoney(value) {
   const normalized = String(value || "").replace(/\./g, "").replace(",", ".");
@@ -44,6 +45,110 @@ function make(tag, className, text) {
   return el;
 }
 
+function normalizeText(value) {
+  return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+function getProductTag(product, available) {
+  if (product.tag) return product.tag;
+  if (available <= 0) return "Sob encomenda";
+  if (available <= storeConfig.minStock) return "Poucas unidades";
+  if (String(product.category || "").toLowerCase().includes("kit")) return "Kit especial";
+  if (product.externalUrl) return "Loja parceira";
+  return "Produto disponível";
+}
+
+function getCategories() {
+  const categories = [...new Set(products.map(product => product.category).filter(Boolean))];
+  return categories.sort((a, b) => a.localeCompare(b, "pt-BR"));
+}
+
+function mountCatalogTools() {
+  const section = document.getElementById("produtos");
+  const grid = productGrid;
+  if (!section || !grid || document.getElementById("catalogTools")) return;
+
+  const tools = make("div", "container catalog-tools");
+  tools.id = "catalogTools";
+
+  const search = document.createElement("input");
+  search.type = "search";
+  search.placeholder = "Buscar por produto, intenção ou categoria...";
+  search.setAttribute("aria-label", "Buscar produtos");
+  search.addEventListener("input", () => {
+    catalogFilters.search = search.value;
+    renderProducts();
+  });
+
+  const category = document.createElement("select");
+  category.setAttribute("aria-label", "Filtrar categoria");
+  category.addEventListener("change", () => {
+    catalogFilters.category = category.value;
+    renderProducts();
+  });
+
+  const sort = document.createElement("select");
+  sort.setAttribute("aria-label", "Ordenar produtos");
+  [
+    ["destaques", "Destaques"],
+    ["preco-menor", "Menor preço"],
+    ["preco-maior", "Maior preço"],
+    ["estoque", "Mais estoque"],
+    ["nome", "Nome A-Z"],
+  ].forEach(([value, label]) => {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    sort.appendChild(option);
+  });
+  sort.addEventListener("change", () => {
+    catalogFilters.sort = sort.value;
+    renderProducts();
+  });
+
+  tools.append(search, category, sort);
+  grid.parentNode.insertBefore(tools, grid);
+  updateCategoryOptions();
+}
+
+function updateCategoryOptions() {
+  const category = document.querySelector("#catalogTools select[aria-label='Filtrar categoria']");
+  if (!category) return;
+  const current = category.value || "todos";
+  clearNode(category);
+  const all = document.createElement("option");
+  all.value = "todos";
+  all.textContent = "Todas as categorias";
+  category.appendChild(all);
+  getCategories().forEach(cat => {
+    const option = document.createElement("option");
+    option.value = cat;
+    option.textContent = cat;
+    category.appendChild(option);
+  });
+  category.value = [...category.options].some(option => option.value === current) ? current : "todos";
+}
+
+function getFilteredProducts() {
+  const search = normalizeText(catalogFilters.search);
+  let list = products.filter(product => {
+    const text = normalizeText(`${product.name} ${product.category} ${product.description} ${product.tag || ""}`);
+    const matchesSearch = !search || text.includes(search);
+    const matchesCategory = catalogFilters.category === "todos" || product.category === catalogFilters.category;
+    return matchesSearch && matchesCategory;
+  });
+
+  list = [...list].sort((a, b) => {
+    if (catalogFilters.sort === "preco-menor") return Number(a.price || 0) - Number(b.price || 0);
+    if (catalogFilters.sort === "preco-maior") return Number(b.price || 0) - Number(a.price || 0);
+    if (catalogFilters.sort === "estoque") return getStock(b.id) - getStock(a.id);
+    if (catalogFilters.sort === "nome") return String(a.name).localeCompare(String(b.name), "pt-BR");
+    return Number(Boolean(b.tag)) - Number(Boolean(a.tag));
+  });
+
+  return list;
+}
+
 function renderProductGallery(card, product) {
   const images = productImages(product);
   if (!images.length) {
@@ -73,10 +178,22 @@ function renderProductGallery(card, product) {
 }
 
 renderProducts = function renderProductsWithAdminItems() {
+  mountCatalogTools();
+  updateCategoryOptions();
   clearNode(productGrid);
-  products.forEach(product => {
+  const list = getFilteredProducts();
+
+  if (!list.length) {
+    const empty = make("div", "empty-catalog", "Nenhum produto encontrado. Tente outra busca ou categoria.");
+    productGrid.appendChild(empty);
+    return;
+  }
+
+  list.forEach(product => {
     const available = getStock(product.id);
     const card = make("article", "product-card");
+    const tag = make("span", "product-tag", getProductTag(product, available));
+    card.appendChild(tag);
     renderProductGallery(card, product);
 
     const info = make("div");
@@ -154,6 +271,7 @@ function mountProductAdmin() {
   addField(form, "Descrição", "productDescription", "textarea", "Descrição comercial curta");
   addField(form, "Valor de venda", "productPrice", "text", "Ex.: 18,00");
   addField(form, "Estoque", "productStock", "number", "Ex.: 10");
+  addField(form, "Selo comercial", "productTag", "text", "Ex.: Mais vendido, Promoção, Novidade", false);
   addField(form, "Data de entrega se não houver estoque", "productDelivery", "date", "", false);
   addField(form, "Ícone", "productIcon", "text", "Ex.: 🌿", false);
   addField(form, "Imagens", "productImages", "textarea", "Cole uma URL de imagem por linha", false);
@@ -183,6 +301,7 @@ function mountProductAdmin() {
       description: document.getElementById("productDescription").value.trim(),
       price: parseMoney(document.getElementById("productPrice").value),
       stock: Number.parseInt(document.getElementById("productStock").value, 10) || 0,
+      tag: document.getElementById("productTag").value.trim(),
       deliveryDate: document.getElementById("productDelivery").value,
       icon: document.getElementById("productIcon").value.trim() || "✨",
       imageUrl: "",
@@ -215,6 +334,7 @@ function renderProductAdminList() {
     const item = make("div", "history-item");
     item.appendChild(make("strong", "", product.name));
     item.appendChild(make("span", "", `${product.category} • ${currency.format(product.price)} • Estoque: ${getStock(product.id)}`));
+    if (product.tag) item.appendChild(make("span", "", `Selo: ${product.tag}`));
     if (product.deliveryDate) item.appendChild(make("span", "", `Entrega se faltar estoque: ${product.deliveryDate}`));
     if (product.externalUrl) item.appendChild(make("span", "", "Possui link externo/parceiro."));
     list.appendChild(item);
