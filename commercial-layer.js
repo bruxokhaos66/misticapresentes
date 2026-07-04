@@ -55,6 +55,14 @@ document.addEventListener("DOMContentLoaded", () => {
     document.head.appendChild(alerts);
   }
 
+  if (!document.getElementById("adminActivityScript")) {
+    const activity = document.createElement("script");
+    activity.id = "adminActivityScript";
+    activity.src = "admin-activity.js";
+    activity.defer = true;
+    document.head.appendChild(activity);
+  }
+
   if (!document.getElementById("isisCommerceScript")) {
     const isis = document.createElement("script");
     isis.id = "isisCommerceScript";
