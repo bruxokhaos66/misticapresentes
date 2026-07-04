@@ -14,6 +14,63 @@
     { key: "incensos", label: "Incensos", terms: ["incenso", "aroma", "defumação", "defumacao"] },
   ];
 
+  const kitRecipes = {
+    protecao: {
+      title: "Kit Proteção",
+      intro: "Para proteção e fortalecimento energético, eu sugiro uma combinação simples e forte:",
+      slots: [
+        { label: "Incenso de proteção", terms: ["incenso", "arruda", "sálvia", "salvia", "prote"] },
+        { label: "Vela ritualística", terms: ["vela", "prote", "ritual", "branca", "preta"] },
+        { label: "Cristal de proteção", terms: ["cristal", "pedra", "quartzo", "turmalina", "olho"] },
+      ],
+    },
+    limpeza: {
+      title: "Kit Limpeza Energética",
+      intro: "Para limpar e renovar a energia do ambiente, este kit funciona muito bem:",
+      slots: [
+        { label: "Defumação ou incenso", terms: ["incenso", "defum", "sálvia", "salvia", "limpeza"] },
+        { label: "Banho de ervas", terms: ["banho", "erva", "limpeza"] },
+        { label: "Vela de harmonização", terms: ["vela", "branca", "harmonia", "limpeza"] },
+      ],
+    },
+    presente: {
+      title: "Kit Presente Místico",
+      intro: "Para presentear com significado, eu montaria uma sugestão assim:",
+      slots: [
+        { label: "Produto principal", terms: ["cristal", "pedra", "difusor", "vela", "presente"] },
+        { label: "Aroma especial", terms: ["incenso", "aroma", "essência", "essencia", "óleo", "oleo"] },
+        { label: "Complemento simbólico", terms: ["guia", "chaveiro", "pingente", "kit", "presente"] },
+      ],
+    },
+    relaxar: {
+      title: "Kit Relaxamento",
+      intro: "Para relaxar e deixar o ambiente mais leve, eu sugiro:",
+      slots: [
+        { label: "Aroma relaxante", terms: ["lavanda", "aroma", "difusor", "essência", "essencia"] },
+        { label: "Incenso suave", terms: ["incenso", "calma", "relax", "sono"] },
+        { label: "Cristal ou vela", terms: ["ametista", "cristal", "vela", "calma"] },
+      ],
+    },
+    prosperidade: {
+      title: "Kit Prosperidade",
+      intro: "Para intenção de prosperidade e abundância, eu montaria:",
+      slots: [
+        { label: "Elemento de prosperidade", terms: ["canela", "prosper", "abund", "dinheiro"] },
+        { label: "Vela de intenção", terms: ["vela", "dourada", "amarela", "prosper"] },
+        { label: "Cristal de abundância", terms: ["pirita", "citrino", "cristal", "pedra"] },
+      ],
+    },
+    amor: {
+      title: "Kit Amor e Harmonia",
+      intro: "Para amor, harmonia e autocuidado, eu sugiro:",
+      slots: [
+        { label: "Aroma ou incenso", terms: ["rosa", "amor", "incenso", "aroma"] },
+        { label: "Vela de harmonia", terms: ["vela", "rosa", "harmonia", "amor"] },
+        { label: "Cristal afetivo", terms: ["quartzo rosa", "quartzo", "cristal", "amor"] },
+      ],
+    },
+  };
+
   function clean(value) {
     return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   }
@@ -77,6 +134,31 @@
       .map(row => row.product);
   }
 
+  function bestProductForSlot(list, slot, usedIds) {
+    return [...list]
+      .filter(product => Number(product.stock || 0) > 0 && !usedIds.has(String(product.id)))
+      .map(product => {
+        const text = productText(product);
+        const score = slot.terms.filter(term => text.includes(clean(term))).length;
+        return { product, score };
+      })
+      .filter(row => row.score > 0)
+      .sort((a, b) => b.score - a.score || Number(a.product.price || 0) - Number(b.product.price || 0))[0]?.product || null;
+  }
+
+  function buildKit(list, intentKey) {
+    const recipe = kitRecipes[intentKey];
+    if (!recipe) return null;
+    const used = new Set();
+    const items = recipe.slots.map(slot => {
+      const product = bestProductForSlot(list, slot, used);
+      if (product) used.add(String(product.id));
+      return { slot, product };
+    }).filter(row => row.product);
+    if (!items.length) return null;
+    return { ...recipe, items, total: items.reduce((sum, row) => sum + Number(row.product.price || 0), 0) };
+  }
+
   function addIsisMessage(role, html) {
     const chat = document.getElementById("isisChat");
     if (!chat) return;
@@ -96,8 +178,33 @@
     addToCart(local.id);
   }
 
-  function renderSuggestions(query, suggestions) {
-    if (!suggestions.length) {
+  function addKitToCart(kitKey, sourceList) {
+    const kit = buildKit(sourceList || products || [], kitKey);
+    if (!kit) return alert("Não consegui montar este kit com estoque disponível agora.");
+    kit.items.forEach(row => addProductToCart(row.product));
+  }
+
+  function renderKit(kit, key) {
+    if (!kit) return "";
+    const rows = kit.items.map(row => `
+      <li>
+        <strong>${row.slot.label}</strong>
+        <span>${row.product.name} • ${money(row.product.price)}</span>
+      </li>
+    `).join("");
+    return `
+      <article class="isis-kit-card">
+        <strong>${kit.title}</strong>
+        <p>${kit.intro}</p>
+        <ul>${rows}</ul>
+        <strong>Total sugerido: ${money(kit.total)}</strong>
+        <button class="btn" type="button" data-isis-add-kit="${key}">Adicionar kit ao carrinho</button>
+      </article>
+    `;
+  }
+
+  function renderSuggestions(query, suggestions, kit) {
+    if (!suggestions.length && !kit) {
       addIsisMessage("bot", "Não encontrei um produto exato agora. Posso te encaminhar pelo WhatsApp para a loja verificar opções disponíveis.");
       return;
     }
@@ -119,14 +226,18 @@
     const intro = intent
       ? `Encontrei sugestões para <strong>${intent.label}</strong>:`
       : "Encontrei estes produtos que combinam com sua busca:";
-    addIsisMessage("bot", `${intro}<div class="isis-product-grid">${cards}</div>`);
+    const kitHtml = intent ? renderKit(kit, intent.key) : "";
+    addIsisMessage("bot", `${intro}${kitHtml}<div class="isis-product-grid">${cards}</div>`);
   }
 
   async function handleQuestion(text) {
     addIsisMessage("user", text);
     const list = await fetchProducts();
+    const intent = detectIntent(text);
+    const kit = intent ? buildKit(list, intent.key) : null;
     const suggestions = suggestProducts(list, text);
-    renderSuggestions(text, suggestions);
+    window.__isisLastProducts = list;
+    renderSuggestions(text, suggestions, kit);
   }
 
   function installForm() {
@@ -150,10 +261,12 @@
     wrap.id = "isisCommerceActions";
     wrap.className = "quick-actions isis-commerce-actions";
     [
-      "Quero proteção",
-      "Quero limpar energias",
-      "Quero um presente",
-      "Quero algo para relaxar",
+      "Kit proteção",
+      "Kit limpeza energética",
+      "Kit presente",
+      "Kit relaxamento",
+      "Kit prosperidade",
+      "Kit amor e harmonia",
       "Cristais disponíveis",
       "Produtos em promoção",
     ].forEach(label => {
@@ -170,20 +283,23 @@
   function installAddButtons() {
     document.addEventListener("click", event => {
       const id = event.target?.dataset?.isisAdd;
-      if (!id) return;
-      const product = Array.isArray(products) ? products.find(item => String(item.id) === String(id)) : null;
-      if (product) addProductToCart(product);
+      if (id) {
+        const product = Array.isArray(products) ? products.find(item => String(item.id) === String(id)) : null;
+        if (product) addProductToCart(product);
+      }
+      const kitKey = event.target?.dataset?.isisAddKit;
+      if (kitKey) addKitToCart(kitKey, window.__isisLastProducts || []);
     });
   }
 
-  window.misticaIsisCommerce = { ask: handleQuestion };
+  window.misticaIsisCommerce = { ask: handleQuestion, buildKit };
 
   window.addEventListener("load", () => {
     installForm();
     installQuickActions();
     installAddButtons();
     setTimeout(() => {
-      addIsisMessage("bot", "Olá, eu sou a Isis. Posso sugerir produtos por intenção: proteção, limpeza energética, presente, relaxamento, cristais, velas ou incensos.");
+      addIsisMessage("bot", "Olá, eu sou a Isis. Posso montar kits por intenção: proteção, limpeza energética, presente, relaxamento, prosperidade, amor, cristais, velas ou incensos.");
     }, 900);
   });
 })();

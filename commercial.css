@@ -74,6 +74,12 @@
 .isis-product-card p { margin: 0; color: #fff8e7; }
 .isis-product-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .isis-commerce-actions { margin-top: 14px; }
+.isis-kit-card { display: grid; gap: 10px; border: 1px solid rgba(172, 219, 164, 0.30); border-radius: 18px; background: linear-gradient(135deg, rgba(113, 138, 70, 0.18), rgba(240, 197, 106, 0.08)); padding: 14px; margin-top: 12px; text-align: left; }
+.isis-kit-card > strong { color: #dff5d8; }
+.isis-kit-card p { margin: 0; color: #fff8e7; }
+.isis-kit-card ul { margin: 0; padding-left: 18px; display: grid; gap: 7px; }
+.isis-kit-card li strong { color: #f0c56a; display: block; }
+.isis-kit-card li span { color: #d9cfad; }
 
 .image-upload-panel { border: 1px solid rgba(240, 197, 106, 0.24); border-radius: 20px; padding: 16px; background: rgba(255, 255, 255, 0.04); display: grid; gap: 12px; }
 .image-upload-panel h3 { margin: 0; color: #fff8e7; }
