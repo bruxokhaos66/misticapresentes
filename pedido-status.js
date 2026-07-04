@@ -8,12 +8,42 @@
     "Cancelado",
   ];
 
+  const cfg = window.misticaSiteConfig || {};
+  const API_BASE = (cfg.apiBaseUrl || "https://api.misticaesotericos.com.br").replace(/\/$/, "");
+  const SITE_API_KEY = String(cfg.siteApiKey || "").trim();
+
   function money(value) {
     try { return currency.format(Number(value || 0)); } catch { return `R$ ${Number(value || 0).toFixed(2)}`; }
   }
 
   function datePt(value) {
     try { return new Date(value).toLocaleString("pt-BR"); } catch { return String(value || ""); }
+  }
+
+  function headers() {
+    return {
+      "Content-Type": "application/json",
+      ...(SITE_API_KEY ? { "X-Mistica-Api-Key": SITE_API_KEY } : {}),
+    };
+  }
+
+  async function apiStatus(saleId, status) {
+    const numericId = Number(saleId);
+    if (!Number.isInteger(numericId) || numericId <= 0) return { skipped: true, reason: "pedido local" };
+    const response = await fetch(`${API_BASE}/api/pedidos/${numericId}/status`, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({ status, usuario: "Admin", observacao: "Alterado pelo painel do site" }),
+    });
+    if (!response.ok) {
+      let detail = `API ${response.status}`;
+      try {
+        const body = await response.json();
+        detail = body.detail || detail;
+      } catch {}
+      throw new Error(detail);
+    }
+    return response.json();
   }
 
   function ensurePedidoFields() {
@@ -36,15 +66,31 @@
     return `pedido-status status-${String(status || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   }
 
-  function setPedidoStatus(saleId, status) {
-    const sale = sales.find(item => String(item.id) === String(saleId));
-    if (!sale || !PEDIDO_STATUS.includes(status)) return;
+  function localStatusUpdate(sale, status, user = "Admin") {
     sale.status = status;
     sale.timeline = Array.isArray(sale.timeline) ? sale.timeline : [];
-    sale.timeline.unshift({ status, at: new Date().toISOString(), user: "Admin" });
+    sale.timeline.unshift({ status, at: new Date().toISOString(), user });
     if (typeof saveState === "function") saveState();
     if (typeof renderAll === "function") renderAll();
     renderPedidosAdmin();
+  }
+
+  function setPedidoStatus(saleId, status) {
+    const sale = sales.find(item => String(item.id) === String(saleId));
+    if (!sale || !PEDIDO_STATUS.includes(status)) return;
+    localStatusUpdate(sale, status);
+    apiStatus(saleId, status)
+      .then(result => {
+        if (result?.skipped) return;
+        sale.timeline.unshift({ status: `${status} • salvo na API`, at: new Date().toISOString(), user: "API" });
+        if (typeof saveState === "function") saveState();
+        renderPedidosAdmin();
+      })
+      .catch(error => {
+        sale.timeline.unshift({ status: `API offline: ${error.message}`, at: new Date().toISOString(), user: "Sistema" });
+        if (typeof saveState === "function") saveState();
+        renderPedidosAdmin();
+      });
   }
 
   function buildPedidoMessage(sale) {
@@ -60,7 +106,7 @@
   }
 
   function renderTimeline(sale) {
-    const timeline = Array.isArray(sale.timeline) ? sale.timeline.slice(0, 4) : [];
+    const timeline = Array.isArray(sale.timeline) ? sale.timeline.slice(0, 5) : [];
     if (!timeline.length) return "";
     return `<div class="pedido-timeline">${timeline.map(item => `<span>${item.status} • ${datePt(item.at)}</span>`).join("")}</div>`;
   }
@@ -113,7 +159,7 @@
     panel.innerHTML = `
       <p class="eyebrow">Pedidos</p>
       <h2>Confirmação de Pix e status</h2>
-      <p class="privacy-note">Use este painel para confirmar pagamento, separar pedido, marcar como pronto, entregue ou cancelado.</p>
+      <p class="privacy-note">Use este painel para confirmar pagamento, separar pedido, marcar como pronto, entregue ou cancelado. Se a API estiver online, o status também será salvo no backend.</p>
       <div id="pedidosAdminList" class="pedidos-admin-list"></div>
     `;
     admin.insertBefore(panel, admin.firstChild);
