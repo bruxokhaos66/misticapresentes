@@ -33,9 +33,10 @@ def calcular_total_venda(carrinho, desconto_percentual=0, forma_pagamento="Dinhe
 
 
 def _tentar_sincronizar_venda_sem_bloquear(venda_id):
-    """Registra pendência e tenta enviar em segundo plano.
+    """Registra pendência e tenta enviar a venda atual em segundo plano.
 
-    A tela de venda nunca deve esperar internet/API, porque isso trava o caixa.
+    A tela de venda nunca deve esperar internet/API. A venda recem-salva deve ser
+    priorizada para aparecer logo no app, mesmo se existirem pendencias antigas.
     """
     try:
         from services.sync_service import enfileirar_venda_para_sync
@@ -47,7 +48,7 @@ def _tentar_sincronizar_venda_sem_bloquear(venda_id):
     def executar():
         try:
             from services.sync_service import sincronizar_pendencias
-            sincronizar_pendencias(limite=3)
+            sincronizar_pendencias(limite=8, referencia_id_prioritaria=venda_id)
         except Exception as exc:
             print(f"[Sync] Venda {venda_id} ficou pendente: {exc}")
 
