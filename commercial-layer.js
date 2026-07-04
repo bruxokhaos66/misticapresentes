@@ -15,6 +15,14 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   document.querySelectorAll(".internal-section").forEach(section => { section.hidden = true; });
 
+  if (!document.getElementById("adminAccessScript")) {
+    const script = document.createElement("script");
+    script.id = "adminAccessScript";
+    script.src = "admin-access.js";
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+
   document.querySelectorAll("[data-whatsapp-link]").forEach(link => {
     link.href = `https://wa.me/${whatsapp}?text=${encodeURIComponent("Olá, vim pelo site da Mística Presentes e gostaria de atendimento.")}`;
     link.textContent = "Comprar pelo WhatsApp";
