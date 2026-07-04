@@ -1,4 +1,13 @@
 (() => {
+  function loadDailyGoal() {
+    if (document.getElementById("dailyGoalScript")) return;
+    const script = document.createElement("script");
+    script.id = "dailyGoalScript";
+    script.src = "daily-goal.js";
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+
   function money(value) {
     return typeof currency !== "undefined" ? currency.format(Number(value || 0)) : `R$ ${Number(value || 0).toFixed(2).replace(".", ",")}`;
   }
@@ -98,5 +107,8 @@
     whatsapp: sendWhatsapp,
   };
 
-  window.addEventListener("load", mountPanel);
+  window.addEventListener("load", () => {
+    mountPanel();
+    loadDailyGoal();
+  });
 })();
