@@ -35,6 +35,12 @@ def executar_app(app_dir: Path) -> None:
         print(f"[Aviso] status de sincronizacao: {exc}")
 
     try:
+        from app_painel_guard_patch import aplicar_painel_guard_runtime
+        fonte = aplicar_painel_guard_runtime(fonte)
+    except Exception as exc:
+        print(f"[Aviso] protecao painel mobile: {exc}")
+
+    try:
         from app_scroll_patch import aplicar_scrollbars_runtime
         fonte = aplicar_scrollbars_runtime(fonte)
     except Exception as exc:
