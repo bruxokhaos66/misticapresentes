@@ -1,4 +1,13 @@
 (() => {
+  function loadCustomerFollowup() {
+    if (document.getElementById("customerFollowupScript")) return;
+    const script = document.createElement("script");
+    script.id = "customerFollowupScript";
+    script.src = "customer-followup.js";
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+
   function money(value) {
     return typeof currency !== "undefined" ? currency.format(Number(value || 0)) : `R$ ${Number(value || 0).toFixed(2).replace(".", ",")}`;
   }
@@ -90,5 +99,8 @@
     message,
   };
 
-  window.addEventListener("load", mountTopProducts);
+  window.addEventListener("load", () => {
+    mountTopProducts();
+    loadCustomerFollowup();
+  });
 })();
