@@ -24,7 +24,7 @@ def _api():
 
 def _parse_data(txt):
     bruto = str(txt or "").strip()
-    for fmt in ("%d/%m/%Y %H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
+    for fmt in ("%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
         try:
             return datetime.strptime(bruto[:19], fmt)
         except Exception:
@@ -114,6 +114,12 @@ def _partes(lista, tamanho):
         yield lista[i:i + tamanho]
 
 
+def _enviar_venda_individual(client, payload):
+    resp = client.post(f"{_api()}/api/sync/venda", json=payload)
+    resp.raise_for_status()
+    return resp.json()
+
+
 def sync_vendas(client):
     vendas_ids = listar_vendas_locais()
     total = len(vendas_ids)
@@ -124,6 +130,7 @@ def sync_vendas(client):
         return {"enviadas": 0, "erros": 0, "total_local": 0}
 
     lote_tamanho = 8
+    usar_fallback_individual = False
     for numero_lote, ids_lote in enumerate(_partes(vendas_ids, lote_tamanho), start=1):
         payloads = []
         for venda_id in ids_lote:
@@ -134,17 +141,31 @@ def sync_vendas(client):
                 print(f"Erro montando venda {venda_id}: {type(exc).__name__}: {exc}", flush=True)
         if not payloads:
             continue
-        try:
-            resp = client.post(f"{_api()}/api/sync/vendas-lote", json={"vendas": payloads})
-            resp.raise_for_status()
-            dados = resp.json()
-            enviados = int(dados.get("total", len(payloads)) or 0)
-            ok += enviados
-            print(f"Lote {numero_lote}: enviado {enviados} venda(s) | ok={ok} | erros={erros}", flush=True)
-        except Exception as exc:
-            erros += len(payloads)
-            print(f"Erro lote {numero_lote}: {type(exc).__name__}: {exc}", flush=True)
-    return {"enviadas": ok, "erros": erros, "total_local": total}
+
+        if not usar_fallback_individual:
+            try:
+                resp = client.post(f"{_api()}/api/sync/vendas-lote", json={"vendas": payloads})
+                resp.raise_for_status()
+                dados = resp.json()
+                enviados = int(dados.get("total", len(payloads)) or 0)
+                ok += enviados
+                print(f"Lote {numero_lote}: enviado {enviados} venda(s) | ok={ok} | erros={erros}", flush=True)
+                continue
+            except Exception as exc:
+                usar_fallback_individual = True
+                print(f"Lote {numero_lote}: endpoint em lote falhou ({type(exc).__name__}: {exc}). Usando envio individual.", flush=True)
+
+        for payload in payloads:
+            venda_id = payload.get("local_id")
+            try:
+                retorno = _enviar_venda_individual(client, payload)
+                ok += 1
+                print(f"Venda {venda_id}: {retorno.get('status', 'ok')} | ok={ok} | erros={erros}", flush=True)
+            except Exception as exc:
+                erros += 1
+                print(f"Erro venda {venda_id}: {type(exc).__name__}: {exc}", flush=True)
+
+    return {"enviadas": ok, "erros": erros, "total_local": total, "fallback_individual": usar_fallback_individual}
 
 
 def main():
