@@ -28,7 +28,7 @@ APP_FOLDER = DIST_DIR / APP_NAME
 DESKTOP_FOLDER = DESKTOP / APP_NAME
 ICON_PATH = ROOT / "assets" / "mistica_xamanico_moderno.ico"
 
-PASTAS_DADOS = ["database", "services", "repositories", "reports", "isis", "Isis"]
+PASTAS_DADOS = ["assets", "database", "services", "repositories", "reports", "isis", "Isis"]
 ARQUIVOS_DADOS = [("mistica_presentes.py", "."), ("config.py", ".")]
 COLLECT_SUBMODULES = ["database", "services", "repositories", "reports", "isis"]
 HIDDEN_IMPORTS = [

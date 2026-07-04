@@ -19,7 +19,7 @@ if exist dist rmdir /S /Q dist
 if exist MisticaPresentes.spec del /Q MisticaPresentes.spec
 if exist ServidorMisticaApp.spec del /Q ServidorMisticaApp.spec
 
-python -m PyInstaller --noconfirm --onedir --windowed --name "MisticaPresentes" --add-data "mistica_presentes.py;." --add-data "app_runtime_patch.py;." --add-data "app_frajola_patch.py;." --add-data "app_sync_status_patch.py;." --add-data "app_scroll_patch.py;." --add-data "config.py;." --add-data "database;database" --add-data "services;services" --add-data "isis;isis" --add-data "backend;backend" app.py
+python -m PyInstaller --noconfirm --onedir --windowed --name "MisticaPresentes" --icon "assets\mistica_xamanico_moderno.ico" --add-data "mistica_presentes.py;." --add-data "app_runtime_patch.py;." --add-data "app_frajola_patch.py;." --add-data "app_painel_guard_patch.py;." --add-data "app_sync_status_patch.py;." --add-data "app_scroll_patch.py;." --add-data "config.py;." --add-data "assets;assets" --add-data "database;database" --add-data "services;services" --add-data "isis;isis" --add-data "backend;backend" app.py
 
 python -m PyInstaller --noconfirm --onedir --console --name "ServidorMisticaApp" --add-data "backend;backend" --add-data "database;database" --add-data "services;services" --add-data "config.py;." servidor_app.py
 

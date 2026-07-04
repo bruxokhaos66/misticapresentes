@@ -24,6 +24,7 @@ ARQUIVOS_DADOS = [
 ]
 
 PASTAS_DADOS = [
+    "assets",
     "database",
     "services",
     "repositories",

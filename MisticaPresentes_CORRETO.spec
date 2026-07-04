@@ -5,6 +5,7 @@ import os
 from PyInstaller.utils.hooks import collect_submodules
 
 block_cipher = None
+ICON_PATH = os.path.abspath(os.path.join('assets', 'mistica_xamanico_moderno.ico'))
 
 hiddenimports = []
 for pacote in [
@@ -52,6 +53,7 @@ datas = [
     ('app_sync_status_patch.py', '.'),
     ('app_scroll_patch.py', '.'),
     ('config.py', '.'),
+    ('assets', 'assets'),
 ]
 
 for origem, destino in [
@@ -99,5 +101,6 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=ICON_PATH,
 )
 

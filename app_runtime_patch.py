@@ -13,6 +13,72 @@ def aplicar_patches_runtime(fonte):
         1,
     )
 
+    # Icone unico do app: janela, barra de tarefas e janelas filhas do Tk.
+    if "def aplicar_icone_mistica(self" not in fonte:
+        marcador_icone = "    def adicionar_barra_rolagem_tree(self, tree):"
+        metodo_icone = r'''
+    def aplicar_icone_mistica(self):
+        try:
+            import ctypes
+            try:
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("BruxoBR.MisticaPresentes.App")
+            except Exception:
+                pass
+
+            bases = []
+            try:
+                bases.append(Path(getattr(sys, "_MEIPASS", PROJECT_DIR)))
+            except Exception:
+                pass
+            try:
+                bases.append(Path(PROJECT_DIR))
+            except Exception:
+                pass
+            try:
+                bases.append(Path(sys.executable).resolve().parent)
+            except Exception:
+                pass
+
+            ico = None
+            png = None
+            for base in bases:
+                cand_ico = base / "assets" / "mistica_xamanico_moderno.ico"
+                cand_png = base / "assets" / "mistica_xamanico_moderno.png"
+                if ico is None and cand_ico.exists():
+                    ico = cand_ico
+                if png is None and cand_png.exists():
+                    png = cand_png
+
+            if ico is not None:
+                try:
+                    self.iconbitmap(str(ico))
+                    self.wm_iconbitmap(str(ico))
+                except Exception:
+                    pass
+
+            if png is not None:
+                try:
+                    self._icone_mistica_img = PhotoImage(file=str(png))
+                    self.iconphoto(True, self._icone_mistica_img)
+                except Exception:
+                    pass
+        except Exception as exc:
+            try:
+                registrar_erro_sistema("icone_mistica", exc)
+            except Exception:
+                pass
+
+'''
+        if marcador_icone in fonte:
+            fonte = fonte.replace(marcador_icone, metodo_icone + marcador_icone, 1)
+
+    if "self.aplicar_icone_mistica()" not in fonte:
+        fonte = fonte.replace(
+            '        self.title("Mística Presentes - Gestão v23")',
+            '        self.title("Mística Presentes - Gestão v23")\n        self.aplicar_icone_mistica()',
+            1,
+        )
+
     # Guarda os cards principais do dashboard para atualizar sem reconstruir a tela.
     fonte = fonte.replace(
         '        f.columnconfigure((0, 1, 2, 3, 4), weight=1)',
