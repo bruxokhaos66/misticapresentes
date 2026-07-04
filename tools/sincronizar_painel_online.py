@@ -1,6 +1,5 @@
 import json
 import sys
-import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -15,7 +14,7 @@ from database import init_db, query_db
 from services.sync_service import montar_payload_venda
 
 
-REQ_TIMEOUT = httpx.Timeout(connect=4, read=4, write=4, pool=4)
+REQ_TIMEOUT = httpx.Timeout(connect=6, read=30, write=30, pool=6)
 
 
 def _api():
@@ -49,7 +48,7 @@ def listar_vendas_locais():
     for venda_id, data_venda, data_iso in rows:
         data = _parse_data(data_iso) or _parse_data(data_venda)
         if data is None or data >= corte:
-            filtradas.append((venda_id,))
+            filtradas.append(venda_id)
     return filtradas
 
 
@@ -98,41 +97,48 @@ def sync_produtos(client):
     return {"criados": criados, "ignorados": ignorados, "erros": erros}
 
 
-def _enviar_venda_com_tentativa(client, payload):
-    ultimo_erro = None
-    for tentativa in range(1, 3):
-        try:
-            resp = client.post(f"{_api()}/api/sync/venda", json=payload)
-            resp.raise_for_status()
-            return True, None
-        except Exception as exc:
-            ultimo_erro = exc
-            time.sleep(0.5)
-    return False, ultimo_erro
+def _partes(lista, tamanho):
+    for i in range(0, len(lista), tamanho):
+        yield lista[i:i + tamanho]
 
 
 def sync_vendas(client):
-    vendas = listar_vendas_locais()
-    total = len(vendas)
+    vendas_ids = listar_vendas_locais()
+    total = len(vendas_ids)
     ok = 0
     erros = 0
     print(f"Vendas locais para enviar: {total}", flush=True)
-    for idx, (venda_id,) in enumerate(vendas, start=1):
-        payload = montar_payload_venda(venda_id)
-        sucesso, erro = _enviar_venda_com_tentativa(client, payload)
-        if sucesso:
-            ok += 1
-        else:
-            erros += 1
-            print(f"Erro venda {venda_id}: {type(erro).__name__}: {erro}", flush=True)
-        print(f"Progresso vendas: {idx}/{total} | ok={ok} | erros={erros}", flush=True)
+    if not vendas_ids:
+        return {"enviadas": 0, "erros": 0, "total_local": 0}
+
+    lote_tamanho = 8
+    for numero_lote, ids_lote in enumerate(_partes(vendas_ids, lote_tamanho), start=1):
+        payloads = []
+        for venda_id in ids_lote:
+            try:
+                payloads.append(montar_payload_venda(venda_id))
+            except Exception as exc:
+                erros += 1
+                print(f"Erro montando venda {venda_id}: {type(exc).__name__}: {exc}", flush=True)
+        if not payloads:
+            continue
+        try:
+            resp = client.post(f"{_api()}/api/sync/vendas-lote", json={"vendas": payloads})
+            resp.raise_for_status()
+            dados = resp.json()
+            enviados = int(dados.get("total", len(payloads)) or 0)
+            ok += enviados
+            print(f"Lote {numero_lote}: enviado {enviados} venda(s) | ok={ok} | erros={erros}", flush=True)
+        except Exception as exc:
+            erros += len(payloads)
+            print(f"Erro lote {numero_lote}: {type(exc).__name__}: {exc}", flush=True)
     return {"enviadas": ok, "erros": erros, "total_local": total}
 
 
 def main():
     init_db()
     print("API:", _api(), flush=True)
-    limits = httpx.Limits(max_keepalive_connections=0, max_connections=3)
+    limits = httpx.Limits(max_keepalive_connections=0, max_connections=2)
     with httpx.Client(timeout=REQ_TIMEOUT, limits=limits) as client:
         health = client.get(f"{_api()}/api/health")
         print("Health:", health.status_code, flush=True)
