@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from backend.database import conectar, executar, listar, obter
 from backend.user_sync_routes import router as user_sync_router
+from backend.site_stock_routes import router as site_stock_router
 from config import API_URL, DB_PATH, DEFAULT_API_URL, DEFAULT_SERVER_URL, OFFICIAL_DOMAIN, SERVER_URL, hash_password_pbkdf2
 from database.migrations import init_db
 
@@ -15,7 +16,7 @@ from database.migrations import init_db
 app = FastAPI(
     title="Mística Presentes API",
     description="API oficial para sincronização do app Mística Presentes.",
-    version="0.3.2",
+    version="0.3.3",
 )
 
 app.add_middleware(
@@ -24,6 +25,7 @@ app.add_middleware(
         "https://misticaesotericos.com.br",
         "https://www.misticaesotericos.com.br",
         "https://api.misticaesotericos.com.br",
+        "https://bruxokhaos66.github.io",
         "http://localhost:3000",
         "http://localhost:8000",
     ],
@@ -33,6 +35,7 @@ app.add_middleware(
 )
 
 app.include_router(user_sync_router)
+app.include_router(site_stock_router)
 
 
 class ProdutoIn(BaseModel):
@@ -55,6 +58,7 @@ class ClienteIn(BaseModel):
 
 
 class VendaItemIn(BaseModel):
+    produto_id: Optional[int] = None
     codigo_p: Optional[str] = None
     nome_p: Optional[str] = None
     quantidade: int = 0
@@ -64,6 +68,7 @@ class VendaItemIn(BaseModel):
 
 
 class VendaIn(BaseModel):
+    origem: Optional[str] = "api"
     local_id: Optional[int] = None
     cliente: Optional[str] = "Cliente não informado"
     subtotal: float = 0.0
@@ -76,6 +81,7 @@ class VendaIn(BaseModel):
     data_venda: Optional[str] = None
     data_iso: Optional[str] = None
     dia_operacional: Optional[str] = None
+    baixa_estoque: bool = False
     itens: list[VendaItemIn] = Field(default_factory=list)
 
 
@@ -106,11 +112,6 @@ def garantir_colunas_sync_backend():
 
 
 def garantir_admin_api():
-    """Garante um admin conhecido para acesso do Mística Painel via celular.
-
-    A senha pode ser alterada no Render pela variável MISTICA_ADMIN_PASSWORD.
-    Enquanto a variável não existir, usa a senha provisória Mistica@123.
-    """
     senha_admin = os.environ.get("MISTICA_ADMIN_PASSWORD", "Mistica@123").strip()
     if not senha_admin:
         return
@@ -366,6 +367,39 @@ def listar_vendas(limite: int = Query(100, ge=1, le=500)):
     )
 
 
+def _buscar_produto_para_baixa(conn, item: VendaItemIn):
+    if item.produto_id:
+        produto = conn.execute(
+            "SELECT id, codigo_p, nome, quantidade FROM produtos WHERE id=? AND COALESCE(ativo,1)=1",
+            (item.produto_id,),
+        ).fetchone()
+        if produto:
+            return produto
+    if item.codigo_p:
+        produto = conn.execute(
+            "SELECT id, codigo_p, nome, quantidade FROM produtos WHERE codigo_p=? AND COALESCE(ativo,1)=1",
+            (item.codigo_p,),
+        ).fetchone()
+        if produto:
+            return produto
+    return None
+
+
+def _baixar_estoque_venda(conn, itens: list[VendaItemIn]):
+    for item in itens:
+        produto = _buscar_produto_para_baixa(conn, item)
+        if not produto:
+            raise HTTPException(status_code=404, detail=f"Produto não encontrado: {item.codigo_p or item.nome_p}")
+        estoque_atual = int(produto["quantidade"] or 0)
+        quantidade = int(item.quantidade or 0)
+        if estoque_atual < quantidade:
+            raise HTTPException(status_code=409, detail=f"Estoque insuficiente para {produto['nome']}. Disponível: {estoque_atual}")
+
+    for item in itens:
+        produto = _buscar_produto_para_baixa(conn, item)
+        conn.execute("UPDATE produtos SET quantidade = quantidade - ? WHERE id=?", (int(item.quantidade or 0), produto["id"]))
+
+
 def salvar_venda_online(venda: VendaIn, origem_sync="api"):
     garantir_colunas_sync_backend()
     agora = datetime.now()
@@ -382,6 +416,9 @@ def salvar_venda_online(venda: VendaIn, origem_sync="api"):
             return {"id": existente["id"], "local_id": venda.local_id, "status": "ja_sincronizado"}
 
     with conectar() as conn:
+        if venda.baixa_estoque:
+            _baixar_estoque_venda(conn, venda.itens)
+
         cur = conn.execute(
             """
             INSERT INTO vendas (
@@ -424,7 +461,7 @@ def salvar_venda_online(venda: VendaIn, origem_sync="api"):
                     item.valor_total,
                 ),
             )
-    return {"id": venda_id, "local_id": venda.local_id, "status": "criado"}
+    return {"id": venda_id, "local_id": venda.local_id, "status": "criado", "estoque_baixado": venda.baixa_estoque}
 
 
 @app.post("/api/vendas")
