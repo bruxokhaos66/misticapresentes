@@ -13,6 +13,13 @@ def aplicar_patches_runtime(fonte):
         1,
     )
 
+    # Guarda os cards principais do dashboard para atualizar sem reconstruir a tela.
+    fonte = fonte.replace(
+        '            ctk.CTkLabel(card, text=val, font=("Arial", 22, "bold"), text_color="#ffffff").pack(pady=(2, 12))',
+        '            if not hasattr(self, "cards_dashboard_topo"):\n                self.cards_dashboard_topo = {}\n            lbl_kpi = ctk.CTkLabel(card, text=val, font=("Arial", 22, "bold"), text_color="#ffffff")\n            lbl_kpi.pack(pady=(2, 12))\n            self.cards_dashboard_topo[titulo] = lbl_kpi',
+        1,
+    )
+
     # Sincronizacao automatica de usuarios com a API, sem travar a tela.
     if "def sincronizar_usuarios_online(self" not in fonte:
         marcador_sync = "    def adicionar_barra_rolagem_tree(self, tree):"
@@ -66,10 +73,31 @@ def aplicar_patches_runtime(fonte):
     fonte = fonte.replace(botao, '        self.montar_painel_vendas_dia(f)')
 
     pos_venda = 'registrar_log(self.current_user[\'nome\'], "Venda", f"N {vid} - {format_moeda(self.v_calc[\'tot\'])}")'
-    fonte = fonte.replace(pos_venda, pos_venda + '\n        try:\n            self.atualizar_painel_vendas_dia(apos_venda=True)\n        except Exception:\n            pass')
+    fonte = fonte.replace(pos_venda, pos_venda + '\n        try:\n            self.atualizar_cards_dashboard_topo()\n            self.atualizar_painel_vendas_dia(apos_venda=True)\n        except Exception:\n            pass')
 
     marcador = '    # --- CONTROLE DINÂMICO DE PREÇOS (ESTOQUE) ---'
     metodos = r'''
+    def atualizar_cards_dashboard_topo(self):
+        try:
+            dados_dash = obter_kpis_dashboard()
+            valores = {
+                "VENDAS HOJE": format_moeda(dados_dash["tot_hoje"]),
+                "VENDAS MES": format_moeda(dados_dash["tot_mes"]),
+                "PRODUTOS": str(dados_dash["qtd_prod"]),
+                "CLIENTES": str(dados_dash["qtd_cli"]),
+                "PECAS ESTOQUE": str(dados_dash["tot_estoque"]),
+            }
+            if hasattr(self, "cards_dashboard_topo"):
+                for titulo, valor in valores.items():
+                    lbl = self.cards_dashboard_topo.get(titulo)
+                    if lbl:
+                        lbl.configure(text=valor)
+        except Exception as exc:
+            try:
+                registrar_erro_sistema("dashboard_topo_update", exc)
+            except Exception:
+                pass
+
     def montar_painel_vendas_dia(self, parent=None):
         try:
             from services.vendedor_meta_service import resumo_vendedor_atual
@@ -181,6 +209,7 @@ def aplicar_patches_runtime(fonte):
     def atualizar_painel_vendas_dia(self, apos_venda=False):
         try:
             from services.vendedor_meta_service import vendas_dia_operacional_detalhadas, resumo_vendedor_atual
+            self.atualizar_cards_dashboard_topo()
             nome_usuario = self.current_user.get("nome", "Sistema") if isinstance(self.current_user, dict) else "Sistema"
             resumo_user = resumo_vendedor_atual(nome_usuario)
             if hasattr(self, "cards_painel_vendas"):
