@@ -21,6 +21,8 @@ STATUS_PEDIDO = {
     "Concluído",
 }
 
+STATUS_BAIXA_ESTOQUE = {"Pagamento confirmado", "Separando pedido"}
+
 
 class PedidoStatusIn(BaseModel):
     status: str = Field(min_length=1)
@@ -55,10 +57,16 @@ def garantir_tabela_status(conn):
         )
         """
     )
-    try:
-        conn.execute("ALTER TABLE vendas ADD COLUMN observacao_pedido TEXT")
-    except Exception:
-        pass
+    alteracoes = [
+        "ALTER TABLE vendas ADD COLUMN observacao_pedido TEXT",
+        "ALTER TABLE vendas ADD COLUMN estoque_baixado INTEGER DEFAULT 0",
+        "ALTER TABLE vendas ADD COLUMN estoque_baixado_em TEXT",
+    ]
+    for sql in alteracoes:
+        try:
+            conn.execute(sql)
+        except Exception:
+            pass
 
 
 def venda_para_pedido(conn, venda):
@@ -86,6 +94,85 @@ def venda_para_pedido(conn, venda):
     return data
 
 
+def buscar_produto_para_baixa(conn, item):
+    codigo = str(item["codigo_p"] or "").strip()
+    nome = str(item["nome_p"] or "").strip()
+
+    if codigo:
+        produto = conn.execute(
+            "SELECT id, codigo_p, nome, quantidade FROM produtos WHERE codigo_p=? AND COALESCE(ativo,1)=1",
+            (codigo,),
+        ).fetchone()
+        if produto:
+            return produto
+
+        if codigo.isdigit():
+            produto = conn.execute(
+                "SELECT id, codigo_p, nome, quantidade FROM produtos WHERE id=? AND COALESCE(ativo,1)=1",
+                (int(codigo),),
+            ).fetchone()
+            if produto:
+                return produto
+
+    if nome:
+        produto = conn.execute(
+            "SELECT id, codigo_p, nome, quantidade FROM produtos WHERE lower(trim(nome))=lower(trim(?)) AND COALESCE(ativo,1)=1",
+            (nome,),
+        ).fetchone()
+        if produto:
+            return produto
+
+    return None
+
+
+def baixar_estoque_do_pedido(conn, venda_id: int, usuario: str, agora: str):
+    venda = conn.execute("SELECT id, estoque_baixado FROM vendas WHERE id=?", (venda_id,)).fetchone()
+    if not venda:
+        raise HTTPException(status_code=404, detail="Pedido não encontrado")
+    if int(venda["estoque_baixado"] or 0) == 1:
+        return False
+
+    itens = conn.execute(
+        """
+        SELECT id, codigo_p, nome_p, quantidade
+        FROM vendas_itens
+        WHERE venda_id=?
+        ORDER BY id ASC
+        """,
+        (venda_id,),
+    ).fetchall()
+    if not itens:
+        return False
+
+    for item in itens:
+        quantidade = int(item["quantidade"] or 0)
+        if quantidade <= 0:
+            continue
+        produto = buscar_produto_para_baixa(conn, item)
+        if not produto:
+            raise HTTPException(status_code=404, detail=f"Produto não encontrado para baixa: {item['nome_p'] or item['codigo_p']}")
+        estoque_atual = int(produto["quantidade"] or 0)
+        if estoque_atual < quantidade:
+            raise HTTPException(status_code=409, detail=f"Estoque insuficiente para {produto['nome']}. Disponível: {estoque_atual}")
+
+    for item in itens:
+        quantidade = int(item["quantidade"] or 0)
+        if quantidade <= 0:
+            continue
+        produto = buscar_produto_para_baixa(conn, item)
+        conn.execute("UPDATE produtos SET quantidade = quantidade - ? WHERE id=?", (quantidade, produto["id"]))
+
+    conn.execute("UPDATE vendas SET estoque_baixado=1, estoque_baixado_em=? WHERE id=?", (agora, venda_id))
+    conn.execute(
+        """
+        INSERT INTO pedido_status_log (venda_id, status, usuario, observacao, data_hora)
+        VALUES (?,?,?,?,?)
+        """,
+        (venda_id, "Estoque baixado", usuario or "Admin", "Baixa automática ao confirmar/separar pedido", agora),
+    )
+    return True
+
+
 @router.get("/pedidos")
 def listar_pedidos(status: str = "", limite: int = Query(100, ge=1, le=500)):
     with conectar() as conn:
@@ -95,7 +182,7 @@ def listar_pedidos(status: str = "", limite: int = Query(100, ge=1, le=500)):
                 """
                 SELECT id, cliente, data_venda, subtotal, desconto, taxa, total_final,
                        forma_pagamento, vendedor, status, data_iso, dia_operacional,
-                       origem_sync, local_id, observacao_pedido
+                       origem_sync, local_id, observacao_pedido, estoque_baixado, estoque_baixado_em
                 FROM vendas
                 WHERE COALESCE(status,'')=?
                 ORDER BY id DESC
@@ -108,7 +195,7 @@ def listar_pedidos(status: str = "", limite: int = Query(100, ge=1, le=500)):
                 """
                 SELECT id, cliente, data_venda, subtotal, desconto, taxa, total_final,
                        forma_pagamento, vendedor, status, data_iso, dia_operacional,
-                       origem_sync, local_id, observacao_pedido
+                       origem_sync, local_id, observacao_pedido, estoque_baixado, estoque_baixado_em
                 FROM vendas
                 ORDER BY id DESC
                 LIMIT ?
@@ -126,7 +213,7 @@ def obter_pedido(venda_id: int):
             """
             SELECT id, cliente, data_venda, subtotal, desconto, taxa, total_final,
                    forma_pagamento, vendedor, status, data_iso, dia_operacional,
-                   origem_sync, local_id, observacao_pedido
+                   origem_sync, local_id, observacao_pedido, estoque_baixado, estoque_baixado_em
             FROM vendas
             WHERE id=?
             """,
@@ -141,7 +228,7 @@ def obter_pedido(venda_id: int):
 def historico_status_pedido(venda_id: int):
     with conectar() as conn:
         garantir_tabela_status(conn)
-        venda = conn.execute("SELECT id, status FROM vendas WHERE id=?", (venda_id,)).fetchone()
+        venda = conn.execute("SELECT id, status, estoque_baixado, estoque_baixado_em FROM vendas WHERE id=?", (venda_id,)).fetchone()
         if not venda:
             raise HTTPException(status_code=404, detail="Pedido não encontrado")
         historico = conn.execute(
@@ -157,6 +244,8 @@ def historico_status_pedido(venda_id: int):
         "ok": True,
         "venda_id": venda_id,
         "status_atual": venda["status"],
+        "estoque_baixado": bool(venda["estoque_baixado"]),
+        "estoque_baixado_em": venda["estoque_baixado_em"],
         "historico": [dict(row) for row in historico],
     }
 
@@ -169,19 +258,26 @@ def atualizar_status_pedido(venda_id: int, payload: PedidoStatusIn, x_mistica_ap
         raise HTTPException(status_code=400, detail="Status de pedido inválido")
 
     agora = datetime.now().isoformat(timespec="seconds")
+    estoque_baixado_agora = False
     with conectar() as conn:
         garantir_tabela_status(conn)
         venda = conn.execute("SELECT id FROM vendas WHERE id=?", (venda_id,)).fetchone()
         if not venda:
             raise HTTPException(status_code=404, detail="Pedido não encontrado")
 
+        if status in STATUS_BAIXA_ESTOQUE:
+            estoque_baixado_agora = baixar_estoque_do_pedido(conn, venda_id, payload.usuario or "Admin", agora)
+
         conn.execute("UPDATE vendas SET status=? WHERE id=?", (status, venda_id))
+        observacao = payload.observacao or ""
+        if estoque_baixado_agora:
+            observacao = (observacao + " | " if observacao else "") + "Estoque baixado automaticamente"
         conn.execute(
             """
             INSERT INTO pedido_status_log (venda_id, status, usuario, observacao, data_hora)
             VALUES (?,?,?,?,?)
             """,
-            (venda_id, status, payload.usuario or "Admin", payload.observacao or "", agora),
+            (venda_id, status, payload.usuario or "Admin", observacao, agora),
         )
         conn.commit()
 
@@ -189,6 +285,7 @@ def atualizar_status_pedido(venda_id: int, payload: PedidoStatusIn, x_mistica_ap
         "ok": True,
         "venda_id": venda_id,
         "status": status,
+        "estoque_baixado_agora": estoque_baixado_agora,
         "data_hora": agora,
     }
 
