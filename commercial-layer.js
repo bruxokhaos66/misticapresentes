@@ -5,6 +5,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const whatsappDisplay = cfg.whatsappDisplay || "(49) 99917-2137";
   const instagram = cfg.instagram || "@misticaprodutos";
   const domain = cfg.domain || "misticaesotericos.com.br";
+  const params = new URLSearchParams(window.location.search);
+  const adminAccess = params.get("admin") === "mistica" || window.location.hash === "#admin-mistica";
+
+  if (adminAccess) {
+    document.body.classList.add("admin-open");
+    setTimeout(() => document.getElementById("admin")?.scrollIntoView({ behavior: "smooth" }), 250);
+  }
 
   document.querySelectorAll("[data-whatsapp-link]").forEach(link => {
     link.href = `https://wa.me/${whatsapp}?text=${encodeURIComponent("Olá, vim pelo site da Mística Presentes e gostaria de atendimento.")}`;
@@ -24,7 +31,7 @@ document.addEventListener("DOMContentLoaded", () => {
   if (productTitle) productTitle.textContent = "Produtos em destaque";
 
   const productText = document.querySelector("#produtos .section-title p:last-child");
-  if (productText) productText.textContent = "Escolha seus artigos favoritos, adicione ao carrinho e envie o pedido pelo WhatsApp. Promoções e novidades podem ser atualizadas no painel interno.";
+  if (productText) productText.textContent = "Escolha seus artigos favoritos, adicione ao carrinho e envie o pedido pelo WhatsApp.";
 
   const footerContact = document.querySelector(".footer-grid div:nth-child(2)");
   if (footerContact) {
