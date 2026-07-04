@@ -136,6 +136,20 @@
     }
   }
 
+  async function baixarEstoqueManual(saleId) {
+    const sale = pedidosAtuais().find(item => String(item.id) === String(saleId));
+    if (!sale) return;
+    if (sale.estoqueBaixado) return alert("O estoque deste pedido já foi baixado.");
+    if (!confirm(`Baixar estoque do pedido ${saleId}? Esta ação não deve ser repetida.`)) return;
+    try {
+      await api(`/api/pedidos/${Number(saleId)}/baixar-estoque`, { method: "POST" });
+      await carregarPedidosApi();
+      alert("Estoque baixado com sucesso.");
+    } catch (error) {
+      alert(`Falha ao baixar estoque: ${error.message}`);
+    }
+  }
+
   async function registrarPagamentoPix(saleId) {
     const sale = pedidosAtuais().find(item => String(item.id) === String(saleId));
     if (!sale) return;
@@ -273,6 +287,7 @@
       ${lista.slice(0, 60).map(sale => {
         const items = (sale.items || []).map(item => `${item.qty}x ${item.name}`).join(" | ");
         const options = PEDIDO_STATUS.map(status => `<option value="${status}" ${sale.status === status ? "selected" : ""}>${status}</option>`).join("");
+        const stockButton = !sale.estoqueBaixado ? `<button class="btn btn-ghost" type="button" data-stock-down="${sale.id}">Baixar estoque</button>` : "";
         return `
           <article class="pedido-card pedido-origem-${sale.origem}" data-sale-id="${sale.id}">
             <div class="pedido-card-head">
@@ -295,6 +310,7 @@
             </label>
             <div class="pedido-actions">
               <button class="btn" type="button" data-confirm-pix="${sale.id}">Registrar Pix</button>
+              ${stockButton}
               <button class="btn btn-ghost" type="button" data-ready-order="${sale.id}">Pronto retirada</button>
               <button class="btn btn-ghost" type="button" data-save-note="${sale.id}">Salvar obs.</button>
               <button class="btn btn-ghost" type="button" data-send-pedido="${sale.id}">WhatsApp</button>
@@ -338,6 +354,7 @@
       }
       if (target.dataset.reloadPedidos !== undefined) carregarPedidosApi().catch(() => { apiOnline = false; renderPedidosAdmin(); });
       if (target.dataset.confirmPix) registrarPagamentoPix(target.dataset.confirmPix);
+      if (target.dataset.stockDown) baixarEstoqueManual(target.dataset.stockDown);
       if (target.dataset.readyOrder) setPedidoStatus(target.dataset.readyOrder, "Pronto para retirada");
       if (target.dataset.cancelPedido) cancelarPedidoApi(target.dataset.cancelPedido);
       if (target.dataset.saveNote) salvarObservacaoPedido(target.dataset.saveNote);
@@ -355,6 +372,7 @@
     setStatus: setPedidoStatus,
     reload: carregarPedidosApi,
     registerPix: registrarPagamentoPix,
+    stockDown: baixarEstoqueManual,
     setFilter: value => { filtroOrigem = value || "todos"; renderPedidosAdmin(); },
   };
 
