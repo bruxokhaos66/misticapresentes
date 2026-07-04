@@ -13,6 +13,7 @@
   const SITE_API_KEY = String(cfg.siteApiKey || "").trim();
   let pedidosApi = [];
   let apiOnline = false;
+  let filtroOrigem = "todos";
 
   function money(value) {
     try { return currency.format(Number(value || 0)); } catch { return `R$ ${Number(value || 0).toFixed(2)}`; }
@@ -45,7 +46,23 @@
     return response.json();
   }
 
+  function origemDoPedido(pedido) {
+    const origem = String(pedido.origem || pedido.origem_sync || pedido.origemSync || "api").toLowerCase();
+    const vendedor = String(pedido.vendedor || "").toLowerCase();
+    const cliente = String(pedido.cliente || "").toLowerCase();
+    if (origem.includes("isis") || vendedor.includes("isis") || cliente.includes("isis")) return "isis";
+    if (origem.includes("site") || origem.includes("api") || vendedor.includes("site")) return "site";
+    return "manual";
+  }
+
+  function origemLabel(origem) {
+    if (origem === "isis") return "Isis";
+    if (origem === "site") return "Site/API";
+    return "Manual";
+  }
+
   function normalizarPedidoApi(pedido) {
+    const origem = origemDoPedido(pedido);
     return {
       id: String(pedido.id),
       date: pedido.data_iso || pedido.data_venda || new Date().toISOString(),
@@ -55,7 +72,8 @@
       vendedor: pedido.vendedor || "",
       cliente: pedido.cliente || "Cliente não informado",
       observacao: pedido.observacao_pedido || "",
-      origem: pedido.origem_sync || "api",
+      origem,
+      origemRaw: pedido.origem || pedido.origem_sync || "api",
       items: Array.isArray(pedido.itens) && pedido.itens.length
         ? pedido.itens.map(item => ({
             qty: Number(item.quantidade || 1),
@@ -80,7 +98,22 @@
   function pedidosAtuais() {
     if (apiOnline && pedidosApi.length) return pedidosApi;
     ensurePedidoFields();
-    return typeof sales !== "undefined" ? sales : [];
+    return typeof sales !== "undefined" ? sales.map(sale => ({ ...sale, origem: origemDoPedido(sale) })) : [];
+  }
+
+  function aplicarFiltro(lista) {
+    if (filtroOrigem === "todos") return lista;
+    return lista.filter(pedido => pedido.origem === filtroOrigem);
+  }
+
+  function resumoPedidos(lista) {
+    return {
+      todos: lista.length,
+      isis: lista.filter(p => p.origem === "isis").length,
+      site: lista.filter(p => p.origem === "site").length,
+      manual: lista.filter(p => p.origem === "manual").length,
+      pendentes: lista.filter(p => p.status === "Aguardando pagamento").length,
+    };
   }
 
   async function setPedidoStatus(saleId, status) {
@@ -178,7 +211,7 @@
 
   function buildPedidoMessage(sale) {
     const items = (sale.items || []).map(item => `• ${item.qty}x ${item.name} - ${money(Number(item.price || 0) * Number(item.qty || 0))}`).join("\n");
-    return `Pedido ${sale.id} - Mística Presentes\n\nStatus: ${sale.status}\nCliente: ${sale.cliente || "Pedido site/celular"}\nData: ${datePt(sale.date)}\n\n${items}\n\nTotal: ${money(sale.total)}\n\nQualquer dúvida, estamos à disposição.`;
+    return `Pedido ${sale.id} - Mística Presentes\n\nStatus: ${sale.status}\nOrigem: ${origemLabel(sale.origem)}\nCliente: ${sale.cliente || "Pedido site/celular"}\nData: ${datePt(sale.date)}\n\n${items}\n\nTotal: ${money(sale.total)}\n\nQualquer dúvida, estamos à disposição.`;
   }
 
   function sendPedidoWhatsapp(saleId) {
@@ -194,11 +227,17 @@
     return `<div class="pedido-timeline">${timeline.map(item => `<span>${item.status}${item.note ? " • " + item.note : ""} • ${datePt(item.at)}</span>`).join("")}</div>`;
   }
 
+  function filtroButton(key, label, count) {
+    return `<button class="btn btn-ghost ${filtroOrigem === key ? "active" : ""}" type="button" data-filter-origem="${key}">${label}: ${count}</button>`;
+  }
+
   function renderPedidosAdmin() {
     const root = document.getElementById("pedidosAdminList");
     if (!root) return;
-    const lista = pedidosAtuais();
-    if (!lista.length) {
+    const base = pedidosAtuais();
+    const resumo = resumoPedidos(base);
+    const lista = aplicarFiltro(base);
+    if (!base.length) {
       root.innerHTML = `<div class="history-item"><span>Nenhum pedido registrado ainda.</span></div>`;
       return;
     }
@@ -206,18 +245,27 @@
     root.innerHTML = `
       <div class="pedido-toolbar">
         <span>${apiOnline ? "Pedidos carregados da API" : "Modo offline: pedidos locais"}</span>
+        <strong>Pendentes: ${resumo.pendentes}</strong>
         <button class="btn btn-ghost" type="button" data-reload-pedidos>Recarregar API</button>
       </div>
+      <div class="pedido-toolbar pedido-filter-bar">
+        ${filtroButton("todos", "Todos", resumo.todos)}
+        ${filtroButton("isis", "Isis", resumo.isis)}
+        ${filtroButton("site", "Site/API", resumo.site)}
+        ${filtroButton("manual", "Manual", resumo.manual)}
+      </div>
+      ${!lista.length ? `<div class="history-item"><span>Nenhum pedido neste filtro.</span></div>` : ""}
       ${lista.slice(0, 60).map(sale => {
         const items = (sale.items || []).map(item => `${item.qty}x ${item.name}`).join(" | ");
         const options = PEDIDO_STATUS.map(status => `<option value="${status}" ${sale.status === status ? "selected" : ""}>${status}</option>`).join("");
         return `
-          <article class="pedido-card" data-sale-id="${sale.id}">
+          <article class="pedido-card pedido-origem-${sale.origem}" data-sale-id="${sale.id}">
             <div class="pedido-card-head">
               <div>
                 <strong>Pedido ${sale.id}</strong>
                 <span>${sale.cliente || "Pedido site/celular"}</span>
                 <span>${datePt(sale.date)}</span>
+                <small class="pedido-origin">Origem: ${origemLabel(sale.origem)}</small>
               </div>
               <span class="${statusClass(sale.status)}">${sale.status}</span>
             </div>
@@ -253,7 +301,7 @@
     panel.innerHTML = `
       <p class="eyebrow">Pedidos</p>
       <h2>Painel conectado ao backend</h2>
-      <p class="privacy-note">Pedidos, status, observações, histórico e Pix são carregados da API quando ela está online.</p>
+      <p class="privacy-note">Pedidos, status, observações, histórico, Pix e origem são carregados da API quando ela está online.</p>
       <div id="pedidosAdminList" class="pedidos-admin-list"></div>
     `;
     admin.insertBefore(panel, admin.firstChild);
@@ -268,6 +316,10 @@
     document.addEventListener("click", event => {
       const target = event.target;
       if (!target?.dataset) return;
+      if (target.dataset.filterOrigem) {
+        filtroOrigem = target.dataset.filterOrigem;
+        renderPedidosAdmin();
+      }
       if (target.dataset.reloadPedidos !== undefined) carregarPedidosApi().catch(() => { apiOnline = false; renderPedidosAdmin(); });
       if (target.dataset.confirmPix) registrarPagamentoPix(target.dataset.confirmPix);
       if (target.dataset.readyOrder) setPedidoStatus(target.dataset.readyOrder, "Pronto para retirada");
@@ -287,6 +339,7 @@
     setStatus: setPedidoStatus,
     reload: carregarPedidosApi,
     registerPix: registrarPagamentoPix,
+    setFilter: value => { filtroOrigem = value || "todos"; renderPedidosAdmin(); },
   };
 
   window.addEventListener("load", () => {
