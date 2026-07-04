@@ -74,6 +74,20 @@
     `;
   }
 
+  function exportReportCsv() {
+    const list = filteredSales();
+    if (!list.length) return alert("Não há vendas para exportar neste filtro.");
+    if (typeof exportCsv !== "function") return alert("Exportação CSV indisponível neste navegador.");
+    const rows = [["ID", "Data", "Status", "Itens", "Total"]].concat(list.map(sale => [
+      sale.id || "",
+      sale.date ? new Date(sale.date).toLocaleString("pt-BR") : "",
+      sale.status || "",
+      Array.isArray(sale.items) ? sale.items.map(item => `${item.qty || 1}x ${item.name || "Item"}`).join(" | ") : "",
+      Number(sale.total || 0).toFixed(2).replace(".", ","),
+    ]));
+    exportCsv(`mistica-relatorio-vendas-${inputDate(new Date())}.csv`, rows);
+  }
+
   function mountReport() {
     const admin = document.getElementById("adminContent");
     if (!admin || document.getElementById("salesReportPanel")) return;
@@ -99,7 +113,8 @@
         </select></label>
       </div>
       <div class="report-export-actions">
-        <button class="btn" type="button" data-refresh-sales-report>Atualizar relatório</button>
+        <button class="btn btn-ghost" type="button" data-refresh-sales-report>Atualizar relatório</button>
+        <button class="btn" type="button" data-export-sales-report>Exportar CSV</button>
       </div>
       <div id="salesReportContent" class="admin-report-content"></div>
     `;
@@ -108,11 +123,13 @@
     else admin.prepend(panel);
     panel.querySelectorAll("input, select").forEach(input => input.addEventListener("change", renderReport));
     panel.querySelector("[data-refresh-sales-report]").addEventListener("click", renderReport);
+    panel.querySelector("[data-export-sales-report]").addEventListener("click", exportReportCsv);
     renderReport();
   }
 
   window.misticaSalesReport = {
     render: renderReport,
+    exportCsv: exportReportCsv,
     getFilteredSales: filteredSales,
   };
 
