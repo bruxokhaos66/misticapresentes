@@ -498,6 +498,120 @@ def listar_vendas(limite: int = Query(100, ge=1, le=500)):
     return vendas
 
 
+def _intervalo_vendas_hoje_backend(agora=None):
+    from datetime import time, timedelta
+
+    agora = agora or datetime.now()
+    fechamento = time(23, 0, 0)
+    inicio = datetime.combine(agora.date(), time.min)
+    if agora.time() >= fechamento:
+        inicio = datetime.combine(agora.date(), fechamento)
+        fim = datetime.combine((inicio + timedelta(days=1)).date(), fechamento)
+        dia_ref = agora.date() + timedelta(days=1)
+    else:
+        fim = datetime.combine(inicio.date(), fechamento)
+        dia_ref = agora.date()
+    return (
+        inicio.strftime("%Y-%m-%d %H:%M:%S"),
+        fim.strftime("%Y-%m-%d %H:%M:%S"),
+        dia_ref.strftime("%d/%m/%Y"),
+    )
+
+
+def _anexar_itens_vendas(vendas: list[dict]) -> list[dict]:
+    ids = [int(venda["id"]) for venda in vendas if venda.get("id") is not None]
+    if not ids:
+        return vendas
+
+    placeholders = ",".join("?" for _ in ids)
+    itens_por_venda = {venda_id: [] for venda_id in ids}
+    with conectar() as conn:
+        itens = conn.execute(
+            f"""
+            SELECT venda_id, codigo_p, nome_p, quantidade, valor_unitario, valor_total
+            FROM vendas_itens
+            WHERE venda_id IN ({placeholders})
+            ORDER BY id
+            """,
+            ids,
+        ).fetchall()
+        for item in itens:
+            itens_por_venda.setdefault(int(item["venda_id"]), []).append(
+                {
+                    "codigo_p": item["codigo_p"],
+                    "nome_p": item["nome_p"],
+                    "quantidade": int(item["quantidade"] or 0),
+                    "valor_unitario": float(item["valor_unitario"] or 0),
+                    "valor_total": float(item["valor_total"] or 0),
+                }
+            )
+
+    for venda in vendas:
+        venda["itens"] = itens_por_venda.get(int(venda.get("id") or 0), [])
+    return vendas
+
+
+@app.get("/api/painel/dashboard")
+def painel_dashboard(meta_mes: float = Query(1500.0, ge=0)):
+    inicio_hoje, fim_hoje, dia_operacional = _intervalo_vendas_hoje_backend()
+    mes = datetime.now().strftime("/%m/%Y")
+    with conectar() as conn:
+        vendas_hoje = conn.execute(
+            """
+            SELECT COALESCE(SUM(total_final),0) AS total
+            FROM vendas
+            WHERE COALESCE(status,'Concluído') != 'Cancelado'
+              AND (
+                  COALESCE(dia_operacional,'') = ?
+                  OR (datetime(data_iso) >= datetime(?) AND datetime(data_iso) < datetime(?))
+              )
+            """,
+            (dia_operacional, inicio_hoje, fim_hoje),
+        ).fetchone()["total"] or 0.0
+        vendas_mes = conn.execute(
+            """
+            SELECT COALESCE(SUM(total_final),0) AS total
+            FROM vendas
+            WHERE COALESCE(status,'Concluído') != 'Cancelado'
+              AND (COALESCE(data_venda,'') LIKE ? OR COALESCE(data_iso,'') LIKE ?)
+            """,
+            (f"%{mes}%", f"%{mes}%"),
+        ).fetchone()["total"] or 0.0
+        vendas_do_dia = [
+            dict(row)
+            for row in conn.execute(
+                """
+                SELECT id, cliente, data_venda, subtotal, desconto, taxa, total_final,
+                       forma_pagamento, vendedor, status, data_iso, dia_operacional,
+                       origem_sync, local_id
+                FROM vendas
+                WHERE COALESCE(status,'Concluído') != 'Cancelado'
+                  AND (
+                      COALESCE(dia_operacional,'') = ?
+                      OR (datetime(data_iso) >= datetime(?) AND datetime(data_iso) < datetime(?))
+                  )
+                ORDER BY id DESC
+                LIMIT 300
+                """,
+                (dia_operacional, inicio_hoje, fim_hoje),
+            ).fetchall()
+        ]
+
+    falta_meta = max(float(meta_mes or 0) - float(vendas_mes or 0), 0.0)
+    return {
+        "vendas_hoje": float(vendas_hoje or 0),
+        "vendas_mes": float(vendas_mes or 0),
+        "meta_mes": float(meta_mes or 0),
+        "falta_meta": falta_meta,
+        "meta_completa": falta_meta <= 0,
+        "dia_operacional": dia_operacional,
+        "inicio_vendas_hoje": inicio_hoje,
+        "fim_vendas_hoje": fim_hoje,
+        "ultima_atualizacao": datetime.now().strftime("%H:%M:%S"),
+        "vendas_do_dia": _anexar_itens_vendas(vendas_do_dia),
+    }
+
+
 def _buscar_produto_para_baixa(conn, item: VendaItemIn):
     if item.produto_id:
         produto = conn.execute(

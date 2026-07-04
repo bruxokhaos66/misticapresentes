@@ -210,6 +210,7 @@
       <section class="hero">
         <article class="card welcome">
           <h2 id="boasVindas">Bem-vindo</h2>
+          <p id="perfilUsuario">Perfil: aguardando login.</p>
           <p id="diaOperacional">Dia operacional: aguardando dados.</p>
         </article>
         <article class="card refresh-box">
@@ -253,7 +254,7 @@
   <script>
     const API = "https://api.misticaesotericos.com.br";
     const META_MES = 1500;
-    const VERSAO = "painel-mobile-20260704-automatico";
+    const VERSAO = "painel-mobile-20260704-dashboard-api";
     const AUTO_REFRESH_MS = 5000;
     const MIN_REFRESH_GAP_MS = 4000;
     const ERROR_RETRY_MS = 6000;
@@ -352,9 +353,11 @@
     }
     function abrirPainel() {
       const perfil = isAdmin() ? "Adm" : "Vendedor(a)";
+      const nome = usuarioAtual().nome || usuarioAtual().login || perfil;
       $("loginBox").classList.add("hide");
       $("painel").classList.remove("hide");
-      $("boasVindas").textContent = `Bem-vindo, ${perfil}`;
+      $("boasVindas").textContent = `Bem-vindo, ${nome}`;
+      $("perfilUsuario").textContent = perfil;
       $("diaOperacional").textContent = `Dia operacional: ${etiquetaDiaOperacional()}`;
       setStatus("ONLINE", "Atualizando", "Conectado.");
     }
@@ -399,44 +402,17 @@
         lista.appendChild(card);
       });
     }
-    function calcular(vendas) {
-      const agora = new Date();
-      const ini = inicioDiaOperacional(agora);
-      const fim = fimDiaOperacional(agora);
-      const etiqueta = etiquetaDiaOperacional(agora);
-      const mes = mesKey(agora);
-      let totalHoje = 0;
-      let totalMes = 0;
-      const vendasHoje = [];
-      const escopo = (Array.isArray(vendas) ? vendas : []).filter((v) => vendaAtiva(v) && vendaDoUsuario(v));
-
-      escopo.forEach((venda) => {
-        const data = dataVenda(venda);
-        const total = Number(venda.total_final || 0);
-        const diaOp = String(venda.dia_operacional || "").trim();
-        const diaIso = parseBrDateKey(diaOp);
-        const ehHoje = diaOp === etiqueta || (data >= ini && data < fim);
-        const ehMes = mesKey(data) === mes || diaIso.slice(0, 7) === mes;
-        if (ehHoje) {
-          totalHoje += total;
-          vendasHoje.push({ venda, data });
-        }
-        if (ehMes) totalMes += total;
-      });
-
-      vendasHoje.sort((a, b) => b.data - a.data);
-      return { totalHoje, totalMes, vendasHoje, escopo };
-    }
-    function aplicarResumo(dados, totalRecebidas) {
-      const falta = Math.max(0, META_MES - dados.totalMes);
-      $("vHoje").textContent = brl(dados.totalHoje);
-      $("vMes").textContent = brl(dados.totalMes);
-      $("meta").textContent = brl(META_MES);
-      $("falta").textContent = falta <= 0 ? "Meta completa" : brl(falta);
-      $("faltaCard").classList.toggle("ok", falta <= 0);
-      $("diaOperacional").textContent = `Dia operacional: ${etiquetaDiaOperacional()}`;
-      $("origemDados").textContent = `API online. Versao ${VERSAO}. Vendas recebidas: ${totalRecebidas}. Vendas no acesso atual: ${dados.escopo.length}.`;
-      renderVendas(dados.vendasHoje);
+    function aplicarResumo(dados) {
+      const falta = Number(dados.falta_meta || 0);
+      const vendasDia = Array.isArray(dados.vendas_do_dia) ? dados.vendas_do_dia : [];
+      $("vHoje").textContent = brl(dados.vendas_hoje);
+      $("vMes").textContent = brl(dados.vendas_mes);
+      $("meta").textContent = brl(dados.meta_mes);
+      $("falta").textContent = dados.meta_completa ? "Meta completa" : brl(falta);
+      $("faltaCard").classList.toggle("ok", Boolean(dados.meta_completa));
+      $("diaOperacional").textContent = `Dia operacional: ${dados.dia_operacional || etiquetaDiaOperacional()}`;
+      $("origemDados").textContent = `API online. Versao ${VERSAO}. Regra igual ao desktop. Vendas do dia: ${vendasDia.length}.`;
+      renderVendas(vendasDia.map((venda) => ({ venda, data: dataVenda(venda) })));
     }
     async function sincronizar(motivo = "auto") {
       const agora = Date.now();
@@ -446,15 +422,14 @@
       ultimaTentativa = agora;
       try {
         setStatus("ONLINE", "Atualizando", "Buscando dados em segundo plano...");
-        const [status, vendas] = await Promise.all([
+        const [status, dashboard] = await Promise.all([
           api("/api/status", {}, 8000).catch(() => ({})),
-          api("/api/vendas?limite=500", {}, 12000)
+          api(`/api/painel/dashboard?meta_mes=${META_MES}`, {}, 12000)
         ]);
-        const dados = calcular(vendas);
-        aplicarResumo(dados, Array.isArray(vendas) ? vendas.length : 0);
-        const hora = new Date().toLocaleTimeString("pt-BR");
-        $("lastUpdate").textContent = `Ultima atualizacao: ${hora}`;
-        setStatus("ONLINE", "Atualizado", `Online. Atualizado as ${hora}. API vendas: ${status.vendas || 0}.`);
+        aplicarResumo(dashboard);
+        const hora = dashboard.ultima_atualizacao || new Date().toLocaleTimeString("pt-BR");
+        $("lastUpdate").textContent = `Ultima atualização: ${hora}`;
+        setStatus("ONLINE", "Atualizado", `Última atualização: ${hora}`);
         reagendar(AUTO_REFRESH_MS);
       } catch (error) {
         $("lastUpdate").textContent = "Ultima atualizacao: sem conexao.";
