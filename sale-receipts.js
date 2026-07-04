@@ -16,6 +16,15 @@
     document.head.appendChild(script);
   }
 
+  function carregarRelatorioVendas() {
+    if (document.getElementById("salesReportScript")) return;
+    const script = document.createElement("script");
+    script.id = "salesReportScript";
+    script.src = "sales-report.js";
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+
   function vendaPorId(vendaId) {
     if (typeof sales === "undefined" || !Array.isArray(sales)) return null;
     return sales.find(item => String(item.id) === String(vendaId));
@@ -97,5 +106,6 @@
   window.addEventListener("load", () => {
     inserirAcoesComprovante();
     carregarFiltrosHistorico();
+    carregarRelatorioVendas();
   });
 })();
