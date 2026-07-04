@@ -1,6 +1,15 @@
 (() => {
   const DAYS_LIMIT = 30;
 
+  function loadMessageTemplates() {
+    if (document.getElementById("messageTemplatesScript")) return;
+    const script = document.createElement("script");
+    script.id = "messageTemplatesScript";
+    script.src = "message-templates.js";
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+
   function normalizePhone(value) {
     return String(value || "").replace(/\D/g, "");
   }
@@ -102,5 +111,8 @@
     openWhatsapp,
   };
 
-  window.addEventListener("load", mountFollowup);
+  window.addEventListener("load", () => {
+    mountFollowup();
+    loadMessageTemplates();
+  });
 })();
