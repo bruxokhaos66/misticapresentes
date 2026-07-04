@@ -1,6 +1,15 @@
 (() => {
   const STORAGE_KEY = "misticaDailyGoal";
 
+  function loadTopProducts() {
+    if (document.getElementById("topProductsScript")) return;
+    const script = document.createElement("script");
+    script.id = "topProductsScript";
+    script.src = "top-products.js";
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+
   function money(value) {
     return typeof currency !== "undefined" ? currency.format(Number(value || 0)) : `R$ ${Number(value || 0).toFixed(2).replace(".", ",")}`;
   }
@@ -123,5 +132,8 @@
     setGoal,
   };
 
-  window.addEventListener("load", mountGoal);
+  window.addEventListener("load", () => {
+    mountGoal();
+    loadTopProducts();
+  });
 })();
