@@ -2,6 +2,7 @@ window.misticaSiteConfig = {
   domain: "misticaesotericos.com.br",
   publicBaseUrl: "https://misticaesotericos.com.br",
   apiBaseUrl: "https://api.misticaesotericos.com.br",
+  siteApiKey: "",
   serverMode: "production",
   usePublicDomainAccess: true,
   storageMode: "api_first",
