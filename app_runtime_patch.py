@@ -15,8 +15,53 @@ def aplicar_patches_runtime(fonte):
 
     # Guarda os cards principais do dashboard para atualizar sem reconstruir a tela.
     fonte = fonte.replace(
+        '        f.columnconfigure((0, 1, 2, 3, 4), weight=1)',
+        '        f.columnconfigure((0, 1, 2, 3, 4), weight=1)\n        f.rowconfigure(2, weight=1)',
+        1,
+    )
+    fonte = fonte.replace(
+        '            card = ctk.CTkFrame(f, fg_color=self.cor_vinho, corner_radius=15, border_width=2, border_color=cor)',
+        '            card = ctk.CTkFrame(f, fg_color="#211728", corner_radius=14, border_width=1, border_color=cor)',
+        1,
+    )
+    fonte = fonte.replace(
+        '            card.grid(row=0, column=idx, padx=8, pady=10, sticky="ew")',
+        '            card.grid(row=0, column=idx, padx=6, pady=(4, 10), sticky="ew")',
+        1,
+    )
+    fonte = fonte.replace(
+        '            ctk.CTkLabel(card, text=titulo, font=("Arial", 11, "bold"), text_color=cor).pack(pady=(12, 2))',
+        '            ctk.CTkLabel(card, text=titulo, font=("Arial", 12, "bold"), text_color="#f1e1b0").pack(pady=(12, 1))',
+        1,
+    )
+    fonte = fonte.replace(
         '            ctk.CTkLabel(card, text=val, font=("Arial", 22, "bold"), text_color="#ffffff").pack(pady=(2, 12))',
-        '            if not hasattr(self, "cards_dashboard_topo"):\n                self.cards_dashboard_topo = {}\n            lbl_kpi = ctk.CTkLabel(card, text=val, font=("Arial", 22, "bold"), text_color="#ffffff")\n            lbl_kpi.pack(pady=(2, 12))\n            self.cards_dashboard_topo[titulo] = lbl_kpi',
+        '            if not hasattr(self, "cards_dashboard_topo"):\n                self.cards_dashboard_topo = {}\n            lbl_kpi = ctk.CTkLabel(card, text=val, font=("Arial", 24, "bold"), text_color="#ffffff")\n            lbl_kpi.pack(pady=(2, 12))\n            self.cards_dashboard_topo[titulo] = lbl_kpi',
+        1,
+    )
+    fonte = fonte.replace(
+        '        f_info = ctk.CTkFrame(f, fg_color="#18121f", corner_radius=15)\n        f_info.grid(row=1, column=0, columnspan=5, pady=20, sticky="nsew")',
+        '        f_info = ctk.CTkFrame(f, fg_color="#1b1422", corner_radius=14, border_width=1, border_color="#3d3048")\n        f_info.grid(row=1, column=0, columnspan=5, pady=(2, 10), sticky="ew")',
+        1,
+    )
+    fonte = fonte.replace(
+        '        ctk.CTkLabel(f_info, text="Mistica Presentes", font=("Georgia", 28, "bold"), text_color=self.cor_ouro).pack(pady=(15, 5))',
+        '        ctk.CTkLabel(f_info, text="Mistica Presentes", font=("Georgia", 26, "bold"), text_color=self.cor_ouro).pack(pady=(12, 3))',
+        1,
+    )
+    fonte = fonte.replace(
+        '            font=("Arial", 14, "italic"),\n            wraplength=720,\n            text_color="#cccccc"',
+        '            font=("Arial", 15, "italic"),\n            wraplength=860,\n            text_color="#f4ead7"',
+        1,
+    )
+    fonte = fonte.replace(
+        '        ctk.CTkLabel(f_info, text="Painel de alertas da Isis", font=self.font_label, text_color=self.cor_ouro).pack(pady=(10, 3))',
+        '        ctk.CTkLabel(f_info, text="Painel de alertas da Isis", font=("Arial", 14, "bold"), text_color=self.cor_ouro).pack(pady=(4, 2))',
+        1,
+    )
+    fonte = fonte.replace(
+        '        ctk.CTkLabel(f_info, text=alertas_txt, font=("Arial", 13, "bold"), wraplength=900, justify="left", text_color="#f0e6d2").pack(padx=25, pady=(0, 10))',
+        '        ctk.CTkLabel(f_info, text=alertas_txt, font=("Arial", 13, "bold"), wraplength=980, justify="left", text_color="#fff7e8").pack(padx=24, pady=(0, 10))',
         1,
     )
 
@@ -117,47 +162,98 @@ def aplicar_patches_runtime(fonte):
             except Exception:
                 pass
 
-        self.frame_vendas_dia = ctk.CTkFrame(parent, fg_color="#18121f", corner_radius=16)
         try:
-            self.frame_vendas_dia.grid(row=2, column=0, columnspan=5, pady=8, sticky="nsew")
+            parent.grid_rowconfigure(2, weight=1)
+        except Exception:
+            pass
+
+        self.frame_vendas_dia = ctk.CTkFrame(parent, fg_color="#151019", corner_radius=14, border_width=1, border_color="#3b2d43")
+        try:
+            self.frame_vendas_dia.grid(row=2, column=0, columnspan=5, pady=(0, 4), sticky="nsew")
         except Exception:
             self.frame_vendas_dia.pack(fill="both", expand=True, padx=10, pady=8)
 
         inicio, fim, dia = intervalo_vendas_hoje()
-        topo = ctk.CTkFrame(self.frame_vendas_dia, fg_color="#120d18", corner_radius=12)
-        topo.pack(fill="x", padx=10, pady=(10, 6))
-        ctk.CTkLabel(topo, text=f"Vendas em tempo real • {dia}", font=("Arial", 17, "bold"), text_color=self.cor_ouro).pack(side="left", padx=12, pady=8)
+        topo = ctk.CTkFrame(self.frame_vendas_dia, fg_color="#211728", corner_radius=12)
+        topo.pack(fill="x", padx=10, pady=(10, 8))
+        titulo_topo = ctk.CTkFrame(topo, fg_color="transparent")
+        titulo_topo.pack(side="left", fill="x", expand=True, padx=12, pady=8)
+        ctk.CTkLabel(titulo_topo, text=f"Vendas em tempo real - {dia}", font=("Arial", 18, "bold"), text_color=self.cor_ouro).pack(anchor="w")
+        ctk.CTkLabel(titulo_topo, text="Vendido, meta, falta, mes, bonus e historico do dia.", font=("Arial", 12), text_color="#d9cde2").pack(anchor="w")
 
-        self.lbl_sync_status = ctk.CTkLabel(topo, text="Sincronização: verificando...", font=("Arial", 12, "bold"), text_color=self.cor_ouro)
-        self.lbl_sync_status.pack(side="right", padx=12, pady=8)
+        status_box = ctk.CTkFrame(topo, fg_color="#0f1c16", corner_radius=10, border_width=1, border_color="#31533d")
+        status_box.pack(side="right", padx=10, pady=8)
+        self.lbl_sync_status = ctk.CTkLabel(status_box, text="API: verificando...", font=("Arial", 12, "bold"), text_color="#ffcc66", justify="right")
+        self.lbl_sync_status.pack(padx=12, pady=7)
 
         cards = ctk.CTkFrame(self.frame_vendas_dia, fg_color="transparent")
-        cards.pack(fill="x", padx=10, pady=(0, 6))
+        cards.pack(fill="x", padx=10, pady=(0, 8))
         self.cards_painel_vendas = {}
         for titulo in ["Vendido", "Meta", "Falta", "Mês", "Bônus"]:
-            card = ctk.CTkFrame(cards, fg_color="#241d2b", corner_radius=10)
+            card = ctk.CTkFrame(cards, fg_color="#241a2d", corner_radius=10, border_width=1, border_color="#3d3048")
             card.pack(side="left", fill="x", expand=True, padx=4)
-            ctk.CTkLabel(card, text=titulo.upper(), font=("Arial", 10, "bold"), text_color="#cbbdce").pack(pady=(5, 0))
-            lbl = ctk.CTkLabel(card, text="...", font=("Arial", 13, "bold"), text_color=self.cor_ouro)
-            lbl.pack(pady=(0, 5))
+            ctk.CTkLabel(card, text=titulo.upper(), font=("Arial", 11, "bold"), text_color="#d8cada").pack(pady=(7, 0))
+            lbl = ctk.CTkLabel(card, text="...", font=("Arial", 15, "bold"), text_color=self.cor_ouro)
+            lbl.pack(pady=(1, 8))
             self.cards_painel_vendas[titulo] = lbl
 
-        bloco = ctk.CTkFrame(self.frame_vendas_dia, fg_color="#120d18", corner_radius=12)
+        bloco = ctk.CTkFrame(self.frame_vendas_dia, fg_color="#110d16", corner_radius=12, border_width=1, border_color="#34293c")
         bloco.pack(fill="both", expand=True, padx=10, pady=(0, 10))
-        ctk.CTkLabel(bloco, text="Histórico do dia por vendedor e produto • painel leve, sem travar a venda", font=("Arial", 13, "bold"), text_color=self.cor_ouro).pack(anchor="w", padx=10, pady=(8, 4))
+        cab_hist = ctk.CTkFrame(bloco, fg_color="transparent")
+        cab_hist.pack(fill="x", padx=10, pady=(8, 4))
+        ctk.CTkLabel(cab_hist, text="Historico do dia por vendedor e produto", font=("Arial", 14, "bold"), text_color=self.cor_ouro).pack(side="left")
+        ctk.CTkLabel(cab_hist, text="Role para ver todas as vendas", font=("Arial", 12), text_color="#cfc3d5").pack(side="right")
 
         area = ctk.CTkFrame(bloco, fg_color="transparent")
         area.pack(fill="both", expand=True, padx=10, pady=(0, 8))
-        self.tree_vendas_dia = ttk.Treeview(area, columns=("hora", "usuario", "produto", "qtd", "valor", "venda"), show="headings", height=12)
+        try:
+            area.configure(height=275)
+            area.pack_propagate(False)
+            area.grid_rowconfigure(0, weight=1)
+            area.grid_columnconfigure(0, weight=1)
+        except Exception:
+            pass
+
+        try:
+            style = ttk.Style()
+            style.configure("MisticaDashboard.Treeview", font=("Arial", 12), rowheight=30, background="#fbf7ef", fieldbackground="#fbf7ef", foreground="#1d1522", borderwidth=0)
+            style.configure("MisticaDashboard.Treeview.Heading", font=("Arial", 12, "bold"), background="#3a2a44", foreground="#ffffff")
+            style.map("MisticaDashboard.Treeview", background=[("selected", "#b98a3c")], foreground=[("selected", "#111111")])
+        except Exception:
+            pass
+
+        self.tree_vendas_dia = ttk.Treeview(area, columns=("hora", "usuario", "produto", "qtd", "valor", "venda"), show="headings", height=9, style="MisticaDashboard.Treeview")
         scroll_y = ttk.Scrollbar(area, orient="vertical", command=self.tree_vendas_dia.yview)
-        self.tree_vendas_dia.configure(yscrollcommand=scroll_y.set)
-        headers = {"hora":"Data/Hora", "usuario":"Usuário/Vendedor", "produto":"Produto", "qtd":"Qtd", "valor":"Valor", "venda":"Venda Nº"}
-        widths = {"hora":150, "usuario":180, "produto":420, "qtd":60, "valor":120, "venda":80}
+        scroll_x = ttk.Scrollbar(area, orient="horizontal", command=self.tree_vendas_dia.xview)
+        self.tree_vendas_dia.configure(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
+        headers = {"hora":"Data/Hora", "usuario":"Usuario/Vendedor", "produto":"Produto", "qtd":"Qtd", "valor":"Valor", "venda":"Venda No"}
+        widths = {"hora":155, "usuario":185, "produto":430, "qtd":70, "valor":125, "venda":85}
         for col in headers:
             self.tree_vendas_dia.heading(col, text=headers[col])
-            self.tree_vendas_dia.column(col, width=widths[col], anchor="center" if col in ("qtd", "valor", "venda") else "w")
-        self.tree_vendas_dia.pack(side="left", fill="both", expand=True)
-        scroll_y.pack(side="right", fill="y")
+            self.tree_vendas_dia.column(col, width=widths[col], minwidth=widths[col], stretch=col == "produto", anchor="center" if col in ("qtd", "valor", "venda") else "w")
+        self.tree_vendas_dia.tag_configure("par", background="#fffaf0")
+        self.tree_vendas_dia.tag_configure("impar", background="#efe7db")
+        self.tree_vendas_dia.grid(row=0, column=0, sticky="nsew")
+        scroll_y.grid(row=0, column=1, sticky="ns")
+        scroll_x.grid(row=1, column=0, sticky="ew")
+
+        def rolar_vendas(event):
+            try:
+                if getattr(event, "num", None) == 4:
+                    self.tree_vendas_dia.yview_scroll(-3, "units")
+                elif getattr(event, "num", None) == 5:
+                    self.tree_vendas_dia.yview_scroll(3, "units")
+                else:
+                    delta = int(-1 * (event.delta / 120))
+                    self.tree_vendas_dia.yview_scroll(delta, "units")
+                return "break"
+            except Exception:
+                return None
+
+        self.tree_vendas_dia.bind("<Enter>", lambda event: self.tree_vendas_dia.focus_set())
+        self.tree_vendas_dia.bind("<MouseWheel>", rolar_vendas)
+        self.tree_vendas_dia.bind("<Button-4>", rolar_vendas)
+        self.tree_vendas_dia.bind("<Button-5>", rolar_vendas)
 
         self.atualizar_painel_vendas_dia()
         self.agendar_atualizacao_painel_vendas_dia()
@@ -169,7 +265,10 @@ def aplicar_patches_runtime(fonte):
             pendencias = estado.get("pendencias", 0)
             ultima = estado.get("ultima_sincronizacao") or "Nunca"
             online = bool(estado.get("online"))
-            txt = f"Sincronização: {'Online' if online else 'Offline'} | Pendências: {pendencias} | Última: {ultima}"
+            painel = str(getattr(self, "_painel_mobile_status_texto", "") or "").strip()
+            txt = f"API: {'Online' if online else 'Offline'} | Pendencias: {pendencias} | Ultima: {ultima}"
+            if painel:
+                txt = txt + " | " + painel
             if hasattr(self, "lbl_sync_status"):
                 self.lbl_sync_status.configure(text=txt, text_color="#7CFC98" if online and int(pendencias or 0) == 0 else "#ffcc66")
         except Exception as exc:
@@ -227,8 +326,8 @@ def aplicar_patches_runtime(fonte):
             if hasattr(self, "tree_vendas_dia"):
                 for item in self.tree_vendas_dia.get_children():
                     self.tree_vendas_dia.delete(item)
-                for venda_id, data_venda, data_iso, vendedor, produto, qtd, valor_item, total_venda, forma, dia_op in vendas_dia_operacional_detalhadas():
-                    self.tree_vendas_dia.insert("", "end", values=(data_venda or data_iso, vendedor, produto, qtd, format_moeda(valor_item), venda_id))
+                for idx, (venda_id, data_venda, data_iso, vendedor, produto, qtd, valor_item, total_venda, forma, dia_op) in enumerate(vendas_dia_operacional_detalhadas()):
+                    self.tree_vendas_dia.insert("", "end", values=(data_venda or data_iso, vendedor, produto, qtd, format_moeda(valor_item), venda_id), tags=("par" if idx % 2 == 0 else "impar",))
             self._atualizar_status_sync_leve()
             if apos_venda:
                 self._sincronizar_pendencias_em_segundo_plano()
