@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from backend.database import conectar, executar, listar, obter
 from backend.order_status_routes import router as order_status_router
+from backend.product_routes import router as product_router
 from backend.upload_routes import router as upload_router
 from backend.user_sync_routes import router as user_sync_router
 from backend.site_stock_routes import router as site_stock_router
@@ -20,7 +21,7 @@ from database.migrations import init_db
 app = FastAPI(
     title="Mística Presentes API",
     description="API oficial para sincronização do app Mística Presentes.",
-    version="0.3.6",
+    version="0.3.7",
 )
 
 app.add_middleware(
@@ -42,6 +43,7 @@ UPLOADS_DIR = Path(__file__).resolve().parent / "uploads"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
+app.include_router(product_router)
 app.include_router(user_sync_router)
 app.include_router(site_stock_router)
 app.include_router(order_status_router)

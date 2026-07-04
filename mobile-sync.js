@@ -68,9 +68,18 @@
     return response.json();
   }
 
+  function fullUrl(path) {
+    const value = String(path || "").trim();
+    if (!value) return "";
+    if (value.startsWith("http://") || value.startsWith("https://")) return value;
+    return `${API_BASE}${value.startsWith("/") ? "" : "/"}${value}`;
+  }
+
   function normalizarProduto(item) {
     const codigo = item.codigo_p || item.codigo || String(item.id || "");
     const id = `api-${item.id}`;
+    const imagens = Array.isArray(item.imagens) ? item.imagens.map(fullUrl).filter(Boolean) : [];
+    const imagemPrincipal = fullUrl(item.imagem_url || item.imagem || item.imageUrl || imagens[0] || "");
     return {
       id,
       apiId: item.id,
@@ -81,8 +90,10 @@
       price: Number(item.preco || item.valor || 0),
       stock: Number(item.quantidade || item.estoque || 0),
       icon: item.icone || "✨",
-      imageUrl: item.imagem || item.imageUrl || "",
-      images: Array.isArray(item.imagens) ? item.imagens : [],
+      imageUrl: imagemPrincipal,
+      images: imagens.length ? imagens : (imagemPrincipal ? [imagemPrincipal] : []),
+      externalUrl: item.link_externo || item.externalUrl || "",
+      tag: item.selo || item.tag || "",
     };
   }
 
