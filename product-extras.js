@@ -26,13 +26,21 @@
     try { return getStock(p.id); } catch { return Number(p.stock || 0); }
   }
 
-  function carregarAdminImageUpload() {
-    if (document.getElementById("adminImageUploadScript")) return;
+  function carregarScript(id, src) {
+    if (document.getElementById(id)) return;
     const script = document.createElement("script");
-    script.id = "adminImageUploadScript";
-    script.src = "admin-image-upload.js";
+    script.id = id;
+    script.src = src;
     script.defer = true;
     document.head.appendChild(script);
+  }
+
+  function carregarAdminImageUpload() {
+    carregarScript("adminImageUploadScript", "admin-image-upload.js");
+  }
+
+  function carregarAdminProductApi() {
+    carregarScript("adminProductApiScript", "admin-product-api.js");
   }
 
   function produtosDoKit(kit) {
@@ -164,6 +172,7 @@
   function ativarExtras() {
     if (typeof products === "undefined") return;
     carregarAdminImageUpload();
+    carregarAdminProductApi();
     montarKits();
     inserirBotoesDetalhe();
   }
