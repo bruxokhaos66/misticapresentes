@@ -3,6 +3,10 @@
   const API_BASE = (cfg.apiBaseUrl || "https://api.misticaesotericos.com.br").replace(/\/$/, "");
   const SITE_API_KEY = String(cfg.siteApiKey || "").trim();
   let ultimoRelatorio = { pedidos: [], estoqueBaixo: [], maisVendidos: [] };
+  let pedidosBrutos = [];
+  let filtroPeriodo = "30";
+  let filtroOrigem = "todos";
+  let filtroStatus = "todos";
 
   function money(value) {
     try { return currency.format(Number(value || 0)); } catch { return `R$ ${Number(value || 0).toFixed(2)}`; }
@@ -28,6 +32,32 @@
     if (origem.includes("isis") || vendedor.includes("isis") || cliente.includes("isis")) return "Isis";
     if (origem.includes("site") || origem.includes("api") || vendedor.includes("site")) return "Site/API";
     return "Manual";
+  }
+
+  function dataPedido(pedido) {
+    const valor = pedido.data_iso || pedido.data_venda || "";
+    const data = new Date(valor);
+    if (!Number.isNaN(data.getTime())) return data;
+    const partes = String(valor).match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    if (partes) return new Date(`${partes[3]}-${partes[2]}-${partes[1]}T00:00:00`);
+    return null;
+  }
+
+  function aplicarFiltros(pedidos) {
+    const agora = new Date();
+    return pedidos.filter(pedido => {
+      if (filtroOrigem !== "todos" && origemDoPedido(pedido) !== filtroOrigem) return false;
+      if (filtroStatus !== "todos" && String(pedido.status || "") !== filtroStatus) return false;
+      if (filtroPeriodo !== "todos") {
+        const data = dataPedido(pedido);
+        if (!data) return false;
+        const dias = Number(filtroPeriodo || 30);
+        const limite = new Date(agora);
+        limite.setDate(limite.getDate() - dias);
+        if (data < limite) return false;
+      }
+      return true;
+    });
   }
 
   function calcularMaisVendidos(pedidos) {
@@ -120,7 +150,7 @@
   }
 
   function tabelaMaisVendidos(lista) {
-    if (!lista.length) return `<p class="privacy-note">Ainda não há itens vendidos suficientes para ranking.</p>`;
+    if (!lista.length) return `<p class="privacy-note">Ainda não há itens vendidos suficientes para ranking neste filtro.</p>`;
     return `
       <div class="report-list">
         ${lista.slice(0, 8).map(item => `
@@ -133,50 +163,90 @@
     `;
   }
 
+  function renderizarRelatorio(root, estoqueList) {
+    const pedidosList = aplicarFiltros(pedidosBrutos);
+    const resumo = resumoPedidos(pedidosList);
+    const maisVendidos = calcularMaisVendidos(pedidosList);
+    ultimoRelatorio = { pedidos: pedidosList, estoqueBaixo: estoqueList, maisVendidos };
+    root.innerHTML = `
+      <div class="report-filters">
+        <label>Período
+          <select data-report-filter="periodo">
+            <option value="0" ${filtroPeriodo === "0" ? "selected" : ""}>Hoje</option>
+            <option value="7" ${filtroPeriodo === "7" ? "selected" : ""}>Últimos 7 dias</option>
+            <option value="30" ${filtroPeriodo === "30" ? "selected" : ""}>Últimos 30 dias</option>
+            <option value="todos" ${filtroPeriodo === "todos" ? "selected" : ""}>Todos</option>
+          </select>
+        </label>
+        <label>Origem
+          <select data-report-filter="origem">
+            <option value="todos" ${filtroOrigem === "todos" ? "selected" : ""}>Todas</option>
+            <option value="Isis" ${filtroOrigem === "Isis" ? "selected" : ""}>Isis</option>
+            <option value="Site/API" ${filtroOrigem === "Site/API" ? "selected" : ""}>Site/API</option>
+            <option value="Manual" ${filtroOrigem === "Manual" ? "selected" : ""}>Manual</option>
+          </select>
+        </label>
+        <label>Status
+          <select data-report-filter="status">
+            <option value="todos" ${filtroStatus === "todos" ? "selected" : ""}>Todos</option>
+            <option value="Aguardando pagamento" ${filtroStatus === "Aguardando pagamento" ? "selected" : ""}>Aguardando pagamento</option>
+            <option value="Pagamento confirmado" ${filtroStatus === "Pagamento confirmado" ? "selected" : ""}>Pagamento confirmado</option>
+            <option value="Separando pedido" ${filtroStatus === "Separando pedido" ? "selected" : ""}>Separando pedido</option>
+            <option value="Pronto para retirada" ${filtroStatus === "Pronto para retirada" ? "selected" : ""}>Pronto retirada</option>
+            <option value="Entregue" ${filtroStatus === "Entregue" ? "selected" : ""}>Entregue</option>
+            <option value="Cancelado" ${filtroStatus === "Cancelado" ? "selected" : ""}>Cancelado</option>
+          </select>
+        </label>
+      </div>
+      <div class="report-export-actions">
+        <button class="btn btn-ghost" type="button" data-export-report="pedidos">Exportar pedidos CSV</button>
+        <button class="btn btn-ghost" type="button" data-export-report="estoque">Exportar estoque baixo CSV</button>
+        <button class="btn btn-ghost" type="button" data-export-report="vendidos">Exportar mais vendidos CSV</button>
+      </div>
+      <div class="report-grid">
+        ${card("Pedidos", resumo.total)}
+        ${card("Pendentes", resumo.pendentes, "Aguardando pagamento")}
+        ${card("Pagos", resumo.pagos, "Pagamento confirmado")}
+        ${card("Separação", resumo.separados, "Separando/pronto")}
+        ${card("Estoque baixado", resumo.estoqueBaixado)}
+        ${card("Pedidos Isis", resumo.isis)}
+        ${card("Faturamento", money(resumo.faturamento), "sem cancelados")}
+        ${card("Estoque baixo", estoqueList.length)}
+      </div>
+      <div class="report-columns">
+        <section>
+          <h3>Produtos mais vendidos</h3>
+          ${tabelaMaisVendidos(maisVendidos)}
+        </section>
+        <section>
+          <h3>Estoque baixo</h3>
+          ${tabelaEstoqueBaixo(estoqueList)}
+        </section>
+      </div>
+    `;
+  }
+
   async function carregarRelatorio() {
     const root = document.getElementById("adminReportContent");
     if (!root) return;
     root.innerHTML = `<p class="privacy-note">Carregando relatório...</p>`;
     try {
       const [pedidos, estoqueBaixo] = await Promise.all([
-        api("/api/pedidos?limite=300"),
+        api("/api/pedidos?limite=500"),
         api("/api/estoque/baixo?limite=50"),
       ]);
-      const pedidosList = Array.isArray(pedidos) ? pedidos : [];
+      pedidosBrutos = Array.isArray(pedidos) ? pedidos : [];
       const estoqueList = Array.isArray(estoqueBaixo) ? estoqueBaixo : [];
-      const resumo = resumoPedidos(pedidosList);
-      const maisVendidos = calcularMaisVendidos(pedidosList);
-      ultimoRelatorio = { pedidos: pedidosList, estoqueBaixo: estoqueList, maisVendidos };
-      root.innerHTML = `
-        <div class="report-export-actions">
-          <button class="btn btn-ghost" type="button" data-export-report="pedidos">Exportar pedidos CSV</button>
-          <button class="btn btn-ghost" type="button" data-export-report="estoque">Exportar estoque baixo CSV</button>
-          <button class="btn btn-ghost" type="button" data-export-report="vendidos">Exportar mais vendidos CSV</button>
-        </div>
-        <div class="report-grid">
-          ${card("Pedidos", resumo.total)}
-          ${card("Pendentes", resumo.pendentes, "Aguardando pagamento")}
-          ${card("Pagos", resumo.pagos, "Pagamento confirmado")}
-          ${card("Separação", resumo.separados, "Separando/pronto")}
-          ${card("Estoque baixado", resumo.estoqueBaixado)}
-          ${card("Pedidos Isis", resumo.isis)}
-          ${card("Faturamento", money(resumo.faturamento), "sem cancelados")}
-          ${card("Estoque baixo", estoqueList.length)}
-        </div>
-        <div class="report-columns">
-          <section>
-            <h3>Produtos mais vendidos</h3>
-            ${tabelaMaisVendidos(maisVendidos)}
-          </section>
-          <section>
-            <h3>Estoque baixo</h3>
-            ${tabelaEstoqueBaixo(estoqueList)}
-          </section>
-        </div>
-      `;
+      renderizarRelatorio(root, estoqueList);
     } catch (error) {
       root.innerHTML = `<p class="privacy-note">Não foi possível carregar o relatório agora: ${error.message}</p>`;
     }
+  }
+
+  function rerenderFiltros() {
+    const root = document.getElementById("adminReportContent");
+    if (!root) return;
+    renderizarRelatorio(root, ultimoRelatorio.estoqueBaixo || []);
   }
 
   function montarPainel() {
@@ -196,6 +266,15 @@
     admin.insertBefore(panel, pedidos?.nextSibling || admin.firstChild);
     carregarRelatorio();
   }
+
+  document.addEventListener("change", event => {
+    const filtro = event.target?.dataset?.reportFilter;
+    if (!filtro) return;
+    if (filtro === "periodo") filtroPeriodo = event.target.value;
+    if (filtro === "origem") filtroOrigem = event.target.value;
+    if (filtro === "status") filtroStatus = event.target.value;
+    rerenderFiltros();
+  });
 
   document.addEventListener("click", event => {
     if (event.target?.dataset?.reloadAdminReport !== undefined) carregarRelatorio();
