@@ -123,6 +123,14 @@
 .admin-alert-isis { border-color: rgba(172, 219, 164, 0.40); background: rgba(113, 138, 70, 0.14); }
 .admin-alert-danger { border-color: rgba(255, 166, 166, 0.36); background: rgba(255, 166, 166, 0.10); }
 
+.admin-activity-panel { margin-bottom: 22px; }
+.admin-activity-content { display: grid; gap: 8px; margin-top: 12px; }
+.admin-activity-row { border: 1px solid rgba(240, 197, 106, 0.18); border-radius: 14px; background: rgba(255, 255, 255, 0.035); padding: 12px; display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.admin-activity-row div { display: grid; gap: 4px; }
+.admin-activity-row strong { color: #fff8e7; }
+.admin-activity-row span, .admin-activity-row small, .admin-activity-row time { color: #d9cfad; }
+.admin-activity-row time { white-space: nowrap; font-size: 0.82rem; }
+
 .admin-report-panel { margin-bottom: 22px; }
 .admin-report-content { display: grid; gap: 18px; margin-top: 14px; }
 .report-filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
@@ -157,7 +165,8 @@
   .catalog-tools,
   .kit-grid,
   .product-detail-layout { grid-template-columns: 1fr; }
-  .pedido-card-head { display: grid; }
+  .pedido-card-head,
+  .admin-activity-row { display: grid; }
 }
 
 @media (max-width: 560px) {
