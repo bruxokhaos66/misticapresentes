@@ -41,4 +41,10 @@ def mensagem_dashboard_isis_runtime():
     if alvo in fonte and 'buscar_online_em_background' not in fonte:
         fonte = fonte.replace(alvo, novo, 1)
 
+    try:
+        from app_painel_guard_patch import aplicar_painel_guard_runtime
+        fonte = aplicar_painel_guard_runtime(fonte)
+    except Exception:
+        pass
+
     return fonte
