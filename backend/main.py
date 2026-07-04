@@ -16,7 +16,7 @@ from database.migrations import init_db
 app = FastAPI(
     title="Mística Presentes API",
     description="API oficial para sincronização do app Mística Presentes.",
-    version="0.3.3",
+    version="0.3.4",
 )
 
 app.add_middleware(
@@ -193,7 +193,7 @@ def health():
 def status():
     total_produtos = obter("SELECT COUNT(*) AS total FROM produtos WHERE COALESCE(ativo,1)=1") or {"total": 0}
     total_clientes = obter("SELECT COUNT(*) AS total FROM clientes WHERE COALESCE(ativo,1)=1") or {"total": 0}
-    total_vendas = obter("SELECT COUNT(*) AS total FROM vendas WHERE COALESCE(status,'Concluído')!='Cancelada'") or {"total": 0}
+    total_vendas = obter("SELECT COUNT(*) AS total FROM vendas WHERE COALESCE(status,'Concluído') NOT IN ('Cancelado','Cancelada')") or {"total": 0}
     return {
         "status": "online",
         "produtos": total_produtos["total"],
@@ -240,8 +240,8 @@ def login_painel(entrada: LoginIn):
 def painel_resumo():
     total_produtos = obter("SELECT COUNT(*) AS total FROM produtos WHERE COALESCE(ativo,1)=1") or {"total": 0}
     total_clientes = obter("SELECT COUNT(*) AS total FROM clientes WHERE COALESCE(ativo,1)=1") or {"total": 0}
-    total_vendas = obter("SELECT COUNT(*) AS total FROM vendas WHERE COALESCE(status,'Concluído')!='Cancelada'") or {"total": 0}
-    venda_total = obter("SELECT COALESCE(SUM(total_final),0) AS total FROM vendas WHERE COALESCE(status,'Concluído')!='Cancelada'") or {"total": 0}
+    total_vendas = obter("SELECT COUNT(*) AS total FROM vendas WHERE COALESCE(status,'Concluído') NOT IN ('Cancelado','Cancelada')") or {"total": 0}
+    venda_total = obter("SELECT COALESCE(SUM(total_final),0) AS total FROM vendas WHERE COALESCE(status,'Concluído') NOT IN ('Cancelado','Cancelada')") or {"total": 0}
     estoque_total = obter("SELECT COALESCE(SUM(quantidade),0) AS total FROM produtos WHERE COALESCE(ativo,1)=1") or {"total": 0}
     return {
         "produtos": total_produtos["total"],
@@ -358,7 +358,8 @@ def listar_vendas(limite: int = Query(100, ge=1, le=500)):
     return listar(
         """
         SELECT id, cliente, data_venda, subtotal, desconto, taxa, total_final,
-               forma_pagamento, vendedor, status, data_iso, dia_operacional
+               forma_pagamento, vendedor, status, data_iso, dia_operacional,
+               origem_sync, local_id
         FROM vendas
         ORDER BY id DESC
         LIMIT ?
@@ -405,7 +406,7 @@ def salvar_venda_online(venda: VendaIn, origem_sync="api"):
     agora = datetime.now()
     data_venda = venda.data_venda or agora.strftime("%d/%m/%Y %H:%M:%S")
     data_iso = venda.data_iso or agora.isoformat(timespec="seconds")
-    dia_operacional = venda.dia_operacional or agora.strftime("%Y-%m-%d")
+    dia_operacional = venda.dia_operacional or agora.strftime("%d/%m/%Y")
 
     if venda.local_id:
         existente = obter(
