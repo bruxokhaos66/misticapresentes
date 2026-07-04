@@ -1,4 +1,13 @@
 (() => {
+  function loadDailyTasks() {
+    if (document.getElementById("dailyTasksScript")) return;
+    const script = document.createElement("script");
+    script.id = "dailyTasksScript";
+    script.src = "daily-tasks.js";
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+
   const TEMPLATES = [
     ["Atendimento inicial", "Ola! Seja bem-vindo(a) a Mistica Presentes. Como podemos te ajudar hoje?"],
     ["Pedido recebido", "Ola! Recebemos seu pedido na Mistica Presentes. Vamos conferir os itens e ja te retornamos com a confirmacao."],
@@ -71,5 +80,8 @@
     whatsapp: sendTemplate,
   };
 
-  window.addEventListener("load", mountTemplates);
+  window.addEventListener("load", () => {
+    mountTemplates();
+    loadDailyTasks();
+  });
 })();
