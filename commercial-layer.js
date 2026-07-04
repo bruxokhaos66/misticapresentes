@@ -15,6 +15,14 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   document.querySelectorAll(".internal-section").forEach(section => { section.hidden = true; });
 
+  if (!document.getElementById("seoSiteScript")) {
+    const seo = document.createElement("script");
+    seo.id = "seoSiteScript";
+    seo.src = "seo-site.js";
+    seo.defer = true;
+    document.head.appendChild(seo);
+  }
+
   if (!document.getElementById("adminAccessScript")) {
     const script = document.createElement("script");
     script.id = "adminAccessScript";
