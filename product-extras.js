@@ -51,6 +51,10 @@
     carregarScript("isisOrderApiScript", "isis-order-api.js");
   }
 
+  function carregarAdminReport() {
+    carregarScript("adminReportScript", "admin-report.js");
+  }
+
   function produtosDoKit(kit) {
     const achados = [];
     kit.termos.forEach(t => {
@@ -183,6 +187,7 @@
     carregarAdminProductApi();
     carregarIsisKitShare();
     carregarIsisOrderApi();
+    carregarAdminReport();
     montarKits();
     inserirBotoesDetalhe();
   }
