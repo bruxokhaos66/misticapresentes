@@ -1,0 +1,3 @@
+(() => {
+  window.misticaSalesReport = window.misticaSalesReport || {};
+})();
