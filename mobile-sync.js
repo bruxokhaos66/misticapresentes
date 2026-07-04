@@ -1,6 +1,7 @@
 (() => {
   const config = window.misticaSiteConfig || {};
   const API_BASE = (config.apiBaseUrl || "https://api.misticaesotericos.com.br").replace(/\/$/, "");
+  const SITE_API_KEY = String(config.siteApiKey || "").trim();
   const SYNC_INTERVAL_MS = 5000;
 
   let syncRunning = false;
@@ -43,20 +44,32 @@
     el.style.color = ok ? "#dff5d8" : "#ffd7d7";
   }
 
+  function apiHeaders(extra = {}) {
+    return {
+      "Content-Type": "application/json",
+      ...(SITE_API_KEY ? { "X-Mistica-Api-Key": SITE_API_KEY } : {}),
+      ...extra,
+    };
+  }
+
   async function api(path, options = {}) {
     const response = await fetch(`${API_BASE}${path}`, {
       ...options,
-      headers: {
-        "Content-Type": "application/json",
-        ...(options.headers || {}),
-      },
+      headers: apiHeaders(options.headers || {}),
     });
-    if (!response.ok) throw new Error(`API ${response.status}`);
+    if (!response.ok) {
+      let detail = `API ${response.status}`;
+      try {
+        const body = await response.json();
+        detail = body.detail || body.message || detail;
+      } catch {}
+      throw new Error(detail);
+    }
     return response.json();
   }
 
   function normalizarProduto(item) {
-    const codigo = item.codigo_p || item.codigo || String(item.id);
+    const codigo = item.codigo_p || item.codigo || String(item.id || "");
     const id = `api-${item.id}`;
     return {
       id,
@@ -142,24 +155,33 @@
     }
   }
 
-  async function reservarEstoqueApi(itens, vendaId) {
-    const payload = {
-      origem: "site",
-      venda_id: vendaId,
-      itens: itens.map(item => {
-        const produto = products.find(p => p.id === item.id);
-        return {
-          produto_id: produto?.apiId || null,
-          codigo_p: produto?.codigo || item.id,
-          nome_p: item.name,
-          quantidade: Number(item.qty || 0),
-        };
-      }),
-    };
-    return api("/api/estoque/reservar", { method: "POST", body: JSON.stringify(payload) });
+  function montarItensVenda(itens) {
+    return itens.map(item => {
+      const produto = products.find(p => p.id === item.id);
+      const temCodigoReal = Boolean(produto?.apiId || produto?.codigo);
+      if (!temCodigoReal) {
+        console.warn("Produto sem código sincronizado; baixa automática ignorada.", item.name);
+      }
+      return {
+        produto_id: produto?.apiId || null,
+        codigo_p: produto?.codigo || item.id,
+        nome_p: item.name,
+        quantidade: Number(item.qty || 0),
+        custo_unitario: 0,
+        valor_unitario: Number(item.price || 0),
+        valor_total: Number(item.price || 0) * Number(item.qty || 0),
+        baixa_automatica: temCodigoReal,
+      };
+    });
   }
 
   async function enviarVendaApi(venda, itens) {
+    const itensPayload = montarItensVenda(itens);
+    const podeBaixarEstoque = itensPayload.every(item => item.baixa_automatica);
+    if (!podeBaixarEstoque) {
+      setSyncStatus("Produto sem código sincronizado; baixa automática ignorada.", false);
+    }
+
     const payload = {
       origem: "site",
       cliente: "Pedido site/celular",
@@ -169,23 +191,12 @@
       total_final: Number(venda.total || 0),
       forma_pagamento: "Pix site/celular",
       vendedor: "Site/Celular",
-      status: venda.status || "Aguardando conferência do pagamento",
+      status: "Aguardando pagamento",
       data_venda: new Date(venda.date).toLocaleString("pt-BR"),
       data_iso: venda.date,
       dia_operacional: new Date(venda.date).toISOString().slice(0, 10),
-      baixa_estoque: true,
-      itens: itens.map(item => {
-        const produto = products.find(p => p.id === item.id);
-        return {
-          produto_id: produto?.apiId || null,
-          codigo_p: produto?.codigo || item.id,
-          nome_p: item.name,
-          quantidade: Number(item.qty || 0),
-          custo_unitario: 0,
-          valor_unitario: Number(item.price || 0),
-          valor_total: Number(item.price || 0) * Number(item.qty || 0),
-        };
-      }),
+      baixa_estoque: podeBaixarEstoque,
+      itens: itensPayload.map(({ baixa_automatica, ...item }) => item),
     };
     return api("/api/vendas", { method: "POST", body: JSON.stringify(payload) });
   }
@@ -203,7 +214,7 @@
         total,
         items: saleItems,
         pixPayload: payload,
-        status: "Aguardando conferência do pagamento",
+        status: "Aguardando pagamento",
       };
       sales.unshift(venda);
       sales = sales.slice(0, 50);
@@ -211,11 +222,19 @@
       saveState();
       renderAll();
 
-      reservarEstoqueApi(saleItems, saleId)
-        .catch(() => null)
-        .then(() => enviarVendaApi(venda, saleItems))
-        .then(() => sincronizarAgora())
-        .catch(() => setSyncStatus("Venda local salva • API offline", false));
+      enviarVendaApi(venda, saleItems)
+        .then(() => {
+          setSyncStatus("Venda enviada para o sistema da loja e estoque atualizado.", true);
+          return sincronizarAgora();
+        })
+        .catch(error => {
+          const msg = String(error.message || "");
+          if (msg.toLowerCase().includes("estoque insuficiente")) {
+            setSyncStatus(msg, false);
+          } else {
+            setSyncStatus("Venda salva localmente. API offline. Confira o estoque manualmente.", false);
+          }
+        });
     };
   }
 
@@ -223,7 +242,6 @@
     apiBase: API_BASE,
     syncNow: sincronizarAgora,
     sendSale: enviarVendaApi,
-    reserveStock: reservarEstoqueApi,
   };
 
   window.addEventListener("load", () => {
