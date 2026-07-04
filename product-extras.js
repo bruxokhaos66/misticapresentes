@@ -26,6 +26,15 @@
     try { return getStock(p.id); } catch { return Number(p.stock || 0); }
   }
 
+  function carregarAdminImageUpload() {
+    if (document.getElementById("adminImageUploadScript")) return;
+    const script = document.createElement("script");
+    script.id = "adminImageUploadScript";
+    script.src = "admin-image-upload.js";
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+
   function produtosDoKit(kit) {
     const achados = [];
     kit.termos.forEach(t => {
@@ -154,6 +163,7 @@
 
   function ativarExtras() {
     if (typeof products === "undefined") return;
+    carregarAdminImageUpload();
     montarKits();
     inserirBotoesDetalhe();
   }
