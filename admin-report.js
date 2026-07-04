@@ -2,6 +2,7 @@
   const cfg = window.misticaSiteConfig || {};
   const API_BASE = (cfg.apiBaseUrl || "https://api.misticaesotericos.com.br").replace(/\/$/, "");
   const SITE_API_KEY = String(cfg.siteApiKey || "").trim();
+  let ultimoRelatorio = { pedidos: [], estoqueBaixo: [], maisVendidos: [] };
 
   function money(value) {
     try { return currency.format(Number(value || 0)); } catch { return `R$ ${Number(value || 0).toFixed(2)}`; }
@@ -41,7 +42,7 @@
         mapa.set(nome, atual);
       });
     });
-    return [...mapa.values()].sort((a, b) => b.quantidade - a.quantidade).slice(0, 8);
+    return [...mapa.values()].sort((a, b) => b.quantidade - a.quantidade).slice(0, 20);
   }
 
   function resumoPedidos(pedidos) {
@@ -56,6 +57,48 @@
         .filter(p => !String(p.status || "").toLowerCase().includes("cancel"))
         .reduce((sum, p) => sum + Number(p.total_final || 0), 0),
     };
+  }
+
+  function csvEscape(value) {
+    const text = String(value ?? "").replace(/"/g, '""');
+    return `"${text}"`;
+  }
+
+  function baixarCsv(nome, linhas) {
+    const csv = linhas.map(row => row.map(csvEscape).join(";")).join("\n");
+    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = nome;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportarPedidos() {
+    const linhas = [["id", "data", "cliente", "origem", "status", "total", "forma_pagamento", "estoque_baixado"]];
+    ultimoRelatorio.pedidos.forEach(p => {
+      linhas.push([p.id, p.data_venda || p.data_iso || "", p.cliente || "", origemDoPedido(p), p.status || "", Number(p.total_final || 0), p.forma_pagamento || "", Number(p.estoque_baixado || 0) === 1 ? "sim" : "nao"]);
+    });
+    baixarCsv("mistica-pedidos.csv", linhas);
+  }
+
+  function exportarEstoqueBaixo() {
+    const linhas = [["id", "codigo", "nome", "categoria", "quantidade", "estoque_minimo"]];
+    ultimoRelatorio.estoqueBaixo.forEach(p => {
+      linhas.push([p.id, p.codigo_p || "", p.nome || "", p.categoria || "", Number(p.quantidade || 0), Number(p.estoque_minimo || 0)]);
+    });
+    baixarCsv("mistica-estoque-baixo.csv", linhas);
+  }
+
+  function exportarMaisVendidos() {
+    const linhas = [["produto", "quantidade", "total"]];
+    ultimoRelatorio.maisVendidos.forEach(p => {
+      linhas.push([p.nome, p.quantidade, Number(p.total || 0)]);
+    });
+    baixarCsv("mistica-mais-vendidos.csv", linhas);
   }
 
   function card(label, value, hint = "") {
@@ -80,7 +123,7 @@
     if (!lista.length) return `<p class="privacy-note">Ainda não há itens vendidos suficientes para ranking.</p>`;
     return `
       <div class="report-list">
-        ${lista.map(item => `
+        ${lista.slice(0, 8).map(item => `
           <div class="report-row">
             <strong>${item.nome}</strong>
             <span>${item.quantidade} un. • ${money(item.total)}</span>
@@ -99,9 +142,17 @@
         api("/api/pedidos?limite=300"),
         api("/api/estoque/baixo?limite=50"),
       ]);
-      const resumo = resumoPedidos(Array.isArray(pedidos) ? pedidos : []);
-      const maisVendidos = calcularMaisVendidos(Array.isArray(pedidos) ? pedidos : []);
+      const pedidosList = Array.isArray(pedidos) ? pedidos : [];
+      const estoqueList = Array.isArray(estoqueBaixo) ? estoqueBaixo : [];
+      const resumo = resumoPedidos(pedidosList);
+      const maisVendidos = calcularMaisVendidos(pedidosList);
+      ultimoRelatorio = { pedidos: pedidosList, estoqueBaixo: estoqueList, maisVendidos };
       root.innerHTML = `
+        <div class="report-export-actions">
+          <button class="btn btn-ghost" type="button" data-export-report="pedidos">Exportar pedidos CSV</button>
+          <button class="btn btn-ghost" type="button" data-export-report="estoque">Exportar estoque baixo CSV</button>
+          <button class="btn btn-ghost" type="button" data-export-report="vendidos">Exportar mais vendidos CSV</button>
+        </div>
         <div class="report-grid">
           ${card("Pedidos", resumo.total)}
           ${card("Pendentes", resumo.pendentes, "Aguardando pagamento")}
@@ -110,7 +161,7 @@
           ${card("Estoque baixado", resumo.estoqueBaixado)}
           ${card("Pedidos Isis", resumo.isis)}
           ${card("Faturamento", money(resumo.faturamento), "sem cancelados")}
-          ${card("Estoque baixo", estoqueBaixo.length)}
+          ${card("Estoque baixo", estoqueList.length)}
         </div>
         <div class="report-columns">
           <section>
@@ -119,7 +170,7 @@
           </section>
           <section>
             <h3>Estoque baixo</h3>
-            ${tabelaEstoqueBaixo(Array.isArray(estoqueBaixo) ? estoqueBaixo : [])}
+            ${tabelaEstoqueBaixo(estoqueList)}
           </section>
         </div>
       `;
@@ -148,9 +199,13 @@
 
   document.addEventListener("click", event => {
     if (event.target?.dataset?.reloadAdminReport !== undefined) carregarRelatorio();
+    const tipo = event.target?.dataset?.exportReport;
+    if (tipo === "pedidos") exportarPedidos();
+    if (tipo === "estoque") exportarEstoqueBaixo();
+    if (tipo === "vendidos") exportarMaisVendidos();
   });
 
-  window.misticaAdminReport = { reload: carregarRelatorio };
+  window.misticaAdminReport = { reload: carregarRelatorio, exportarPedidos, exportarEstoqueBaixo, exportarMaisVendidos };
 
   window.addEventListener("load", () => {
     montarPainel();
