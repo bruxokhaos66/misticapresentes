@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from backend.database import conectar, executar, listar, obter
+from backend.order_status_routes import router as order_status_router
 from backend.user_sync_routes import router as user_sync_router
 from backend.site_stock_routes import router as site_stock_router
 from config import API_URL, DB_PATH, DEFAULT_API_URL, DEFAULT_SERVER_URL, OFFICIAL_DOMAIN, SERVER_URL, hash_password_pbkdf2
@@ -16,7 +17,7 @@ from database.migrations import init_db
 app = FastAPI(
     title="Mística Presentes API",
     description="API oficial para sincronização do app Mística Presentes.",
-    version="0.3.4",
+    version="0.3.5",
 )
 
 app.add_middleware(
@@ -36,6 +37,7 @@ app.add_middleware(
 
 app.include_router(user_sync_router)
 app.include_router(site_stock_router)
+app.include_router(order_status_router)
 
 
 class ProdutoIn(BaseModel):
@@ -173,7 +175,7 @@ def _permissoes_por_perfil(perfil: str):
 def _validar_chave_sync(x_mistica_sync_key: str | None):
     chave = os.environ.get("MISTICA_SYNC_KEY", "").strip()
     if chave and x_mistica_sync_key != chave:
-        raise HTTPException(status_code=403, detail="Chave de sincronizaÃ§Ã£o invÃ¡lida")
+        raise HTTPException(status_code=403, detail="Chave de sincronização inválida")
 
 
 @app.get("/")
