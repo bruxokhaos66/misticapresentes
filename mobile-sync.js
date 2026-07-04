@@ -3,6 +3,14 @@
   const API_BASE = (config.apiBaseUrl || "https://api.misticaesotericos.com.br").replace(/\/$/, "");
   const SITE_API_KEY = String(config.siteApiKey || "").trim();
   const SYNC_INTERVAL_MS = 5000;
+  const STATUS_RAPIDOS = [
+    "Aguardando pagamento",
+    "Pago",
+    "Em separação",
+    "Pronto para retirada",
+    "Entregue",
+    "Cancelado",
+  ];
 
   let syncRunning = false;
   let lastSyncAt = null;
@@ -265,6 +273,59 @@
     return Boolean(venda?.estoqueReposto) || textoNormalizado(venda?.status).includes("cancelad");
   }
 
+  function escapeInline(value) {
+    return String(value || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+  }
+
+  function mensagemStatusPedido(venda, status) {
+    const nomeLoja = typeof storeConfig !== "undefined" ? storeConfig.name : "Mística Presentes";
+    const itens = (venda.items || []).map(item => `• ${item.qty || 1}x ${item.name || "Item"}`).join("\n");
+    const prefixo = `Olá! Aqui é da ${nomeLoja}.`;
+    const pedido = `Pedido: ${venda.id || ""}`;
+    const total = `Total: ${currency.format(Number(venda.total || 0))}`;
+    const mensagens = {
+      "Aguardando pagamento": "Seu pedido está aguardando confirmação do pagamento.",
+      "Pago": "Pagamento confirmado. Gratidão pela preferência!",
+      "Em separação": "Seu pedido está em separação com carinho pela nossa equipe.",
+      "Pronto para retirada": "Seu pedido já está pronto para retirada.",
+      "Entregue": "Seu pedido foi entregue. Gratidão pela preferência!",
+      "Cancelado": "Seu pedido foi cancelado. Se precisar, podemos ajudar com um novo atendimento.",
+    };
+    return `${prefixo}\n${pedido}\nStatus: ${status}\n${mensagens[status] || "Atualizamos o status do seu pedido."}\n\n${itens}\n\n${total}`;
+  }
+
+  function buildWhatsappStatusUrl(venda, status) {
+    const numero = (config.whatsappNumber || (typeof storeConfig !== "undefined" ? storeConfig.whatsappNumber : "554999172137"));
+    return `https://wa.me/${String(numero).replace(/\D/g, "")}?text=${encodeURIComponent(mensagemStatusPedido(venda, status))}`;
+  }
+
+  function atualizarStatusVendaLocal(vendaId, novoStatus, abrirWhatsapp = false) {
+    const venda = sales.find(item => String(item.id) === String(vendaId));
+    if (!venda) return setSyncStatus("Venda não encontrada para atualizar status.", false);
+    const statusAnterior = venda.status;
+    venda.status = novoStatus;
+    venda.statusUpdatedAt = new Date().toISOString();
+
+    if (textoNormalizado(novoStatus).includes("cancelad") && !vendaCancelada(venda)) {
+      const totalReposto = reporEstoqueDaVenda(venda);
+      venda.cancelledAt = venda.cancelledAt || new Date().toISOString();
+      venda.estoqueReposto = true;
+      setSyncStatus(totalReposto > 0 ? `Pedido ${venda.id} cancelado. ${totalReposto} item(ns) devolvido(s) ao estoque.` : `Pedido ${venda.id} cancelado. Sem itens vinculados para repor automaticamente.`, totalReposto > 0);
+    } else {
+      setSyncStatus(`Pedido ${venda.id}: ${statusAnterior || "sem status"} → ${novoStatus}.`, true);
+    }
+
+    saveState();
+    renderAll();
+    if (abrirWhatsapp) window.open(buildWhatsappStatusUrl(venda, novoStatus), "_blank", "noopener");
+  }
+
+  function abrirWhatsappStatus(vendaId, status) {
+    const venda = sales.find(item => String(item.id) === String(vendaId));
+    if (!venda) return setSyncStatus("Venda não encontrada para WhatsApp.", false);
+    window.open(buildWhatsappStatusUrl(venda, status || venda.status || "Atualização"), "_blank", "noopener");
+  }
+
   function reporEstoqueDaVenda(venda) {
     let totalReposto = 0;
     (venda.items || []).forEach(item => {
@@ -296,6 +357,8 @@
     if (window.__misticaCancelSaleInstalled || typeof renderHistory !== "function") return;
     window.__misticaCancelSaleInstalled = true;
     window.cancelSale = cancelarVendaLocal;
+    window.updateSaleStatus = atualizarStatusVendaLocal;
+    window.openSaleStatusWhatsapp = abrirWhatsappStatus;
     renderHistory = function renderHistoryWithCancelActions() {
       if (!sales.length) {
         salesHistory.innerHTML = `<div class="history-item"><span>Nenhuma venda registrada ainda.</span></div>`;
@@ -303,17 +366,26 @@
       }
       salesHistory.innerHTML = sales.slice(0, 10).map(sale => {
         const cancelada = vendaCancelada(sale);
+        const vendaId = escapeInline(sale.id);
+        const statusAtual = escapeInline(sale.status || "Atualização");
         const cancelledInfo = sale.cancelledAt ? `<span>Cancelado em: ${new Date(sale.cancelledAt).toLocaleString("pt-BR")}</span>` : "";
-        const action = cancelada
+        const cancelAction = cancelada
           ? `<span class="privacy-note">Estoque já reposto</span>`
-          : `<button class="btn btn-ghost btn-full" type="button" onclick="cancelSale('${String(sale.id).replace(/'/g, "\\'")}')">Cancelar e repor estoque</button>`;
+          : `<button class="btn btn-ghost btn-full" type="button" onclick="cancelSale('${vendaId}')">Cancelar e repor estoque</button>`;
+        const statusButtons = STATUS_RAPIDOS.map(status => {
+          const active = textoNormalizado(status) === textoNormalizado(sale.status) ? " disabled" : "";
+          return `<button class="btn btn-ghost" type="button" onclick="updateSaleStatus('${vendaId}', '${escapeInline(status)}')"${active}>${status}</button>`;
+        }).join("");
+        const whatsAction = `<button class="btn btn-ghost btn-full" type="button" onclick="openSaleStatusWhatsapp('${vendaId}', '${statusAtual}')">WhatsApp do status</button>`;
         return `
           <div class="history-item">
             <strong>${currency.format(sale.total)} • ${new Date(sale.date).toLocaleString("pt-BR")}</strong>
             <span>${(sale.items || []).map(item => `${item.qty}x ${item.name}`).join(" | ")}</span>
             <span>Status: ${sale.status}</span>
             ${cancelledInfo}
-            ${action}
+            <div class="admin-activity-tools">${statusButtons}</div>
+            ${whatsAction}
+            ${cancelAction}
           </div>
         `;
       }).join("");
@@ -326,6 +398,8 @@
     syncNow: sincronizarAgora,
     sendSale: enviarVendaApi,
     cancelSale: cancelarVendaLocal,
+    updateSaleStatus: atualizarStatusVendaLocal,
+    openSaleStatusWhatsapp: abrirWhatsappStatus,
   };
 
   window.addEventListener("load", () => {
