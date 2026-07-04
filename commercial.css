@@ -64,6 +64,17 @@
 .related-product-card span { font-size: 1.7rem; }
 .related-product-card small { color: #f0c56a; font-weight: 800; }
 
+.isis-message { border-radius: 18px; padding: 12px 14px; margin-bottom: 10px; line-height: 1.45; }
+.isis-bot { background: rgba(240, 197, 106, 0.10); border: 1px solid rgba(240, 197, 106, 0.22); color: #fff8e7; }
+.isis-user { background: rgba(113, 138, 70, 0.18); border: 1px solid rgba(113, 138, 70, 0.30); color: #fff8e7; text-align: right; }
+.isis-product-grid { display: grid; gap: 10px; margin-top: 12px; }
+.isis-product-card { display: grid; gap: 7px; border: 1px solid rgba(240, 197, 106, 0.24); border-radius: 16px; background: rgba(0, 0, 0, 0.18); padding: 12px; text-align: left; }
+.isis-product-card strong { color: #f0c56a; }
+.isis-product-card span, .isis-product-card small { color: #d9cfad; }
+.isis-product-card p { margin: 0; color: #fff8e7; }
+.isis-product-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.isis-commerce-actions { margin-top: 14px; }
+
 .image-upload-panel { border: 1px solid rgba(240, 197, 106, 0.24); border-radius: 20px; padding: 16px; background: rgba(255, 255, 255, 0.04); display: grid; gap: 12px; }
 .image-upload-panel h3 { margin: 0; color: #fff8e7; }
 .image-upload-drop { border: 1px dashed rgba(240, 197, 106, 0.46); border-radius: 16px; padding: 16px; display: grid; gap: 8px; cursor: pointer; background: rgba(8, 10, 10, 0.45); }
