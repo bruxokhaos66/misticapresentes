@@ -43,6 +43,10 @@
     carregarScript("adminProductApiScript", "admin-product-api.js");
   }
 
+  function carregarIsisKitShare() {
+    carregarScript("isisKitShareScript", "isis-kit-share.js");
+  }
+
   function produtosDoKit(kit) {
     const achados = [];
     kit.termos.forEach(t => {
@@ -173,6 +177,7 @@
     if (typeof products === "undefined") return;
     carregarAdminImageUpload();
     carregarAdminProductApi();
+    carregarIsisKitShare();
     montarKits();
     inserirBotoesDetalhe();
   }
