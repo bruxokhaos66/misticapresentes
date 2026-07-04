@@ -56,18 +56,20 @@
   }
 
   function normalizarProduto(item) {
+    const codigo = item.codigo_p || item.codigo || String(item.id);
     const id = `api-${item.id}`;
     return {
       id,
       apiId: item.id,
-      codigo: item.codigo_p || String(item.id),
-      name: item.nome || "Produto sem nome",
+      codigo,
+      name: item.nome || item.nome_p || "Produto sem nome",
       category: item.categoria || "Produtos da loja",
-      description: item.categoria ? `Categoria: ${item.categoria}` : "Produto sincronizado da loja.",
-      price: Number(item.preco || 0),
-      stock: Number(item.quantidade || 0),
-      icon: "✨",
-      imageUrl: "",
+      description: item.descricao || (item.categoria ? `Categoria: ${item.categoria}` : "Produto sincronizado da loja."),
+      price: Number(item.preco || item.valor || 0),
+      stock: Number(item.quantidade || item.estoque || 0),
+      icon: item.icone || "✨",
+      imageUrl: item.imagem || item.imageUrl || "",
+      images: Array.isArray(item.imagens) ? item.imagens : [],
     };
   }
 
@@ -101,7 +103,9 @@
         id: String(v.id),
         date: v.data_iso || v.data_venda || new Date().toISOString(),
         total,
-        items: [{ qty: 1, name: v.cliente || "Venda sincronizada", price: total }],
+        items: Array.isArray(v.itens) && v.itens.length
+          ? v.itens.map(item => ({ qty: Number(item.quantidade || 1), name: item.nome_p || item.nome || "Item", price: Number(item.valor_unitario || 0) }))
+          : [{ qty: 1, name: v.cliente || "Venda sincronizada", price: total }],
         status: v.status || "Concluído",
         formaPagamento: v.forma_pagamento || "",
         vendedor: v.vendedor || "",
@@ -130,7 +134,7 @@
         renderAll();
       } catch {}
 
-      setSyncStatus(`Online • ${status.produtos || 0} produtos • ${lastSyncAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`, true);
+      setSyncStatus(`Online • estoque sincronizado • ${status.produtos || 0} produtos • ${lastSyncAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`, true);
     } catch (error) {
       setSyncStatus("Offline • usando dados locais", false);
     } finally {
@@ -138,8 +142,26 @@
     }
   }
 
+  async function reservarEstoqueApi(itens, vendaId) {
+    const payload = {
+      origem: "site",
+      venda_id: vendaId,
+      itens: itens.map(item => {
+        const produto = products.find(p => p.id === item.id);
+        return {
+          produto_id: produto?.apiId || null,
+          codigo_p: produto?.codigo || item.id,
+          nome_p: item.name,
+          quantidade: Number(item.qty || 0),
+        };
+      }),
+    };
+    return api("/api/estoque/reservar", { method: "POST", body: JSON.stringify(payload) });
+  }
+
   async function enviarVendaApi(venda, itens) {
     const payload = {
+      origem: "site",
       cliente: "Pedido site/celular",
       subtotal: Number(venda.total || 0),
       desconto: 0,
@@ -151,14 +173,19 @@
       data_venda: new Date(venda.date).toLocaleString("pt-BR"),
       data_iso: venda.date,
       dia_operacional: new Date(venda.date).toISOString().slice(0, 10),
-      itens: itens.map(item => ({
-        codigo_p: item.id,
-        nome_p: item.name,
-        quantidade: Number(item.qty || 0),
-        custo_unitario: 0,
-        valor_unitario: Number(item.price || 0),
-        valor_total: Number(item.price || 0) * Number(item.qty || 0),
-      })),
+      baixa_estoque: true,
+      itens: itens.map(item => {
+        const produto = products.find(p => p.id === item.id);
+        return {
+          produto_id: produto?.apiId || null,
+          codigo_p: produto?.codigo || item.id,
+          nome_p: item.name,
+          quantidade: Number(item.qty || 0),
+          custo_unitario: 0,
+          valor_unitario: Number(item.price || 0),
+          valor_total: Number(item.price || 0) * Number(item.qty || 0),
+        };
+      }),
     };
     return api("/api/vendas", { method: "POST", body: JSON.stringify(payload) });
   }
@@ -183,7 +210,10 @@
       cart = [];
       saveState();
       renderAll();
-      enviarVendaApi(venda, saleItems)
+
+      reservarEstoqueApi(saleItems, saleId)
+        .catch(() => null)
+        .then(() => enviarVendaApi(venda, saleItems))
         .then(() => sincronizarAgora())
         .catch(() => setSyncStatus("Venda local salva • API offline", false));
     };
@@ -192,6 +222,8 @@
   window.misticaMobileSync = {
     apiBase: API_BASE,
     syncNow: sincronizarAgora,
+    sendSale: enviarVendaApi,
+    reserveStock: reservarEstoqueApi,
   };
 
   window.addEventListener("load", () => {
