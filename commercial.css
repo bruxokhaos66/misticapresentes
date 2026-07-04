@@ -40,6 +40,34 @@
   box-shadow: 0 0 0 4px rgba(240, 197, 106, 0.10);
 }
 
+.kits-section {
+  margin-bottom: 28px;
+}
+
+.kits-section h3 {
+  margin: 0 0 16px;
+  color: #fff8e7;
+}
+
+.kit-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.kit-card {
+  border: 1px solid rgba(240, 197, 106, 0.24);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.045);
+  padding: 18px;
+  display: grid;
+  gap: 10px;
+}
+
+.kit-icon {
+  font-size: 2rem;
+}
+
 .product-card {
   border-color: rgba(240, 197, 106, 0.26) !important;
 }
@@ -110,6 +138,82 @@
   background: rgba(255, 179, 167, 0.13) !important;
 }
 
+.product-modal[hidden] {
+  display: none;
+}
+
+.product-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: rgba(0, 0, 0, 0.72);
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.product-modal-card {
+  width: min(940px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+  border: 1px solid rgba(240, 197, 106, 0.30);
+  border-radius: 26px;
+  background: #10140f;
+  padding: 24px;
+  position: relative;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+}
+
+.modal-close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f0c56a;
+  border-radius: 999px;
+  width: 36px;
+  height: 36px;
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+.product-detail-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 320px) 1fr;
+  gap: 22px;
+  align-items: start;
+}
+
+.product-detail-info {
+  display: grid;
+  gap: 12px;
+}
+
+.product-detail-info h2 {
+  margin: 0;
+  color: #fff8e7;
+}
+
+.related-products {
+  margin-top: 24px;
+}
+
+.related-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.related-item {
+  text-align: left;
+  border: 1px solid rgba(240, 197, 106, 0.22);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff8e7;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+
 .highlight-strip span {
   text-transform: none;
   letter-spacing: 0.01em;
@@ -121,7 +225,9 @@
 }
 
 @media (max-width: 760px) {
-  .catalog-tools {
+  .catalog-tools,
+  .kit-grid,
+  .product-detail-layout {
     grid-template-columns: 1fr;
   }
 }
