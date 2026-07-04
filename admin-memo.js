@@ -1,6 +1,15 @@
 (() => {
   const KEY = "misticaAdminMemo";
 
+  function loadSpecialOrders() {
+    if (document.getElementById("specialOrdersScript")) return;
+    const script = document.createElement("script");
+    script.id = "specialOrdersScript";
+    script.src = "special-orders.js";
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+
   function todayKey() {
     return new Date().toISOString().slice(0, 10);
   }
@@ -69,5 +78,8 @@
     copy: copyMemo,
   };
 
-  window.addEventListener("load", mountMemo);
+  window.addEventListener("load", () => {
+    mountMemo();
+    loadSpecialOrders();
+  });
 })();
