@@ -98,6 +98,31 @@
     }
   }
 
+  async function registrarPagamentoPix(saleId) {
+    const sale = pedidosAtuais().find(item => String(item.id) === String(saleId));
+    if (!sale) return;
+    const comprovante = window.prompt("Identificação do comprovante Pix, se houver:", "") || "";
+    try {
+      await api("/api/pagamentos", {
+        method: "POST",
+        body: JSON.stringify({
+          venda_id: Number(saleId),
+          forma: "Pix",
+          valor: Number(sale.total || 0),
+          status: "Confirmado",
+          comprovante,
+          observacao: "Pix confirmado manualmente pelo Admin",
+          usuario: "Admin",
+        }),
+      });
+      await carregarPedidosApi();
+      alert("Pix registrado e pedido marcado como pagamento confirmado.");
+    } catch (error) {
+      alert(`Falha ao registrar Pix: ${error.message}`);
+      await setPedidoStatus(saleId, "Pagamento confirmado");
+    }
+  }
+
   async function salvarObservacaoPedido(saleId) {
     const field = document.querySelector(`[data-pedido-observacao="${saleId}"]`);
     if (!field) return;
@@ -205,7 +230,7 @@
               <textarea data-pedido-observacao="${sale.id}" placeholder="Ex.: cliente retirará amanhã">${sale.observacao || ""}</textarea>
             </label>
             <div class="pedido-actions">
-              <button class="btn" type="button" data-confirm-pix="${sale.id}">Confirmar Pix</button>
+              <button class="btn" type="button" data-confirm-pix="${sale.id}">Registrar Pix</button>
               <button class="btn btn-ghost" type="button" data-ready-order="${sale.id}">Pronto retirada</button>
               <button class="btn btn-ghost" type="button" data-save-note="${sale.id}">Salvar obs.</button>
               <button class="btn btn-ghost" type="button" data-send-pedido="${sale.id}">WhatsApp</button>
@@ -228,7 +253,7 @@
     panel.innerHTML = `
       <p class="eyebrow">Pedidos</p>
       <h2>Painel conectado ao backend</h2>
-      <p class="privacy-note">Pedidos, status, observações e histórico são carregados da API quando ela está online.</p>
+      <p class="privacy-note">Pedidos, status, observações, histórico e Pix são carregados da API quando ela está online.</p>
       <div id="pedidosAdminList" class="pedidos-admin-list"></div>
     `;
     admin.insertBefore(panel, admin.firstChild);
@@ -244,7 +269,7 @@
       const target = event.target;
       if (!target?.dataset) return;
       if (target.dataset.reloadPedidos !== undefined) carregarPedidosApi().catch(() => { apiOnline = false; renderPedidosAdmin(); });
-      if (target.dataset.confirmPix) setPedidoStatus(target.dataset.confirmPix, "Pagamento confirmado");
+      if (target.dataset.confirmPix) registrarPagamentoPix(target.dataset.confirmPix);
       if (target.dataset.readyOrder) setPedidoStatus(target.dataset.readyOrder, "Pronto para retirada");
       if (target.dataset.cancelPedido) cancelarPedidoApi(target.dataset.cancelPedido);
       if (target.dataset.saveNote) salvarObservacaoPedido(target.dataset.saveNote);
@@ -261,6 +286,7 @@
     render: renderPedidosAdmin,
     setStatus: setPedidoStatus,
     reload: carregarPedidosApi,
+    registerPix: registrarPagamentoPix,
   };
 
   window.addEventListener("load", () => {
