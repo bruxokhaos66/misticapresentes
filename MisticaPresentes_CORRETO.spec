@@ -1,5 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import os
+
 from PyInstaller.utils.hooks import collect_submodules
 
 block_cipher = None
@@ -24,21 +26,45 @@ for pacote in [
     except Exception:
         pass
 
+def incluir_pasta(origem, destino):
+    itens = []
+    ignorar_dirs = {'__pycache__', '.gradle', 'build', 'dist'}
+    ignorar_arquivos = {'local.properties'}
+    ignorar_ext = {'.pyc', '.pyo'}
+    for raiz, dirs, arquivos in os.walk(origem):
+        dirs[:] = [d for d in dirs if d not in ignorar_dirs]
+        rel = os.path.relpath(raiz, origem)
+        alvo = destino if rel == '.' else os.path.join(destino, rel)
+        for nome in arquivos:
+            if nome in ignorar_arquivos or os.path.splitext(nome)[1].lower() in ignorar_ext:
+                continue
+            itens.append((os.path.join(raiz, nome), alvo))
+    return itens
+
+
 datas = [
     ('mistica_presentes.py', '.'),
     ('auto_updater.py', '.'),
     ('app_version.py', '.'),
     ('app_runtime_patch.py', '.'),
     ('app_frajola_patch.py', '.'),
+    ('app_painel_guard_patch.py', '.'),
     ('app_sync_status_patch.py', '.'),
     ('app_scroll_patch.py', '.'),
     ('config.py', '.'),
+]
+
+for origem, destino in [
     ('database', 'database'),
     ('services', 'services'),
     ('isis', 'isis'),
     ('backend', 'backend'),
     ('painel', 'painel'),
-]
+    ('tools', 'tools'),
+    ('scripts', 'scripts'),
+    ('docs', 'docs'),
+]:
+    datas += incluir_pasta(origem, destino)
 
 a = Analysis(
     ['app.py'],

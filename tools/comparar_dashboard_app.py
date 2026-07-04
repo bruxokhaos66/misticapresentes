@@ -38,12 +38,23 @@ def vendas_locais():
     return inicio, fim, dia, rows
 
 
+def totais_locais():
+    produtos = query_db("SELECT COUNT(*) FROM produtos WHERE COALESCE(ativo,1)=1") or [(0,)]
+    vendas = query_db("SELECT COUNT(*) FROM vendas WHERE COALESCE(status,'ConcluÃ­do') NOT IN ('Cancelado','Cancelada')") or [(0,)]
+    return int(produtos[0][0] or 0), int(vendas[0][0] or 0)
+
+
 def vendas_api():
     api = (API_URL or "https://api.misticaesotericos.com.br").rstrip("/")
-    with httpx.Client(timeout=20) as client:
-        vendas = client.get(f"{api}/api/vendas?limite=500").json()
-        status = client.get(f"{api}/api/status").json()
-        resumo = client.get(f"{api}/api/painel/resumo").json()
+    try:
+        with httpx.Client(timeout=20) as client:
+            vendas = client.get(f"{api}/api/vendas?limite=500").json()
+            status = client.get(f"{api}/api/status").json()
+            resumo = client.get(f"{api}/api/painel/resumo").json()
+    except Exception as exc:
+        vendas = []
+        status = {"erro": f"{type(exc).__name__}: {exc}"}
+        resumo = {}
     return api, vendas, status, resumo
 
 
@@ -72,15 +83,34 @@ def filtrar_api(vendas, inicio, fim, dia):
     return out
 
 
+def classificar_api(produtos_local, vendas_local_total, status, locais_hoje, api_hoje):
+    if not isinstance(status, dict) or status.get("erro"):
+        return "INDISPONIVEL"
+    produtos_api = int(status.get("produtos") or 0)
+    vendas_api_total = int(status.get("vendas") or 0)
+    if (produtos_local > 0 and produtos_api == 0) or (vendas_local_total > 0 and vendas_api_total == 0):
+        return "ZERADA"
+    if produtos_local >= 5 and produtos_api < max(1, int(produtos_local * 0.9)):
+        return "INCOMPLETA"
+    ids_local = {str(r[0]) for r in locais_hoje}
+    ids_api = {str(v.get("local_id") or "") for v in api_hoje}
+    if ids_local and not ids_local.issubset(ids_api):
+        return "INCOMPLETA"
+    return "OK"
+
+
 def main():
     init_db()
     inicio, fim, dia, locais = vendas_locais()
+    produtos_local, vendas_local_total = totais_locais()
     total_local = sum(float(r[5] or 0) for r in locais)
     api, vendas, status, resumo = vendas_api()
     api_hoje = filtrar_api(vendas, inicio, fim, dia)
     total_api = sum(float(v.get("total_final") or 0) for v in api_hoje)
+    classificacao = classificar_api(produtos_local, vendas_local_total, status, locais, api_hoje)
 
     print("=== COMPARAÇÃO DESKTOP x APP/API ===")
+    print("Resultado:", classificacao)
     print("API:", api)
     print("Dia operacional:", dia)
     print("Intervalo:", inicio, "até", fim)
@@ -88,6 +118,8 @@ def main():
     print("API/App vendas hoje:", len(api_hoje), brl(total_api))
     print("Status API:", json.dumps(status, ensure_ascii=False))
     print("Resumo API:", json.dumps(resumo, ensure_ascii=False))
+    if classificacao != "OK":
+        print("Acao recomendada: python tools/reparar_api_painel_mobile.py")
     print()
 
     print("--- VENDAS NO DESKTOP ---")

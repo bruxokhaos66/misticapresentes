@@ -1,4 +1,5 @@
 import json
+import os
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -20,6 +21,11 @@ REQ_TIMEOUT = httpx.Timeout(connect=6, read=30, write=30, pool=6)
 
 def _api():
     return (API_URL or "https://api.misticaesotericos.com.br").rstrip("/")
+
+
+def _headers_sync():
+    chave = os.environ.get("MISTICA_SYNC_KEY", "").strip()
+    return {"x-mistica-sync-key": chave} if chave else {}
 
 
 def _parse_data(txt):
@@ -66,6 +72,38 @@ def listar_vendas_locais():
 
 def sync_produtos(client):
     locais = listar_produtos_locais()
+    ativos = [
+        {
+            "codigo_p": codigo_p,
+            "nome": nome,
+            "preco": float(preco or 0),
+            "quantidade": int(quantidade or 0),
+            "categoria": categoria,
+            "custo": float(custo or 0),
+            "lucro": float(lucro or 0),
+            "estoque_minimo": int(estoque_minimo or 0),
+        }
+        for codigo_p, nome, preco, quantidade, categoria, custo, lucro, estoque_minimo, ativo in locais
+        if int(ativo or 0) and str(nome or "").strip()
+    ]
+    if not ativos:
+        return {"criados": 0, "atualizados": 0, "ignorados": len(locais), "erros": 0, "modo": "sem_produtos_ativos"}
+
+    try:
+        criados = 0
+        atualizados = 0
+        ignorados = 0
+        for lote in _partes(ativos, 80):
+            resp = client.post(f"{_api()}/api/sync/produtos-lote", json={"produtos": lote}, headers=_headers_sync())
+            resp.raise_for_status()
+            dados = resp.json()
+            criados += int(dados.get("criados") or 0)
+            atualizados += int(dados.get("atualizados") or 0)
+            ignorados += int(dados.get("ignorados") or 0)
+        return {"criados": criados, "atualizados": atualizados, "ignorados": ignorados, "erros": 0, "modo": "lote_upsert"}
+    except Exception as exc:
+        print(f"Endpoint de produtos em lote indisponivel ({type(exc).__name__}: {exc}). Usando fallback item a item.", flush=True)
+
     try:
         remotos = client.get(f"{_api()}/api/produtos?limite=500").json()
     except Exception:
@@ -106,7 +144,7 @@ def sync_produtos(client):
         except Exception as exc:
             erros += 1
             print(f"Erro produto {nome}: {type(exc).__name__}: {exc}", flush=True)
-    return {"criados": criados, "ignorados": ignorados, "erros": erros}
+    return {"criados": criados, "atualizados": 0, "ignorados": ignorados, "erros": erros, "modo": "fallback_criar"}
 
 
 def _partes(lista, tamanho):
@@ -115,7 +153,7 @@ def _partes(lista, tamanho):
 
 
 def _enviar_venda_individual(client, payload):
-    resp = client.post(f"{_api()}/api/sync/venda", json=payload)
+    resp = client.post(f"{_api()}/api/sync/venda", json=payload, headers=_headers_sync())
     resp.raise_for_status()
     return resp.json()
 
@@ -144,7 +182,7 @@ def sync_vendas(client):
 
         if not usar_fallback_individual:
             try:
-                resp = client.post(f"{_api()}/api/sync/vendas-lote", json={"vendas": payloads})
+                resp = client.post(f"{_api()}/api/sync/vendas-lote", json={"vendas": payloads}, headers=_headers_sync())
                 resp.raise_for_status()
                 dados = resp.json()
                 enviados = int(dados.get("total", len(payloads)) or 0)

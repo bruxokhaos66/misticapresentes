@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime
 
 import httpx
@@ -123,8 +124,12 @@ def enfileirar_venda_para_sync(venda_id):
 def _enviar_pendencia(pendencia_id, tipo, payload_json):
     endpoint = f"{API_URL.rstrip('/')}/api/sync/{tipo}"
     payload = json.loads(payload_json)
+    headers = {}
+    chave = os.environ.get("MISTICA_SYNC_KEY", "").strip()
+    if chave:
+        headers["x-mistica-sync-key"] = chave
     with httpx.Client(timeout=SYNC_TIMEOUT) as client:
-        resp = client.post(endpoint, json=payload)
+        resp = client.post(endpoint, json=payload, headers=headers)
         resp.raise_for_status()
         return resp.json()
 

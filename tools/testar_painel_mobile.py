@@ -10,6 +10,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from config import API_URL
+from database import init_db, query_db
 from services.dia_operacional_service import intervalo_vendas_hoje
 
 
@@ -32,8 +33,28 @@ def venda_ativa(v):
     return status not in ("cancelado", "cancelada")
 
 
+def totais_locais():
+    init_db()
+    produtos = query_db("SELECT COUNT(*) FROM produtos WHERE COALESCE(ativo,1)=1") or [(0,)]
+    vendas = query_db("SELECT COUNT(*) FROM vendas WHERE COALESCE(status,'ConcluÃ­do') NOT IN ('Cancelado','Cancelada')") or [(0,)]
+    return int(produtos[0][0] or 0), int(vendas[0][0] or 0)
+
+
+def classificar_api(status, produtos_local, vendas_local_total):
+    if not isinstance(status, dict) or status.get("erro"):
+        return "INDISPONIVEL"
+    produtos_api = int(status.get("produtos") or 0)
+    vendas_api = int(status.get("vendas") or 0)
+    if (produtos_local > 0 and produtos_api == 0) or (vendas_local_total > 0 and vendas_api == 0):
+        return "ZERADA"
+    if produtos_local >= 5 and produtos_api < max(1, int(produtos_local * 0.9)):
+        return "INCOMPLETA"
+    return "OK"
+
+
 def main():
     api = (API_URL or "https://api.misticaesotericos.com.br").rstrip("/")
+    produtos_local, vendas_local_total = totais_locais()
     inicio, fim, dia = intervalo_vendas_hoje()
     inicio_dt = datetime.strptime(inicio, "%Y-%m-%d %H:%M:%S")
     fim_dt = datetime.strptime(fim, "%Y-%m-%d %H:%M:%S")
@@ -46,9 +67,14 @@ def main():
                 print(f"Login {login}:", r.status_code, r.text[:300])
             except Exception as exc:
                 print(f"Login {login}: ERRO {type(exc).__name__}: {exc}")
-        status = client.get(f"{api}/api/status").json()
-        resumo = client.get(f"{api}/api/painel/resumo").json()
-        vendas = client.get(f"{api}/api/vendas?limite=500").json()
+        try:
+            status = client.get(f"{api}/api/status").json()
+            resumo = client.get(f"{api}/api/painel/resumo").json()
+            vendas = client.get(f"{api}/api/vendas?limite=500").json()
+        except Exception as exc:
+            status = {"erro": f"{type(exc).__name__}: {exc}"}
+            resumo = {}
+            vendas = []
 
     hoje = []
     for v in vendas if isinstance(vendas, list) else []:
@@ -60,6 +86,8 @@ def main():
             hoje.append(v)
 
     total = sum(float(v.get("total_final") or 0) for v in hoje)
+    classificacao = classificar_api(status, produtos_local, vendas_local_total)
+    print("Resultado:", classificacao)
     print("Status API:", json.dumps(status, ensure_ascii=False))
     print("Resumo API:", json.dumps(resumo, ensure_ascii=False))
     print("Dia operacional:", dia, inicio, "até", fim)
@@ -67,8 +95,9 @@ def main():
     for v in hoje:
         print(f"- id={v.get('id')} local_id={v.get('local_id')} data={v.get('data_venda') or v.get('data_iso')} vendedor={v.get('vendedor')} total={brl(v.get('total_final'))} dia={v.get('dia_operacional')}")
 
-    if total == 0:
+    if classificacao != "OK" or total == 0:
         print("\nATENÇÃO: a API está zerada ou sem vendas no dia operacional. Rode: python tools/sincronizar_painel_online.py")
+        print("Reparo completo recomendado: python tools/reparar_api_painel_mobile.py")
     else:
         print("\nAPI OK. Se o celular mostra outro valor, o problema é cache, login errado ou APK antigo.")
 

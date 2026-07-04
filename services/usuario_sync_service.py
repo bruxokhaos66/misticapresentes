@@ -1,4 +1,5 @@
 import json
+import os
 import urllib.request
 
 from config import API_URL
@@ -32,7 +33,11 @@ def sincronizar_usuarios_com_api(timeout=10):
         return {"status": "sem_usuarios", "usuarios_sincronizados": 0}
     url = (API_URL or "https://api.misticaesotericos.com.br").rstrip("/") + "/api/sync/usuarios"
     dados = json.dumps({"usuarios": usuarios}, ensure_ascii=False).encode("utf-8")
-    req = urllib.request.Request(url, data=dados, headers={"Content-Type": "application/json"}, method="POST")
+    headers = {"Content-Type": "application/json"}
+    chave = os.environ.get("MISTICA_SYNC_KEY", "").strip()
+    if chave:
+        headers["x-mistica-sync-key"] = chave
+    req = urllib.request.Request(url, data=dados, headers=headers, method="POST")
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         texto = resp.read().decode("utf-8", errors="ignore")
     return json.loads(texto)

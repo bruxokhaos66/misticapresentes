@@ -11,7 +11,6 @@ import httpx
 from config import API_URL
 from database import query_db
 from services.usuario_sync_service import sincronizar_usuarios_com_api
-from tools.sincronizar_painel_online import main as sincronizar_painel_online_main
 
 
 API_TIMEOUT = httpx.Timeout(connect=4, read=8, write=8, pool=4)
@@ -43,45 +42,73 @@ def _local_qtd_produtos() -> int:
     return int(row[0][0] if row and row[0] else 0)
 
 
+def _local_qtd_usuarios() -> int:
+    row = query_db("SELECT COUNT(*) FROM usuarios WHERE COALESCE(ativo,1)=1 AND COALESCE(login,'')!=''")
+    return int(row[0][0] if row and row[0] else 0)
+
+
 def _status_api() -> dict[str, Any]:
     with httpx.Client(timeout=API_TIMEOUT) as client:
         status = client.get(f"{_api_url()}/api/status").json()
         resumo = client.get(f"{_api_url()}/api/painel/resumo").json()
+        try:
+            usuarios = client.get(f"{_api_url()}/api/usuarios").json()
+        except Exception:
+            usuarios = []
     return {
         "status": status,
         "resumo": resumo,
         "api_produtos": int(status.get("produtos") or resumo.get("produtos") or 0),
         "api_vendas": int(status.get("vendas") or resumo.get("vendas") or 0),
+        "api_usuarios": len(usuarios) if isinstance(usuarios, list) else 0,
     }
 
 
 def diagnosticar_api_painel() -> dict[str, Any]:
     local_produtos = _local_qtd_produtos()
     local_vendas = _local_qtd_vendas_35_dias()
+    local_usuarios = _local_qtd_usuarios()
     try:
         remoto = _status_api()
         api_produtos = remoto["api_produtos"]
         api_vendas = remoto["api_vendas"]
+        api_usuarios = remoto["api_usuarios"]
         api_ok = True
         erro = ""
     except Exception as exc:
         api_produtos = 0
         api_vendas = 0
+        api_usuarios = 0
         api_ok = False
         erro = f"{type(exc).__name__}: {exc}"
 
     produtos_zerados = local_produtos > 0 and api_produtos == 0
-    vendas_muito_abaixo = local_vendas >= 3 and api_vendas < max(1, int(local_vendas * 0.5))
-    precisa_sync = (not api_ok) or produtos_zerados or vendas_muito_abaixo
+    vendas_zeradas = local_vendas > 0 and api_vendas == 0
+    usuarios_zerados = local_usuarios > 0 and api_usuarios == 0
+    produtos_incompletos = local_produtos >= 5 and api_produtos < max(1, int(local_produtos * 0.9))
+    vendas_incompletas = local_vendas >= 3 and api_vendas < max(1, int(local_vendas * 0.8))
+    api_zerada = produtos_zerados or vendas_zeradas or usuarios_zerados
+    api_incompleta = produtos_incompletos or vendas_incompletas
+    precisa_sync = (not api_ok) or api_zerada or api_incompleta
+    if not api_ok:
+        motivo = "api_indisponivel"
+    elif api_zerada:
+        motivo = "api_zerada"
+    elif api_incompleta:
+        motivo = "api_incompleta"
+    else:
+        motivo = "ok"
 
     return {
         "api_ok": api_ok,
         "precisa_sync": bool(precisa_sync),
         "local_produtos": local_produtos,
         "local_vendas_35_dias": local_vendas,
+        "local_usuarios": local_usuarios,
         "api_produtos": api_produtos,
         "api_vendas": api_vendas,
-        "motivo": "api_indisponivel" if not api_ok else "api_incompleta" if precisa_sync else "ok",
+        "api_usuarios": api_usuarios,
+        "motivo": motivo,
         "erro": erro,
     }
 
@@ -94,6 +121,7 @@ def sincronizar_painel_completo() -> dict[str, Any]:
     except Exception as exc:
         usuarios = {"status": "erro", "erro": f"{type(exc).__name__}: {exc}"}
     try:
+        from tools.sincronizar_painel_online import main as sincronizar_painel_online_main
         sincronizar_painel_online_main()
         depois = diagnosticar_api_painel()
         return {
@@ -155,7 +183,8 @@ def resultado_resumido(resultado: dict[str, Any]) -> str:
         return (
             f"API: {resultado.get('status')} | "
             f"produtos local/api {diag.get('local_produtos')}/{diag.get('api_produtos')} | "
-            f"vendas local/api {diag.get('local_vendas_35_dias')}/{diag.get('api_vendas')}"
+            f"vendas local/api {diag.get('local_vendas_35_dias')}/{diag.get('api_vendas')} | "
+            f"motivo {diag.get('motivo')}"
         )
     except Exception:
         return json.dumps(resultado, ensure_ascii=False)[:250]

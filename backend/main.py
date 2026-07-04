@@ -2,7 +2,7 @@ import os
 from datetime import datetime
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -47,6 +47,10 @@ class ProdutoIn(BaseModel):
     custo: float = 0.0
     lucro: float = 0.0
     estoque_minimo: int = 0
+
+
+class ProdutosLotePayload(BaseModel):
+    produtos: list[ProdutoIn] = Field(default_factory=list)
 
 
 class ClienteIn(BaseModel):
@@ -164,6 +168,12 @@ def _permissoes_por_perfil(perfil: str):
         "backup": False,
         "admin": False,
     }
+
+
+def _validar_chave_sync(x_mistica_sync_key: str | None):
+    chave = os.environ.get("MISTICA_SYNC_KEY", "").strip()
+    if chave and x_mistica_sync_key != chave:
+        raise HTTPException(status_code=403, detail="Chave de sincronizaÃ§Ã£o invÃ¡lida")
 
 
 @app.get("/")
@@ -298,6 +308,79 @@ def criar_produto(produto: ProdutoIn):
         ),
     )
     return {"id": novo_id, "status": "criado"}
+
+
+@app.post("/api/sync/produtos-lote")
+def sincronizar_produtos_lote(payload: ProdutosLotePayload, x_mistica_sync_key: str | None = Header(default=None)):
+    _validar_chave_sync(x_mistica_sync_key)
+    criados = 0
+    atualizados = 0
+    ignorados = 0
+    with conectar() as conn:
+        for produto in payload.produtos:
+            nome = str(produto.nome or "").strip()
+            codigo = str(produto.codigo_p or "").strip()
+            if not nome:
+                ignorados += 1
+                continue
+            existente = None
+            if codigo:
+                existente = conn.execute(
+                    "SELECT id FROM produtos WHERE codigo_p=?",
+                    (codigo,),
+                ).fetchone()
+            if not existente:
+                existente = conn.execute(
+                    "SELECT id FROM produtos WHERE lower(trim(nome))=lower(trim(?))",
+                    (nome,),
+                ).fetchone()
+            if existente:
+                conn.execute(
+                    """
+                    UPDATE produtos
+                       SET codigo_p=?, nome=?, preco=?, quantidade=?, categoria=?,
+                           custo=?, lucro=?, estoque_minimo=?, ativo=1
+                     WHERE id=?
+                    """,
+                    (
+                        codigo or None,
+                        nome,
+                        produto.preco,
+                        produto.quantidade,
+                        produto.categoria,
+                        produto.custo,
+                        produto.lucro,
+                        produto.estoque_minimo,
+                        existente["id"],
+                    ),
+                )
+                atualizados += 1
+            else:
+                conn.execute(
+                    """
+                    INSERT INTO produtos (codigo_p, nome, preco, quantidade, categoria, custo, lucro, estoque_minimo, ativo)
+                    VALUES (?,?,?,?,?,?,?,?,1)
+                    """,
+                    (
+                        codigo or None,
+                        nome,
+                        produto.preco,
+                        produto.quantidade,
+                        produto.categoria,
+                        produto.custo,
+                        produto.lucro,
+                        produto.estoque_minimo,
+                    ),
+                )
+                criados += 1
+    return {
+        "status": "ok",
+        "criados": criados,
+        "atualizados": atualizados,
+        "ignorados": ignorados,
+        "total": criados + atualizados,
+        "data_hora": datetime.now().isoformat(timespec="seconds"),
+    }
 
 
 @app.get("/api/produtos/{produto_id}")

@@ -56,10 +56,10 @@ def aplicar_painel_guard_runtime(fonte):
         fonte = fonte.replace(alvo_venda, alvo_venda + '\n            self.verificar_api_painel_mobile("apos_venda")', 1)
 
     alvo_status = 'self.lbl_sync_status.pack(side="right", padx=12, pady=8)'
-    if alvo_status in fonte and 'Sincronizar Painel Mobile Agora' not in fonte:
+    if alvo_status in fonte and 'Reparar API / Painel Mobile' not in fonte:
         fonte = fonte.replace(
             alvo_status,
-            alvo_status + '\n        ctk.CTkButton(topo, text="Sincronizar Painel Mobile Agora", height=30, font=("Arial", 11, "bold"), fg_color="#4f835f", command=lambda: self.verificar_api_painel_mobile("botao", forcar=True)).pack(side="right", padx=8, pady=6)',
+            alvo_status + '\n        ctk.CTkButton(topo, text="Reparar API / Painel Mobile", height=30, font=("Arial", 11, "bold"), fg_color="#4f835f", command=lambda: self.verificar_api_painel_mobile("botao", forcar=True)).pack(side="right", padx=8, pady=6)',
             1,
         )
 

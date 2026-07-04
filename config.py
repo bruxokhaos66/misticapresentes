@@ -14,6 +14,7 @@ DEFAULT_SERVER_URL = f"https://{OFFICIAL_DOMAIN}/painel/"
 DEFAULT_SERVER_MODE = "production"
 DEFAULT_STORAGE_MODE = "api_first"
 DEFAULT_AUTH_MODE = "domain"
+DATABASE_URL = str(os.environ.get("DATABASE_URL") or "").strip()
 
 
 def _normalizar_url(url):
@@ -83,6 +84,8 @@ def carregar_db_path():
     """Define o banco SQLite.
 
     Na API online, configure MISTICA_DB_PATH apontando para um volume/disco persistente.
+    DATABASE_URL fica reservado para uma migracao futura para PostgreSQL e nao altera
+    o SQLite local automaticamente.
     Exemplos:
     - /data/mistica_gestao_v20.db
     - /var/data/mistica_gestao_v20.db
