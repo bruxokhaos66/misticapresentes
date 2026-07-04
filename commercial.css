@@ -124,6 +124,8 @@
 .admin-alert-danger { border-color: rgba(255, 166, 166, 0.36); background: rgba(255, 166, 166, 0.10); }
 
 .admin-activity-panel { margin-bottom: 22px; }
+.admin-activity-tools { display: grid; grid-template-columns: 1fr auto; gap: 10px; margin-top: 12px; }
+.admin-activity-tools input { border: 1px solid rgba(240, 197, 106, 0.28); border-radius: 12px; background: rgba(8, 10, 10, 0.74); color: #fff8e7; padding: 10px 12px; font: inherit; }
 .admin-activity-content { display: grid; gap: 8px; margin-top: 12px; }
 .admin-activity-row { border: 1px solid rgba(240, 197, 106, 0.18); border-radius: 14px; background: rgba(255, 255, 255, 0.035); padding: 12px; display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
 .admin-activity-row div { display: grid; gap: 4px; }
@@ -166,7 +168,8 @@
 @media (max-width: 760px) {
   .catalog-tools,
   .kit-grid,
-  .product-detail-layout { grid-template-columns: 1fr; }
+  .product-detail-layout,
+  .admin-activity-tools { grid-template-columns: 1fr; }
   .pedido-card-head,
   .admin-activity-row { display: grid; }
   .admin-activity-actions { justify-items: start; }
