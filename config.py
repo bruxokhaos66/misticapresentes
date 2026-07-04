@@ -26,14 +26,7 @@ def _normalizar_url(url):
 
 
 def carregar_server_config():
-    """Carrega a configuração oficial do Mística Painel.
-
-    O app de celular deve abrir a área interna do site:
-    https://misticaesotericos.com.br/painel/
-
-    A API de dados fica em:
-    https://api.misticaesotericos.com.br
-    """
+    """Carrega a configuração oficial do Mística Painel."""
     cfg = {
         "server_url": DEFAULT_SERVER_URL,
         "api_url": DEFAULT_API_URL,
@@ -64,7 +57,6 @@ def carregar_server_config():
 
 
 def salvar_server_config(server_url=DEFAULT_SERVER_URL, api_url=None, storage_mode=DEFAULT_STORAGE_MODE):
-    # Força o painel interno oficial e não grava tokens antigos no arquivo local.
     cfg = {
         "server_url": DEFAULT_SERVER_URL,
         "api_url": DEFAULT_API_URL,
@@ -88,6 +80,18 @@ def resetar_server_config_oficial():
 
 
 def carregar_db_path():
+    """Define o banco SQLite.
+
+    Na API online, configure MISTICA_DB_PATH apontando para um volume/disco persistente.
+    Exemplos:
+    - /data/mistica_gestao_v20.db
+    - /var/data/mistica_gestao_v20.db
+    - /mnt/data/mistica_gestao_v20.db
+    """
+    env_path = str(os.environ.get("MISTICA_DB_PATH") or os.environ.get("DATABASE_PATH") or "").strip()
+    if env_path:
+        return env_path
+
     padrao = os.path.join(DOCS_PATH, "mistica_gestao_v20.db")
     try:
         if os.path.exists(CONFIG_REDE_PATH):
@@ -174,6 +178,12 @@ def hash_password_pbkdf2(senha, salt=b"mistica_presentes"):
 def ensure_directories():
     for pasta in [DOCS_PATH, BACKUP_DIR, ERROR_LOG_DIR]:
         os.makedirs(pasta, exist_ok=True)
+    try:
+        db_dir = os.path.dirname(DB_PATH)
+        if db_dir:
+            os.makedirs(db_dir, exist_ok=True)
+    except Exception:
+        pass
     try:
         resetar_server_config_oficial()
     except Exception:
