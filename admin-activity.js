@@ -20,10 +20,16 @@
     try { return new Date(value).toLocaleString("pt-BR"); } catch { return String(value || ""); }
   }
 
+  function mensagemPedido(item) {
+    return `Olá! Aqui é da Mística Presentes. Estamos entrando em contato sobre o pedido ${item.venda_id || ""}. Status atual: ${item.status || "Atualização"}.`;
+  }
+
   function itemAtividade(item) {
     const status = item.status || "Atualização";
     const cliente = item.cliente ? ` • ${item.cliente}` : "";
     const obs = item.observacao ? `<small>${item.observacao}</small>` : "";
+    const numero = window.misticaSiteConfig?.whatsappNumber || "554999172137";
+    const link = `https://wa.me/${numero}?text=${encodeURIComponent(mensagemPedido(item))}`;
     return `
       <article class="admin-activity-row">
         <div>
@@ -31,7 +37,10 @@
           <span>Pedido ${item.venda_id || ""}${cliente}</span>
           ${obs}
         </div>
-        <time>${datePt(item.data_hora)}</time>
+        <div class="admin-activity-actions">
+          <time>${datePt(item.data_hora)}</time>
+          <a class="btn btn-ghost" href="${link}" target="_blank" rel="noopener">WhatsApp</a>
+        </div>
       </article>
     `;
   }

@@ -130,6 +130,8 @@
 .admin-activity-row strong { color: #fff8e7; }
 .admin-activity-row span, .admin-activity-row small, .admin-activity-row time { color: #d9cfad; }
 .admin-activity-row time { white-space: nowrap; font-size: 0.82rem; }
+.admin-activity-actions { justify-items: end; }
+.admin-activity-actions .btn { padding: 7px 10px; font-size: 0.82rem; }
 
 .admin-report-panel { margin-bottom: 22px; }
 .admin-report-content { display: grid; gap: 18px; margin-top: 14px; }
@@ -167,6 +169,7 @@
   .product-detail-layout { grid-template-columns: 1fr; }
   .pedido-card-head,
   .admin-activity-row { display: grid; }
+  .admin-activity-actions { justify-items: start; }
 }
 
 @media (max-width: 560px) {
