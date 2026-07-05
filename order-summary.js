@@ -1,6 +1,15 @@
 (() => {
   const KEY = "misticaSpecialOrders";
 
+  function loadOrderAgeAlert() {
+    if (document.getElementById("orderAgeAlertScript")) return;
+    const script = document.createElement("script");
+    script.id = "orderAgeAlertScript";
+    script.src = "order-age-alert.js";
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+
   function loadOrders() {
     try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch { return []; }
   }
@@ -45,6 +54,7 @@
         renderSummary();
       };
     }
+    loadOrderAgeAlert();
   }
 
   window.misticaOrderSummary = { render: renderSummary, counts: countByStatus };
