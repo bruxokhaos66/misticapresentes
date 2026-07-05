@@ -109,6 +109,8 @@
       summary.className = "report-card";
       summary.setAttribute("role", "button");
       summary.setAttribute("tabindex", "0");
+      summary.setAttribute("aria-live", "polite");
+      summary.setAttribute("aria-atomic", "true");
       summary.addEventListener("click", toggleLateOnly);
       summary.addEventListener("keydown", event => {
         if (event.key === "Enter" || event.key === " ") {
