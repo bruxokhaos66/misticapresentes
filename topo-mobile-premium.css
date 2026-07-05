@@ -21,8 +21,13 @@
   text-align: center;
 }
 
+.hero-grid {
+  grid-template-columns: 0.82fr 1.18fr;
+}
+
 .hero-card-isis {
   isolation: isolate;
+  min-height: 100%;
 }
 
 .hero-card-isis img {
@@ -37,12 +42,17 @@
   backdrop-filter: blur(12px) saturate(1.15);
 }
 
+.isis-section .isis-showcase-image img {
+  content: url("assets/isis-bruxinha.svg");
+}
+
 @media (max-width: 920px) {
   .hero {
     padding: 42px 0 58px;
   }
 
   .hero-grid {
+    grid-template-columns: 1fr;
     gap: 26px;
   }
 
@@ -95,7 +105,7 @@
   }
 
   .hero-card-isis img {
-    max-height: 470px;
+    max-height: 540px;
     border-radius: 26px;
   }
 
@@ -165,7 +175,7 @@
   }
 
   .hero-card-isis img {
-    max-height: 380px;
+    max-height: 470px;
   }
 
   .floating-card strong {
