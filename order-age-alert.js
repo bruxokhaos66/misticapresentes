@@ -25,6 +25,11 @@
       .filter(order => order.days !== null && order.days >= LIMIT_DAYS && order.status !== "Disponivel");
   }
 
+  function lateCountText() {
+    const count = lateOrders().length;
+    return count ? `${count} atrasada(s)` : "sem atrasadas";
+  }
+
   function lateMessage() {
     const list = lateOrders();
     if (!list.length) return "Encomendas atrasadas - Mistica Presentes\n\nNenhuma encomenda atrasada.";
@@ -45,6 +50,14 @@
     window.open(`https://wa.me/${whatsappNumber()}?text=${encodeURIComponent(lateMessage())}`, "_blank", "noopener");
   }
 
+  function updateLateButtons() {
+    const countText = lateCountText();
+    const copyButton = document.getElementById("copyLateOrdersButton");
+    const whatsappButton = document.getElementById("whatsappLateOrdersButton");
+    if (copyButton) copyButton.textContent = `Copiar atrasadas (${countText})`;
+    if (whatsappButton) whatsappButton.textContent = `WhatsApp atrasadas (${countText})`;
+  }
+
   function mountLateButton() {
     const panel = document.getElementById("specialOrdersPanel");
     const actions = panel?.querySelector(".report-export-actions");
@@ -54,7 +67,6 @@
       copyButton.id = "copyLateOrdersButton";
       copyButton.className = "btn btn-ghost";
       copyButton.type = "button";
-      copyButton.textContent = "Copiar atrasadas";
       copyButton.addEventListener("click", copyLateOrders);
       actions.appendChild(copyButton);
     }
@@ -63,10 +75,10 @@
       whatsappButton.id = "whatsappLateOrdersButton";
       whatsappButton.className = "btn btn-ghost";
       whatsappButton.type = "button";
-      whatsappButton.textContent = "WhatsApp atrasadas";
       whatsappButton.addEventListener("click", sendLateOrdersWhatsapp);
       actions.appendChild(whatsappButton);
     }
+    updateLateButtons();
   }
 
   function decorate() {
@@ -88,6 +100,7 @@
       }
       if (days >= LIMIT_DAYS) card.classList.add("order-age-warning");
     });
+    updateLateButtons();
   }
 
   function install() {
@@ -104,6 +117,6 @@
     }
   }
 
-  window.misticaOrderAgeAlert = { install, decorate, lateOrders, lateMessage, copyLateOrders, sendWhatsapp: sendLateOrdersWhatsapp };
+  window.misticaOrderAgeAlert = { install, decorate, lateOrders, lateMessage, copyLateOrders, sendWhatsapp: sendLateOrdersWhatsapp, updateButtons: updateLateButtons };
   window.addEventListener("load", () => setTimeout(install, 400));
 })();
