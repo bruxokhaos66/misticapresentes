@@ -2,6 +2,15 @@
   const LIMIT = 20;
   const DAYS_LIMIT = 30;
 
+  function loadCustomerMissing() {
+    if (document.getElementById("customerMissingScript")) return;
+    const script = document.createElement("script");
+    script.id = "customerMissingScript";
+    script.src = "customer-missing.js";
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+
   function normalize(value) {
     return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
   }
@@ -133,5 +142,8 @@
   }
 
   window.misticaSlowProducts = { render, list: slowProducts, message, copyList };
-  window.addEventListener("load", mount);
+  window.addEventListener("load", () => {
+    mount();
+    loadCustomerMissing();
+  });
 })();
