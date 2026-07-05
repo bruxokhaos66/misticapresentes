@@ -24,6 +24,10 @@
         background: rgba(240, 197, 106, 0.08);
         outline: none;
       }
+      #lateOrdersSummary .late-summary-hint {
+        color: #d9cfad;
+        opacity: 0.88;
+      }
     `;
     document.head.appendChild(style);
   }
@@ -120,7 +124,7 @@
     const actionHint = lateOnly ? "Clique para mostrar todas." : "Clique para filtrar atrasadas.";
     summary.title = actionHint;
     summary.setAttribute("aria-label", `${list.length} encomenda(s) atrasada(s). ${oldest ? `Mais antiga com ${oldest} dia(s).` : "Nenhuma acima do prazo."} ${filterState} ${actionHint}`);
-    summary.innerHTML = `<span>Encomendas atrasadas</span><strong>${list.length}</strong><small>${oldest ? `Mais antiga: ${oldest} dia(s)` : "Nenhuma acima do prazo"}</small><small>${actionHint}</small>`;
+    summary.innerHTML = `<span>Encomendas atrasadas</span><strong>${list.length}</strong><small>${oldest ? `Mais antiga: ${oldest} dia(s)` : "Nenhuma acima do prazo"}</small><small class="late-summary-hint">${actionHint}</small>`;
   }
 
   function updateEmptyNotice(visible) {
