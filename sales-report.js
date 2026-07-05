@@ -1,4 +1,13 @@
 (() => {
+  function loadPaymentReport() {
+    if (document.getElementById("paymentReportScript")) return;
+    const script = document.createElement("script");
+    script.id = "paymentReportScript";
+    script.src = "payment-report.js";
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+
   function money(value) {
     return typeof currency !== "undefined" ? currency.format(Number(value || 0)) : `R$ ${Number(value || 0).toFixed(2).replace(".", ",")}`;
   }
@@ -72,6 +81,7 @@
         <section><h3>Últimas vendas do filtro</h3><div class="report-list">${saleRows}</div></section>
       </div>
     `;
+    window.misticaPaymentReport?.render?.();
   }
 
   function exportReportCsv() {
@@ -125,6 +135,7 @@
     panel.querySelector("[data-refresh-sales-report]").addEventListener("click", renderReport);
     panel.querySelector("[data-export-sales-report]").addEventListener("click", exportReportCsv);
     renderReport();
+    loadPaymentReport();
   }
 
   window.misticaSalesReport = {
