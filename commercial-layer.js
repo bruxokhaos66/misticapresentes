@@ -18,6 +18,24 @@ document.addEventListener("DOMContentLoaded", () => {
   favicon.href = logoAsset;
   document.head.appendChild(favicon);
 
+  function loadScriptOnce(id, src) {
+    if (document.getElementById(id)) return;
+    const script = document.createElement("script");
+    script.id = id;
+    script.src = `${src}?v=${assetVersion}`;
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+
+  loadScriptOnce("seoSiteScript", "seo-site.js");
+  loadScriptOnce("adminAccessScript", "admin-access.js");
+  loadScriptOnce("productExtrasScript", "product-extras.js");
+  loadScriptOnce("pedidoStatusScript", "pedido-status.js");
+  loadScriptOnce("adminAlertsScript", "admin-alerts.js");
+  loadScriptOnce("adminActivityScript", "admin-activity.js");
+  loadScriptOnce("isisCommerceScript", "isis-commerce.js");
+  loadScriptOnce("isisCommandsScript", "isis-commands.js");
+
   const adminPanel = document.getElementById("admin");
   if (adminPanel) {
     adminPanel.hidden = !adminAccess;
@@ -76,8 +94,19 @@ document.addEventListener("DOMContentLoaded", () => {
   const heroEyebrow = document.querySelector(".hero-copy .eyebrow");
   if (heroEyebrow) heroEyebrow.textContent = "Mística Presentes • Pinhalzinho-SC";
 
+  const productTitle = document.querySelector("#produtos .section-title h2");
+  if (productTitle) productTitle.textContent = "Produtos em destaque";
+
+  const productText = document.querySelector("#produtos .section-title p:last-child");
+  if (productText) productText.textContent = "Escolha seus artigos favoritos, adicione ao carrinho e envie o pedido pelo WhatsApp.";
+
   const footerContact = document.querySelector(".footer-grid div:nth-child(2)");
   if (footerContact) {
     footerContact.innerHTML = `<h3>Contato</h3><p>WhatsApp: ${whatsappDisplay}</p><p>Instagram: ${instagram}</p><p>Site: ${domain}</p>`;
+  }
+
+  const footerPublish = document.querySelector(".footer-grid div:nth-child(3)");
+  if (footerPublish) {
+    footerPublish.innerHTML = `<h3>Divulgação</h3><p>Produtos para espiritualidade, bem-estar, proteção e energias positivas.</p><p>${domain}</p>`;
   }
 });
