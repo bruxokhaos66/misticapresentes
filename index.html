@@ -11,6 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="commercial.css" />
+  <link rel="stylesheet" href="isis-visual.css" />
   <script defer src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
   <script defer src="site-config.js"></script>
   <script defer src="app.js"></script>
@@ -152,11 +153,27 @@
         <div class="form-panel">
           <p class="eyebrow">Assistente virtual</p>
           <h2>Isis</h2>
-          <p class="privacy-note">A Isis ajuda com produtos, pedidos, carrinho, estoque e pesquisas.</p>
+          <p class="privacy-note">A Isis ajuda com produtos, pedidos, carrinho, estoque e pesquisas. Agora ela também tem uma presença visual própria no site, com estados para atendimento, novidades, análise e consultoria.</p>
           <div id="isisChat" class="isis-chat"></div>
           <form id="isisForm" class="form inline-form"><label>Mensagem para a Isis<input id="isisInput" type="text" placeholder="Ex.: quero um presente xamânico" required /></label><button class="btn" type="submit">Perguntar</button></form>
         </div>
-        <div class="form-panel dark-panel"><p class="eyebrow">Ações rápidas</p><h2>Comandos úteis</h2><div class="quick-actions"><button class="btn btn-ghost" type="button" data-isis-command="produtos xamânicos">Produtos xamânicos</button><button class="btn btn-ghost" type="button" data-isis-command="estoque baixo">Estoque baixo</button><button class="btn btn-ghost" type="button" data-isis-command="pesquisar incensos atacado">Pesquisar incensos</button><button class="btn btn-ghost" type="button" data-isis-command="vendas hoje">Vendas de hoje</button></div></div>
+        <div class="form-panel dark-panel isis-showcase-panel">
+          <div>
+            <p class="eyebrow">Nova identidade da Isis</p>
+            <h2>Humana, mística e inteligente</h2>
+            <p class="privacy-note">Variações visuais para usar conforme o momento do atendimento.</p>
+          </div>
+          <figure class="isis-showcase-image">
+            <img src="assets/isis-estados.svg" alt="Isis feliz, empolgada, pensativa e inteligente para o site da Mística Presentes" loading="lazy" />
+          </figure>
+          <div class="isis-state-grid" aria-label="Estados visuais da Isis">
+            <div class="isis-state-card"><strong>Feliz</strong><span>Boas-vindas e atendimento acolhedor.</span></div>
+            <div class="isis-state-card"><strong>Empolgada</strong><span>Novidades, promoções e chamadas comerciais.</span></div>
+            <div class="isis-state-card"><strong>Pensativa</strong><span>Busca, análise e sugestões de compra.</span></div>
+            <div class="isis-state-card"><strong>Inteligente</strong><span>Consultoria, recomendações e ajuda ao cliente.</span></div>
+          </div>
+          <div class="quick-actions"><button class="btn btn-ghost" type="button" data-isis-command="produtos xamânicos">Produtos xamânicos</button><button class="btn btn-ghost" type="button" data-isis-command="estoque baixo">Estoque baixo</button><button class="btn btn-ghost" type="button" data-isis-command="pesquisar incensos atacado">Pesquisar incensos</button><button class="btn btn-ghost" type="button" data-isis-command="vendas hoje">Vendas de hoje</button></div>
+        </div>
       </div>
     </section>
 
