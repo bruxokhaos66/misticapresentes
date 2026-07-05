@@ -117,7 +117,8 @@
     }
     const list = lateOrders();
     const oldest = list.reduce((max, order) => Math.max(max, order.days || 0), 0);
-    summary.setAttribute("aria-label", `${list.length} encomenda(s) atrasada(s). ${oldest ? `Mais antiga com ${oldest} dia(s).` : "Nenhuma acima do prazo."} Clique para filtrar.`);
+    const filterState = lateOnly ? "Filtro ativo." : "Filtro inativo.";
+    summary.setAttribute("aria-label", `${list.length} encomenda(s) atrasada(s). ${oldest ? `Mais antiga com ${oldest} dia(s).` : "Nenhuma acima do prazo."} ${filterState} Clique para filtrar.`);
     summary.innerHTML = `<span>Encomendas atrasadas</span><strong>${list.length}</strong><small>${oldest ? `Mais antiga: ${oldest} dia(s)` : "Nenhuma acima do prazo"}</small>`;
   }
 
