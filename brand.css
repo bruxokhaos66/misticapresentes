@@ -1,11 +1,4 @@
-.top-ribbon {
-  position: relative;
-  z-index: 12;
-  border-bottom: 1px solid rgba(240, 197, 106, 0.16);
-  background: linear-gradient(90deg, rgba(49, 67, 38, 0.34), rgba(8, 8, 13, 0.94), rgba(35, 16, 53, 0.34));
-  color: #f3eadb;
-  font-size: 0.9rem;
-}
+.top-ribbon { position: relative; z-index: 12; border-bottom: 1px solid rgba(240, 197, 106, 0.16); background: linear-gradient(90deg, rgba(49, 67, 38, 0.34), rgba(8, 8, 13, 0.94), rgba(35, 16, 53, 0.34)); color: #f3eadb; font-size: 0.9rem; }
 .top-ribbon-grid { min-height: 38px; display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 18px; align-items: center; }
 .top-ribbon span { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
 .site-header { background: radial-gradient(circle at 14% 0%, rgba(240, 197, 106, 0.13), transparent 34%), radial-gradient(circle at 78% 0%, rgba(197, 213, 143, 0.10), transparent 30%), rgba(8, 8, 13, 0.92); }
@@ -37,8 +30,28 @@
 .hero-benefits span + span { border-left: 1px solid rgba(255, 248, 230, 0.13); }
 .hero-benefits strong { display: block; color: var(--gold); font-size: 0.78rem; letter-spacing: 0.09em; text-transform: uppercase; }
 .products-section .section-title h2::before, .products-section .section-title h2::after { content: "✦"; display: inline-block; margin: 0 14px; color: var(--gold); font-family: Inter, system-ui, sans-serif; font-size: 1rem; vertical-align: middle; }
-@media (max-width: 1120px) { .top-ribbon-grid { grid-template-columns: 1fr 1fr; } .top-ribbon-grid span:first-child { grid-column: 1 / -1; } .brand-hero .hero-grid { grid-template-columns: 1fr; } .hero-showcase img { height: auto; min-height: 0; border-radius: 32px; } .hero-benefits { grid-template-columns: repeat(2, 1fr); } .hero-benefits span:nth-child(3) { border-left: 0; } }
+/* Ajustes comerciais aplicados sem alterar comandos ou lógica do sistema */
+.brand-hero .hero-card-isis { min-height: 520px; padding: 0; border: 0; border-radius: 30px; background: transparent; box-shadow: none; overflow: hidden; }
+.brand-hero .hero-card-isis::before { display: none; }
+.brand-hero .hero-card-isis > img { content: url("assets/hero-mistica.svg"); width: 100%; height: min(58vw, 620px); min-height: 440px; object-fit: cover; object-position: center; border-radius: 30px; filter: drop-shadow(0 34px 70px rgba(0, 0, 0, 0.55)); }
+.brand-hero .floating-card { display: none; }
+.brand-hero .hero-copy h1 { font-size: 0; line-height: 0; }
+.brand-hero .hero-copy h1::before { content: "Energia, proteção e bem-estar para sua casa e sua jornada espiritual."; display: block; font-family: Cinzel, serif; font-size: clamp(2.45rem, 5vw, 4.9rem); line-height: 1.08; letter-spacing: 0.01em; background: linear-gradient(135deg, #fff9ef 0%, #f0c56a 31%, #fff7ec 58%, #d8a94c 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hero-benefits span { font-size: 0; }
+.hero-benefits span::before { display: block; font-size: 0.95rem; line-height: 1.4; color: #f2e4cf; }
+.hero-benefits span:nth-child(1)::before { content: "⭐ Atendimento especializado"; }
+.hero-benefits span:nth-child(2)::before { content: "🚚 Entrega rápida"; }
+.hero-benefits span:nth-child(3)::before { content: "💎 Produtos selecionados"; }
+.hero-benefits span:nth-child(4)::before { content: "🔒 Compra segura"; }
+.floating-whatsapp { position: fixed; right: 18px; bottom: 18px; z-index: 80; display: inline-flex; align-items: center; gap: 8px; min-height: 54px; padding: 0 18px; border: 1px solid rgba(240,197,106,.42); border-radius: 999px; color: #10200c; background: linear-gradient(135deg, #f6d989, #d9a746 54%, #718a46); box-shadow: 0 18px 46px rgba(0,0,0,.38), 0 0 28px rgba(240,197,106,.24); font-weight: 950; text-decoration: none; }
+.floating-whatsapp:hover { transform: translateY(-2px); filter: saturate(1.08); }
+.isis-showcase-panel { border-color: rgba(240,197,106,.28); background: radial-gradient(circle at 20% 0%, rgba(240,197,106,.16), transparent 34%), linear-gradient(145deg, rgba(35,16,53,.50), rgba(49,67,38,.30)); }
+.isis-showcase-panel h2::after { content: " • kits personalizados"; color: var(--sage); font-size: .46em; display: block; margin-top: 8px; font-family: Inter, system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; }
+.isis-state-card:nth-child(1) span::after { content: " Responde dúvidas iniciais."; }
+.isis-state-card:nth-child(3) span::after { content: " Indica produtos por intenção."; }
+.isis-state-card:nth-child(4) span::after { content: " Ajuda a montar kits personalizados."; }
+@media (max-width: 1120px) { .top-ribbon-grid { grid-template-columns: 1fr 1fr; } .top-ribbon-grid span:first-child { grid-column: 1 / -1; } .brand-hero .hero-grid { grid-template-columns: 1fr; } .hero-showcase img, .brand-hero .hero-card-isis > img { height: auto; min-height: 0; border-radius: 32px; } .hero-benefits { grid-template-columns: repeat(2, 1fr); } .hero-benefits span:nth-child(3) { border-left: 0; } }
 @media (max-width: 920px) { .top-ribbon { display: none; } .nav { min-height: 88px; gap: 12px; } .brand { flex: 1 1 auto; } .brand img { width: 58px; height: 58px; border-radius: 17px; } .brand-copy strong { font-size: 1.1rem; } .brand-copy small { margin-top: 7px; font-size: 0.56rem; } .menu-toggle { flex: 0 0 auto; min-width: 58px; height: 58px; align-items: center; justify-content: center; border-radius: 20px; border-color: rgba(240, 197, 106, 0.23); background: linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(126, 63, 242, 0.12)); font-size: 1.65rem; } .nav-links { inset: 92px 16px auto 16px; } .brand-hero { min-height: auto; padding-top: 50px; } }
-@media (max-width: 700px) { .hero-benefits { grid-template-columns: 1fr; padding: 12px 14px; } .hero-benefits span, .hero-benefits span + span { border-left: 0; border-top: 1px solid rgba(255, 248, 230, 0.11); } .hero-benefits span:first-child { border-top: 0; } }
-@media (max-width: 560px) { .container { width: min(100% - 32px, 1160px); } .brand { gap: 10px; } .brand img { width: 54px; height: 54px; padding: 3px; } .brand-copy strong { max-width: calc(100vw - 160px); font-size: 1rem; letter-spacing: 0.055em; } .brand-copy small { max-width: calc(100vw - 160px); overflow: hidden; text-overflow: ellipsis; font-size: 0.53rem; letter-spacing: 0.12em; } .brand-hero h1 { font-size: clamp(2.5rem, 12vw, 4.2rem); } .hero-showcase img { border-radius: 24px; } .products-section .section-title h2::before, .products-section .section-title h2::after { display: none; } }
+@media (max-width: 700px) { .hero-benefits { grid-template-columns: 1fr; padding: 12px 14px; } .hero-benefits span, .hero-benefits span + span { border-left: 0; border-top: 1px solid rgba(255, 248, 230, 0.11); } .hero-benefits span:first-child { border-top: 0; } .floating-whatsapp { right: 14px; bottom: 14px; min-height: 50px; padding: 0 14px; font-size: .92rem; } }
+@media (max-width: 560px) { .container { width: min(100% - 32px, 1160px); } .brand { gap: 10px; } .brand img { width: 54px; height: 54px; padding: 3px; } .brand-copy strong { max-width: calc(100vw - 160px); font-size: 1rem; letter-spacing: 0.055em; } .brand-copy small { max-width: calc(100vw - 160px); overflow: hidden; text-overflow: ellipsis; font-size: 0.53rem; letter-spacing: 0.12em; } .brand-hero h1::before { font-size: clamp(2.2rem, 11vw, 3.8rem); } .hero-showcase img, .brand-hero .hero-card-isis > img { border-radius: 24px; } .products-section .section-title h2::before, .products-section .section-title h2::after { display: none; } }
 @media (max-width: 380px) { .brand-copy small { display: none; } .brand-copy strong { max-width: calc(100vw - 145px); font-size: 0.94rem; } .brand img, .menu-toggle { width: 50px; height: 50px; min-width: 50px; } }
