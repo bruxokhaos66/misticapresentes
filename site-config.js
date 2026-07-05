@@ -15,7 +15,7 @@ window.misticaSiteConfig = {
 };
 
 (() => {
-  const isisUrl = "assets/isis-humana-premium.webp?v=20260705r";
+  const isisUrl = "assets/isis-hero-premium.webp?v=20260705r";
   const logoUrl = "assets/mistica-logo-xamanico.webp?v=20260705r";
   const css = `
     .top-ribbon{display:none!important}
@@ -32,7 +32,7 @@ window.misticaSiteConfig = {
     .brand-hero .hero-grid{position:relative!important;z-index:2!important;grid-template-columns:minmax(0,.88fr) minmax(360px,1.02fr)!important;align-items:center!important;gap:clamp(26px,4vw,58px)!important}
     .brand-hero h1{max-width:580px!important;text-transform:uppercase!important;font-size:clamp(2.1rem,3.9vw,3.75rem)!important;line-height:1.06!important;letter-spacing:.035em!important;background:linear-gradient(180deg,#fff6dc 0%,#efc168 48%,#b8ca75 100%)!important;-webkit-background-clip:text!important;background-clip:text!important;color:transparent!important}
     .hero-text{max-width:540px!important;font-size:clamp(.98rem,1.18vw,1.1rem)!important;line-height:1.62!important;color:#f1e4d1!important}
-    .hero-card-isis{position:relative!important;z-index:2!important;min-height:560px!important;padding:18px!important;display:grid!important;align-content:center!important;justify-items:center!important;border:1px solid rgba(240,197,106,.24)!important;background-image:radial-gradient(circle at 55% 22%,rgba(240,197,106,.12),transparent 34%),linear-gradient(180deg,rgba(7,6,11,.18),rgba(7,6,11,.82)),url('${isisUrl}')!important;background-size:cover,cover,contain!important;background-position:center,center,center!important;background-repeat:no-repeat!important;box-shadow:0 24px 70px rgba(0,0,0,.38)!important;overflow:hidden!important}
+    .hero-card-isis{position:relative!important;z-index:2!important;min-height:560px!important;padding:18px!important;display:grid!important;align-content:center!important;justify-items:center!important;border:1px solid rgba(240,197,106,.24)!important;background-image:radial-gradient(circle at 55% 22%,rgba(240,197,106,.12),transparent 34%),linear-gradient(180deg,rgba(7,6,11,.08),rgba(7,6,11,.62)),url('${isisUrl}')!important;background-size:cover,cover,cover!important;background-position:center,center,center!important;background-repeat:no-repeat!important;box-shadow:0 24px 70px rgba(0,0,0,.38)!important;overflow:hidden!important}
     .hero-card-isis:before,.hero-card-isis:after{display:none!important}
     .hero-card-isis>img{content:url('${isisUrl}')!important;display:block!important;opacity:1!important;visibility:visible!important;width:100%!important;max-width:560px!important;max-height:620px!important;object-fit:contain!important;object-position:center!important;border-radius:28px!important;filter:drop-shadow(0 32px 70px rgba(0,0,0,.54))!important;z-index:2!important;position:relative!important}
     .hero-card-isis .floating-card{z-index:3!important;position:absolute!important;left:24px!important;right:24px!important;bottom:24px!important}
@@ -48,7 +48,7 @@ window.misticaSiteConfig = {
     }
     style.textContent = css;
     const heroCard = document.querySelector(".hero-card-isis");
-    if (heroCard) heroCard.style.backgroundImage = `radial-gradient(circle at 55% 22%, rgba(240,197,106,.12), transparent 34%), linear-gradient(180deg, rgba(7,6,11,.18), rgba(7,6,11,.82)), url('${isisUrl}')`;
+    if (heroCard) heroCard.style.backgroundImage = `radial-gradient(circle at 55% 22%, rgba(240,197,106,.12), transparent 34%), linear-gradient(180deg, rgba(7,6,11,.08), rgba(7,6,11,.62)), url('${isisUrl}')`;
     const heroImg = document.querySelector(".hero-card-isis > img");
     if (heroImg) {
       heroImg.src = isisUrl;
