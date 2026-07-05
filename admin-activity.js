@@ -4,6 +4,7 @@
   const SITE_API_KEY = String(cfg.siteApiKey || "").trim();
   let atividadeRows = [];
   let termoBusca = "";
+  let painelMontado = false;
 
   function headers() {
     return {
@@ -13,7 +14,7 @@
   }
 
   async function api(path) {
-    const response = await fetch(`${API_BASE}${path}`, { headers: headers() });
+    const response = await fetch(`${API_BASE}${path}`, { headers: headers(), cache: "no-store" });
     if (!response.ok) throw new Error(`API ${response.status}`);
     return response.json();
   }
@@ -22,12 +23,31 @@
     return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   }
 
+  function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>'"]/g, char => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      "'": "&#39;",
+      '"': "&quot;",
+    }[char]));
+  }
+
+  function normalizarTelefone(value) {
+    const numero = String(value || "554999172137").replace(/\D/g, "");
+    return numero || "554999172137";
+  }
+
   function datePt(value) {
-    try { return new Date(value).toLocaleString("pt-BR"); } catch { return String(value || ""); }
+    if (!value) return "-";
+    const data = new Date(value);
+    return Number.isNaN(data.getTime()) ? String(value) : data.toLocaleString("pt-BR");
   }
 
   function mensagemPedido(item) {
-    return `Olá! Aqui é da Mística Presentes. Estamos entrando em contato sobre o pedido ${item.venda_id || ""}. Status atual: ${item.status || "Atualização"}.`;
+    const pedido = item?.venda_id ? `pedido ${item.venda_id}` : "pedido";
+    const status = item?.status || "Atualização";
+    return `Olá! Aqui é da Mística Presentes. Estamos entrando em contato sobre o ${pedido}. Status atual: ${status}.`;
   }
 
   function textoBusca(item) {
@@ -41,21 +61,22 @@
   }
 
   function itemAtividade(item) {
-    const status = item.status || "Atualização";
-    const cliente = item.cliente ? ` • ${item.cliente}` : "";
-    const obs = item.observacao ? `<small>${item.observacao}</small>` : "";
-    const numero = window.misticaSiteConfig?.whatsappNumber || "554999172137";
+    const status = escapeHtml(item.status || "Atualização");
+    const pedido = escapeHtml(item.venda_id || "-");
+    const cliente = item.cliente ? ` • ${escapeHtml(item.cliente)}` : "";
+    const obs = item.observacao ? `<small>${escapeHtml(item.observacao)}</small>` : "";
+    const numero = normalizarTelefone(window.misticaSiteConfig?.whatsappNumber);
     const link = `https://wa.me/${numero}?text=${encodeURIComponent(mensagemPedido(item))}`;
     return `
       <article class="admin-activity-row">
         <div>
           <strong>${status}</strong>
-          <span>Pedido ${item.venda_id || ""}${cliente}</span>
+          <span>Pedido ${pedido}${cliente}</span>
           ${obs}
         </div>
         <div class="admin-activity-actions">
-          <time>${datePt(item.data_hora)}</time>
-          <a class="btn btn-ghost" href="${link}" target="_blank" rel="noopener">WhatsApp</a>
+          <time>${escapeHtml(datePt(item.data_hora))}</time>
+          <a class="btn btn-ghost" href="${link}" target="_blank" rel="noopener noreferrer">WhatsApp</a>
         </div>
       </article>
     `;
@@ -79,13 +100,13 @@
       atividadeRows = Array.isArray(lista) ? lista : [];
       renderizarAtividade();
     } catch (error) {
-      root.innerHTML = `<p class="privacy-note">Não foi possível carregar atividade: ${error.message}</p>`;
+      root.innerHTML = `<p class="privacy-note">Não foi possível carregar atividade: ${escapeHtml(error.message || "erro desconhecido")}</p>`;
     }
   }
 
   function montarPainel() {
     const admin = document.getElementById("adminContent");
-    if (!admin || document.getElementById("adminActivityPanel")) return;
+    if (!admin || document.getElementById("adminActivityPanel")) return false;
     const panel = document.createElement("section");
     panel.id = "adminActivityPanel";
     panel.className = "form-panel admin-activity-panel";
@@ -103,6 +124,8 @@
     const report = document.getElementById("adminReportPanel");
     admin.insertBefore(panel, alerts?.nextSibling || report || admin.firstChild);
     carregarAtividade();
+    painelMontado = true;
+    return true;
   }
 
   document.addEventListener("input", event => {
@@ -118,8 +141,11 @@
   window.misticaAdminActivity = { reload: carregarAtividade, search: value => { termoBusca = value || ""; renderizarAtividade(); } };
 
   window.addEventListener("load", () => {
-    montarPainel();
-    setInterval(montarPainel, 1500);
+    if (!montarPainel()) {
+      const montagem = setInterval(() => {
+        if (painelMontado || montarPainel()) clearInterval(montagem);
+      }, 1500);
+    }
     setInterval(carregarAtividade, 45000);
   });
 })();
