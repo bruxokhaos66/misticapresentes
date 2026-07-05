@@ -1,0 +1,57 @@
+.isis-showcase-panel {
+  display: grid;
+  gap: 18px;
+  align-self: stretch;
+}
+
+.isis-showcase-panel .isis-showcase-image {
+  width: 100%;
+  border: 1px solid rgba(240, 197, 106, 0.30);
+  border-radius: 26px;
+  background: radial-gradient(circle at 50% 20%, rgba(240, 197, 106, 0.15), transparent 36%), rgba(0, 0, 0, 0.22);
+  box-shadow: var(--shadow), var(--glow-purple);
+  overflow: hidden;
+}
+
+.isis-showcase-panel .isis-showcase-image img {
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+.isis-state-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.isis-state-card {
+  border: 1px solid rgba(255, 248, 230, 0.14);
+  border-radius: 18px;
+  padding: 13px;
+  background: linear-gradient(145deg, rgba(255, 250, 244, 0.08), rgba(126, 63, 242, 0.10));
+}
+
+.isis-state-card strong {
+  display: block;
+  color: var(--gold);
+  font-family: Cinzel, Georgia, serif;
+  font-size: 0.98rem;
+}
+
+.isis-state-card span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.isis-section .checkout-grid {
+  align-items: stretch;
+}
+
+@media (max-width: 920px) {
+  .isis-state-grid {
+    grid-template-columns: 1fr;
+  }
+}

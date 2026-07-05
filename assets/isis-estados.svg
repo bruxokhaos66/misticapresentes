@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 760" role="img" aria-labelledby="title desc">
+  <title id="title">Estados visuais da Isis para o site da Mística Presentes</title>
+  <desc id="desc">Quatro ilustrações da assistente Isis em estados feliz, empolgada, pensativa e inteligente, com estética mística e xamânica.</desc>
+  <defs>
+    <radialGradient id="pageBg" cx="50%" cy="42%" r="78%">
+      <stop offset="0" stop-color="#7e3ff2" stop-opacity="0.34"/>
+      <stop offset="0.48" stop-color="#314326" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#070711"/>
+    </radialGradient>
+    <linearGradient id="panel" x1="0" x2="1" y1="0" y2="1">
+      <stop stop-color="#231035"/>
+      <stop offset="0.52" stop-color="#4b173f"/>
+      <stop offset="1" stop-color="#24351f"/>
+    </linearGradient>
+    <linearGradient id="dress" x1="0" x2="1" y1="0" y2="1">
+      <stop stop-color="#2a123d"/>
+      <stop offset="0.45" stop-color="#5a1d55"/>
+      <stop offset="1" stop-color="#314326"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" x2="1">
+      <stop stop-color="#fff0b8"/>
+      <stop offset="0.48" stop-color="#f0c56a"/>
+      <stop offset="1" stop-color="#b97728"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="7" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <g id="stars" fill="#f6d989" opacity="0.9">
+      <path d="M18 0l6 13 14 5-14 5-6 13-6-13-14-5 14-5 6-13Z"/>
+      <circle cx="70" cy="34" r="4"/>
+      <circle cx="104" cy="8" r="3"/>
+    </g>
+    <g id="isisBase">
+      <ellipse cx="180" cy="328" rx="112" ry="124" fill="#0b0b12" opacity="0.34"/>
+      <path d="M79 620c16-116 52-184 101-184s86 68 101 184H79Z" fill="url(#dress)" stroke="#f0c56a" stroke-width="5"/>
+      <path d="M95 438c9-55 38-86 76-95l-30 164c-39-2-58-25-46-69Z" fill="#231035" stroke="#b37cff" stroke-width="4"/>
+      <path d="M265 438c-9-55-38-86-76-95l30 164c39-2 58-25 46-69Z" fill="#314326" stroke="#c5d58f" stroke-width="4"/>
+      <circle cx="180" cy="286" r="79" fill="#f0c9a6" stroke="#f0c56a" stroke-width="5"/>
+      <path d="M102 280c18-76 68-116 122-105 52 11 76 52 75 106-41-45-83-56-132-32-24 12-45 23-65 31Z" fill="#211126"/>
+      <path d="M75 214c64-88 150-124 255-108-25 20-38 45-42 72 52 11 93 36 121 75-124-23-227-15-334-39Z" fill="#231035" stroke="#b37cff" stroke-width="5"/>
+      <path d="M108 213c45-18 100-24 164-17" stroke="#f0c56a" stroke-width="7" stroke-linecap="round"/>
+      <circle cx="149" cy="295" r="8" fill="#241407"/>
+      <circle cx="211" cy="295" r="8" fill="#241407"/>
+      <circle cx="128" cy="322" r="12" fill="#eaa0b8" opacity="0.45"/>
+      <circle cx="232" cy="322" r="12" fill="#eaa0b8" opacity="0.45"/>
+      <path d="M180 374l25 48-25 34-25-34 25-48Z" fill="url(#gold)" stroke="#fff2c7" stroke-width="3"/>
+      <path d="M180 374v82" stroke="#fff2c7" stroke-width="3" opacity="0.55"/>
+      <path d="M122 540c38 32 76 32 116 0" stroke="#f0c56a" stroke-width="5" stroke-linecap="round" fill="none" opacity="0.75"/>
+    </g>
+  </defs>
+
+  <rect width="1440" height="760" rx="42" fill="url(#pageBg)"/>
+  <g opacity="0.24" stroke="#f0c56a" stroke-width="2" fill="none">
+    <circle cx="118" cy="112" r="58"/>
+    <circle cx="1324" cy="112" r="68"/>
+    <path d="M124 54v116M66 112h116M1272 112h104M1324 60v104"/>
+    <path d="M64 650c112-48 174-130 212-250M1378 655c-112-48-174-130-212-250"/>
+  </g>
+  <use href="#stars" x="92" y="78"/>
+  <use href="#stars" x="1198" y="612" transform="scale(1.15)"/>
+
+  <g transform="translate(48 44)">
+    <rect width="318" height="622" rx="34" fill="url(#panel)" stroke="#f0c56a" stroke-opacity="0.42"/>
+    <use href="#isisBase" x="-20" y="0" filter="url(#glow)"/>
+    <path d="M123 336c25 24 55 24 80 0" stroke="#8d5132" stroke-width="7" stroke-linecap="round" fill="none"/>
+    <text x="159" y="548" text-anchor="middle" font-family="Cinzel, Georgia, serif" font-size="31" font-weight="700" fill="#f0c56a">Isis feliz</text>
+    <text x="159" y="584" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="17" fill="#d8c9b7">acolhedora, positiva</text>
+    <text x="159" y="609" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="17" fill="#d8c9b7">e pronta para ajudar</text>
+  </g>
+
+  <g transform="translate(391 44)">
+    <rect width="318" height="622" rx="34" fill="url(#panel)" stroke="#f0c56a" stroke-opacity="0.42"/>
+    <use href="#isisBase" x="-20" y="0" filter="url(#glow)"/>
+    <path d="M123 334c20 18 52 22 78 0" stroke="#8d5132" stroke-width="8" stroke-linecap="round" fill="none"/>
+    <path d="M235 120c48 8 78 38 78 75 0 42-38 76-86 76h-35l-28 28 7-36c-34-13-56-39-56-68 0-42 54-82 120-75Z" fill="rgba(126,63,242,.42)" stroke="#f0c56a" stroke-width="4"/>
+    <text x="214" y="178" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="800" fill="#fff0b8">Novidade!</text>
+    <text x="159" y="548" text-anchor="middle" font-family="Cinzel, Georgia, serif" font-size="31" font-weight="700" fill="#f0c56a">Isis empolgada</text>
+    <text x="159" y="584" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="17" fill="#d8c9b7">animada, convidativa</text>
+    <text x="159" y="609" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="17" fill="#d8c9b7">e cheia de energia</text>
+  </g>
+
+  <g transform="translate(734 44)">
+    <rect width="318" height="622" rx="34" fill="url(#panel)" stroke="#f0c56a" stroke-opacity="0.42"/>
+    <use href="#isisBase" x="-20" y="0" filter="url(#glow)"/>
+    <path d="M132 342c18 10 38 10 56 0" stroke="#8d5132" stroke-width="6" stroke-linecap="round" fill="none"/>
+    <path d="M248 103c42 10 70 37 70 72 0 40-35 71-78 74l-24 28-2-31c-39-8-67-36-67-71 0-43 45-82 101-72Z" fill="rgba(255,250,244,.10)" stroke="#f0c56a" stroke-width="4"/>
+    <circle cx="230" cy="175" r="9" fill="#f6d989"/><circle cx="260" cy="175" r="9" fill="#f6d989"/><circle cx="290" cy="175" r="9" fill="#f6d989"/>
+    <text x="159" y="548" text-anchor="middle" font-family="Cinzel, Georgia, serif" font-size="31" font-weight="700" fill="#f0c56a">Isis pensativa</text>
+    <text x="159" y="584" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="17" fill="#d8c9b7">reflexiva, analítica</text>
+    <text x="159" y="609" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="17" fill="#d8c9b7">e cuidadosa na resposta</text>
+  </g>
+
+  <g transform="translate(1077 44)">
+    <rect width="318" height="622" rx="34" fill="url(#panel)" stroke="#f0c56a" stroke-opacity="0.42"/>
+    <use href="#isisBase" x="-20" y="0" filter="url(#glow)"/>
+    <path d="M122 336c25 17 52 17 76 0" stroke="#8d5132" stroke-width="7" stroke-linecap="round" fill="none"/>
+    <g transform="translate(218 92)" opacity="0.86" stroke="#f0c56a" fill="none" stroke-width="3">
+      <circle cx="34" cy="34" r="32"/>
+      <path d="M34 2v64M2 34h64M12 12l44 44M56 12L12 56"/>
+    </g>
+    <path d="M250 270l9 20 22 8-22 8-9 20-9-20-22-8 22-8 9-20Z" fill="#f6d989"/>
+    <text x="159" y="548" text-anchor="middle" font-family="Cinzel, Georgia, serif" font-size="31" font-weight="700" fill="#f0c56a">Isis inteligente</text>
+    <text x="159" y="584" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="17" fill="#d8c9b7">confiante, sábia</text>
+    <text x="159" y="609" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="17" fill="#d8c9b7">e consultora da loja</text>
+  </g>
+
+  <text x="720" y="718" text-anchor="middle" font-family="Cinzel, Georgia, serif" font-size="34" font-weight="700" fill="#f0c56a">Isis • sua assistente da Mística Presentes</text>
+</svg>
