@@ -17,9 +17,11 @@
       #lateOrdersSummary {
         cursor: pointer;
       }
-      #lateOrdersSummary:hover {
+      #lateOrdersSummary:hover,
+      #lateOrdersSummary:focus-visible {
         border-color: rgba(240, 197, 106, 0.42);
         background: rgba(240, 197, 106, 0.08);
+        outline: none;
       }
     `;
     document.head.appendChild(style);
@@ -78,12 +80,14 @@
     const copyButton = document.getElementById("copyLateOrdersButton");
     const whatsappButton = document.getElementById("whatsappLateOrdersButton");
     const filterButton = document.getElementById("filterLateOrdersButton");
+    const summary = document.getElementById("lateOrdersSummary");
     if (copyButton) copyButton.textContent = `Copiar atrasadas (${countText})`;
     if (whatsappButton) whatsappButton.textContent = `WhatsApp atrasadas (${countText})`;
     if (filterButton) {
       filterButton.textContent = lateOnly ? "Mostrar todas" : `Ver atrasadas (${countText})`;
       filterButton.classList.toggle("active", lateOnly);
     }
+    if (summary) summary.setAttribute("aria-pressed", String(lateOnly));
   }
 
   function renderLateSummary() {
@@ -96,7 +100,15 @@
       summary.id = "lateOrdersSummary";
       summary.className = "report-card";
       summary.title = "Clique para filtrar encomendas atrasadas";
+      summary.setAttribute("role", "button");
+      summary.setAttribute("tabindex", "0");
       summary.addEventListener("click", toggleLateOnly);
+      summary.addEventListener("keydown", event => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          toggleLateOnly();
+        }
+      });
       content.parentNode.insertBefore(summary, content);
     }
     const list = lateOrders();
