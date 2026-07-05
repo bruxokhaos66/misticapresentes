@@ -158,6 +158,7 @@
 
   function toggleLateOnly() {
     lateOnly = !lateOnly;
+    renderLateSummary();
     applyLateFilter();
   }
 
