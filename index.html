@@ -18,6 +18,31 @@
   <script defer src="sale-receipts.js"></script>
   <script defer src="commercial-layer.js"></script>
   <script defer src="product-admin.js"></script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Store",
+    "name": "Mística Presentes",
+    "alternateName": "Mística Artigos Esotéricos",
+    "url": "https://misticaesotericos.com.br/",
+    "telephone": "+55 49 99917-2137",
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": "Galeria Ody - Av. Brasília, 2400 - Sala 07",
+      "addressLocality": "Pinhalzinho",
+      "addressRegion": "SC",
+      "postalCode": "89870-000",
+      "addressCountry": "BR"
+    },
+    "sameAs": [
+      "https://www.instagram.com/misticaprodutos"
+    ],
+    "description": "Loja de produtos místicos, esotéricos e xamânicos em Pinhalzinho-SC. Incensos, cristais, velas ritualísticas, banhos de ervas, aromaterapia, óleos essenciais, essências Via Aroma e presentes com significado.",
+    "areaServed": "Pinhalzinho, Santa Catarina",
+    "paymentAccepted": "Pix, dinheiro, cartão",
+    "currenciesAccepted": "BRL"
+  }
+  </script>
 </head>
 <body>
   <header class="site-header">
@@ -32,6 +57,7 @@
         <a href="#produtos">Produtos</a>
         <a href="#checkout">Carrinho</a>
         <a href="#isis">Isis</a>
+        <a href="#contato">Contato</a>
         <a class="btn btn-small" href="#" data-whatsapp-link target="_blank" rel="noopener">WhatsApp</a>
       </div>
     </nav>
@@ -134,6 +160,21 @@
       </div>
     </section>
 
+    <section id="contato" class="section about">
+      <div class="container split">
+        <div>
+          <p class="eyebrow">Contato e localização</p>
+          <h2>Mística Presentes</h2>
+        </div>
+        <div>
+          <p>Galeria Ody - Av. Brasília, 2400 - Sala 07 - Centro, Pinhalzinho - SC, 89870-000</p>
+          <p>WhatsApp: (49) 99917-2137</p>
+          <p>Instagram: @misticaprodutos</p>
+          <p>Site: https://misticaesotericos.com.br</p>
+        </div>
+      </div>
+    </section>
+
     <section id="cliente" class="section client-section internal-section">
       <div class="container checkout-grid">
         <div class="form-panel"><p class="eyebrow">Cliente</p><h2>Cadastro interno</h2><form id="clientForm" class="form"><label>Nome completo<input id="clientName" type="text" placeholder="Ex.: Maria Aparecida" minlength="3" required /></label><label>CPF<input id="clientCpf" type="text" placeholder="000.000.000-00" maxlength="14" inputmode="numeric" required /></label><label>Endereço<input id="clientAddress" type="text" placeholder="Rua, número, bairro e cidade" minlength="5" required /></label><label>WhatsApp<input id="clientWhatsapp" type="text" placeholder="(49) 99999-9999" maxlength="15" inputmode="numeric" required /></label><label class="check-row"><input id="privacyConsent" type="checkbox" required /><span>Tenho autorização do cliente para salvar estes dados.</span></label><button class="btn" type="submit">Salvar cliente</button></form><div id="clientSaved" class="saved-box" hidden></div></div>
@@ -145,6 +186,6 @@
 
     <section id="admin" class="section admin-section"><div class="container section-title"><p class="eyebrow">Administração</p><h2>Painel interno da Mística</h2><p>Área interna para produtos, vendas, estoque, fornecedores e backup.</p></div><div class="container form-panel" id="adminLoginPanel"><h3>Entrar no painel administrativo</h3><p class="privacy-note">Proteção simples para site estático. Para segurança real, use backend.</p><form id="adminLoginForm" class="form inline-form"><label>Senha administrativa<input id="adminPassword" type="password" placeholder="Digite a senha" required /></label><button class="btn" type="submit">Entrar</button></form><div id="adminLoginStatus" class="saved-box" hidden></div></div><div class="container admin-content" id="adminContent" hidden><div class="dashboard-grid"><article class="metric-card"><span>Hoje</span><strong id="revenueToday">R$ 0,00</strong></article><article class="metric-card"><span>Semana</span><strong id="revenueWeek">R$ 0,00</strong></article><article class="metric-card"><span>Mês</span><strong id="revenueMonth">R$ 0,00</strong></article><article class="metric-card"><span>Vendas</span><strong id="salesCount">0</strong></article></div><div class="checkout-grid admin-grid"><div class="form-panel"><p class="eyebrow">Alertas</p><h2>Estoque mínimo</h2><div id="lowStockAlerts" class="history-list"></div></div><div class="form-panel dark-panel"><p class="eyebrow">Backup</p><h2>Dados locais</h2><div class="stack-actions"><button class="btn btn-full" type="button" data-download-backup>Baixar backup JSON</button><button class="btn btn-ghost btn-full" type="button" data-restore-backup>Como restaurar backup</button></div><small id="backupStatus" class="privacy-note"></small></div></div><div class="checkout-grid admin-grid"><div class="form-panel"><p class="eyebrow">Fornecedores</p><h2>Cadastro de fornecedores</h2><form id="supplierForm" class="form"><label>Nome do fornecedor<input id="supplierName" type="text" placeholder="Ex.: Distribuidora de Incensos" required /></label><label>Categoria<input id="supplierCategory" type="text" placeholder="Incensos, cristais, velas" required /></label><label>WhatsApp<input id="supplierWhatsapp" type="text" placeholder="(49) 99999-9999" maxlength="15" inputmode="numeric" /></label><label>Observação<textarea id="supplierNotes" placeholder="Prazos, marcas, condições"></textarea></label><button class="btn" type="submit">Salvar fornecedor</button></form></div><div class="form-panel dark-panel"><p class="eyebrow">Lista</p><h2>Fornecedores salvos</h2><div id="supplierList" class="history-list"></div></div></div></div></section>
   </main>
-  <footer class="footer"><div class="container footer-grid"><div><img src="assets/logo-mistica.svg" alt="Logo Mística Presentes" /><strong>Mística Presentes</strong><p>Encontre tudo para espiritualidade, bem-estar e energias positivas.</p></div><div><h3>Contato</h3><p>WhatsApp: (49) 99917-2137</p><p>Instagram: @misticaprodutos</p><p>Site: misticaesotericos.com.br</p></div><div><h3>Divulgação</h3><p>Em breve: misticaesotericos.com.br</p><p><a href="#admin">Área interna</a></p></div></div></footer>
+  <footer class="footer"><div class="container footer-grid"><div><img src="assets/logo-mistica.svg" alt="Logo Mística Presentes" /><strong>Mística Presentes</strong><p>Encontre tudo para espiritualidade, bem-estar e energias positivas.</p></div><div><h3>Contato</h3><p>Galeria Ody - Av. Brasília, 2400 - Sala 07 - Centro, Pinhalzinho - SC, 89870-000</p><p>WhatsApp: (49) 99917-2137</p><p>Instagram: @misticaprodutos</p><p>Site: https://misticaesotericos.com.br</p></div><div><h3>Divulgação</h3><p>Mística Presentes em Pinhalzinho-SC</p><p><a href="#admin">Área interna</a></p></div></div></footer>
 </body>
 </html>
