@@ -8,6 +8,15 @@
     document.head.appendChild(script);
   }
 
+  function loadSlowProducts() {
+    if (document.getElementById("slowProductsScript")) return;
+    const script = document.createElement("script");
+    script.id = "slowProductsScript";
+    script.src = "slow-products.js";
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+
   function money(value) {
     return typeof currency !== "undefined" ? currency.format(Number(value || 0)) : `R$ ${Number(value || 0).toFixed(2).replace(".", ",")}`;
   }
@@ -101,6 +110,7 @@
 
   window.addEventListener("load", () => {
     mountTopProducts();
+    loadSlowProducts();
     loadCustomerFollowup();
   });
 })();
