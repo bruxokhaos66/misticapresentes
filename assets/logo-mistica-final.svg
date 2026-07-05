@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" role="img" aria-labelledby="title desc">
+  <title id="title">Logo Mística Presentes</title>
+  <desc id="desc">Símbolo místico com lua, folha, estrela e aura dourada para a marca Mística Presentes.</desc>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="38%" r="68%">
+      <stop offset="0" stop-color="#26351c"/>
+      <stop offset="0.44" stop-color="#10150e"/>
+      <stop offset="1" stop-color="#030305"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="19%" y1="10%" x2="82%" y2="88%">
+      <stop offset="0" stop-color="#fff1bd"/>
+      <stop offset="0.5" stop-color="#f0c56a"/>
+      <stop offset="1" stop-color="#a97826"/>
+    </linearGradient>
+    <linearGradient id="sage" x1="18%" y1="20%" x2="82%" y2="78%">
+      <stop offset="0" stop-color="#d8e7a2"/>
+      <stop offset="1" stop-color="#536b37"/>
+    </linearGradient>
+    <filter id="glow" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="640" height="640" rx="156" fill="url(#bg)"/>
+  <circle cx="320" cy="320" r="242" fill="none" stroke="#f0c56a" stroke-opacity=".28" stroke-width="3"/>
+  <circle cx="320" cy="320" r="198" fill="none" stroke="#b8c977" stroke-opacity=".22" stroke-width="2"/>
+  <path d="M405 96C318 119 252 203 252 320c0 116 66 200 153 224-126 16-238-82-238-224S279 80 405 96Z" fill="url(#gold)" filter="url(#glow)"/>
+  <path d="M338 462c-44-23-73-73-73-142 0-68 29-119 73-142-17 38-25 86-25 142s8 104 25 142Z" fill="#07070b" opacity=".72"/>
+  <path d="M390 260c50 24 81 67 92 130-65-4-112-31-142-79 16-22 32-39 50-51Z" fill="url(#sage)" opacity=".92"/>
+  <path d="M343 322c45 10 85 34 121 71" fill="none" stroke="#fff1bd" stroke-opacity=".62" stroke-width="7" stroke-linecap="round"/>
+  <path d="M452 144l16 42 42 16-42 16-16 42-16-42-42-16 42-16 16-42Z" fill="#ffd987" opacity=".96"/>
+  <circle cx="428" cy="448" r="16" fill="#b8c977"/>
+  <path d="M210 500c64 50 156 64 232 20" fill="none" stroke="#f0c56a" stroke-opacity=".42" stroke-width="8" stroke-linecap="round"/>
+</svg>
