@@ -17,8 +17,25 @@ function parseImages(value) {
 }
 
 function safeUrl(value) {
-  const url = String(value || "").trim();
-  return url.startsWith("http://") || url.startsWith("https://") ? url : "";
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const url = new URL(raw);
+    return ["http:", "https:"].includes(url.protocol) ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
+function validateProduct(product, rawExternalUrl) {
+  const errors = [];
+  if (!product.name) errors.push("Informe o nome do produto.");
+  if (!product.category) errors.push("Informe a categoria do produto.");
+  if (!product.description) errors.push("Informe uma descrição curta do produto.");
+  if (!Number.isFinite(product.price) || product.price <= 0) errors.push("Informe um valor de venda maior que zero.");
+  if (!Number.isInteger(product.stock) || product.stock < 0) errors.push("Informe um estoque válido, igual ou maior que zero.");
+  if (rawExternalUrl && !product.externalUrl) errors.push("O link externo precisa começar com http:// ou https:// e ser uma URL válida.");
+  return errors;
 }
 
 function mergeCustomProducts() {
@@ -277,6 +294,11 @@ function mountProductAdmin() {
   addField(form, "Imagens", "productImages", "textarea", "Cole uma URL de imagem por linha", false);
   addField(form, "Link externo ou afiliado", "productExternal", "url", "Ex.: link da Shopee afiliado", false);
 
+  const status = make("div", "saved-box");
+  status.id = "productAdminStatus";
+  status.hidden = true;
+  form.appendChild(status);
+
   const submit = make("button", "btn", "Salvar produto");
   submit.type = "submit";
   form.appendChild(submit);
@@ -294,20 +316,28 @@ function mountProductAdmin() {
 
   form.addEventListener("submit", event => {
     event.preventDefault();
+    const rawExternalUrl = document.getElementById("productExternal").value.trim();
     const product = {
       id: `produto-${Date.now()}`,
       name: document.getElementById("productName").value.trim(),
       category: document.getElementById("productCategory").value.trim(),
       description: document.getElementById("productDescription").value.trim(),
       price: parseMoney(document.getElementById("productPrice").value),
-      stock: Number.parseInt(document.getElementById("productStock").value, 10) || 0,
+      stock: Number.parseInt(document.getElementById("productStock").value, 10),
       tag: document.getElementById("productTag").value.trim(),
       deliveryDate: document.getElementById("productDelivery").value,
       icon: document.getElementById("productIcon").value.trim() || "✨",
       imageUrl: "",
       images: parseImages(document.getElementById("productImages").value),
-      externalUrl: safeUrl(document.getElementById("productExternal").value)
+      externalUrl: safeUrl(rawExternalUrl)
     };
+
+    const errors = validateProduct(product, rawExternalUrl);
+    if (errors.length) {
+      status.hidden = false;
+      status.textContent = errors.join(" ");
+      return;
+    }
 
     customProducts.unshift(product);
     products.unshift(product);
@@ -316,6 +346,8 @@ function mountProductAdmin() {
     saveState();
     renderAll();
     renderProductAdminList();
+    status.hidden = false;
+    status.textContent = `Produto salvo: ${product.name}`;
     form.reset();
   });
 
