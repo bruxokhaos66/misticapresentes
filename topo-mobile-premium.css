@@ -1,0 +1,178 @@
+.hero {
+  padding-top: clamp(62px, 7vw, 96px);
+}
+
+.hero-copy {
+  position: relative;
+  z-index: 1;
+}
+
+.hero-copy .eyebrow {
+  width: fit-content;
+  border: 1px solid rgba(240, 197, 106, 0.28);
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(240, 197, 106, 0.12), rgba(126, 63, 242, 0.12));
+  padding: 8px 13px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.hero-actions .btn {
+  min-width: 178px;
+  text-align: center;
+}
+
+.hero-card-isis {
+  isolation: isolate;
+}
+
+.hero-card-isis img {
+  background: rgba(0, 0, 0, 0.16);
+}
+
+.hero-card-isis .floating-card {
+  left: 24px;
+  right: 24px;
+  bottom: 24px;
+  width: auto;
+  backdrop-filter: blur(12px) saturate(1.15);
+}
+
+@media (max-width: 920px) {
+  .hero {
+    padding: 42px 0 58px;
+  }
+
+  .hero-grid {
+    gap: 26px;
+  }
+
+  .hero-copy {
+    text-align: center;
+  }
+
+  .hero-copy .eyebrow {
+    margin-inline: auto;
+    font-size: 0.68rem;
+    letter-spacing: 0.16em;
+  }
+
+  .hero-copy h1 {
+    margin-inline: auto;
+    font-size: clamp(2.15rem, 9.5vw, 4.25rem);
+    max-width: 780px;
+  }
+
+  .hero-text {
+    margin: 18px auto 22px;
+    max-width: 620px;
+    font-size: 1rem;
+  }
+
+  .hero-actions {
+    justify-content: center;
+  }
+
+  .trust-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 22px;
+  }
+
+  .trust-row span {
+    display: grid;
+    min-height: 46px;
+    place-items: center;
+    text-align: center;
+    padding: 10px 12px;
+    font-size: 0.82rem;
+    line-height: 1.25;
+  }
+
+  .hero-card {
+    border-radius: 34px;
+    padding: clamp(14px, 4vw, 22px);
+  }
+
+  .hero-card-isis img {
+    max-height: 470px;
+    border-radius: 26px;
+  }
+
+  .hero-card-isis .floating-card {
+    position: static;
+    margin-top: 14px;
+    text-align: left;
+  }
+}
+
+@media (max-width: 560px) {
+  .nav {
+    min-height: 76px;
+    gap: 12px;
+  }
+
+  .brand {
+    gap: 10px;
+    font-size: clamp(0.92rem, 5vw, 1.12rem);
+    letter-spacing: 0.035em;
+  }
+
+  .brand img,
+  .footer img {
+    width: 48px;
+    height: 48px;
+  }
+
+  .menu-toggle {
+    border-radius: 18px;
+    padding: 9px 13px;
+  }
+
+  .hero {
+    padding-top: 32px;
+  }
+
+  .hero-copy h1 {
+    font-size: clamp(2rem, 10.4vw, 3.25rem);
+  }
+
+  .hero-text {
+    font-size: 0.96rem;
+  }
+
+  .hero-actions {
+    gap: 10px;
+  }
+
+  .hero-actions .btn {
+    min-width: 0;
+  }
+
+  .trust-row {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .trust-row span {
+    min-height: 42px;
+    padding: 9px 8px;
+    font-size: 0.76rem;
+  }
+
+  .hero-card {
+    border-radius: 30px;
+  }
+
+  .hero-card-isis img {
+    max-height: 380px;
+  }
+
+  .floating-card strong {
+    font-size: 1.02rem;
+  }
+
+  .floating-card span {
+    font-size: 0.86rem;
+  }
+}
