@@ -117,6 +117,22 @@
     updateLateButtons();
   }
 
+  function orderLateFirst() {
+    const content = document.getElementById("specialOrdersContent");
+    if (!content) return;
+    const late = lateOrders();
+    const cards = Array.from(content.querySelectorAll(".history-item"));
+    cards
+      .sort((a, b) => {
+        const aText = a.textContent || "";
+        const bText = b.textContent || "";
+        const aLate = late.find(order => aText.includes(order.name) && aText.includes(order.item));
+        const bLate = late.find(order => bText.includes(order.name) && bText.includes(order.item));
+        return (bLate?.days || 0) - (aLate?.days || 0);
+      })
+      .forEach(card => content.appendChild(card));
+  }
+
   function decorate() {
     const content = document.getElementById("specialOrdersContent");
     if (!content) return;
@@ -136,6 +152,7 @@
       }
       if (days >= LIMIT_DAYS) card.classList.add("order-age-warning");
     });
+    orderLateFirst();
     applyLateFilter();
     updateLateButtons();
   }
@@ -154,6 +171,6 @@
     }
   }
 
-  window.misticaOrderAgeAlert = { install, decorate, lateOrders, lateMessage, copyLateOrders, sendWhatsapp: sendLateOrdersWhatsapp, updateButtons: updateLateButtons, toggleLateOnly };
+  window.misticaOrderAgeAlert = { install, decorate, lateOrders, lateMessage, copyLateOrders, sendWhatsapp: sendLateOrdersWhatsapp, updateButtons: updateLateButtons, toggleLateOnly, orderLateFirst };
   window.addEventListener("load", () => setTimeout(install, 400));
 })();
