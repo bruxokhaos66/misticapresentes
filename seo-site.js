@@ -3,7 +3,7 @@
   const baseUrl = (cfg.publicBaseUrl || "https://misticaesotericos.com.br").replace(/\/$/, "");
   const defaultTitle = "Mística Presentes | Incensos, Cristais, Velas e Artigos Espiritualistas";
   const defaultDescription = "Loja física e virtual de artigos místicos, incensos, cristais, velas ritualísticas, aromaterapia, banhos de ervas e presentes com significado.";
-  const defaultImage = `${baseUrl}/assets/logo-mistica.svg`;
+  const defaultImage = `${baseUrl}/assets/logo-mistica-final.webp`;
 
   function upsertMeta(selector, attrs) {
     let el = document.head.querySelector(selector);
