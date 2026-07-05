@@ -10,6 +10,15 @@
     document.head.appendChild(script);
   }
 
+  function loadCustomerVip() {
+    if (document.getElementById("customerVipScript")) return;
+    const script = document.createElement("script");
+    script.id = "customerVipScript";
+    script.src = "customer-vip.js";
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+
   function normalizePhone(value) {
     return String(value || "").replace(/\D/g, "");
   }
@@ -113,6 +122,7 @@
 
   window.addEventListener("load", () => {
     mountFollowup();
+    loadCustomerVip();
     loadMessageTemplates();
   });
 })();
