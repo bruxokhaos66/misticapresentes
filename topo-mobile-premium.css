@@ -42,8 +42,16 @@
   backdrop-filter: blur(12px) saturate(1.15);
 }
 
+.isis-section .isis-showcase-image {
+  min-height: 440px;
+  background-image: url("assets/isis-bruxinha.svg");
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
 .isis-section .isis-showcase-image img {
-  content: url("assets/isis-bruxinha.svg");
+  display: none;
 }
 
 @media (max-width: 920px) {
@@ -176,6 +184,10 @@
 
   .hero-card-isis img {
     max-height: 470px;
+  }
+
+  .isis-section .isis-showcase-image {
+    min-height: 360px;
   }
 
   .floating-card strong {
