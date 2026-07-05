@@ -1,5 +1,6 @@
 (() => {
   const KEY = "misticaSpecialOrders";
+  let orderSearch = "";
 
   function loadOrders() {
     try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch { return []; }
@@ -7,6 +8,17 @@
 
   function saveOrders(list) {
     localStorage.setItem(KEY, JSON.stringify(list));
+  }
+
+  function normalize(value) {
+    return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  }
+
+  function filteredOrders() {
+    const term = normalize(orderSearch);
+    const list = loadOrders();
+    if (!term) return list;
+    return list.filter(order => normalize(`${order.name} ${order.item} ${order.status} ${order.whatsapp}`).includes(term));
   }
 
   function phone(value) {
@@ -47,8 +59,8 @@
   }
 
   function listMessage() {
-    const list = loadOrders();
-    if (!list.length) return "Encomendas - Mistica Presentes\n\nNenhuma encomenda registrada.";
+    const list = filteredOrders();
+    if (!list.length) return "Encomendas - Mistica Presentes\n\nNenhuma encomenda encontrada.";
     return `Encomendas - Mistica Presentes\n\n${list.map(order => `• ${order.name} | ${order.item} | ${order.status} | ${order.whatsapp || "sem WhatsApp"}`).join("\n")}`;
   }
 
@@ -70,12 +82,17 @@
     window.open(`https://wa.me/${number}?text=${encodeURIComponent(message(order))}`, "_blank", "noopener");
   }
 
+  function setSearch(value) {
+    orderSearch = value || "";
+    renderOrders();
+  }
+
   function renderOrders() {
     const content = document.getElementById("specialOrdersContent");
     if (!content) return;
-    const list = loadOrders();
+    const list = filteredOrders();
     if (!list.length) {
-      content.innerHTML = `<div class="history-item"><span>Nenhuma encomenda registrada.</span></div>`;
+      content.innerHTML = `<div class="history-item"><span>Nenhuma encomenda encontrada.</span></div>`;
       return;
     }
     content.innerHTML = list.map(order => `
@@ -109,6 +126,9 @@
         <label>WhatsApp<input id="specialOrderWhatsapp" type="text" placeholder="(49) 99999-9999"></label>
         <button class="btn" type="submit">Salvar encomenda</button>
       </form>
+      <div class="report-filters">
+        <label>Buscar encomenda<input id="specialOrderSearch" type="search" placeholder="Cliente, item ou status"></label>
+      </div>
       <div class="report-export-actions">
         <button class="btn btn-ghost" type="button" onclick="misticaSpecialOrders.copyList()">Copiar lista</button>
         <button class="btn btn-ghost" type="button" onclick="misticaSpecialOrders.render()">Atualizar</button>
@@ -119,9 +139,10 @@
     if (memo?.nextSibling) admin.insertBefore(panel, memo.nextSibling);
     else admin.appendChild(panel);
     panel.querySelector("#specialOrderForm").addEventListener("submit", addOrder);
+    panel.querySelector("#specialOrderSearch").addEventListener("input", event => setSearch(event.target.value));
     renderOrders();
   }
 
-  window.misticaSpecialOrders = { render: renderOrders, status: updateStatus, remove: removeOrder, whatsapp: openWhatsapp, copyList, listMessage };
+  window.misticaSpecialOrders = { render: renderOrders, status: updateStatus, remove: removeOrder, whatsapp: openWhatsapp, copyList, listMessage, search: setSearch };
   window.addEventListener("load", mountOrders);
 })();
