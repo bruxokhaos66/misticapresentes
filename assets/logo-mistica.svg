@@ -1,18 +1,22 @@
 <svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
   <title id="title">Logo Mística Presentes</title>
-  <desc id="desc">Símbolo circular com lua, folhas e cristal em estilo xamânico.</desc>
-  <rect width="512" height="512" rx="128" fill="#11170D"/>
-  <circle cx="256" cy="256" r="188" fill="#182311" stroke="#E0B35B" stroke-width="10"/>
-  <path d="M314 112C264 128 229 175 229 230C229 300 286 357 356 357C365 357 373 356 382 354C354 389 311 412 262 412C176 412 106 342 106 256C106 180 161 117 234 104C261 99 288 102 314 112Z" fill="#E0B35B"/>
-  <path d="M315 142C281 158 258 192 258 232C258 289 304 335 361 335C372 335 383 333 393 329C373 355 342 372 306 372C245 372 196 323 196 262C196 206 238 160 292 153C300 151 308 150 315 142Z" fill="#182311" opacity="0.92"/>
-  <path d="M256 154L288 235L256 323L224 235L256 154Z" fill="#F6D58E" stroke="#FFF3C8" stroke-width="6"/>
-  <path d="M224 235H288" stroke="#8D5132" stroke-width="6" stroke-linecap="round"/>
-  <path d="M256 323L208 376H304L256 323Z" fill="#798B48" stroke="#E0B35B" stroke-width="6"/>
-  <path d="M158 298C199 293 226 270 236 232C193 236 166 259 158 298Z" fill="#B7C98A"/>
-  <path d="M354 213C316 219 291 242 282 279C321 274 347 251 354 213Z" fill="#B7C98A"/>
-  <path d="M154 298C187 289 211 268 232 236" stroke="#41512B" stroke-width="6" stroke-linecap="round"/>
-  <path d="M286 276C311 256 332 237 354 214" stroke="#41512B" stroke-width="6" stroke-linecap="round"/>
-  <circle cx="167" cy="169" r="8" fill="#F6D58E"/>
-  <circle cx="361" cy="143" r="6" fill="#F6D58E"/>
-  <circle cx="391" cy="248" r="7" fill="#F6D58E"/>
+  <desc id="desc">Logo xamânico moderno com lua crescente, cristal, pena e estrelas em dourado sobre fundo escuro.</desc>
+  <defs>
+    <radialGradient id="bgGlow" cx="50%" cy="42%" r="68%"><stop offset="0%" stop-color="#314326"/><stop offset="48%" stop-color="#121A10"/><stop offset="100%" stop-color="#08090D"/></radialGradient>
+    <linearGradient id="gold" x1="109" y1="81" x2="405" y2="424" gradientUnits="userSpaceOnUse"><stop stop-color="#FFF0B8"/><stop offset="0.45" stop-color="#E4B24E"/><stop offset="1" stop-color="#8F5B1E"/></linearGradient>
+    <linearGradient id="crystal" x1="223" y1="134" x2="292" y2="361" gradientUnits="userSpaceOnUse"><stop stop-color="#FFF6D1"/><stop offset="0.46" stop-color="#D7B56C"/><stop offset="1" stop-color="#6F853F"/></linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="128" fill="#07090A"/>
+  <rect x="20" y="20" width="472" height="472" rx="114" fill="url(#bgGlow)" stroke="#6E5524" stroke-width="2"/>
+  <circle cx="256" cy="256" r="188" stroke="url(#gold)" stroke-width="8"/>
+  <circle cx="256" cy="256" r="159" stroke="#C5D58F" stroke-width="2" stroke-dasharray="7 15" opacity="0.42"/>
+  <path d="M336 88C285 103 248 151 248 207C248 274 302 329 370 329C386 329 401 326 415 321C389 372 336 407 275 407C188 407 117 337 117 250C117 170 177 104 254 94C284 90 310 85 336 88Z" fill="url(#gold)"/>
+  <path d="M337 122C307 140 287 172 287 209C287 263 331 307 385 307C394 307 403 306 411 303C392 333 358 353 320 353C261 353 213 305 213 246C213 193 252 149 303 140C317 138 328 132 337 122Z" fill="#11170D" opacity="0.96"/>
+  <path d="M256 128L294 226L256 352L218 226L256 128Z" fill="url(#crystal)" stroke="#FFF0B8" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M218 226H294" stroke="#80562A" stroke-width="6" stroke-linecap="round"/><path d="M256 128V352" stroke="#FFF0B8" stroke-width="4" opacity="0.42"/>
+  <path d="M256 352L205 408H307L256 352Z" fill="#26361E" stroke="url(#gold)" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M151 311C198 302 228 276 239 231C190 238 160 265 151 311Z" fill="#C5D58F"/><path d="M361 204C318 213 291 240 282 284C326 276 353 248 361 204Z" fill="#C5D58F"/>
+  <path d="M153 310C184 294 211 270 236 234" stroke="#314326" stroke-width="7" stroke-linecap="round"/><path d="M285 281C310 257 335 231 360 205" stroke="#314326" stroke-width="7" stroke-linecap="round"/>
+  <path d="M174 163L184 184L206 187L190 202L194 224L174 213L154 224L158 202L142 187L164 184L174 163Z" fill="#F6D989"/>
+  <circle cx="354" cy="139" r="7" fill="#F6D989"/><circle cx="392" cy="245" r="6" fill="#F6D989"/><circle cx="132" cy="254" r="5" fill="#F6D989" opacity="0.82"/>
 </svg>
