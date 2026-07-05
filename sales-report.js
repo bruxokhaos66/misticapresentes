@@ -8,6 +8,15 @@
     document.head.appendChild(script);
   }
 
+  function loadCashClosing() {
+    if (document.getElementById("cashClosingScript")) return;
+    const script = document.createElement("script");
+    script.id = "cashClosingScript";
+    script.src = "cash-closing.js";
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+
   function money(value) {
     return typeof currency !== "undefined" ? currency.format(Number(value || 0)) : `R$ ${Number(value || 0).toFixed(2).replace(".", ",")}`;
   }
@@ -82,6 +91,7 @@
       </div>
     `;
     window.misticaPaymentReport?.render?.();
+    window.misticaCashClosing?.render?.();
   }
 
   function exportReportCsv() {
@@ -136,6 +146,7 @@
     panel.querySelector("[data-export-sales-report]").addEventListener("click", exportReportCsv);
     renderReport();
     loadPaymentReport();
+    loadCashClosing();
   }
 
   window.misticaSalesReport = {
