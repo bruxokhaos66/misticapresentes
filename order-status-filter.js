@@ -1,4 +1,13 @@
 (() => {
+  function loadOrderSummary() {
+    if (document.getElementById("orderSummaryScript")) return;
+    const script = document.createElement("script");
+    script.id = "orderSummaryScript";
+    script.src = "order-summary.js";
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+
   function normalizar(value) {
     return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   }
@@ -46,6 +55,7 @@
         aplicarFiltroStatus();
       };
     }
+    loadOrderSummary();
   }
 
   window.misticaOrderStatusFilter = { install: instalar, apply: aplicarFiltroStatus };
