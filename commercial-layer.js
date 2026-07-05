@@ -85,13 +85,25 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   const heroTitle = document.querySelector(".hero-copy h1");
-  if (heroTitle) heroTitle.textContent = "Artigos místicos e xamânicos para transformar o seu ambiente.";
+  if (heroTitle) heroTitle.textContent = "Transforme sua energia. Eleve sua essência.";
 
   const heroText = document.querySelector(".hero-text");
   if (heroText) heroText.textContent = "Incensos, cristais, velas ritualísticas, aromaterapia, banhos de ervas e artigos espiritualistas escolhidos para espiritualidade, bem-estar e energias positivas.";
 
   const heroEyebrow = document.querySelector(".hero-copy .eyebrow");
-  if (heroEyebrow) heroEyebrow.textContent = "Xamanismo • Cristais • Aromas • Proteção";
+  if (heroEyebrow) heroEyebrow.textContent = "✦ Xamanismo • Cristais • Aromas • Proteção";
+
+  const isisHeroImage = document.querySelector(".hero-card-isis > img");
+  if (isisHeroImage) {
+    isisHeroImage.src = "assets/isis-humana-premium.webp?v=20260705q";
+    isisHeroImage.alt = "Isis, guia espiritual da Mística Presentes";
+  }
+
+  const isisHeroTitle = document.querySelector(".hero-card-isis .floating-card strong");
+  if (isisHeroTitle) isisHeroTitle.textContent = "Isis";
+
+  const isisHeroText = document.querySelector(".hero-card-isis .floating-card span");
+  if (isisHeroText) isisHeroText.textContent = "Sua guia espiritual para escolhas conscientes.";
 
   const productTitle = document.querySelector("#produtos .section-title h2");
   if (productTitle) productTitle.textContent = "Produtos em destaque";
