@@ -18,7 +18,8 @@
         cursor: pointer;
       }
       #lateOrdersSummary:hover,
-      #lateOrdersSummary:focus-visible {
+      #lateOrdersSummary:focus-visible,
+      #lateOrdersSummary.active {
         border-color: rgba(240, 197, 106, 0.42);
         background: rgba(240, 197, 106, 0.08);
         outline: none;
@@ -87,7 +88,10 @@
       filterButton.textContent = lateOnly ? "Mostrar todas" : `Ver atrasadas (${countText})`;
       filterButton.classList.toggle("active", lateOnly);
     }
-    if (summary) summary.setAttribute("aria-pressed", String(lateOnly));
+    if (summary) {
+      summary.setAttribute("aria-pressed", String(lateOnly));
+      summary.classList.toggle("active", lateOnly);
+    }
   }
 
   function renderLateSummary() {
