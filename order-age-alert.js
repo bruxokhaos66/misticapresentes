@@ -79,6 +79,22 @@
     }
   }
 
+  function renderLateSummary() {
+    const panel = document.getElementById("specialOrdersPanel");
+    const content = document.getElementById("specialOrdersContent");
+    if (!panel || !content) return;
+    let summary = document.getElementById("lateOrdersSummary");
+    if (!summary) {
+      summary = document.createElement("div");
+      summary.id = "lateOrdersSummary";
+      summary.className = "report-card";
+      content.parentNode.insertBefore(summary, content);
+    }
+    const list = lateOrders();
+    const oldest = list.reduce((max, order) => Math.max(max, order.days || 0), 0);
+    summary.innerHTML = `<span>Encomendas atrasadas</span><strong>${list.length}</strong><small>${oldest ? `Mais antiga: ${oldest} dia(s)` : "Nenhuma acima do prazo"}</small>`;
+  }
+
   function updateEmptyNotice(visible) {
     const content = document.getElementById("specialOrdersContent");
     if (!content) return;
@@ -184,6 +200,7 @@
       }
       if (days >= LIMIT_DAYS) card.classList.add("order-age-warning");
     });
+    renderLateSummary();
     orderLateFirst();
     applyLateFilter();
     updateLateButtons();
@@ -205,6 +222,6 @@
     }
   }
 
-  window.misticaOrderAgeAlert = { install, decorate, lateOrders, lateMessage, copyLateOrders, sendWhatsapp: sendLateOrdersWhatsapp, updateButtons: updateLateButtons, toggleLateOnly, orderLateFirst };
+  window.misticaOrderAgeAlert = { install, decorate, lateOrders, lateMessage, copyLateOrders, sendWhatsapp: sendLateOrdersWhatsapp, updateButtons: updateLateButtons, toggleLateOnly, orderLateFirst, renderLateSummary };
   window.addEventListener("load", () => setTimeout(install, 400));
 })();
