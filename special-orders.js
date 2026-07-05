@@ -46,6 +46,22 @@
     return `Ola, ${order.name}! Aqui e da Mistica Presentes. Sua encomenda (${order.item}) esta com status: ${order.status}. Gratidao!`;
   }
 
+  function listMessage() {
+    const list = loadOrders();
+    if (!list.length) return "Encomendas - Mistica Presentes\n\nNenhuma encomenda registrada.";
+    return `Encomendas - Mistica Presentes\n\n${list.map(order => `• ${order.name} | ${order.item} | ${order.status} | ${order.whatsapp || "sem WhatsApp"}`).join("\n")}`;
+  }
+
+  async function copyList() {
+    const text = listMessage();
+    try {
+      await navigator.clipboard.writeText(text);
+      alert("Lista de encomendas copiada.");
+    } catch {
+      prompt("Copie a lista de encomendas:", text);
+    }
+  }
+
   function openWhatsapp(id) {
     const order = loadOrders().find(item => String(item.id) === String(id));
     if (!order) return;
@@ -93,6 +109,10 @@
         <label>WhatsApp<input id="specialOrderWhatsapp" type="text" placeholder="(49) 99999-9999"></label>
         <button class="btn" type="submit">Salvar encomenda</button>
       </form>
+      <div class="report-export-actions">
+        <button class="btn btn-ghost" type="button" onclick="misticaSpecialOrders.copyList()">Copiar lista</button>
+        <button class="btn btn-ghost" type="button" onclick="misticaSpecialOrders.render()">Atualizar</button>
+      </div>
       <div id="specialOrdersContent" class="history-list"></div>
     `;
     const memo = document.getElementById("adminMemoPanel");
@@ -102,6 +122,6 @@
     renderOrders();
   }
 
-  window.misticaSpecialOrders = { render: renderOrders, status: updateStatus, remove: removeOrder, whatsapp: openWhatsapp };
+  window.misticaSpecialOrders = { render: renderOrders, status: updateStatus, remove: removeOrder, whatsapp: openWhatsapp, copyList, listMessage };
   window.addEventListener("load", mountOrders);
 })();
