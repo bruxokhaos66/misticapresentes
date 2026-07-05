@@ -1,137 +1,147 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 720" role="img" aria-labelledby="title desc">
   <title id="title">Isis, assistente virtual da Mística Presentes</title>
-  <desc id="desc">Ilustração publicitária e sofisticada da Isis, assistente virtual da Mística Presentes, com estética mística, xamânica e elegante.</desc>
+  <desc id="desc">Ilustração publicitária sofisticada da Isis, assistente virtual da Mística Presentes, com aparência humana, elegante, mística e xamânica.</desc>
   <defs>
-    <radialGradient id="bg" cx="50%" cy="40%" r="76%">
-      <stop offset="0" stop-color="#9d62ff" stop-opacity="0.42"/>
-      <stop offset="0.36" stop-color="#4b173f" stop-opacity="0.38"/>
-      <stop offset="0.68" stop-color="#314326" stop-opacity="0.30"/>
+    <radialGradient id="bg" cx="50%" cy="38%" r="78%">
+      <stop offset="0" stop-color="#8d5cff" stop-opacity="0.46"/>
+      <stop offset="0.38" stop-color="#4b173f" stop-opacity="0.38"/>
+      <stop offset="0.70" stop-color="#314326" stop-opacity="0.32"/>
       <stop offset="1" stop-color="#070711"/>
     </radialGradient>
-    <radialGradient id="aura" cx="50%" cy="40%" r="52%">
-      <stop offset="0" stop-color="#f6d989" stop-opacity="0.34"/>
-      <stop offset="0.42" stop-color="#b37cff" stop-opacity="0.24"/>
-      <stop offset="1" stop-color="#000000" stop-opacity="0"/>
+    <radialGradient id="aura" cx="52%" cy="36%" r="58%">
+      <stop offset="0" stop-color="#f6d989" stop-opacity="0.36"/>
+      <stop offset="0.44" stop-color="#b37cff" stop-opacity="0.23"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0"/>
     </radialGradient>
-    <linearGradient id="dress" x1="296" x2="640" y1="332" y2="690">
-      <stop stop-color="#2a123d"/>
-      <stop offset="0.44" stop-color="#571d56"/>
-      <stop offset="1" stop-color="#293d22"/>
-    </linearGradient>
-    <linearGradient id="gold" x1="0" x2="1">
-      <stop stop-color="#fff1bd"/>
-      <stop offset="0.45" stop-color="#f0c56a"/>
-      <stop offset="1" stop-color="#b97728"/>
+    <linearGradient id="dress" x1="300" x2="648" y1="360" y2="690">
+      <stop stop-color="#221033"/>
+      <stop offset="0.48" stop-color="#5a1d55"/>
+      <stop offset="1" stop-color="#2d4325"/>
     </linearGradient>
     <linearGradient id="skin" x1="0" x2="1" y1="0" y2="1">
-      <stop stop-color="#f7d1ad"/>
-      <stop offset="1" stop-color="#d99672"/>
+      <stop stop-color="#f6d2b5"/>
+      <stop offset="1" stop-color="#d4936e"/>
+    </linearGradient>
+    <linearGradient id="hair" x1="0" x2="1" y1="0" y2="1">
+      <stop stop-color="#130715"/>
+      <stop offset="0.52" stop-color="#2b142c"/>
+      <stop offset="1" stop-color="#09040b"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" x2="1">
+      <stop stop-color="#fff2bf"/>
+      <stop offset="0.46" stop-color="#f0c56a"/>
+      <stop offset="1" stop-color="#b97728"/>
     </linearGradient>
     <linearGradient id="glass" x1="0" x2="1" y1="0" y2="1">
-      <stop stop-color="#fff7ec" stop-opacity="0.20"/>
-      <stop offset="1" stop-color="#b37cff" stop-opacity="0.07"/>
+      <stop stop-color="#fff7ec" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#b37cff" stop-opacity="0.08"/>
     </linearGradient>
-    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
-      <feGaussianBlur stdDeviation="8" result="blur"/>
+    <pattern id="grid" width="58" height="58" patternUnits="userSpaceOnUse">
+      <path d="M58 0H0v58" fill="none" stroke="#fff7ec" stroke-opacity="0.032" stroke-width="1"/>
+    </pattern>
+    <filter id="glow" x="-35%" y="-35%" width="170%" height="170%">
+      <feGaussianBlur stdDeviation="7" result="blur"/>
       <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
-    <filter id="softShadow" x="-35%" y="-35%" width="170%" height="170%">
-      <feDropShadow dx="0" dy="22" stdDeviation="18" flood-color="#000" flood-opacity="0.42"/>
+    <filter id="shadow" x="-35%" y="-35%" width="170%" height="170%">
+      <feDropShadow dx="0" dy="22" stdDeviation="18" flood-color="#000" flood-opacity="0.45"/>
     </filter>
-    <pattern id="grid" width="64" height="64" patternUnits="userSpaceOnUse">
-      <path d="M64 0H0v64" fill="none" stroke="#fff7ec" stroke-opacity="0.035" stroke-width="1"/>
-    </pattern>
   </defs>
 
   <rect width="920" height="720" rx="54" fill="url(#bg)"/>
   <rect width="920" height="720" rx="54" fill="url(#grid)"/>
-  <circle cx="460" cy="350" r="318" fill="url(#aura)"/>
+  <circle cx="480" cy="322" r="318" fill="url(#aura)"/>
 
-  <g opacity="0.52" stroke="#f0c56a" stroke-width="2.5" fill="none">
-    <circle cx="736" cy="120" r="70"/>
-    <circle cx="736" cy="120" r="44"/>
-    <path d="M736 50v140M666 120h140M686 70l100 100M786 70 686 170"/>
-    <circle cx="160" cy="560" r="48"/>
-    <path d="M160 512v96M112 560h96M128 528l64 64M192 528l-64 64"/>
-    <path d="M92 516c88-42 146-111 174-208M830 540c-80-38-132-104-158-198"/>
+  <g opacity="0.45" stroke="#f0c56a" stroke-width="2.4" fill="none">
+    <circle cx="742" cy="122" r="72"/>
+    <circle cx="742" cy="122" r="44"/>
+    <path d="M742 50v144M670 122h144M692 72l100 100M792 72 692 172"/>
+    <circle cx="152" cy="556" r="46"/>
+    <path d="M152 510v92M106 556h92M120 524l64 64M184 524l-64 64"/>
+    <path d="M88 500c92-42 154-116 188-220M832 534c-86-40-142-108-170-202"/>
   </g>
 
   <g fill="#f6d989" opacity="0.96">
-    <path d="M116 112l12 27 28 10-28 10-12 27-12-27-28-10 28-10 12-27Z"/>
-    <path d="M780 300l9 20 22 8-22 8-9 20-9-20-22-8 22-8 9-20Z"/>
-    <path d="M196 300l7 15 16 6-16 6-7 15-7-15-16-6 16-6 7-15Z"/>
-    <circle cx="250" cy="126" r="5"/>
-    <circle cx="664" cy="236" r="4"/>
-    <circle cx="792" cy="446" r="4"/>
+    <path d="M122 98l12 28 30 10-30 10-12 28-12-28-30-10 30-10 12-28Z"/>
+    <path d="M790 298l9 20 22 8-22 8-9 20-9-20-22-8 22-8 9-20Z"/>
+    <path d="M218 292l7 15 16 6-16 6-7 15-7-15-16-6 16-6 7-15Z"/>
+    <circle cx="258" cy="124" r="5"/>
+    <circle cx="652" cy="236" r="4"/>
+    <circle cx="802" cy="452" r="4"/>
   </g>
 
-  <g filter="url(#softShadow)">
-    <rect x="142" y="542" width="636" height="94" rx="28" fill="rgba(16, 10, 24, 0.68)" stroke="#f0c56a" stroke-opacity="0.40"/>
-    <text x="460" y="594" text-anchor="middle" font-family="Cinzel, Georgia, serif" font-size="42" font-weight="700" fill="#f0c56a">Isis</text>
-    <text x="460" y="622" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="700" fill="#fff7ec">sua assistente mística para presentes, aromas e boas energias</text>
+  <g filter="url(#shadow)">
+    <rect x="52" y="78" width="276" height="120" rx="28" fill="url(#glass)" stroke="#f0c56a" stroke-opacity="0.42"/>
+    <text x="82" y="112" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="900" fill="#c5d58f" letter-spacing="2.2">ASSISTENTE</text>
+    <text x="82" y="156" font-family="Cinzel, Georgia, serif" font-size="48" font-weight="700" fill="#f0c56a">Isis</text>
+    <text x="82" y="182" font-family="Inter, Arial, sans-serif" font-size="16" fill="#fff7ec">Mística Presentes</text>
   </g>
 
   <g filter="url(#glow)">
-    <ellipse cx="460" cy="398" rx="220" ry="224" fill="#0b0b12" opacity="0.26"/>
+    <ellipse cx="478" cy="406" rx="234" ry="220" fill="#0b0b12" opacity="0.24"/>
 
-    <path d="M272 625c28-132 92-212 188-212s160 80 188 212H272Z" fill="url(#dress)" stroke="#f0c56a" stroke-width="5"/>
-    <path d="M324 494c34 42 77 65 136 65s103-23 136-65" fill="none" stroke="#f0c56a" stroke-width="4" opacity="0.72"/>
-    <path d="M366 444c24 40 55 60 94 60s70-20 94-60" fill="none" stroke="#fff2c7" stroke-width="3" opacity="0.36"/>
-    <path d="M460 426l38 66-38 44-38-44 38-66Z" fill="url(#gold)" stroke="#fff2c7" stroke-width="3"/>
-    <path d="M460 426v110" stroke="#fff2c7" stroke-width="3" opacity="0.58"/>
+    <path d="M280 626c30-130 96-210 198-210s168 80 198 210H280Z" fill="url(#dress)" stroke="#f0c56a" stroke-width="5"/>
+    <path d="M330 505c42 42 90 64 148 64s107-22 148-64" fill="none" stroke="#f0c56a" stroke-width="4" opacity="0.72"/>
+    <path d="M370 450c28 45 64 68 108 68s80-23 108-68" fill="none" stroke="#fff2c7" stroke-width="3" opacity="0.38"/>
+    <path d="M478 428l40 68-40 46-40-46 40-68Z" fill="url(#gold)" stroke="#fff2c7" stroke-width="3"/>
+    <path d="M478 428v114" stroke="#fff2c7" stroke-width="3" opacity="0.58"/>
 
-    <path d="M322 450c-14 24-26 56-29 88 34 20 68 10 86-18l34-111c-40 4-70 17-91 41Z" fill="#231035" stroke="#b37cff" stroke-width="4"/>
-    <path d="M598 450c14 24 26 56 29 88-34 20-68 10-86-18l-34-111c40 4 70 17 91 41Z" fill="#314326" stroke="#c5d58f" stroke-width="4"/>
+    <path d="M318 450c-14 26-28 62-30 98 38 20 76 9 96-22l38-120c-45 4-80 18-104 44Z" fill="#241033" stroke="#b37cff" stroke-width="4"/>
+    <path d="M638 450c14 26 28 62 30 98-38 20-76 9-96-22l-38-120c45 4 80 18 104 44Z" fill="#314326" stroke="#c5d58f" stroke-width="4"/>
 
-    <circle cx="460" cy="312" r="104" fill="url(#skin)" stroke="#f0c56a" stroke-width="5"/>
-    <path d="M351 306c14-88 72-138 139-126 63 11 101 62 100 138-46-55-102-70-166-38-28 14-52 22-73 26Z" fill="#201026"/>
-    <path d="M318 238c74-104 184-153 326-137-32 25-49 57-52 95 66 13 118 45 157 96-158-31-301-24-431-54Z" fill="#231035" stroke="#b37cff" stroke-width="5"/>
-    <path d="M360 232c62-24 134-32 216-22" stroke="#f0c56a" stroke-width="8" stroke-linecap="round"/>
-    <path d="M386 250c-34 34-52 82-50 144" stroke="#100712" stroke-width="18" stroke-linecap="round" opacity="0.54"/>
-    <path d="M544 238c42 40 58 92 48 160" stroke="#100712" stroke-width="18" stroke-linecap="round" opacity="0.54"/>
+    <path d="M342 300c-10-110 52-178 136-178 84 0 146 68 136 178-40-72-232-72-272 0Z" fill="url(#hair)"/>
+    <path d="M342 302c-44 78-54 170-28 274 42-75 62-150 62-224 0-30-10-46-34-50Z" fill="url(#hair)" opacity="0.98"/>
+    <path d="M614 302c44 78 54 170 28 274-42-75-62-150-62-224 0-30 10-46 34-50Z" fill="url(#hair)" opacity="0.98"/>
+    <path d="M386 224c36-64 150-70 190 2 38 68 28 172-98 172-126 0-130-106-92-174Z" fill="url(#skin)" stroke="#f0c56a" stroke-width="4.5"/>
+    <path d="M370 292c28-82 88-116 158-96 48 14 78 48 90 104-64-54-132-66-202-32-18 9-33 16-46 24Z" fill="url(#hair)"/>
+    <path d="M410 208c42-23 94-28 154-12" stroke="#f0c56a" stroke-width="7" stroke-linecap="round" opacity="0.9"/>
 
-    <circle cx="421" cy="322" r="10" fill="#241407"/>
-    <circle cx="501" cy="322" r="10" fill="#241407"/>
-    <circle cx="392" cy="352" r="14" fill="#eaa0b8" opacity="0.48"/>
-    <circle cx="530" cy="352" r="14" fill="#eaa0b8" opacity="0.48"/>
-    <path d="M428 366c20 21 45 21 65 0" stroke="#8d5132" stroke-width="7" stroke-linecap="round" fill="none"/>
-    <path d="M460 338l-7 18h15l-8-18Z" fill="#c98668" opacity="0.72"/>
+    <path d="M414 314c20-11 42-11 64 0" stroke="#2b142c" stroke-width="5" stroke-linecap="round" fill="none"/>
+    <path d="M494 314c20-11 42-11 64 0" stroke="#2b142c" stroke-width="5" stroke-linecap="round" fill="none"/>
+    <circle cx="442" cy="330" r="9" fill="#241407"/>
+    <circle cx="520" cy="330" r="9" fill="#241407"/>
+    <circle cx="410" cy="356" r="13" fill="#eaa0b8" opacity="0.42"/>
+    <circle cx="548" cy="356" r="13" fill="#eaa0b8" opacity="0.42"/>
+    <path d="M478 342l-8 22h17l-9-22Z" fill="#c98668" opacity="0.72"/>
+    <path d="M444 374c22 18 47 18 69 0" stroke="#8d5132" stroke-width="7" stroke-linecap="round" fill="none"/>
 
     <g stroke="#fff2c7" stroke-linecap="round" opacity="0.84">
-      <path d="M386 330c20-13 41-13 62 0" stroke-width="3"/>
-      <path d="M472 330c20-13 41-13 62 0" stroke-width="3"/>
-      <path d="M460 228v-30" stroke-width="4"/>
-      <path d="M445 213h30" stroke-width="4"/>
-      <path d="M444 246c10 9 21 9 32 0" stroke-width="3"/>
+      <path d="M478 228v-32" stroke-width="4"/>
+      <path d="M462 212h32" stroke-width="4"/>
+      <path d="M462 248c11 9 22 9 33 0" stroke-width="3"/>
+      <path d="M408 342c22 11 44 11 66 0" stroke-width="2.4" opacity="0.55"/>
+      <path d="M488 342c22 11 44 11 66 0" stroke-width="2.4" opacity="0.55"/>
     </g>
 
-    <g fill="none" stroke="#f0c56a" stroke-width="4" stroke-linecap="round" opacity="0.88">
-      <path d="M325 406c-44-8-78 4-103 36"/>
-      <path d="M595 406c44-8 78 4 103 36"/>
-      <path d="M215 450c24-2 45 8 62 28"/>
-      <path d="M705 450c-24-2-45 8-62 28"/>
+    <g fill="none" stroke="#f0c56a" stroke-width="4" stroke-linecap="round" opacity="0.86">
+      <path d="M324 416c-44-8-80 6-108 42"/>
+      <path d="M632 416c44-8 80 6 108 42"/>
+      <path d="M208 468c26-2 50 9 68 31"/>
+      <path d="M748 468c-26-2-50 9-68 31"/>
     </g>
 
-    <g transform="translate(206 402) rotate(-18)">
+    <g transform="translate(206 410) rotate(-18)">
       <path d="M0 82c36-50 86-77 150-82-22 32-31 64-25 98-45-22-87-27-125-16Z" fill="#314326" stroke="#c5d58f" stroke-width="4"/>
       <path d="M34 73c38-25 70-41 99-52" stroke="#c5d58f" stroke-width="3" fill="none"/>
     </g>
-    <g transform="translate(590 376) rotate(14)">
+    <g transform="translate(606 388) rotate(14)">
       <path d="M0 82c36-50 86-77 150-82-22 32-31 64-25 98-45-22-87-27-125-16Z" fill="#314326" stroke="#c5d58f" stroke-width="4"/>
       <path d="M34 73c38-25 70-41 99-52" stroke="#c5d58f" stroke-width="3" fill="none"/>
     </g>
   </g>
 
-  <g transform="translate(118 146)" filter="url(#softShadow)">
-    <rect width="228" height="112" rx="26" fill="url(#glass)" stroke="#f0c56a" stroke-opacity="0.35"/>
-    <text x="24" y="42" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="900" fill="#c5d58f" letter-spacing="2">ASSISTENTE</text>
-    <text x="24" y="74" font-family="Cinzel, Georgia, serif" font-size="25" font-weight="700" fill="#fff7ec">Mística</text>
-    <text x="24" y="98" font-family="Inter, Arial, sans-serif" font-size="15" fill="#d8c9b7">produtos • pedidos • dicas</text>
+  <g filter="url(#shadow)">
+    <rect x="58" y="520" width="414" height="126" rx="28" fill="rgba(10, 14, 20, 0.76)" stroke="#f0c56a" stroke-opacity="0.48"/>
+    <text x="86" y="570" font-family="Inter, Arial, sans-serif" font-size="25" font-weight="900" fill="#f0c56a">Nova Isis</text>
+    <text x="86" y="604" font-family="Inter, Arial, sans-serif" font-size="20" fill="#fff7ec">Sofisticada, humana e pronta</text>
+    <text x="86" y="632" font-family="Inter, Arial, sans-serif" font-size="20" fill="#fff7ec">para guiar sua compra.</text>
   </g>
 
-  <g transform="translate(612 468)" filter="url(#softShadow)">
-    <rect width="202" height="84" rx="24" fill="rgba(35,16,53,0.78)" stroke="#b37cff" stroke-opacity="0.36"/>
-    <text x="24" y="36" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="900" fill="#f0c56a">Nova Isis</text>
-    <text x="24" y="62" font-family="Inter, Arial, sans-serif" font-size="15" fill="#fff7ec">elegante e intuitiva</text>
+  <g filter="url(#shadow)">
+    <rect x="636" y="472" width="202" height="84" rx="24" fill="rgba(35,16,53,0.78)" stroke="#b37cff" stroke-opacity="0.36"/>
+    <text x="660" y="508" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="900" fill="#f0c56a">Assistente virtual</text>
+    <text x="660" y="534" font-family="Inter, Arial, sans-serif" font-size="15" fill="#fff7ec">mística e intuitiva</text>
   </g>
+
+  <rect x="18" y="18" width="884" height="684" rx="44" fill="none" stroke="#f0c56a" stroke-opacity="0.22" stroke-width="2"/>
 </svg>
