@@ -1,14 +1,45 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1350" role="img" aria-labelledby="title desc">
-  <title id="title">Isis premium da Mística Presentes</title>
-  <desc id="desc">Imagem oficial da Isis premium.</desc>
+  <title id="title">Isis humana premium da Mística Presentes</title>
+  <desc id="desc">Ilustração vetorial da Isis com aparência humana, moderna, xamânica e publicitária.</desc>
   <defs>
-    <radialGradient id="fallbackBg" cx="50%" cy="35%" r="72%">
-      <stop offset="0" stop-color="#7e3ff2" stop-opacity="0.34"/>
-      <stop offset="0.52" stop-color="#314326" stop-opacity="0.26"/>
-      <stop offset="1" stop-color="#070711"/>
-    </radialGradient>
+    <radialGradient id="bg" cx="50%" cy="38%" r="75%"><stop offset="0" stop-color="#7e3ff2" stop-opacity=".42"/><stop offset=".48" stop-color="#2b143b"/><stop offset="1" stop-color="#070711"/></radialGradient>
+    <linearGradient id="gold" x1="0" x2="1"><stop stop-color="#fff0b8"/><stop offset=".5" stop-color="#f0c56a"/><stop offset="1" stop-color="#a97325"/></linearGradient>
+    <linearGradient id="dress" x1="320" y1="620" x2="780" y2="1220"><stop stop-color="#21102f"/><stop offset=".5" stop-color="#4b173f"/><stop offset="1" stop-color="#314326"/></linearGradient>
+    <linearGradient id="skin" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f4c7a5"/><stop offset="1" stop-color="#c77b59"/></linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="28" stdDeviation="22" flood-color="#000" flood-opacity=".48"/></filter>
+    <filter id="glow" x="-35%" y="-35%" width="170%" height="170%"><feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
   </defs>
-  <rect width="1080" height="1350" rx="64" fill="url(#fallbackBg)"/>
-  <image href="isis-premium.png?v=20260705e" x="0" y="0" width="1080" height="1350" preserveAspectRatio="xMidYMid slice"/>
-  <text x="540" y="1265" text-anchor="middle" font-family="Cinzel, Georgia, serif" font-size="54" font-weight="700" fill="#f0c56a">Isis</text>
+
+  <rect width="1080" height="1350" rx="70" fill="url(#bg)"/>
+  <circle cx="540" cy="520" r="360" fill="#f0c56a" opacity=".10"/>
+  <circle cx="540" cy="520" r="250" fill="#b37cff" opacity=".14"/>
+  <g stroke="#f0c56a" stroke-width="4" fill="none" opacity=".48"><circle cx="850" cy="190" r="86"/><path d="M850 104v172M764 190h172M790 130l120 120M910 130 790 250"/><path d="M130 1010c170-85 270-230 315-440M950 1020c-160-80-250-210-305-420"/></g>
+  <g fill="#f6d989" opacity=".95"><path d="M165 210l18 42 45 16-45 16-18 42-18-42-45-16 45-16 18-42Z"/><path d="M890 585l15 34 36 13-36 13-15 34-15-34-36-13 36-13 15-34Z"/><circle cx="230" cy="610" r="8"/><circle cx="790" cy="430" r="7"/></g>
+
+  <g filter="url(#shadow)">
+    <ellipse cx="540" cy="1070" rx="315" ry="55" fill="#000" opacity=".34"/>
+    <path d="M240 1215c44-265 145-425 300-425s256 160 300 425H240Z" fill="url(#dress)" stroke="#f0c56a" stroke-width="7"/>
+    <path d="M345 848c-78 50-125 132-152 236 78 32 150 13 205-58l58-207c-43 0-79 10-111 29Z" fill="#24391f" stroke="#c5d58f" stroke-width="7"/>
+    <path d="M735 848c78 50 125 132 152 236-78 32-150 13-205-58l-58-207c43 0 79 10 111 29Z" fill="#24391f" stroke="#c5d58f" stroke-width="7"/>
+    <path d="M540 790l70 130-70 95-70-95 70-130Z" fill="url(#gold)" stroke="#fff2c7" stroke-width="5"/>
+
+    <path d="M328 510c0-170 86-285 212-285s212 115 212 285c0 195-85 325-212 325S328 705 328 510Z" fill="#17101d"/>
+    <ellipse cx="540" cy="472" rx="150" ry="185" fill="url(#skin)" stroke="#f0c56a" stroke-width="7"/>
+    <path d="M382 430c28-150 130-235 265-200 80 20 128 86 130 186-116-78-230-88-395 14Z" fill="#201026"/>
+    <path d="M345 500c42-180 150-278 324-293 5 72 40 120 94 166-128-38-263-22-418 127Z" fill="#27103a" stroke="#b37cff" stroke-width="7"/>
+    <path d="M392 420c80-48 184-68 310-54" stroke="#f0c56a" stroke-width="10" stroke-linecap="round"/>
+    <path d="M390 530c-42 65-60 145-52 240" stroke="#100712" stroke-width="28" stroke-linecap="round" opacity=".7"/>
+    <path d="M690 530c42 65 60 145 52 240" stroke="#100712" stroke-width="28" stroke-linecap="round" opacity=".7"/>
+
+    <path d="M455 520c30-18 62-18 94 0M585 520c30-18 62-18 94 0" stroke="#fff2c7" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="502" cy="545" r="12" fill="#241407"/><circle cx="625" cy="545" r="12" fill="#241407"/>
+    <path d="M555 580l-14 35h34l-20-35Z" fill="#b96f55" opacity=".70"/>
+    <path d="M485 665c42 45 100 45 142 0" stroke="#8d5132" stroke-width="12" stroke-linecap="round" fill="none"/>
+    <circle cx="450" cy="620" r="28" fill="#eaa0b8" opacity=".42"/><circle cx="675" cy="620" r="28" fill="#eaa0b8" opacity=".42"/>
+
+    <path d="M305 820c62 75 140 115 235 115s173-40 235-115" fill="none" stroke="#f0c56a" stroke-width="7" opacity=".75"/>
+    <path d="M540 305v-62M508 274h64" stroke="#fff2c7" stroke-width="7" stroke-linecap="round" opacity=".9"/>
+  </g>
+
+  <g filter="url(#shadow)"><rect x="185" y="1145" width="710" height="125" rx="34" fill="rgba(16,10,24,.76)" stroke="#f0c56a" stroke-opacity=".45"/><text x="540" y="1205" text-anchor="middle" font-family="Cinzel, Georgia, serif" font-size="58" font-weight="700" fill="#f0c56a">Isis</text><text x="540" y="1240" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700" fill="#fff7ec">assistente mística premium</text></g>
 </svg>
