@@ -11,6 +11,15 @@
     document.head.appendChild(script);
   }
 
+  function loadStockEntry() {
+    if (document.getElementById("stockEntryScript")) return;
+    const script = document.createElement("script");
+    script.id = "stockEntryScript";
+    script.src = "stock-entry.js";
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+
   function normalize(value) {
     return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
   }
@@ -144,6 +153,7 @@
   window.misticaSlowProducts = { render, list: slowProducts, message, copyList };
   window.addEventListener("load", () => {
     mount();
+    loadStockEntry();
     loadCustomerMissing();
   });
 })();
