@@ -10,6 +10,15 @@
     document.head.appendChild(script);
   }
 
+  function loadOrderStatusFilter() {
+    if (document.getElementById("orderStatusFilterScript")) return;
+    const script = document.createElement("script");
+    script.id = "orderStatusFilterScript";
+    script.src = "order-status-filter.js";
+    script.defer = true;
+    document.head.appendChild(script);
+  }
+
   function todayKey() {
     return new Date().toISOString().slice(0, 10);
   }
@@ -81,5 +90,6 @@
   window.addEventListener("load", () => {
     mountMemo();
     loadSpecialOrders();
+    loadOrderStatusFilter();
   });
 })();
