@@ -1,45 +1,47 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1350" role="img" aria-labelledby="title desc">
-  <title id="title">Isis humana premium da Mística Presentes</title>
-  <desc id="desc">Ilustração vetorial da Isis com aparência humana, moderna, xamânica e publicitária.</desc>
+  <title id="title">Isis mulher premium da Mística Presentes</title>
+  <desc id="desc">Isis com aparência mais humana, moderna, elegante, xamânica e publicitária.</desc>
   <defs>
-    <radialGradient id="bg" cx="50%" cy="38%" r="75%"><stop offset="0" stop-color="#7e3ff2" stop-opacity=".42"/><stop offset=".48" stop-color="#2b143b"/><stop offset="1" stop-color="#070711"/></radialGradient>
-    <linearGradient id="gold" x1="0" x2="1"><stop stop-color="#fff0b8"/><stop offset=".5" stop-color="#f0c56a"/><stop offset="1" stop-color="#a97325"/></linearGradient>
-    <linearGradient id="dress" x1="320" y1="620" x2="780" y2="1220"><stop stop-color="#21102f"/><stop offset=".5" stop-color="#4b173f"/><stop offset="1" stop-color="#314326"/></linearGradient>
-    <linearGradient id="skin" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f4c7a5"/><stop offset="1" stop-color="#c77b59"/></linearGradient>
-    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="28" stdDeviation="22" flood-color="#000" flood-opacity=".48"/></filter>
-    <filter id="glow" x="-35%" y="-35%" width="170%" height="170%"><feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <radialGradient id="bg" cx="50%" cy="38%" r="78%"><stop offset="0" stop-color="#7e3ff2" stop-opacity=".42"/><stop offset=".45" stop-color="#231035"/><stop offset="1" stop-color="#05050b"/></radialGradient>
+    <linearGradient id="skin" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f2c3a2"/><stop offset="1" stop-color="#bd7453"/></linearGradient>
+    <linearGradient id="gold" x1="0" x2="1"><stop stop-color="#fff1bd"/><stop offset=".5" stop-color="#f0c56a"/><stop offset="1" stop-color="#a97325"/></linearGradient>
+    <linearGradient id="dress" x1="300" y1="700" x2="780" y2="1250"><stop stop-color="#21102f"/><stop offset=".5" stop-color="#4b173f"/><stop offset="1" stop-color="#314326"/></linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="28" stdDeviation="20" flood-color="#000" flood-opacity=".48"/></filter>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
   </defs>
 
   <rect width="1080" height="1350" rx="70" fill="url(#bg)"/>
-  <circle cx="540" cy="520" r="360" fill="#f0c56a" opacity=".10"/>
-  <circle cx="540" cy="520" r="250" fill="#b37cff" opacity=".14"/>
-  <g stroke="#f0c56a" stroke-width="4" fill="none" opacity=".48"><circle cx="850" cy="190" r="86"/><path d="M850 104v172M764 190h172M790 130l120 120M910 130 790 250"/><path d="M130 1010c170-85 270-230 315-440M950 1020c-160-80-250-210-305-420"/></g>
-  <g fill="#f6d989" opacity=".95"><path d="M165 210l18 42 45 16-45 16-18 42-18-42-45-16 45-16 18-42Z"/><path d="M890 585l15 34 36 13-36 13-15 34-15-34-36-13 36-13 15-34Z"/><circle cx="230" cy="610" r="8"/><circle cx="790" cy="430" r="7"/></g>
+  <circle cx="540" cy="520" r="365" fill="#f0c56a" opacity=".08"/>
+  <circle cx="540" cy="520" r="265" fill="#b37cff" opacity=".13"/>
+  <g stroke="#f0c56a" stroke-width="4" fill="none" opacity=".42"><circle cx="852" cy="190" r="82"/><path d="M852 108v164M770 190h164M795 132l114 114M909 132 795 246"/><path d="M120 1010c175-85 276-225 330-425M955 1015c-160-85-255-218-314-420"/></g>
+  <g fill="#f6d989" opacity=".95"><path d="M158 235l18 42 45 16-45 16-18 42-18-42-45-16 45-16 18-42Z"/><path d="M890 615l15 34 36 13-36 13-15 34-15-34-36-13 36-13 15-34Z"/><circle cx="245" cy="590" r="8"/><circle cx="798" cy="440" r="7"/></g>
 
   <g filter="url(#shadow)">
-    <ellipse cx="540" cy="1070" rx="315" ry="55" fill="#000" opacity=".34"/>
-    <path d="M240 1215c44-265 145-425 300-425s256 160 300 425H240Z" fill="url(#dress)" stroke="#f0c56a" stroke-width="7"/>
-    <path d="M345 848c-78 50-125 132-152 236 78 32 150 13 205-58l58-207c-43 0-79 10-111 29Z" fill="#24391f" stroke="#c5d58f" stroke-width="7"/>
-    <path d="M735 848c78 50 125 132 152 236-78 32-150 13-205-58l-58-207c43 0 79 10 111 29Z" fill="#24391f" stroke="#c5d58f" stroke-width="7"/>
-    <path d="M540 790l70 130-70 95-70-95 70-130Z" fill="url(#gold)" stroke="#fff2c7" stroke-width="5"/>
+    <ellipse cx="540" cy="1192" rx="340" ry="62" fill="#000" opacity=".34"/>
+    <path d="M245 1228c46-255 148-420 295-420s249 165 295 420H245Z" fill="url(#dress)" stroke="#f0c56a" stroke-width="6"/>
+    <path d="M320 880c-75 55-118 135-144 226 78 30 150 10 208-66l62-214c-49 2-88 20-126 54Z" fill="#223b1e" stroke="#c5d58f" stroke-width="7"/>
+    <path d="M760 880c75 55 118 135 144 226-78 30-150 10-208-66l-62-214c49 2 88 20 126 54Z" fill="#223b1e" stroke="#c5d58f" stroke-width="7"/>
+    <path d="M540 790l70 132-70 100-70-100 70-132Z" fill="url(#gold)" stroke="#fff2c7" stroke-width="5"/>
 
-    <path d="M328 510c0-170 86-285 212-285s212 115 212 285c0 195-85 325-212 325S328 705 328 510Z" fill="#17101d"/>
-    <ellipse cx="540" cy="472" rx="150" ry="185" fill="url(#skin)" stroke="#f0c56a" stroke-width="7"/>
-    <path d="M382 430c28-150 130-235 265-200 80 20 128 86 130 186-116-78-230-88-395 14Z" fill="#201026"/>
-    <path d="M345 500c42-180 150-278 324-293 5 72 40 120 94 166-128-38-263-22-418 127Z" fill="#27103a" stroke="#b37cff" stroke-width="7"/>
-    <path d="M392 420c80-48 184-68 310-54" stroke="#f0c56a" stroke-width="10" stroke-linecap="round"/>
-    <path d="M390 530c-42 65-60 145-52 240" stroke="#100712" stroke-width="28" stroke-linecap="round" opacity=".7"/>
-    <path d="M690 530c42 65 60 145 52 240" stroke="#100712" stroke-width="28" stroke-linecap="round" opacity=".7"/>
+    <path d="M325 515c0-190 86-315 215-315s215 125 215 315c0 228-86 374-215 374S325 743 325 515Z" fill="#130b18"/>
+    <path d="M322 725c-18-210 34-380 160-480 90-72 202-72 292 14-120 8-224 53-308 135-92 90-138 200-144 331Z" fill="#160b20"/>
+    <ellipse cx="540" cy="510" rx="158" ry="195" fill="url(#skin)" stroke="#f0c56a" stroke-width="7"/>
+    <path d="M385 435c36-145 145-220 297-175 72 22 115 84 123 165-132-70-270-62-420 10Z" fill="#1b0e22"/>
+    <path d="M370 382c77-125 180-190 323-195 10 62 42 112 94 150-156-35-278-22-417 45Z" fill="#28113d" stroke="#b37cff" stroke-width="7"/>
+    <path d="M410 370c78-42 182-58 312-44" stroke="#f0c56a" stroke-width="10" stroke-linecap="round"/>
 
-    <path d="M455 520c30-18 62-18 94 0M585 520c30-18 62-18 94 0" stroke="#fff2c7" stroke-width="5" stroke-linecap="round"/>
-    <circle cx="502" cy="545" r="12" fill="#241407"/><circle cx="625" cy="545" r="12" fill="#241407"/>
-    <path d="M555 580l-14 35h34l-20-35Z" fill="#b96f55" opacity=".70"/>
-    <path d="M485 665c42 45 100 45 142 0" stroke="#8d5132" stroke-width="12" stroke-linecap="round" fill="none"/>
-    <circle cx="450" cy="620" r="28" fill="#eaa0b8" opacity=".42"/><circle cx="675" cy="620" r="28" fill="#eaa0b8" opacity=".42"/>
+    <path d="M423 525c38-18 72-17 104 0M585 525c38-18 72-17 104 0" stroke="#fff2c7" stroke-width="5" stroke-linecap="round"/>
+    <ellipse cx="485" cy="552" rx="13" ry="16" fill="#211106"/><ellipse cx="635" cy="552" rx="13" ry="16" fill="#211106"/>
+    <path d="M555 582l-18 42h38l-20-42Z" fill="#b77052" opacity=".75"/>
+    <path d="M485 674c42 42 100 42 142 0" stroke="#7d422b" stroke-width="11" stroke-linecap="round" fill="none"/>
+    <circle cx="445" cy="620" r="28" fill="#eaa0b8" opacity=".34"/><circle cx="680" cy="620" r="28" fill="#eaa0b8" opacity=".34"/>
 
-    <path d="M305 820c62 75 140 115 235 115s173-40 235-115" fill="none" stroke="#f0c56a" stroke-width="7" opacity=".75"/>
-    <path d="M540 305v-62M508 274h64" stroke="#fff2c7" stroke-width="7" stroke-linecap="round" opacity=".9"/>
+    <path d="M395 842c52 72 102 108 145 108s93-36 145-108" fill="none" stroke="#f0c56a" stroke-width="6" opacity=".70"/>
+    <path d="M350 382c-52 110-74 235-66 375" stroke="#100712" stroke-width="28" stroke-linecap="round" opacity=".80"/>
+    <path d="M730 382c52 110 74 235 66 375" stroke="#100712" stroke-width="28" stroke-linecap="round" opacity=".80"/>
+
+    <g opacity=".92"><path d="M540 218v-64M508 187h64" stroke="#fff2c7" stroke-width="7" stroke-linecap="round"/><path d="M705 268c34 24 72 34 116 30-20 30-30 63-30 98-42-24-82-34-121-29 32-30 44-63 35-99Z" fill="#314326" stroke="#c5d58f" stroke-width="5"/><path d="M375 292c-38 22-78 30-120 24 22 28 34 60 36 95 40-25 78-36 118-34-33-27-45-57-34-85Z" fill="#314326" stroke="#c5d58f" stroke-width="5"/></g>
   </g>
 
-  <g filter="url(#shadow)"><rect x="185" y="1145" width="710" height="125" rx="34" fill="rgba(16,10,24,.76)" stroke="#f0c56a" stroke-opacity=".45"/><text x="540" y="1205" text-anchor="middle" font-family="Cinzel, Georgia, serif" font-size="58" font-weight="700" fill="#f0c56a">Isis</text><text x="540" y="1240" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700" fill="#fff7ec">assistente mística premium</text></g>
+  <g filter="url(#shadow)"><rect x="185" y="1150" width="710" height="120" rx="34" fill="rgba(16,10,24,.80)" stroke="#f0c56a" stroke-opacity=".45"/><text x="540" y="1208" text-anchor="middle" font-family="Cinzel, Georgia, serif" font-size="58" font-weight="700" fill="#f0c56a">Isis</text><text x="540" y="1242" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="700" fill="#fff7ec">assistente mística premium</text></g>
 </svg>
