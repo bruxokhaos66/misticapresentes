@@ -13,6 +13,41 @@
     return Math.floor((Date.now() - date.getTime()) / dayMs);
   }
 
+  function lateOrders() {
+    return loadOrders()
+      .map(order => ({ ...order, days: daysSince(order.createdAt) }))
+      .filter(order => order.days !== null && order.days >= LIMIT_DAYS && order.status !== "Disponivel");
+  }
+
+  function lateMessage() {
+    const list = lateOrders();
+    if (!list.length) return "Encomendas atrasadas - Mistica Presentes\n\nNenhuma encomenda atrasada.";
+    return `Encomendas atrasadas - Mistica Presentes\n\n${list.map(order => `• ${order.name} | ${order.item} | ${order.status} | ${order.days} dia(s) | ${order.whatsapp || "sem WhatsApp"}`).join("\n")}`;
+  }
+
+  async function copyLateOrders() {
+    const text = lateMessage();
+    try {
+      await navigator.clipboard.writeText(text);
+      alert("Lista de encomendas atrasadas copiada.");
+    } catch {
+      prompt("Copie a lista de encomendas atrasadas:", text);
+    }
+  }
+
+  function mountLateButton() {
+    const panel = document.getElementById("specialOrdersPanel");
+    const actions = panel?.querySelector(".report-export-actions");
+    if (!actions || document.getElementById("copyLateOrdersButton")) return;
+    const button = document.createElement("button");
+    button.id = "copyLateOrdersButton";
+    button.className = "btn btn-ghost";
+    button.type = "button";
+    button.textContent = "Copiar atrasadas";
+    button.addEventListener("click", copyLateOrders);
+    actions.appendChild(button);
+  }
+
   function decorate() {
     const content = document.getElementById("specialOrdersContent");
     if (!content) return;
@@ -35,17 +70,19 @@
   }
 
   function install() {
+    mountLateButton();
     decorate();
     const originalRender = window.misticaSpecialOrders?.render;
     if (typeof originalRender === "function" && !window.__misticaOrderAgeAlertInstalled) {
       window.__misticaOrderAgeAlertInstalled = true;
       window.misticaSpecialOrders.render = function renderWithAgeAlert() {
         originalRender();
+        mountLateButton();
         decorate();
       };
     }
   }
 
-  window.misticaOrderAgeAlert = { install, decorate };
+  window.misticaOrderAgeAlert = { install, decorate, lateOrders, lateMessage, copyLateOrders };
   window.addEventListener("load", () => setTimeout(install, 400));
 })();
