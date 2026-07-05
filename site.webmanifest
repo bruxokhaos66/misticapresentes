@@ -8,9 +8,10 @@
   "theme_color": "#172012",
   "icons": [
     {
-      "src": "/assets/logo-mistica.svg",
-      "sizes": "any",
-      "type": "image/svg+xml"
+      "src": "/assets/logo-mistica-final.webp",
+      "sizes": "512x512",
+      "type": "image/webp",
+      "purpose": "any maskable"
     }
   ]
 }
