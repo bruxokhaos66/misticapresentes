@@ -79,11 +79,26 @@
     }
   }
 
+  function updateEmptyNotice(visible) {
+    const content = document.getElementById("specialOrdersContent");
+    if (!content) return;
+    let notice = document.getElementById("lateOrdersEmptyNotice");
+    if (!notice) {
+      notice = document.createElement("div");
+      notice.id = "lateOrdersEmptyNotice";
+      notice.className = "history-item";
+      notice.innerHTML = "<span>Nenhuma encomenda atrasada encontrada.</span>";
+      content.appendChild(notice);
+    }
+    notice.hidden = !visible;
+  }
+
   function applyLateFilter() {
     const content = document.getElementById("specialOrdersContent");
     if (!content) return;
     const late = lateOrders();
-    const cards = Array.from(content.querySelectorAll(".history-item"));
+    const cards = Array.from(content.querySelectorAll(".history-item:not(#lateOrdersEmptyNotice)"));
+    let visibleCount = 0;
     cards.forEach(card => {
       if (!lateOnly) {
         card.hidden = false;
@@ -92,7 +107,9 @@
       const text = card.textContent || "";
       const match = late.some(order => text.includes(order.name) && text.includes(order.item));
       card.hidden = !match;
+      if (match) visibleCount += 1;
     });
+    updateEmptyNotice(lateOnly && visibleCount === 0);
     updateLateButtons();
   }
 
@@ -136,7 +153,7 @@
     const content = document.getElementById("specialOrdersContent");
     if (!content) return;
     const late = lateOrders();
-    const cards = Array.from(content.querySelectorAll(".history-item"));
+    const cards = Array.from(content.querySelectorAll(".history-item:not(#lateOrdersEmptyNotice)"));
     cards
       .sort((a, b) => {
         const aText = a.textContent || "";
@@ -152,7 +169,7 @@
     const content = document.getElementById("specialOrdersContent");
     if (!content) return;
     const orders = loadOrders();
-    const cards = Array.from(content.querySelectorAll(".history-item"));
+    const cards = Array.from(content.querySelectorAll(".history-item:not(#lateOrdersEmptyNotice)"));
     cards.forEach(card => {
       const text = card.textContent || "";
       const order = orders.find(item => text.includes(item.name) && text.includes(item.item));
