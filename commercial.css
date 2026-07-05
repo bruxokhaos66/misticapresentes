@@ -152,6 +152,9 @@
 .report-list { display: grid; gap: 8px; }
 .report-row { display: flex; justify-content: space-between; gap: 10px; border-top: 1px solid rgba(240, 197, 106, 0.12); padding-top: 8px; color: #d9cfad; }
 .report-row strong { color: #fff8e7; }
+.order-age-warning { border-color: rgba(255, 166, 166, 0.48) !important; background: linear-gradient(135deg, rgba(255, 166, 166, 0.13), rgba(255, 255, 255, 0.045)) !important; box-shadow: 0 0 0 1px rgba(255, 166, 166, 0.18); }
+[data-order-age] { display: inline-flex; width: fit-content; border: 1px solid rgba(255, 196, 122, 0.34); border-radius: 999px; background: rgba(240, 197, 106, 0.12); color: #ffdca2; padding: 5px 9px; font-size: 0.78rem; font-weight: 900; }
+.order-age-warning [data-order-age] { border-color: rgba(255, 166, 166, 0.50); background: rgba(255, 166, 166, 0.16); color: #ffd6d6; }
 
 .highlight-strip span { text-transform: none; letter-spacing: 0.01em; }
 .footer a { color: #f0c56a; font-weight: 800; }
