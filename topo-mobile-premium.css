@@ -5,5 +5,87 @@
 .hero-card-isis { isolation: isolate; }
 .isis-section .isis-showcase-image { min-height: 360px; }
 .isis-section .isis-showcase-image img { display: block; width: 100%; height: auto; object-fit: contain; object-position: center; }
+
+.brand img,
+.footer img {
+  opacity: 0;
+}
+
+.brand,
+.footer-grid > div:first-child {
+  position: relative;
+}
+
+.brand::before,
+.footer-grid > div:first-child::before {
+  content: "";
+  display: block;
+  width: 58px;
+  height: 58px;
+  flex: 0 0 58px;
+  border: 1px solid rgba(240,197,106,.34);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(17,23,13,.98), rgba(35,16,53,.70)), url("assets/mistica-logo-xamanico.webp?v=20260705k") center / cover no-repeat;
+  box-shadow: 0 14px 30px rgba(0,0,0,.34), 0 0 28px rgba(240,197,106,.16);
+}
+
+.brand::before {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.footer-grid > div:first-child::before {
+  margin-bottom: 12px;
+}
+
+.brand-hero {
+  background:
+    linear-gradient(90deg, rgba(7,6,10,.84), rgba(13,10,18,.68)),
+    radial-gradient(circle at 20% 25%, rgba(126,63,242,.28), transparent 34%),
+    radial-gradient(circle at 78% 70%, rgba(113,138,70,.24), transparent 34%),
+    url("assets/mistica-hero-xamanico.webp?v=20260705k") center / cover no-repeat;
+}
+
+.brand-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: url("assets/mistica-logo-xamanico.webp?v=20260705k") right 6% center / min(28vw,360px) auto no-repeat;
+  opacity: .14;
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+.highlight-strip {
+  border: 1px solid rgba(240,197,106,.22);
+  background:
+    linear-gradient(135deg, rgba(8,8,13,.78), rgba(35,16,53,.34), rgba(49,67,38,.28)),
+    url("assets/mistica-banner-publicitario.webp?v=20260705k") center / cover no-repeat;
+  box-shadow: 0 24px 70px rgba(0,0,0,.24);
+}
+
+.feature-card,
+.isis-state-card,
+.metric-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.feature-card::after,
+.isis-state-card::after,
+.metric-card::after {
+  content: "";
+  position: absolute;
+  inset: auto -34px -42px auto;
+  width: 118px;
+  height: 118px;
+  background: url("assets/mistica-graficos-produtos.webp?v=20260705k") center / cover no-repeat;
+  border-radius: 999px;
+  opacity: .10;
+  pointer-events: none;
+}
+
 @media (max-width: 920px) { .hero { padding: 42px 0 58px; } .hero-grid { grid-template-columns: 1fr; gap: 26px; } .hero-copy { text-align: center; } .hero-copy .eyebrow { margin-inline: auto; font-size: .68rem; letter-spacing: .16em; } .hero-copy h1 { margin-inline: auto; font-size: clamp(2.15rem,9.5vw,4.25rem); max-width: 780px; } .hero-text { margin: 18px auto 22px; max-width: 620px; font-size: 1rem; } .hero-actions { justify-content: center; } .trust-row { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; margin-top: 22px; } .trust-row span { display: grid; min-height: 46px; place-items: center; text-align: center; padding: 10px 12px; font-size: .82rem; line-height: 1.25; } .hero-card { border-radius: 34px; } .hero-card-isis img { max-height: 620px; border-radius: 26px; } .hero-card-isis .floating-card { position: static; margin: 14px; text-align: left; } }
-@media (max-width: 560px) { .nav { min-height: 76px; gap: 12px; } .brand { gap: 10px; font-size: clamp(.92rem,5vw,1.12rem); letter-spacing: .035em; } .brand img, .footer img { width: 48px; height: 48px; } .menu-toggle { border-radius: 18px; padding: 9px 13px; } .hero { padding-top: 32px; } .hero-copy h1 { font-size: clamp(2rem,10.4vw,3.25rem); } .hero-text { font-size: .96rem; } .hero-actions { gap: 10px; } .hero-actions .btn { min-width: 0; } .trust-row { grid-template-columns: 1fr 1fr; gap: 8px; } .trust-row span { min-height: 42px; padding: 9px 8px; font-size: .76rem; } .hero-card { border-radius: 30px; } .isis-section .isis-showcase-image { min-height: 320px; } .floating-card strong { font-size: 1.02rem; } .floating-card span { font-size: .86rem; } }
+@media (max-width: 560px) { .nav { min-height: 76px; gap: 12px; } .brand { gap: 10px; font-size: clamp(.92rem,5vw,1.12rem); letter-spacing: .035em; } .brand img, .footer img { width: 48px; height: 48px; } .brand::before, .footer-grid > div:first-child::before { width: 48px; height: 48px; flex-basis: 48px; border-radius: 16px; } .menu-toggle { border-radius: 18px; padding: 9px 13px; } .hero { padding-top: 32px; } .hero-copy h1 { font-size: clamp(2rem,10.4vw,3.25rem); } .hero-text { font-size: .96rem; } .hero-actions { gap: 10px; } .hero-actions .btn { min-width: 0; } .trust-row { grid-template-columns: 1fr 1fr; gap: 8px; } .trust-row span { min-height: 42px; padding: 9px 8px; font-size: .76rem; } .hero-card { border-radius: 30px; } .isis-section .isis-showcase-image { min-height: 320px; } .floating-card strong { font-size: 1.02rem; } .floating-card span { font-size: .86rem; } }
