@@ -14,6 +14,13 @@
         color: #fff8e7;
         box-shadow: 0 0 0 1px rgba(240, 197, 106, 0.16);
       }
+      #lateOrdersSummary {
+        cursor: pointer;
+      }
+      #lateOrdersSummary:hover {
+        border-color: rgba(240, 197, 106, 0.42);
+        background: rgba(240, 197, 106, 0.08);
+      }
     `;
     document.head.appendChild(style);
   }
@@ -88,6 +95,8 @@
       summary = document.createElement("div");
       summary.id = "lateOrdersSummary";
       summary.className = "report-card";
+      summary.title = "Clique para filtrar encomendas atrasadas";
+      summary.addEventListener("click", toggleLateOnly);
       content.parentNode.insertBefore(summary, content);
     }
     const list = lateOrders();
