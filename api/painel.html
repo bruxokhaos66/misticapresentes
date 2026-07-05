@@ -18,11 +18,13 @@
     .value { font-size:26px; font-weight:800; color:#fff; }
     .gold { color:var(--gold); } .green { color:var(--green); } .red { color:var(--red); }
     .section { margin-top:14px; }
-    table { width:100%; border-collapse:collapse; font-size:13px; }
-    th,td { padding:8px 6px; border-bottom:1px solid rgba(255,255,255,.08); text-align:left; }
+    .table-wrap { width:100%; overflow-x:auto; }
+    table { width:100%; border-collapse:collapse; font-size:13px; min-width:620px; }
+    th,td { padding:8px 6px; border-bottom:1px solid rgba(255,255,255,.08); text-align:left; vertical-align:top; }
     th { color:var(--gold); font-weight:700; }
     input,select { width:100%; padding:12px; border-radius:14px; border:1px solid rgba(216,181,109,.35); background:#120f18; color:#fff; font-size:15px; margin-top:8px; }
-    button { border:0; border-radius:14px; padding:12px; background:var(--gold); color:#1d1727; font-weight:800; font-size:15px; cursor:pointer; }
+    button { border:0; border-radius:14px; padding:12px; background:var(--gold); color:#1d1727; font-weight:800; font-size:15px; cursor:pointer; min-height:42px; }
+    button:focus-visible, input:focus-visible, select:focus-visible { outline:3px solid rgba(216,181,109,.35); outline-offset:2px; }
     .pill { display:inline-block; padding:3px 8px; border-radius:999px; background:rgba(216,181,109,.13); color:var(--gold); font-size:12px; }
     .alerta { line-height:1.45; white-space:pre-wrap; color:#fff4d0; }
     .footer { text-align:center; color:var(--muted); padding:18px; font-size:12px; }
@@ -33,11 +35,12 @@
     .progress { width:100%; height:14px; background:#120f18; border-radius:999px; overflow:hidden; border:1px solid rgba(216,181,109,.22); margin:10px 0 8px; }
     .progress span { display:block; height:100%; width:0%; background:linear-gradient(90deg,#6fbf9b,#d8b56d); border-radius:999px; }
     .meta-line { color:var(--muted); font-size:13px; line-height:1.45; }
+    #authNotice { display:none; margin-top:12px; color:#ffd0d0; line-height:1.4; }
     #saleToast { position:fixed; left:14px; right:14px; top:76px; z-index:9; display:none; background:linear-gradient(135deg,rgba(34,91,66,.98),rgba(29,23,39,.98)); border:1px solid rgba(216,181,109,.55); color:#fff; border-radius:18px; padding:14px 16px; box-shadow:0 18px 40px rgba(0,0,0,.38); }
     #saleToast .title { color:var(--gold); font-weight:800; margin-bottom:4px; }
     #saleToast .desc { font-size:14px; line-height:1.35; }
     @media (max-width:850px){ .grid{grid-template-columns:repeat(2,minmax(0,1fr));} .value{font-size:22px;} }
-    @media (max-width:520px){ .grid{grid-template-columns:1fr;} header{padding:14px;} main{padding:10px;} table{font-size:12px;} th:nth-child(2), td:nth-child(2){display:none;} #saleToast{top:68px;} .login-actions{grid-template-columns:1fr;} }
+    @media (max-width:520px){ .grid{grid-template-columns:1fr;} header{padding:14px;} main{padding:10px;} table{font-size:12px;} #saleToast{top:68px;} .login-actions{grid-template-columns:1fr;} }
   </style>
 </head>
 <body>
@@ -59,6 +62,7 @@
       <button onclick="entrarApp()">Entrar</button>
       <button style="background:#3f3351;color:#fff" onclick="limparLogin()">Limpar</button>
     </div>
+    <div id="authNotice">Token do painel não configurado neste aparelho. Abra o painel pelo link autorizado do app ou use uma URL com <strong>app_token</strong>.</div>
   </div>
 
   <div id="painelConteudo" style="display:none">
@@ -86,8 +90,8 @@
     </div>
 
     <div class="section card admin-only"><h2>Alertas da Isis</h2><div class="alerta" id="alertas">Carregando...</div></div>
-    <div class="section card admin-only"><h2>Últimas vendas</h2><table><thead><tr><th>Nº</th><th>Data</th><th>Cliente</th><th>Total</th><th>Vendedor</th><th>Status</th></tr></thead><tbody id="vendas"></tbody></table></div>
-    <div class="section card admin-only"><h2>Produtos com estoque baixo</h2><table><thead><tr><th>Produto</th><th>Qtd</th><th>Mínimo</th></tr></thead><tbody id="estoque"></tbody></table></div>
+    <div class="section card admin-only"><h2>Últimas vendas</h2><div class="table-wrap"><table><thead><tr><th>Nº</th><th>Data</th><th>Cliente</th><th>Total</th><th>Vendedor</th><th>Status</th></tr></thead><tbody id="vendas"></tbody></table></div></div>
+    <div class="section card admin-only"><h2>Produtos com estoque baixo</h2><div class="table-wrap"><table><thead><tr><th>Produto</th><th>Qtd</th><th>Mínimo</th></tr></thead><tbody id="estoque"></tbody></table></div></div>
     <div class="section card admin-only"><h2>Contas e cancelamentos</h2><div id="contas"></div><div id="cancelamentos" style="margin-top:10px"></div></div>
   </div>
 </main>
@@ -96,21 +100,28 @@
 const params = new URLSearchParams(location.search);
 const tokenUrl = params.get('app_token') || params.get('token');
 if(tokenUrl){ localStorage.setItem('MISTICA_API_TOKEN', tokenUrl); params.delete('app_token'); params.delete('token'); const clean = location.pathname + (params.toString() ? '?' + params.toString() : '') + location.hash; history.replaceState({}, document.title, clean); }
-const TOKEN = localStorage.getItem('MISTICA_API_TOKEN') || 'mistica-local';
 let ultimaVendaNotificada = Number(localStorage.getItem('MISTICA_ULTIMA_VENDA_ID') || 0);
 let primeiraCargaVendas = true;
+let painelWs = null;
+let painelWsRetry = null;
+function token(){ return localStorage.getItem('MISTICA_API_TOKEN') || ''; }
+function temToken(){ return Boolean(token()); }
 function moeda(v){ return Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
 function txt(v){ return (v===null || v===undefined || v==='') ? '-' : String(v); }
 function esc(v){ return txt(v).replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch])); }
 function setText(id, value){ const el=document.getElementById(id); if(el) el.textContent = value; }
 function perfil(){ return localStorage.getItem('MISTICA_APP_PERFIL') || ''; }
+function pararWebsocket(){ if(painelWsRetry){ clearTimeout(painelWsRetry); painelWsRetry=null; } if(painelWs){ try{ painelWs.close(); }catch(e){} painelWs=null; } }
 function aplicarPerfil(){
   const p = perfil();
   const nome = localStorage.getItem('MISTICA_APP_NOME') || 'Usuário';
-  document.getElementById('loginBox').style.display = p ? 'none' : 'block';
-  document.getElementById('painelConteudo').style.display = p ? 'block' : 'none';
+  const autorizado = p && temToken();
+  document.getElementById('loginBox').style.display = autorizado ? 'none' : 'block';
+  document.getElementById('painelConteudo').style.display = autorizado ? 'block' : 'none';
+  const notice = document.getElementById('authNotice'); if(notice) notice.style.display = p && !temToken() ? 'block' : 'none';
   setText('perfilAtual', `${p === 'adm' ? 'Administrador' : 'Vendedor'} • ${nome}`);
   document.querySelectorAll('.admin-only').forEach(el => el.style.display = p === 'adm' ? '' : 'none');
+  if(!autorizado) pararWebsocket();
 }
 function entrarApp(){
   const nome = (document.getElementById('loginNome').value || 'Usuário').trim();
@@ -119,7 +130,7 @@ function entrarApp(){
   localStorage.setItem('MISTICA_APP_PERFIL', p);
   aplicarPerfil(); carregar(); websocket();
 }
-function limparLogin(){ localStorage.removeItem('MISTICA_APP_NOME'); localStorage.removeItem('MISTICA_APP_PERFIL'); aplicarPerfil(); }
+function limparLogin(){ localStorage.removeItem('MISTICA_APP_NOME'); localStorage.removeItem('MISTICA_APP_PERFIL'); pararWebsocket(); aplicarPerfil(); }
 function avisoSeguranca(data){ const warn = document.getElementById('securityWarning'); const seg = data && data.seguranca; if(warn) warn.style.display = seg && !seg.token_forte_configurado ? 'block' : 'none'; }
 function solicitarPermissaoNotificacao(){ try{ if('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); }catch(e){} }
 function avisoVenda(venda){
@@ -135,31 +146,34 @@ function avisoVenda(venda){
 }
 function renderMetas(m){
   m = m || {}; setText('metaDia', moeda(m.vendas_dia)); setText('metaSemana', moeda(m.vendas_semana)); setText('metaMes', moeda(m.vendas_mes)); setText('metaTotal', moeda(m.vendas_total));
-  const pctReal = Number(m.percentual_meta_semana || 0); const pct = Math.min(pctReal, 100); const barra = document.getElementById('metaBarra'); if(barra) barra.style.width = pct + '%';
+  const pctReal = Number(m.percentual_meta_semana || 0); const pct = Math.min(Math.max(pctReal, 0), 100); const barra = document.getElementById('metaBarra'); if(barra) barra.style.width = pct + '%';
   const falta = moeda(m.falta_meta_semana); const meta = moeda(m.meta_semana || 1000);
   setText('metaTexto', m.meta_batida ? `Meta semanal batida! ${pctReal.toFixed(1)}% da meta.` : `Meta semanal: ${meta} • Falta: ${falta} • ${pctReal.toFixed(1)}%`);
   setText('metaBonus', m.meta_batida ? `Meta batida! Comissão extra: ${moeda(m.bonus_comissao || 100)}` : 'Comissão extra ao bater a meta: R$ 100,00');
 }
 function render(data){
-  avisoSeguranca(data); const ultimas = data.ultimas_vendas || []; if(ultimas.length) avisoVenda(ultimas[0]); renderMetas(data.metas_vendas);
+  data = data || {}; avisoSeguranca(data); const ultimas = Array.isArray(data.ultimas_vendas) ? data.ultimas_vendas : []; if(ultimas.length) avisoVenda(ultimas[0]); renderMetas(data.metas_vendas);
   if(perfil() === 'adm'){
-    setText('qtdHoje', data.vendas_hoje.quantidade); setText('fatHoje', moeda(data.vendas_hoje.faturamento)); setText('caixaStatus', data.caixa.aberto ? 'Aberto' : 'Fechado');
-    document.getElementById('caixaStatus').className = data.caixa.aberto ? 'value green' : 'value red'; setText('estoqueQtd', data.estoque_baixo.length); setText('alertas', data.alertas_isis.texto || 'Sem alertas.');
+    const vendasHoje = data.vendas_hoje || {}; const caixa = data.caixa || {}; const estoqueBaixo = Array.isArray(data.estoque_baixo) ? data.estoque_baixo : [];
+    setText('qtdHoje', vendasHoje.quantidade || 0); setText('fatHoje', moeda(vendasHoje.faturamento)); setText('caixaStatus', caixa.aberto ? 'Aberto' : 'Fechado');
+    document.getElementById('caixaStatus').className = caixa.aberto ? 'value green' : 'value red'; setText('estoqueQtd', estoqueBaixo.length); setText('alertas', data.alertas_isis?.texto || 'Sem alertas.');
     document.getElementById('vendas').innerHTML = ultimas.map(v=>`<tr><td>${esc(v.id)}</td><td>${esc(v.data_venda)}</td><td>${esc(v.cliente)}</td><td>${esc(moeda(v.total_final))}</td><td>${esc(v.vendedor)}</td><td><span class="pill">${esc(v.status)}</span></td></tr>`).join('') || '<tr><td colspan="6">Sem vendas ainda.</td></tr>';
-    document.getElementById('estoque').innerHTML = data.estoque_baixo.map(p=>`<tr><td>${esc(p.produto)}</td><td>${esc(p.quantidade)}</td><td>${esc(p.estoque_minimo)}</td></tr>`).join('') || '<tr><td colspan="3">Nenhum produto crítico.</td></tr>';
-    document.getElementById('contas').innerHTML = '<b>Contas:</b><br>' + (data.contas_alerta.map(c=>`${esc(c.descricao)} • ${esc(moeda(c.valor))} • ${esc(c.vencimento)}`).join('<br>') || 'Sem contas em alerta.');
-    document.getElementById('cancelamentos').innerHTML = '<b>Cancelamentos recentes:</b><br>' + (data.cancelamentos.map(c=>`Venda ${esc(c.id)} • ${esc(moeda(c.total_final))} • ${esc(c.vendedor)}`).join('<br>') || 'Nenhum cancelamento recente.');
+    document.getElementById('estoque').innerHTML = estoqueBaixo.map(p=>`<tr><td>${esc(p.produto)}</td><td>${esc(p.quantidade)}</td><td>${esc(p.estoque_minimo)}</td></tr>`).join('') || '<tr><td colspan="3">Nenhum produto crítico.</td></tr>';
+    const contas = Array.isArray(data.contas_alerta) ? data.contas_alerta : []; const cancelamentos = Array.isArray(data.cancelamentos) ? data.cancelamentos : [];
+    document.getElementById('contas').innerHTML = '<b>Contas:</b><br>' + (contas.map(c=>`${esc(c.descricao)} • ${esc(moeda(c.valor))} • ${esc(c.vencimento)}`).join('<br>') || 'Sem contas em alerta.');
+    document.getElementById('cancelamentos').innerHTML = '<b>Cancelamentos recentes:</b><br>' + (cancelamentos.map(c=>`Venda ${esc(c.id)} • ${esc(moeda(c.total_final))} • ${esc(c.vendedor)}`).join('<br>') || 'Nenhum cancelamento recente.');
   }
 }
 async function carregar(){
   if(!perfil()) return;
-  try{ const r = await fetch('/api/dashboard?_=' + Date.now(),{headers:{'X-Mistica-Token':TOKEN}, cache:'no-store'}); if(!r.ok) throw new Error('HTTP '+r.status); const data = await r.json(); render(data); document.getElementById('status').textContent = 'online • '+data.gerado_em; }
+  if(!temToken()){ document.getElementById('status').textContent = 'sem token do painel'; aplicarPerfil(); return; }
+  try{ const r = await fetch('/api/dashboard?_=' + Date.now(),{headers:{'X-Mistica-Token':token()}, cache:'no-store'}); if(!r.ok) throw new Error('HTTP '+r.status); const data = await r.json(); render(data); document.getElementById('status').textContent = 'online • '+txt(data.gerado_em); }
   catch(e){ document.getElementById('status').textContent = 'offline / sem acesso'; }
 }
 function websocket(){
-  if(!perfil()) return;
-  try{ const proto = location.protocol === 'https:' ? 'wss' : 'ws'; const ws = new WebSocket(`${proto}://${location.host}/ws/dashboard?token=${encodeURIComponent(TOKEN)}`); ws.onmessage = ev => { render(JSON.parse(ev.data)); document.getElementById('status').textContent='online em tempo real'; }; ws.onerror = () => carregar(); ws.onclose = () => setTimeout(websocket, 6000); }
-  catch(e){ setInterval(carregar,5000); }
+  if(!perfil() || !temToken() || painelWs) return;
+  try{ const proto = location.protocol === 'https:' ? 'wss' : 'ws'; painelWs = new WebSocket(`${proto}://${location.host}/ws/dashboard?token=${encodeURIComponent(token())}`); painelWs.onmessage = ev => { render(JSON.parse(ev.data)); document.getElementById('status').textContent='online em tempo real'; }; painelWs.onerror = () => carregar(); painelWs.onclose = () => { painelWs=null; if(perfil() && temToken()) painelWsRetry = setTimeout(websocket, 6000); }; }
+  catch(e){ if(!painelWsRetry) painelWsRetry = setTimeout(carregar,5000); }
 }
 solicitarPermissaoNotificacao(); aplicarPerfil(); carregar(); websocket(); setInterval(carregar,15000);
 </script>
