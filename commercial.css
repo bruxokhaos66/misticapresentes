@@ -1,2 +1,52 @@
-@import url("fix108.css?v=20260705b");
-@import url("hotfix.css?v=20260705c");
+/* Camada comercial final da Fase 1.
+   Mantém apenas refinamentos publicitários e não importa arquivos provisórios. */
+
+.hero-section {
+  min-height: auto;
+}
+
+.hero-copy .eyebrow {
+  width: fit-content;
+  border: 1px solid rgba(184, 201, 119, 0.28);
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: rgba(184, 201, 119, 0.07);
+}
+
+.hero-copy h1 {
+  margin-bottom: 0;
+}
+
+.hero-actions .btn:first-child::after {
+  content: "→";
+  margin-left: 8px;
+}
+
+.category-grid article:nth-child(1),
+.category-grid article:nth-child(4) {
+  background: linear-gradient(180deg, rgba(184, 201, 119, 0.11), rgba(255, 248, 230, 0.055));
+}
+
+.category-grid article:nth-child(2),
+.category-grid article:nth-child(3) {
+  background: linear-gradient(180deg, rgba(240, 197, 106, 0.12), rgba(255, 248, 230, 0.055));
+}
+
+.product-card .btn {
+  width: 100%;
+}
+
+.contact-card {
+  background: linear-gradient(145deg, rgba(83,107,55,.18), rgba(255,248,230,.06));
+}
+
+@media (max-width: 680px) {
+  .hero-copy .eyebrow {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .hero-actions .btn {
+    width: 100%;
+  }
+}
