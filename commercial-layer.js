@@ -11,6 +11,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const logoAsset = `assets/logo-mistica-final.webp?v=${assetVersion}`;
   const isisAsset = `assets/isis-humana-xamanica.webp?v=${assetVersion}`;
 
+  document.querySelectorAll('link[rel~="icon"]').forEach(link => link.remove());
+  const favicon = document.createElement("link");
+  favicon.rel = "icon";
+  favicon.type = "image/webp";
+  favicon.href = logoAsset;
+  document.head.appendChild(favicon);
+
   const adminPanel = document.getElementById("admin");
   if (adminPanel) {
     adminPanel.hidden = !adminAccess;
