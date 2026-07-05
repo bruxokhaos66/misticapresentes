@@ -7,9 +7,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const domain = cfg.domain || "misticaesotericos.com.br";
   const params = new URLSearchParams(window.location.search);
   const adminAccess = params.get("admin") === "mistica" || window.location.hash === "#admin-mistica";
-  const assetVersion = "20260705-webp-final";
+  const assetVersion = "20260705-isis-reload";
   const logoAsset = `assets/logo-mistica-final.webp?v=${assetVersion}`;
-  const isisAsset = `assets/isis-humana-xamanica.webp?v=${assetVersion}`;
+  const isisSources = [
+    `assets/isis-humana-xamanica.webp?v=${assetVersion}`,
+    `assets/isis-humana-premium.webp?v=${assetVersion}`,
+    `assets/isis-xamanica-nova.webp?v=${assetVersion}`,
+    `assets/isis-premium.png?v=${assetVersion}`
+  ];
+  const isisAsset = isisSources[0];
 
   document.querySelectorAll('link[rel~="icon"]').forEach(link => link.remove());
   const favicon = document.createElement("link");
@@ -75,7 +81,14 @@ document.addEventListener("DOMContentLoaded", () => {
   if (isisPanel) {
     isisPanel.innerHTML = `<img class="isis-human-img" src="${isisAsset}" alt="Isis da Mística Presentes" width="720" height="900" loading="lazy" decoding="async"><p>Isis, presença misteriosa e xamânica para guiar escolhas e atendimento da loja.</p>`;
     const isisImg = isisPanel.querySelector("img");
+    let isisAttempt = 0;
     isisImg.onerror = () => {
+      isisAttempt += 1;
+      if (isisSources[isisAttempt]) {
+        isisImg.src = isisSources[isisAttempt];
+        return;
+      }
+      isisPanel.classList.add("asset-failed");
       isisPanel.innerHTML = `<div class="isis-symbol" aria-hidden="true">ISIS</div><p>Isis, presença misteriosa e xamânica para guiar escolhas e atendimento da loja.</p>`;
     };
   }
