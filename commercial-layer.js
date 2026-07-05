@@ -71,6 +71,14 @@ document.addEventListener("DOMContentLoaded", () => {
     document.head.appendChild(isis);
   }
 
+  if (!document.getElementById("isisCommandsScript")) {
+    const isisCommands = document.createElement("script");
+    isisCommands.id = "isisCommandsScript";
+    isisCommands.src = "isis-commands.js";
+    isisCommands.defer = true;
+    document.head.appendChild(isisCommands);
+  }
+
   document.querySelectorAll("[data-whatsapp-link]").forEach(link => {
     link.href = `https://wa.me/${whatsapp}?text=${encodeURIComponent("Olá, vim pelo site da Mística Presentes e gostaria de atendimento.")}`;
     link.textContent = "Comprar pelo WhatsApp";
