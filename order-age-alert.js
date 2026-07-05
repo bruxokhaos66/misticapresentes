@@ -3,6 +3,21 @@
   const LIMIT_DAYS = 7;
   let lateOnly = false;
 
+  function installActiveStyle() {
+    if (document.getElementById("lateOrdersActiveStyle")) return;
+    const style = document.createElement("style");
+    style.id = "lateOrdersActiveStyle";
+    style.textContent = `
+      #filterLateOrdersButton.active {
+        background: rgba(240, 197, 106, 0.24);
+        border-color: rgba(240, 197, 106, 0.62);
+        color: #fff8e7;
+        box-shadow: 0 0 0 1px rgba(240, 197, 106, 0.16);
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
   function loadOrders() {
     try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch { return []; }
   }
@@ -158,6 +173,7 @@
   }
 
   function install() {
+    installActiveStyle();
     mountLateButton();
     decorate();
     const originalRender = window.misticaSpecialOrders?.render;
@@ -165,6 +181,7 @@
       window.__misticaOrderAgeAlertInstalled = true;
       window.misticaSpecialOrders.render = function renderWithAgeAlert() {
         originalRender();
+        installActiveStyle();
         mountLateButton();
         decorate();
       };
