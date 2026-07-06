@@ -214,6 +214,10 @@
     loadScriptOnce("ambientPlayerFixScript", "ambient-player-fix.js?v=20260706-player-unico");
   }
 
+  function loadAdminAmbientMusic() {
+    loadScriptOnce("adminAmbientMusicScript", "admin-ambient-music.js?v=20260706-admin-musicas");
+  }
+
   function applyFooterPremiumFix() {
     installFooterStyle();
     enhanceFooter();
@@ -229,6 +233,7 @@
     loadAccessibilityStatusFix();
     loadAmbientPlaylistAdmin();
     loadAmbientPlayerFix();
+    loadAdminAmbientMusic();
   }
 
   if (document.readyState === "loading") {
