@@ -1,14 +1,21 @@
 (() => {
-  const version = "20260706-isis-section-produtos";
+  const version = "20260706-isis-final-separado";
+  const finalPath = "assistente-isis-produtos-final.webp";
   const sources = [
-    `assets/isis-humana-xamanica-03-produtos.webp?v=${version}`,
-    `./assets/isis-humana-xamanica-03-produtos.webp?v=${version}`,
-    `/assets/isis-humana-xamanica-03-produtos.webp?v=${version}`
+    `assets/${finalPath}?v=${version}`,
+    `./assets/${finalPath}?v=${version}`,
+    `/assets/${finalPath}?v=${version}`
   ];
 
   function renderAssistantIsis() {
     const panel = document.querySelector(".isis-panel-image");
     if (!panel) return;
+
+    const current = panel.querySelector("img");
+    if (current && current.src.includes(finalPath)) {
+      panel.classList.remove("asset-failed");
+      return;
+    }
 
     let attempt = 0;
     const render = src => {
@@ -35,6 +42,5 @@
     setTimeout(renderAssistantIsis, 600);
     setTimeout(renderAssistantIsis, 1600);
     setTimeout(renderAssistantIsis, 3600);
-    setTimeout(renderAssistantIsis, 5200);
   });
 })();
