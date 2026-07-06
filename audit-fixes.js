@@ -74,6 +74,16 @@
       margin-right:auto!important;
       text-align:center!important;
     }
+    .isis-panel-image .isis-human-img{
+      display:block!important;
+      width:min(100%,430px)!important;
+      max-height:620px!important;
+      object-fit:contain!important;
+      margin:0 auto 18px!important;
+      filter:drop-shadow(0 28px 55px rgba(0,0,0,.45))!important;
+      opacity:1!important;
+      visibility:visible!important;
+    }
     .hero-card-isis{
       position:relative!important;
       min-height:560px!important;
@@ -114,6 +124,7 @@
     @media(max-width:560px){
       .highlight-strip{justify-content:flex-start!important;}
       .highlight-strip span{width:100%!important;min-width:auto!important;}
+      .isis-panel-image .isis-human-img{max-height:430px!important;}
     }
     @media(prefers-reduced-motion:reduce){
       *,*::before,*::after{
@@ -134,6 +145,28 @@
     skip.href = main ? `#${main.id}` : "#inicio";
     skip.textContent = "Pular para o conteúdo";
     document.body.prepend(skip);
+  };
+
+  const forceIsisImage = () => {
+    const panel = document.querySelector(".isis-panel-image");
+    if (!panel) return;
+    const version = "20260706-isis-force";
+    const sources = [
+      `assets/isis-humana-xamanica.webp?v=${version}`,
+      `./assets/isis-humana-xamanica.webp?v=${version}`,
+      `/assets/isis-humana-xamanica.webp?v=${version}`
+    ];
+    let attempt = 0;
+    const render = src => {
+      panel.classList.remove("asset-failed");
+      panel.innerHTML = `<img class="isis-human-img" src="${src}" alt="Isis da Mística Presentes" width="720" height="900" loading="eager" decoding="async"><p>Isis, presença misteriosa e xamânica para guiar escolhas e atendimento da loja.</p>`;
+      const img = panel.querySelector("img");
+      img.onerror = () => {
+        attempt += 1;
+        if (sources[attempt]) render(sources[attempt]);
+      };
+    };
+    render(sources[0]);
   };
 
   const improveImages = root => {
@@ -200,6 +233,9 @@
     improveButtons();
     improveLiveRegions();
     improveImages(document);
+    forceIsisImage();
+    setTimeout(forceIsisImage, 1000);
+    setTimeout(forceIsisImage, 3000);
 
     document.querySelectorAll(".hero-card-isis").forEach(card => {
       if (!card.querySelector(".isis-hero-fallback")) {
