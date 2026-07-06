@@ -7,7 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const domain = cfg.domain || "misticaesotericos.com.br";
   const params = new URLSearchParams(window.location.search);
   const adminAccess = params.get("admin") === "mistica" || window.location.hash === "#admin-mistica";
-  const assetVersion = "20260706-etapa3-section-spacing";
+  const assetVersion = "20260706-etapa4-cleanup";
   const logoAsset = `assets/logo-mistica-modern.svg?v=${assetVersion}`;
   const finalSectionPath = "isis-humana-xamanica-03-produtos.png";
   const finalSectionSrc = `assets/${finalSectionPath}?v=${assetVersion}`;
@@ -97,24 +97,29 @@ document.addEventListener("DOMContentLoaded", () => {
     document.head.appendChild(script);
   }
 
-  loadScriptOnce("modernIconFixScript", "modern-icon-fix.js");
-  loadScriptOnce("seoSiteScript", "seo-site.js");
-  loadScriptOnce("adminAccessScript", "admin-access.js");
-  loadScriptOnce("productExtrasScript", "product-extras.js");
-  loadScriptOnce("pedidoStatusScript", "pedido-status.js");
-  loadScriptOnce("adminAlertsScript", "admin-alerts.js");
-  loadScriptOnce("adminActivityScript", "admin-activity.js");
-  loadScriptOnce("painelAuthScript", "painel-auth.js");
-  loadScriptOnce("siteReadinessScript", "site-readiness.js");
-  loadScriptOnce("isisCommerceScript", "isis-commerce.js");
-  loadScriptOnce("isisCommandsScript", "isis-commands.js");
-  loadScriptOnce("isisSectionProductsLockFinalScript", "isis-section-products-fix.js");
-  loadScriptOnce("commercialPremiumScript", "commercial-premium.js");
-  loadScriptOnce("ambientExperienceScript", "ambient-experience.js");
-  loadScriptOnce("wideLayoutFixScript", "layout-wide-fix.js");
-  loadScriptOnce("heroIsisPositionFixScript", "hero-isis-position-fix.js");
-  loadScriptOnce("cardSystemFixScript", "card-system-fix.js");
-  loadScriptOnce("sectionSpacingFixScript", "section-spacing-fix.js");
+  const scriptLayers = [
+    ["modernIconFixScript", "modern-icon-fix.js"],
+    ["seoSiteScript", "seo-site.js"],
+    ["adminAccessScript", "admin-access.js"],
+    ["productExtrasScript", "product-extras.js"],
+    ["pedidoStatusScript", "pedido-status.js"],
+    ["adminAlertsScript", "admin-alerts.js"],
+    ["adminActivityScript", "admin-activity.js"],
+    ["painelAuthScript", "painel-auth.js"],
+    ["siteReadinessScript", "site-readiness.js"],
+    ["isisCommerceScript", "isis-commerce.js"],
+    ["isisCommandsScript", "isis-commands.js"],
+    ["isisSectionProductsLockFinalScript", "isis-section-products-fix.js"],
+    ["commercialPremiumScript", "commercial-premium.js"],
+    ["ambientExperienceScript", "ambient-experience.js"],
+    // Camadas visuais finais. Manter esta ordem para evitar conflitos de layout.
+    ["wideLayoutFixScript", "layout-wide-fix.js"],
+    ["heroIsisPositionFixScript", "hero-isis-position-fix.js"],
+    ["cardSystemFixScript", "card-system-fix.js"],
+    ["sectionSpacingFixScript", "section-spacing-fix.js"]
+  ];
+
+  scriptLayers.forEach(([id, src]) => loadScriptOnce(id, src));
 
   const adminPanel = document.getElementById("admin");
   if (adminPanel) {
