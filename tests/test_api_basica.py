@@ -76,22 +76,18 @@ def test_listagem_musicas_ambiente_responde():
     assert isinstance(data["musicas"], list)
 
 
-def test_upload_musica_ambiente_salva_no_banco():
+def test_upload_musica_ambiente_responde_rapido_e_salva_arquivo():
     response = client.post(
         "/api/uploads/musicas",
         files={"arquivo": ("teste.mp3", b"ID3teste", "audio/mpeg")},
         data={"nome_base": "teste-ambiente"},
+        headers={"X-Mistica-Api-Key": "c4e9012d72c6bb42f52457c6d6ba916a"},
     )
     assert response.status_code == 200
     data = response.json()
     assert data["ok"] is True
-    assert data["armazenamento"] == "banco+arquivo"
-    assert data["url"].startswith("/api/uploads/musicas/arquivo/")
-
-    lista = client.get("/api/uploads/musicas")
-    assert lista.status_code == 200
-    musicas = lista.json()["musicas"]
-    assert any(item.get("url") == data["url"] for item in musicas)
+    assert data["armazenamento"] == "arquivo+backup_banco"
+    assert data["url"].startswith("/api/uploads/musicas/arquivo-local/")
 
     arquivo = client.get(data["url"])
     assert arquivo.status_code == 200
