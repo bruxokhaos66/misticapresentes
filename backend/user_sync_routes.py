@@ -1,4 +1,5 @@
 import os
+import secrets
 from datetime import datetime
 from typing import Optional
 
@@ -99,8 +100,10 @@ def _permissoes_por_perfil(perfil):
 
 
 def _validar_chave_sync(x_mistica_sync_key: str | None):
-    chave = os.environ.get("MISTICA_SYNC_KEY", "").strip()
-    if chave and x_mistica_sync_key != chave:
+    chave = os.environ.get("MISTICA_SYNC_KEY", "").strip() or os.environ.get("MISTICA_SITE_API_KEY", "").strip()
+    if not chave:
+        raise HTTPException(status_code=503, detail="Configure MISTICA_SYNC_KEY ou MISTICA_SITE_API_KEY para permitir sincronização.")
+    if not x_mistica_sync_key or not secrets.compare_digest(str(x_mistica_sync_key), chave):
         raise HTTPException(status_code=403, detail="Chave de sincronização inválida")
 
 
@@ -125,8 +128,8 @@ def _usuario_padrao(login):
 
 
 def _criar_usuario_padrao_se_permitido(conn, login, senha):
-    senha_padrao = os.environ.get("MISTICA_DEFAULT_PANEL_PASSWORD", "1234")
-    if str(senha) != senha_padrao:
+    senha_padrao = os.environ.get("MISTICA_DEFAULT_PANEL_PASSWORD", "").strip()
+    if not senha_padrao or str(senha) != senha_padrao:
         return None
     dados = _usuario_padrao(login)
     if not dados:
@@ -337,7 +340,8 @@ def sincronizar_vendas_lote(payload: VendasLotePayload, x_mistica_sync_key: str 
 
 
 @router.get("/api/usuarios")
-def listar_usuarios_api():
+def listar_usuarios_api(x_mistica_sync_key: str | None = Header(default=None)):
+    _validar_chave_sync(x_mistica_sync_key)
     return listar(
         """
         SELECT id, nome, login, perfil, ativo
@@ -349,7 +353,8 @@ def listar_usuarios_api():
 
 
 @router.get("/api/auth/usuarios-debug")
-def listar_usuarios_debug():
+def listar_usuarios_debug(x_mistica_sync_key: str | None = Header(default=None)):
+    _validar_chave_sync(x_mistica_sync_key)
     return listar(
         """
         SELECT id, nome, login, perfil, COALESCE(ativo,1) AS ativo
