@@ -97,7 +97,7 @@
 
       .admin-premium-summary-grid {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 10px;
       }
 
@@ -124,7 +124,13 @@
         font-size: 1.12rem;
       }
 
-      @media (max-width: 760px) {
+      @media (max-width: 960px) {
+        .admin-premium-summary-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 560px) {
         .admin-premium-summary-grid {
           grid-template-columns: 1fr;
         }
@@ -147,6 +153,10 @@
     return raw ? "Verificar" : "0";
   }
 
+  function siteAccessToday() {
+    return text("siteAccessToday");
+  }
+
   function mountSummary() {
     const admin = document.getElementById("adminContent");
     const dashboard = admin?.querySelector(".dashboard-grid");
@@ -163,17 +173,18 @@
     summary.innerHTML = `
       <p class="eyebrow">Resumo operacional</p>
       <h3>Visão rápida da loja</h3>
-      <p>Acompanhe faturamento, vendas e alertas principais antes de conferir estoque, fornecedores e backup.</p>
+      <p>Acompanhe faturamento, vendas, acessos do site e alertas principais antes de conferir estoque, fornecedores e backup.</p>
       <div class="admin-premium-summary-grid">
         <div class="admin-premium-summary-chip"><span>Hoje</span><strong>${text("revenueToday")}</strong></div>
         <div class="admin-premium-summary-chip"><span>Vendas</span><strong>${text("salesCount")}</strong></div>
+        <div class="admin-premium-summary-chip"><span>Acessos hoje</span><strong>${siteAccessToday()}</strong></div>
         <div class="admin-premium-summary-chip"><span>Estoque mínimo</span><strong>${lowStockCount()}</strong></div>
       </div>
     `;
   }
 
   function installObservers() {
-    ["revenueToday", "salesCount", "lowStockAlerts"].forEach(id => {
+    ["revenueToday", "salesCount", "siteAccessToday", "lowStockAlerts"].forEach(id => {
       const el = document.getElementById(id);
       if (!el || el.dataset.adminDashboardPremiumObserver === "true") return;
       el.dataset.adminDashboardPremiumObserver = "true";
@@ -201,6 +212,7 @@
     apply();
     setTimeout(apply, 700);
     setTimeout(apply, 1800);
+    setTimeout(apply, 3600);
   });
 
   window.misticaAdminDashboardPremium = { apply: mountSummary };
