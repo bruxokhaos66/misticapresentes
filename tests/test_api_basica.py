@@ -43,3 +43,25 @@ def test_backup_status_responde():
     assert "banco_existe" in data
     assert "backup_dir" in data
     assert "ultimos_backups" in data
+
+
+def test_playlist_ambiente_responde():
+    response = client.get("/api/site/playlist-ambiente")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["ok"] is True
+    assert "links" in data
+    assert isinstance(data["links"], list)
+
+
+def test_playlist_ambiente_salva_links_youtube():
+    payload = {"links": ["https://www.youtube.com/watch?v=abc123", "https://example.com/ignorar"]}
+    response = client.post("/api/site/playlist-ambiente", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["ok"] is True
+    assert data["links"] == ["https://www.youtube.com/watch?v=abc123"]
+
+    response_get = client.get("/api/site/playlist-ambiente")
+    assert response_get.status_code == 200
+    assert response_get.json()["links"] == ["https://www.youtube.com/watch?v=abc123"]

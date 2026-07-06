@@ -62,6 +62,10 @@ class AcessoSiteIn(BaseModel):
     origem: Optional[str] = "site"
 
 
+class PlaylistAmbienteIn(BaseModel):
+    links: list[str] = Field(default_factory=list)
+
+
 def validar_site_api_key(chave_recebida: str | None):
     chave = os.environ.get("MISTICA_SITE_API_KEY", "").strip()
     if not chave:
@@ -146,9 +150,39 @@ def garantir_tabela_acessos_site(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_site_acessos_criado_em ON site_acessos(criado_em)")
 
 
+def garantir_tabela_playlist_ambiente(conn):
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS site_playlist_ambiente (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            links TEXT NOT NULL DEFAULT '',
+            atualizado_em TEXT NOT NULL
+        )
+        """
+    )
+
+
 def limitar_texto(valor: str | None, limite: int, padrao: str = "") -> str:
     texto = str(valor or padrao).strip()
     return texto[:limite]
+
+
+def normalizar_link_youtube(valor: str | None) -> str:
+    texto = limitar_texto(valor, 520, "")
+    if not texto.startswith(("https://www.youtube.com/", "https://youtube.com/", "https://youtu.be/", "https://music.youtube.com/")):
+        return ""
+    return texto
+
+
+def limpar_links_playlist(links: list[str]) -> list[str]:
+    limpos = []
+    for item in links:
+        link = normalizar_link_youtube(item)
+        if link and link not in limpos:
+            limpos.append(link)
+        if len(limpos) >= 12:
+            break
+    return limpos
 
 
 @router.post("/vendas")
@@ -276,6 +310,52 @@ def estoque_site():
         ORDER BY nome COLLATE NOCASE
         """
     )
+
+
+@router.get("/site/playlist-ambiente")
+def obter_playlist_ambiente():
+    with conectar() as conn:
+        garantir_tabela_playlist_ambiente(conn)
+        row = conn.execute("SELECT links, atualizado_em FROM site_playlist_ambiente WHERE id=1").fetchone()
+
+    links = []
+    atualizado_em = None
+    if row:
+        links = [item for item in str(row["links"] or "").split("\n") if item]
+        atualizado_em = row["atualizado_em"]
+
+    return {
+        "ok": True,
+        "links": limpar_links_playlist(links),
+        "atualizado_em": atualizado_em,
+        "data_hora": datetime.now().isoformat(timespec="seconds"),
+    }
+
+
+@router.post("/site/playlist-ambiente")
+def salvar_playlist_ambiente(payload: PlaylistAmbienteIn, x_mistica_api_key: str | None = Header(default=None)):
+    validar_site_api_key(x_mistica_api_key)
+    links = limpar_links_playlist(payload.links)
+    atualizado_em = datetime.now().isoformat(timespec="seconds")
+
+    with conectar() as conn:
+        garantir_tabela_playlist_ambiente(conn)
+        conn.execute(
+            """
+            INSERT INTO site_playlist_ambiente (id, links, atualizado_em)
+            VALUES (1, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET links=excluded.links, atualizado_em=excluded.atualizado_em
+            """,
+            ("\n".join(links), atualizado_em),
+        )
+        conn.commit()
+
+    return {
+        "ok": True,
+        "links": links,
+        "total": len(links),
+        "atualizado_em": atualizado_em,
+    }
 
 
 @router.post("/site/acessos")
