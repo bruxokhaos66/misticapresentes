@@ -1,25 +1,98 @@
-/* Camada comercial final da reconstrução visual.
-   Mantém refinamentos publicitários e não importa arquivos provisórios. */
+/* Camada comercial premium da Mística Presentes.
+   Visual moderno, xamânico, publicitário e orientado à venda. */
+
+:root {
+  --premium-glow: 0 0 42px rgba(240,197,106,.16);
+  --premium-card: linear-gradient(145deg, rgba(255,248,230,.075), rgba(83,107,55,.075));
+  --premium-card-strong: linear-gradient(145deg, rgba(240,197,106,.14), rgba(54,32,68,.18), rgba(83,107,55,.12));
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 14% 16%, rgba(184,201,119,.15), transparent 24rem),
+    radial-gradient(circle at 90% 8%, rgba(240,197,106,.12), transparent 22rem),
+    radial-gradient(circle at 62% 72%, rgba(54,32,68,.20), transparent 28rem);
+}
+
+.site-header {
+  box-shadow: 0 12px 40px rgba(0,0,0,.20);
+}
+
+.nav {
+  min-height: 88px;
+}
+
+.brand-copy strong {
+  text-shadow: 0 0 24px rgba(240,197,106,.13);
+}
 
 .hero-section {
   min-height: auto;
+  isolation: isolate;
+}
+
+.hero-section::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(920px, 80vw);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(240,197,106,.065), transparent 62%);
+  pointer-events: none;
+  z-index: 0;
 }
 
 .hero-copy .eyebrow {
   width: fit-content;
-  border: 1px solid rgba(184, 201, 119, 0.28);
+  border: 1px solid rgba(184, 201, 119, 0.34);
   border-radius: 999px;
-  padding: 8px 12px;
-  background: rgba(184, 201, 119, 0.07);
+  padding: 8px 13px;
+  background: rgba(184, 201, 119, 0.08);
+  box-shadow: inset 0 0 28px rgba(184,201,119,.05);
 }
 
 .hero-copy h1 {
   margin-bottom: 0;
+  text-shadow: 0 24px 80px rgba(0,0,0,.46);
+}
+
+.hero-text {
+  font-weight: 600;
 }
 
 .hero-actions .btn:first-child::after {
   content: "→";
   margin-left: 8px;
+}
+
+.btn {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-120%);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.28), transparent);
+  transition: transform .55s ease;
+}
+
+.btn:hover::before {
+  transform: translateX(120%);
+}
+
+.btn-ghost::before {
+  background: linear-gradient(90deg, transparent, rgba(240,197,106,.12), transparent);
 }
 
 .brand-logo-img {
@@ -62,10 +135,12 @@
   justify-content: flex-end;
   min-height: 660px;
   padding-top: 18px;
+  border-color: rgba(240,197,106,.35);
   background:
     radial-gradient(circle at 55% 18%, rgba(240,197,106,.20), transparent 28%),
     radial-gradient(circle at 50% 65%, rgba(83,107,55,.22), transparent 44%),
     linear-gradient(145deg, rgba(8,7,13,.92), rgba(20,31,15,.44));
+  box-shadow: var(--shadow), var(--premium-glow);
 }
 
 .hero-isis-img {
@@ -111,31 +186,231 @@
   text-transform: uppercase;
 }
 
+.premium-hero-selling-bar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.premium-hero-selling-bar span {
+  display: grid;
+  gap: 3px;
+  border: 1px solid rgba(240,197,106,.20);
+  border-radius: 20px;
+  padding: 15px;
+  background: rgba(255,248,230,.055);
+  color: #d8cbb6;
+  box-shadow: 0 16px 48px rgba(0,0,0,.18);
+}
+
+.premium-hero-selling-bar strong {
+  color: #f0c56a;
+  font-size: .78rem;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+}
+
+.intent-section {
+  padding-top: 20px;
+  background: linear-gradient(180deg, rgba(7,7,11,.12), rgba(240,197,106,.035));
+}
+
+.intent-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.intent-grid a {
+  min-height: 220px;
+  display: grid;
+  align-content: end;
+  gap: 7px;
+  text-decoration: none;
+  border: 1px solid rgba(240,197,106,.24);
+  border-radius: 30px;
+  padding: 22px;
+  background:
+    radial-gradient(circle at 20% 16%, rgba(240,197,106,.18), transparent 32%),
+    linear-gradient(145deg, rgba(255,248,230,.08), rgba(83,107,55,.10));
+  box-shadow: 0 24px 70px rgba(0,0,0,.18);
+  transition: transform .18s ease, border-color .18s ease, background .18s ease;
+}
+
+.intent-grid a:hover {
+  transform: translateY(-4px);
+  border-color: rgba(240,197,106,.42);
+  background:
+    radial-gradient(circle at 20% 16%, rgba(240,197,106,.24), transparent 32%),
+    linear-gradient(145deg, rgba(255,248,230,.11), rgba(83,107,55,.14));
+}
+
+.intent-grid span {
+  font-size: 2.2rem;
+}
+
+.intent-grid strong {
+  color: #fff6dc;
+  font-family: Cinzel, serif;
+  font-size: 1.25rem;
+}
+
+.intent-grid small {
+  color: #d8cbb6;
+  font-weight: 700;
+}
+
+.premium-campaign-band {
+  padding: 28px 0 8px;
+}
+
+.campaign-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 24px;
+  align-items: center;
+  border: 1px solid rgba(240,197,106,.26);
+  border-radius: 34px;
+  padding: clamp(24px, 4vw, 42px);
+  background:
+    radial-gradient(circle at 18% 10%, rgba(240,197,106,.16), transparent 28%),
+    radial-gradient(circle at 88% 88%, rgba(184,201,119,.13), transparent 34%),
+    linear-gradient(145deg, rgba(8,7,13,.92), rgba(54,32,68,.32));
+  box-shadow: var(--shadow);
+}
+
+.campaign-card h2 {
+  margin-bottom: 8px;
+}
+
+.campaign-card p:last-child {
+  margin-bottom: 0;
+  max-width: 760px;
+}
+
+.campaign-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.category-grid article,
+.form-panel,
+.product-card,
+.metric-card,
+.contact-card,
+.client-item,
+.history-item,
+.stock-item,
+.cart-item {
+  background: var(--premium-card);
+}
+
+.category-grid article,
+.product-card,
+.form-panel {
+  position: relative;
+  overflow: hidden;
+}
+
+.category-grid article::before,
+.product-card::before,
+.form-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgba(255,255,255,.08), transparent 26%, transparent 74%, rgba(240,197,106,.05));
+  opacity: .68;
+}
+
+.product-card {
+  align-content: start;
+  min-height: 100%;
+  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+
+.product-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(240,197,106,.38);
+  box-shadow: 0 28px 80px rgba(0,0,0,.30);
+}
+
+.premium-product-badge {
+  width: fit-content;
+  border: 1px solid rgba(184,201,119,.26);
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: #f0c56a;
+  background: rgba(184,201,119,.08);
+  font-size: .72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+}
+
+.premium-product-note {
+  display: block;
+  margin-top: -4px;
+  color: #b8c977;
+  font-weight: 800;
+}
+
+.product-image {
+  min-height: 138px;
+  border: 1px solid rgba(240,197,106,.16);
+}
+
+.qty-row {
+  align-items: stretch;
+}
+
+.qty-row input {
+  min-height: 46px;
+  border-color: rgba(240,197,106,.24);
+}
+
+.isis-section {
+  background: radial-gradient(circle at 20% 50%, rgba(240,197,106,.08), transparent 28rem), linear-gradient(180deg, rgba(255,255,255,.015), rgba(54,32,68,.12));
+}
+
+.isis-layout {
+  align-items: stretch;
+}
+
+.isis-panel-image {
+  min-height: 680px;
+  display: grid;
+  place-items: center;
+  padding: 26px 24px 28px;
+  border-color: rgba(240,197,106,.28);
+  background:
+    radial-gradient(circle at 48% 24%, rgba(240,197,106,.13), transparent 32%),
+    radial-gradient(circle at 72% 70%, rgba(83,107,55,.15), transparent 34%),
+    linear-gradient(145deg, rgba(8,7,13,.94), rgba(44,26,53,.52));
+}
+
 .isis-human-img {
   position: relative;
   z-index: 2;
-  width: min(100%, 430px);
-  max-height: 620px;
+  width: min(100%, 500px);
+  max-height: 690px;
   object-fit: contain;
-  border-radius: 30px;
-  filter: drop-shadow(0 32px 70px rgba(0,0,0,.5));
+  border-radius: 22px;
+  filter: drop-shadow(0 32px 74px rgba(0,0,0,.5));
 }
 
-.isis-human-publicitaria {
-  width: min(100%, 460px);
-  max-height: 660px;
-  border-radius: 0;
+.isis-human-produtos {
+  width: min(100%, 520px);
+  max-height: 700px;
   object-fit: contain;
 }
 
 .isis-panel-image:has(.isis-human-img) {
-  min-height: 560px;
+  min-height: 680px;
   padding: 24px 24px 18px;
-}
-
-.isis-panel-image:has(.isis-human-publicitaria) {
-  min-height: 640px;
-  padding-top: 10px;
 }
 
 .isis-panel-image:has(.isis-human-img) p {
@@ -152,26 +427,27 @@
   backdrop-filter: blur(12px);
 }
 
-.asset-failed {
-  display: grid;
-  place-items: center;
-}
-
 .how-to-buy-section {
   position: relative;
   overflow: hidden;
   background: radial-gradient(circle at 20% 20%, rgba(240,197,106,.10), transparent 34%), linear-gradient(180deg, rgba(8,7,13,.98), rgba(20,31,15,.42));
 }
 
-.how-to-buy-grid {
+.how-to-buy-grid,
+.trust-footer-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 18px;
 }
 
-.how-to-buy-grid article {
+.trust-footer-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.how-to-buy-grid article,
+.trust-footer-grid article {
   position: relative;
-  min-height: 210px;
+  min-height: 190px;
   padding: 24px;
   border: 1px solid rgba(240,197,106,.20);
   border-radius: 28px;
@@ -191,14 +467,21 @@
   font-weight: 900;
 }
 
-.how-to-buy-grid strong {
+.how-to-buy-grid strong,
+.trust-footer-grid strong {
   display: block;
   margin-bottom: 10px;
   color: #fff6dc;
   font-size: 1.1rem;
 }
 
-.how-to-buy-grid p {
+.trust-footer-grid strong {
+  font-family: Cinzel, serif;
+  color: #f0c56a;
+}
+
+.how-to-buy-grid p,
+.trust-footer-grid span {
   color: #d8cdb9;
 }
 
@@ -228,9 +511,27 @@
   background: linear-gradient(145deg, rgba(83,107,55,.18), rgba(255,248,230,.06));
 }
 
-@media (max-width: 980px) {
+@media (max-width: 1100px) {
+  .intent-grid,
   .how-to-buy-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .campaign-card {
+    grid-template-columns: 1fr;
+  }
+
+  .campaign-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 980px) {
+  .premium-hero-selling-bar,
+  .trust-row,
+  .confidence-grid,
+  .trust-footer-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -240,7 +541,8 @@
     margin-right: auto;
   }
 
-  .hero-actions .btn {
+  .hero-actions .btn,
+  .campaign-actions .btn {
     width: 100%;
   }
 
@@ -271,22 +573,20 @@
   }
 
   .isis-panel-image:has(.isis-human-img) {
-    min-height: 430px;
+    min-height: 540px;
   }
 
-  .isis-panel-image:has(.isis-human-publicitaria) {
-    min-height: 560px;
+  .isis-human-img,
+  .isis-human-produtos {
+    max-height: 540px;
   }
 
-  .isis-human-img {
-    max-height: 430px;
-  }
-
-  .isis-human-publicitaria {
-    max-height: 500px;
-  }
-
-  .how-to-buy-grid {
+  .how-to-buy-grid,
+  .intent-grid {
     grid-template-columns: 1fr;
+  }
+
+  .intent-grid a {
+    min-height: 170px;
   }
 }
