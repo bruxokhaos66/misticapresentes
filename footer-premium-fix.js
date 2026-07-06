@@ -206,6 +206,10 @@
     loadScriptOnce("accessibilityStatusFixScript", "accessibility-status-fix.js?v=20260706-accessibility-status");
   }
 
+  function loadAmbientPlaylistAdmin() {
+    loadScriptOnce("ambientPlaylistAdminScript", "ambient-playlist-admin.js?v=20260706-playlist-ambiente");
+  }
+
   function applyFooterPremiumFix() {
     installFooterStyle();
     enhanceFooter();
@@ -219,6 +223,7 @@
     loadPerformanceImagesFix();
     loadPerformanceSectionsFix();
     loadAccessibilityStatusFix();
+    loadAmbientPlaylistAdmin();
   }
 
   if (document.readyState === "loading") {
