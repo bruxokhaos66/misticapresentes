@@ -85,7 +85,7 @@ def test_upload_musica_ambiente_salva_no_banco():
     assert response.status_code == 200
     data = response.json()
     assert data["ok"] is True
-    assert data["armazenamento"] == "banco"
+    assert data["armazenamento"] == "banco+arquivo"
     assert data["url"].startswith("/api/uploads/musicas/arquivo/")
 
     lista = client.get("/api/uploads/musicas")
