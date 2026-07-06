@@ -182,6 +182,10 @@
     loadScriptOnce("alsoBoughtFixScript", "also-bought-fix.js?v=20260706-also-bought");
   }
 
+  function loadCartCtaFix() {
+    loadScriptOnce("cartCtaFixScript", "cart-cta-fix.js?v=20260706-cart-cta");
+  }
+
   function applyFooterPremiumFix() {
     installFooterStyle();
     enhanceFooter();
@@ -189,6 +193,7 @@
     loadAmbientPremiumFix();
     loadCommercialBadgesFix();
     loadAlsoBoughtFix();
+    loadCartCtaFix();
   }
 
   if (document.readyState === "loading") {
