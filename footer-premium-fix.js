@@ -166,65 +166,21 @@
     document.head.appendChild(script);
   }
 
-  function loadCatalogPremiumFix() {
-    loadScriptOnce("catalogPremiumFixScript", "catalog-premium-fix.js?v=20260706-catalogo-premium");
-  }
-
-  function loadAmbientPremiumFix() {
-    loadScriptOnce("ambientPremiumFixScript", "ambient-premium-fix.js?v=20260706-ambient-premium");
-  }
-
-  function loadCommercialBadgesFix() {
-    loadScriptOnce("commercialBadgesFixScript", "commercial-badges-fix.js?v=20260706-commercial-badges");
-  }
-
-  function loadAlsoBoughtFix() {
-    loadScriptOnce("alsoBoughtFixScript", "also-bought-fix.js?v=20260706-also-bought");
-  }
-
-  function loadCartCtaFix() {
-    loadScriptOnce("cartCtaFixScript", "cart-cta-fix.js?v=20260706-cart-cta");
-  }
-
-  function loadIsisRecommendationsFix() {
-    loadScriptOnce("isisRecommendationsFixScript", "isis-recommendations-fix.js?v=20260706-isis-recommendations");
-  }
-
-  function loadAdminDashboardPremiumFix() {
-    loadScriptOnce("adminDashboardPremiumFixScript", "admin-dashboard-premium-fix.js?v=20260706-admin-dashboard");
-  }
-
-  function loadPerformanceImagesFix() {
-    loadScriptOnce("performanceImagesFixScript", "performance-images-fix.js?v=20260706-performance-images");
-  }
-
-  function loadPerformanceSectionsFix() {
-    loadScriptOnce("performanceSectionsFixScript", "performance-sections-fix.js?v=20260706-performance-sections");
-  }
-
-  function loadAccessibilityStatusFix() {
-    loadScriptOnce("accessibilityStatusFixScript", "accessibility-status-fix.js?v=20260706-accessibility-status");
-  }
-
-  function loadAmbientPlaylistAdmin() {
-    loadScriptOnce("ambientPlaylistAdminScript", "ambient-playlist-admin.js?v=20260706-playlist-ambiente-v3");
-  }
-
-  function loadAmbientPlayerUnify() {
-    loadScriptOnce("ambientPlayerUnifyScript", "ambient-player-unify.js?v=20260706-fallback");
-  }
-
-  function loadAdminAmbientMusic() {
-    loadScriptOnce("adminAmbientMusicScript", "admin-ambient-music.js?v=20260706-admin-musicas");
-  }
-
-  function loadSinglePlayerGuard() {
-    loadScriptOnce("ambientSinglePlayerGuardScript", "ambient-single-player-guard.js?v=20260706-single-player");
-  }
-
-  function loadSaleApiFirstFix() {
-    loadScriptOnce("misticaSaleApiFirstScript", "mobile-sale-api-first.js?v=20260706-api-first-sale");
-  }
+  function loadCatalogPremiumFix() { loadScriptOnce("catalogPremiumFixScript", "catalog-premium-fix.js?v=20260706-catalogo-premium"); }
+  function loadAmbientPremiumFix() { loadScriptOnce("ambientPremiumFixScript", "ambient-premium-fix.js?v=20260706-ambient-premium"); }
+  function loadCommercialBadgesFix() { loadScriptOnce("commercialBadgesFixScript", "commercial-badges-fix.js?v=20260706-commercial-badges"); }
+  function loadAlsoBoughtFix() { loadScriptOnce("alsoBoughtFixScript", "also-bought-fix.js?v=20260706-also-bought"); }
+  function loadCartCtaFix() { loadScriptOnce("cartCtaFixScript", "cart-cta-fix.js?v=20260706-cart-cta"); }
+  function loadIsisRecommendationsFix() { loadScriptOnce("isisRecommendationsFixScript", "isis-recommendations-fix.js?v=20260706-isis-recommendations"); }
+  function loadAdminDashboardPremiumFix() { loadScriptOnce("adminDashboardPremiumFixScript", "admin-dashboard-premium-fix.js?v=20260706-admin-dashboard"); }
+  function loadPerformanceImagesFix() { loadScriptOnce("performanceImagesFixScript", "performance-images-fix.js?v=20260706-performance-images"); }
+  function loadPerformanceSectionsFix() { loadScriptOnce("performanceSectionsFixScript", "performance-sections-fix.js?v=20260706-performance-sections"); }
+  function loadAccessibilityStatusFix() { loadScriptOnce("accessibilityStatusFixScript", "accessibility-status-fix.js?v=20260706-accessibility-status"); }
+  function loadAmbientPlaylistAdmin() { loadScriptOnce("ambientPlaylistAdminScript", "ambient-playlist-admin.js?v=20260706-playlist-ambiente-v3"); }
+  function loadAmbientPlayerUnify() { loadScriptOnce("ambientPlayerUnifyScript", "ambient-player-unify.js?v=20260706-fallback"); }
+  function loadAdminAmbientMusic() { loadScriptOnce("adminAmbientMusicScript", "admin-ambient-music.js?v=20260706-audio-timeout"); }
+  function loadSinglePlayerGuard() { loadScriptOnce("ambientSinglePlayerGuardScript", "ambient-single-player-guard.js?v=20260706-single-player"); }
+  function loadSaleApiFirstFix() { loadScriptOnce("misticaSaleApiFirstScript", "mobile-sale-api-first.js?v=20260706-api-first-sale"); }
 
   function applyFooterPremiumFix() {
     installFooterStyle();
