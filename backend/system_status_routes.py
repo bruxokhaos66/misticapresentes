@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import os
+import secrets
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Header, HTTPException
 
 from backend.database import conectar
 from config import DB_PATH, OFFICIAL_DOMAIN, SERVER_URL, API_URL
@@ -22,6 +24,14 @@ TABELAS_PRINCIPAIS = [
 ]
 
 
+def validar_site_api_key(chave_recebida: str | None):
+    chave = os.environ.get("MISTICA_SITE_API_KEY", "").strip() or os.environ.get("MISTICA_SYNC_KEY", "").strip()
+    if not chave:
+        raise HTTPException(status_code=503, detail="Configure MISTICA_SITE_API_KEY ou MISTICA_SYNC_KEY para acessar diagnóstico do sistema.")
+    if not chave_recebida or not secrets.compare_digest(str(chave_recebida), chave):
+        raise HTTPException(status_code=403, detail="Chave da API inválida.")
+
+
 def tabela_existe(conn, nome: str) -> bool:
     row = conn.execute(
         "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
@@ -38,7 +48,8 @@ def contar_registros(conn, nome: str) -> int | None:
 
 
 @router.get("/diagnostico/sistema")
-def status_sistema():
+def status_sistema(x_mistica_api_key: str | None = Header(default=None)):
+    validar_site_api_key(x_mistica_api_key)
     db_path = Path(DB_PATH)
     tabelas = []
     erros = []
