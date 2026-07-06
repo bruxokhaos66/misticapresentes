@@ -56,11 +56,6 @@
         background: linear-gradient(135deg, #dfeab2, #b8c977 62%, #fff6cc);
       }
 
-      .ambient-volume {
-        min-width: min(220px, 100%);
-        accent-color: #f0c56a;
-      }
-
       .ambient-status {
         color: #b8c977;
         font-size: .86rem;
@@ -138,8 +133,7 @@
           text-align: left;
         }
 
-        .ambient-controls .btn,
-        .ambient-volume {
+        .ambient-controls .btn {
           width: 100%;
         }
 
@@ -246,7 +240,7 @@
       button.setAttribute("aria-pressed", String(isPlaying));
       button.textContent = isPlaying ? "Desligar música ambiente" : "Ativar ambiente xamânico";
     }
-    if (status) status.textContent = isPlaying ? "Música ambiente ligada em volume suave." : "Toque somente após o cliente ativar.";
+    if (status) status.textContent = isPlaying ? "Música ambiente ligada." : "Toque somente após o cliente ativar.";
   }
 
   function createAmbientCard() {
@@ -261,7 +255,6 @@
       <p>Para uma navegação mais imersiva, o cliente pode ativar uma trilha ambiente suave. Ela não toca sozinha: respeita as regras dos navegadores e a escolha do visitante.</p>
       <div class="ambient-controls">
         <button class="btn ambient-toggle" type="button" data-ambient-toggle aria-pressed="false">Ativar ambiente xamânico</button>
-        <input class="ambient-volume" type="range" min="0" max="0.42" step="0.01" value="${selectedVolume()}" aria-label="Volume da música ambiente" data-ambient-volume>
         <span class="ambient-status" data-ambient-status>Toque somente após o cliente ativar.</span>
       </div>
     `;
@@ -274,7 +267,6 @@
     }
 
     const button = card.querySelector("[data-ambient-toggle]");
-    const volume = card.querySelector("[data-ambient-volume]");
 
     button.addEventListener("click", async () => {
       try {
@@ -284,11 +276,6 @@
         const status = card.querySelector("[data-ambient-status]");
         if (status) status.textContent = "Não foi possível iniciar o áudio neste navegador.";
       }
-      updateUi(card);
-    });
-
-    volume.addEventListener("input", () => {
-      setVolume(volume.value);
       updateUi(card);
     });
 
