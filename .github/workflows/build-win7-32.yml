@@ -1,0 +1,45 @@
+name: Build Windows 7 32-bit Installer
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "desktop-v*"
+
+jobs:
+  build-win7-32:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.8 x86
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+          architecture: "x86"
+
+      - name: Build portable app
+        shell: pwsh
+        run: .\scripts\build_win7_32.ps1
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer\mistica_presentes_win7_32.iss"
+
+      - name: Upload portable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MisticaPresentes-Win7-32bit-Portable
+          path: dist/MisticaPresentes
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MisticaPresentes-Win7-32bit-Setup
+          path: dist/installer/*.exe

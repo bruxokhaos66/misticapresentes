@@ -19,6 +19,7 @@ LOCAL_MANIFEST_PATH = Path.home() / "Documents" / "Mistica_Presentes_Updates" / 
 STATUS_PATH = APP_DATA_DIR / "atualizador_status.json"
 CURRENT_PATH = APP_DATA_DIR / "current.json"
 BAD_VERSIONS_PATH = APP_DATA_DIR / "bad_versions.json"
+DEFAULT_MANIFEST_URL = "https://misticaesotericos.com.br/updates/manifest.json"
 
 
 def preparar_atualizacao() -> Path | None:
@@ -93,7 +94,7 @@ def versoes_bloqueadas() -> set[str]:
 
 def carregar_manifest() -> dict | None:
     cfg = ler_json(CONFIG_PATH)
-    manifest_url = str(cfg.get("manifest_url", "")).strip()
+    manifest_url = str(cfg.get("manifest_url", "")).strip() or DEFAULT_MANIFEST_URL
     if manifest_url:
         if not manifest_url.lower().startswith("https://"):
             raise ValueError("URL de atualizacao precisa usar HTTPS.")
