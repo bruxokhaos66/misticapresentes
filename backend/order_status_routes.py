@@ -319,7 +319,7 @@ def atualizar_observacao_pedido(venda_id: int, payload: PedidoObservacaoIn, x_mi
             (venda_id, venda["status"], payload.usuario or "Admin", "Observação atualizada", agora),
         )
         conn.commit()
-    return {"ok": True, "venda_id": venda_id, "observacao": payload.observacao or ""}
+    return {"ok": True, "venda_id": venda_id, "observacao": payload.observacao, "data_hora": agora}
 
 
 @router.delete("/pedidos/{venda_id}")
@@ -359,3 +359,10 @@ def listar_status_pedidos(limite: int = 100):
             (limite,),
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+try:
+    from backend.order_api_guard_inner_routes import router as order_api_guard_inner_router
+    router.include_router(order_api_guard_inner_router)
+except Exception as exc:
+    print(f"[API] Aviso: rotas seguras de pedido não carregadas: {exc}")
