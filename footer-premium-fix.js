@@ -186,6 +186,10 @@
     loadScriptOnce("cartCtaFixScript", "cart-cta-fix.js?v=20260706-cart-cta");
   }
 
+  function loadIsisRecommendationsFix() {
+    loadScriptOnce("isisRecommendationsFixScript", "isis-recommendations-fix.js?v=20260706-isis-recommendations");
+  }
+
   function applyFooterPremiumFix() {
     installFooterStyle();
     enhanceFooter();
@@ -194,6 +198,7 @@
     loadCommercialBadgesFix();
     loadAlsoBoughtFix();
     loadCartCtaFix();
+    loadIsisRecommendationsFix();
   }
 
   if (document.readyState === "loading") {
