@@ -190,6 +190,10 @@
     loadScriptOnce("isisRecommendationsFixScript", "isis-recommendations-fix.js?v=20260706-isis-recommendations");
   }
 
+  function loadAdminDashboardPremiumFix() {
+    loadScriptOnce("adminDashboardPremiumFixScript", "admin-dashboard-premium-fix.js?v=20260706-admin-dashboard");
+  }
+
   function applyFooterPremiumFix() {
     installFooterStyle();
     enhanceFooter();
@@ -199,6 +203,7 @@
     loadAlsoBoughtFix();
     loadCartCtaFix();
     loadIsisRecommendationsFix();
+    loadAdminDashboardPremiumFix();
   }
 
   if (document.readyState === "loading") {
