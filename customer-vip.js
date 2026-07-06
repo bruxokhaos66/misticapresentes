@@ -47,6 +47,10 @@
     return date && !Number.isNaN(date.getTime()) ? date : null;
   }
 
+  function averageTicket(item) {
+    return item?.count ? item.total / item.count : 0;
+  }
+
   function buildRanking() {
     if (typeof sales === "undefined" || !Array.isArray(sales)) return [];
     const map = new Map();
@@ -76,7 +80,7 @@
   function message() {
     const ranking = buildRanking();
     if (!ranking.length) return "Clientes VIP - Mística Presentes\n\nNenhuma venda registrada ainda.";
-    return `Clientes VIP - Mística Presentes\n\n${ranking.map((item, index) => `${index + 1}. ${item.name} - ${item.count} compra(s) - ${money(item.total)}`).join("\n")}`;
+    return `Clientes VIP - Mística Presentes\n\n${ranking.map((item, index) => `${index + 1}. ${item.name} - ${item.count} compra(s) - ${money(item.total)} - ticket médio ${money(averageTicket(item))}`).join("\n")}`;
   }
 
   async function copyRanking() {
@@ -109,7 +113,7 @@
     content.innerHTML = ranking.map((item, index) => `
       <div class="history-item">
         <strong>${index + 1}. ${item.name}</strong>
-        <span>${item.count} compra(s) • ${money(item.total)}</span>
+        <span>${item.count} compra(s) • ${money(item.total)} • ticket médio ${money(averageTicket(item))}</span>
         <span>${lastText(item.last)} • WhatsApp: ${item.whatsapp || "não cadastrado"}</span>
         <button class="btn btn-ghost btn-full" type="button" onclick="misticaCustomerVip.whatsapp(${index})">Enviar mensagem VIP</button>
       </div>
@@ -140,6 +144,6 @@
     render();
   }
 
-  window.misticaCustomerVip = { render, ranking: buildRanking, message, copyRanking, whatsapp: vipWhatsapp };
+  window.misticaCustomerVip = { render, ranking: buildRanking, message, copyRanking, whatsapp: vipWhatsapp, averageTicket };
   window.addEventListener("load", mount);
 })();
