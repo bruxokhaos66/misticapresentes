@@ -15,6 +15,7 @@ from backend.product_routes import router as product_router
 from backend.upload_routes import router as upload_router
 from backend.user_sync_routes import router as user_sync_router
 from backend.site_stock_routes import router as site_stock_router
+from backend.system_status_routes import router as system_status_router
 from config import API_URL, DB_PATH, DEFAULT_API_URL, DEFAULT_SERVER_URL, OFFICIAL_DOMAIN, SERVER_URL, hash_password_pbkdf2
 from database.migrations import init_db
 
@@ -50,6 +51,7 @@ app.include_router(site_stock_router)
 app.include_router(order_status_router)
 app.include_router(payment_router)
 app.include_router(upload_router)
+app.include_router(system_status_router)
 
 
 class ProdutoIn(BaseModel):
