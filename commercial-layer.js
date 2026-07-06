@@ -51,6 +51,7 @@ document.addEventListener("DOMContentLoaded", () => {
   loadScriptOnce("siteReadinessScript", "site-readiness.js");
   loadScriptOnce("isisCommerceScript", "isis-commerce.js");
   loadScriptOnce("isisCommandsScript", "isis-commands.js");
+  loadScriptOnce("isisSectionProductsFixScript", "isis-section-products-fix.js");
 
   const adminPanel = document.getElementById("admin");
   if (adminPanel) {
