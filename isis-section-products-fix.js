@@ -1,6 +1,6 @@
 (() => {
-  const version = "20260706-isis-lock-final";
-  const finalPath = "assistente-isis-produtos-final.webp";
+  const version = "20260706-isis-png-final";
+  const finalPath = "isis-humana-xamanica-03-produtos.png";
   const finalSrc = `assets/${finalPath}?v=${version}`;
 
   function ensureStyle() {
