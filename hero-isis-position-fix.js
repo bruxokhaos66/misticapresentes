@@ -34,14 +34,14 @@
         min-height: 0 !important;
         height: auto !important;
         padding: 10px !important;
-        margin-top: clamp(-98px, -5.2vw, -56px) !important;
-        margin-bottom: clamp(-34px, -2vw, -18px) !important;
+        margin-top: clamp(-66px, -3.8vw, -36px) !important;
+        margin-bottom: clamp(-24px, -1.4vw, -12px) !important;
         overflow: hidden !important;
         border-radius: 30px !important;
       }
 
       .hero-visual::before {
-        top: -8% !important;
+        top: -4% !important;
         width: 72% !important;
         opacity: .45 !important;
       }
@@ -92,15 +92,15 @@
 
       @media (min-width: 1400px) {
         .hero-visual {
-          margin-top: -112px !important;
+          margin-top: -74px !important;
         }
       }
 
       @media (max-width: 1280px) and (min-width: 981px) {
         .hero-visual {
           width: min(100%, 410px) !important;
-          margin-top: -64px !important;
-          margin-bottom: -18px !important;
+          margin-top: -40px !important;
+          margin-bottom: -12px !important;
         }
 
         .hero-isis-publicitaria {
