@@ -49,6 +49,47 @@
   background: radial-gradient(circle at 50% 30%, rgba(240,197,106,.13), rgba(3,3,5,.5) 68%);
 }
 
+.mystic-logo-card.hero-card-isis {
+  min-height: 610px;
+  padding: 24px 24px 22px;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 24%, rgba(240,197,106,.16), transparent 36%), linear-gradient(145deg, rgba(12,9,18,.86), rgba(20,31,15,.34));
+}
+
+.hero-isis-img {
+  position: relative;
+  z-index: 2;
+  display: block;
+  width: min(100%, 430px);
+  max-height: 520px;
+  object-fit: contain;
+  margin: 0 auto 18px;
+  border-radius: 30px;
+  filter: drop-shadow(0 32px 70px rgba(0,0,0,.5));
+}
+
+.mystic-logo-card.hero-card-isis strong,
+.mystic-logo-card.hero-card-isis small {
+  position: relative;
+  z-index: 3;
+}
+
+.mystic-logo-card.hero-card-isis strong {
+  font-family: Cinzel, serif;
+  font-size: clamp(1.8rem, 3vw, 3rem);
+  color: #f0c56a;
+}
+
+.mystic-logo-card.hero-card-isis small {
+  display: block;
+  max-width: 360px;
+  margin: 6px auto 0;
+  color: #fff6dc;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
 .isis-human-img {
   position: relative;
   z-index: 2;
@@ -118,6 +159,15 @@
 
   .hero-logo-img {
     width: min(74%, 210px);
+  }
+
+  .mystic-logo-card.hero-card-isis {
+    min-height: 480px;
+    padding: 18px;
+  }
+
+  .hero-isis-img {
+    max-height: 390px;
   }
 
   .isis-panel-image:has(.isis-human-img) {
