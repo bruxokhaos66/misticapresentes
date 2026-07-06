@@ -76,6 +76,28 @@ def test_listagem_musicas_ambiente_responde():
     assert isinstance(data["musicas"], list)
 
 
+def test_upload_musica_ambiente_salva_no_banco():
+    response = client.post(
+        "/api/uploads/musicas",
+        files={"arquivo": ("teste.mp3", b"ID3teste", "audio/mpeg")},
+        data={"nome_base": "teste-ambiente"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["ok"] is True
+    assert data["armazenamento"] == "banco"
+    assert data["url"].startswith("/api/uploads/musicas/arquivo/")
+
+    lista = client.get("/api/uploads/musicas")
+    assert lista.status_code == 200
+    musicas = lista.json()["musicas"]
+    assert any(item.get("url") == data["url"] for item in musicas)
+
+    arquivo = client.get(data["url"])
+    assert arquivo.status_code == 200
+    assert arquivo.content == b"ID3teste"
+
+
 def test_links_audio_ambiente_salva_apenas_audio_direto():
     payload = {
         "links": [
