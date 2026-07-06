@@ -7,7 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const domain = cfg.domain || "misticaesotericos.com.br";
   const params = new URLSearchParams(window.location.search);
   const adminAccess = params.get("admin") === "mistica" || window.location.hash === "#admin-mistica";
-  const assetVersion = "20260706-isis-lock-final";
+  const assetVersion = "20260706-isis-png-final";
   const logoAsset = `assets/logo-mistica-modern.svg?v=${assetVersion}`;
   const heroIsisSources = [
     `assets/isis-humana-xamanica-02-publicitaria.webp?v=${assetVersion}`,
@@ -16,9 +16,9 @@ document.addEventListener("DOMContentLoaded", () => {
     `assets/isis-humana-xamanica.webp?v=${assetVersion}`
   ];
   const sectionIsisSources = [
-    `assets/assistente-isis-produtos-final.webp?v=${assetVersion}`,
-    `./assets/assistente-isis-produtos-final.webp?v=${assetVersion}`,
-    `/assets/assistente-isis-produtos-final.webp?v=${assetVersion}`
+    `assets/isis-humana-xamanica-03-produtos.png?v=${assetVersion}`,
+    `./assets/isis-humana-xamanica-03-produtos.png?v=${assetVersion}`,
+    `/assets/isis-humana-xamanica-03-produtos.png?v=${assetVersion}`
   ];
   const heroIsisAsset = heroIsisSources[0];
   const sectionIsisAsset = sectionIsisSources[0];
