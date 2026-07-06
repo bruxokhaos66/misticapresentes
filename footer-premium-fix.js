@@ -166,10 +166,20 @@
     document.head.appendChild(script);
   }
 
+  function loadAmbientPremiumFix() {
+    if (document.getElementById("ambientPremiumFixScript")) return;
+    const script = document.createElement("script");
+    script.id = "ambientPremiumFixScript";
+    script.defer = true;
+    script.src = "ambient-premium-fix.js?v=20260706-ambient-premium";
+    document.head.appendChild(script);
+  }
+
   function applyFooterPremiumFix() {
     installFooterStyle();
     enhanceFooter();
     loadCatalogPremiumFix();
+    loadAmbientPremiumFix();
   }
 
   if (document.readyState === "loading") {
