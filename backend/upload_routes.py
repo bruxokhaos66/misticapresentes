@@ -6,8 +6,10 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, File, Header, HTTPException, UploadFile
+from fastapi import APIRouter, File, Header, HTTPException, Response, UploadFile
 from pydantic import BaseModel, Field
+
+from backend.database import conectar
 
 router = APIRouter(prefix="/api", tags=["uploads"])
 
@@ -75,6 +77,22 @@ def limpar_links_audio(links: list[str]) -> list[str]:
     return limpos
 
 
+def garantir_tabela_musicas_ambiente(conn):
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS site_musicas_ambiente (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            filename TEXT NOT NULL,
+            content_type TEXT NOT NULL,
+            size_bytes INTEGER NOT NULL,
+            dados BLOB NOT NULL,
+            criado_em TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_site_musicas_ambiente_criado ON site_musicas_ambiente(criado_em)")
+
+
 @router.post("/uploads/produtos")
 async def upload_imagem_produto(
     arquivo: UploadFile = File(...),
@@ -127,23 +145,65 @@ async def upload_musica_ambiente(
 
     ext = ALLOWED_AUDIO_TYPES[content_type]
     nome = f"{limpar_nome(nome_base)}-{uuid4().hex[:10]}{ext}"
-    destino = AUDIO_DIR / nome
-    destino.write_bytes(data)
+    criado_em = datetime.now().isoformat(timespec="seconds")
+
+    try:
+        destino = AUDIO_DIR / nome
+        destino.write_bytes(data)
+    except Exception:
+        pass
+
+    with conectar() as conn:
+        garantir_tabela_musicas_ambiente(conn)
+        cur = conn.execute(
+            """
+            INSERT INTO site_musicas_ambiente (filename, content_type, size_bytes, dados, criado_em)
+            VALUES (?,?,?,?,?)
+            """,
+            (nome, content_type, len(data), data, criado_em),
+        )
+        conn.commit()
+        musica_id = int(cur.lastrowid)
 
     return {
         "ok": True,
+        "id": musica_id,
         "filename": nome,
         "content_type": content_type,
         "size_bytes": len(data),
-        "url": f"/uploads/musicas/{nome}",
-        "data_hora": datetime.now().isoformat(timespec="seconds"),
+        "url": f"/api/uploads/musicas/arquivo/{musica_id}",
+        "data_hora": criado_em,
+        "armazenamento": "banco",
     }
 
 
 @router.get("/uploads/musicas")
 def listar_musicas_ambiente():
     musicas = []
-    if AUDIO_DIR.exists():
+    with conectar() as conn:
+        garantir_tabela_musicas_ambiente(conn)
+        rows = conn.execute(
+            """
+            SELECT id, filename, content_type, size_bytes, criado_em
+            FROM site_musicas_ambiente
+            ORDER BY id DESC
+            LIMIT 30
+            """
+        ).fetchall()
+        for row in rows:
+            musicas.append(
+                {
+                    "id": row["id"],
+                    "filename": row["filename"],
+                    "content_type": row["content_type"],
+                    "size_bytes": row["size_bytes"],
+                    "modificado_em": row["criado_em"],
+                    "url": f"/api/uploads/musicas/arquivo/{row['id']}",
+                    "armazenamento": "banco",
+                }
+            )
+
+    if not musicas and AUDIO_DIR.exists():
         for arquivo in sorted(AUDIO_DIR.iterdir(), key=lambda item: item.stat().st_mtime, reverse=True):
             if not arquivo.is_file() or arquivo.name == AUDIO_LINKS_FILE.name or arquivo.suffix.lower() not in {".mp3", ".wav", ".ogg", ".webm"}:
                 continue
@@ -154,14 +214,43 @@ def listar_musicas_ambiente():
                     "url": f"/uploads/musicas/{arquivo.name}",
                     "size_bytes": stat.st_size,
                     "modificado_em": datetime.fromtimestamp(stat.st_mtime).isoformat(timespec="seconds"),
+                    "armazenamento": "arquivo",
                 }
             )
+
     return {
         "ok": True,
         "musicas": musicas[:30],
         "total": len(musicas),
         "data_hora": datetime.now().isoformat(timespec="seconds"),
     }
+
+
+@router.get("/uploads/musicas/arquivo/{musica_id}")
+def obter_musica_ambiente(musica_id: int):
+    with conectar() as conn:
+        garantir_tabela_musicas_ambiente(conn)
+        row = conn.execute(
+            """
+            SELECT filename, content_type, dados
+            FROM site_musicas_ambiente
+            WHERE id=?
+            """,
+            (musica_id,),
+        ).fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Música não encontrada.")
+
+    return Response(
+        content=row["dados"],
+        media_type=row["content_type"],
+        headers={
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "public, max-age=3600",
+            "Content-Disposition": f"inline; filename={row['filename']}",
+        },
+    )
 
 
 @router.get("/uploads/musicas/links")
