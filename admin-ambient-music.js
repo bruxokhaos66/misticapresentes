@@ -2,6 +2,7 @@
   const config = window.misticaSiteConfig || {};
   const API_BASE = String(config.apiBaseUrl || "https://api.misticaesotericos.com.br").replace(/\/$/, "");
   const styleId = "adminAmbientMusicStyle";
+  const MAX_AUDIO_BYTES = 30 * 1024 * 1024;
 
   function isAdminView() {
     return window.location.search.includes("admin=mistica") || window.location.hash.includes("admin-mistica") || document.body?.classList.contains("admin-mode") || document.querySelector("#adminContent:not([hidden])");
@@ -11,6 +12,13 @@
     const headers = {};
     if (config.siteApiKey) headers["X-Mistica-Api-Key"] = config.siteApiKey;
     return headers;
+  }
+
+  function formatBytes(bytes) {
+    const value = Number(bytes) || 0;
+    if (value >= 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`;
+    if (value >= 1024) return `${Math.round(value / 1024)} KB`;
+    return `${value} B`;
   }
 
   function installStyle() {
@@ -71,6 +79,22 @@
         color: #d9ccb5;
         font-size: .9rem;
       }
+
+      .admin-ambient-progress-wrap {
+        width: min(460px, 100%);
+        height: 10px;
+        border: 1px solid rgba(240,197,106,.28);
+        border-radius: 999px;
+        overflow: hidden;
+        background: rgba(0,0,0,.22);
+      }
+
+      .admin-ambient-progress-bar {
+        width: 0%;
+        height: 100%;
+        background: linear-gradient(135deg, #f7d77f, #b8c977);
+        transition: width .18s ease;
+      }
     `;
     document.head.appendChild(style);
   }
@@ -92,8 +116,8 @@
       if (status) status.textContent = `${musicas.length} música(s) encontrada(s) na API.`;
       if (list) {
         list.innerHTML = musicas.length
-          ? musicas.slice(0, 12).map((item) => `<span>🎵 ${item.filename || "música"} • ${Math.round((item.size_bytes || 0) / 1024)} KB</span>`).join("")
-          : "<span>Nenhuma música encontrada. Envie novamente após o deploy da correção.</span>";
+          ? musicas.slice(0, 12).map((item) => `<span>🎵 ${item.filename || "música"} • ${formatBytes(item.size_bytes || 0)}</span>`).join("")
+          : "<span>Nenhuma música encontrada. Envie uma música e aguarde a confirmação.</span>";
       }
       return musicas;
     } catch (error) {
@@ -103,13 +127,43 @@
     }
   }
 
+  function uploadWithProgress(url, form, headers, onProgress) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", url, true);
+      xhr.timeout = 90000;
+      Object.entries(headers || {}).forEach(([key, value]) => xhr.setRequestHeader(key, value));
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable && onProgress) {
+          onProgress(Math.round((event.loaded / event.total) * 100));
+        }
+      };
+      xhr.onload = () => {
+        let data = {};
+        try { data = JSON.parse(xhr.responseText || "{}"); } catch (error) { data = {}; }
+        if (xhr.status >= 200 && xhr.status < 300) resolve(data);
+        else reject(new Error(data.detail || `API respondeu ${xhr.status}`));
+      };
+      xhr.onerror = () => reject(new Error("Falha de conexão com a API."));
+      xhr.ontimeout = () => reject(new Error("O envio demorou demais. Tente um MP3 menor ou confira a conexão."));
+      xhr.send(form);
+    });
+  }
+
   async function uploadTrack(panel) {
     const input = panel.querySelector("[data-admin-ambient-file]");
     const status = panel.querySelector("[data-admin-ambient-status]");
+    const button = panel.querySelector("[data-admin-ambient-upload]");
+    const progress = panel.querySelector("[data-admin-ambient-progress]");
     const file = input?.files?.[0];
 
     if (!file) {
       if (status) status.textContent = "Selecione uma música antes de enviar.";
+      return;
+    }
+
+    if (file.size > MAX_AUDIO_BYTES) {
+      if (status) status.textContent = `Arquivo muito grande: ${formatBytes(file.size)}. Limite: 30 MB.`;
       return;
     }
 
@@ -118,19 +172,21 @@
     form.append("nome_base", file.name.replace(/\.[^.]+$/, "") || "ambiente-xamanico");
 
     try {
-      if (status) status.textContent = "Enviando música para a API...";
-      const response = await fetch(`${API_BASE}/api/uploads/musicas`, {
-        method: "POST",
-        headers: apiHeaders(),
-        body: form,
+      if (button) button.disabled = true;
+      if (progress) progress.style.width = "0%";
+      if (status) status.textContent = `Enviando ${file.name} (${formatBytes(file.size)})...`;
+      const data = await uploadWithProgress(`${API_BASE}/api/uploads/musicas`, form, apiHeaders(), (percent) => {
+        if (progress) progress.style.width = `${percent}%`;
+        if (status) status.textContent = `Enviando ${file.name}: ${percent}%`;
       });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.detail || `API respondeu ${response.status}`);
       if (status) status.textContent = `Música enviada: ${data.filename || file.name}`;
+      if (progress) progress.style.width = "100%";
       input.value = "";
       await listTracks(panel);
     } catch (error) {
       if (status) status.textContent = `Falha ao enviar: ${error.message || "erro desconhecido"}`;
+    } finally {
+      if (button) button.disabled = false;
     }
   }
 
@@ -147,13 +203,14 @@
     panel.innerHTML = `
       <h3>Músicas do ambiente xamânico</h3>
       <p>Envie músicas próprias, autorizadas ou livres para uso comercial. Elas serão usadas no player do site quando o cliente ativar o ambiente xamânico.</p>
-      <input type="file" accept="audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/webm" data-admin-ambient-file>
+      <input type="file" accept="audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/webm,audio/mp4,audio/x-m4a" data-admin-ambient-file>
       <div class="admin-ambient-actions">
         <button class="btn" type="button" data-admin-ambient-upload>Enviar música</button>
         <button class="btn btn-secondary" type="button" data-admin-ambient-refresh>Atualizar lista</button>
         <span class="admin-ambient-status" data-admin-ambient-status>Pronto para enviar.</span>
       </div>
-      <small>Formatos aceitos: MP3, WAV, OGG e WEBM. Limite atual: 18 MB por arquivo.</small>
+      <div class="admin-ambient-progress-wrap"><div class="admin-ambient-progress-bar" data-admin-ambient-progress></div></div>
+      <small>Formatos aceitos: MP3, WAV, OGG, WEBM e M4A. Limite atual: 30 MB por arquivo.</small>
       <div class="admin-ambient-list" data-admin-ambient-list></div>
     `;
 
