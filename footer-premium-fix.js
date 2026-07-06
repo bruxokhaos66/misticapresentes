@@ -207,11 +207,11 @@
   }
 
   function loadAmbientPlaylistAdmin() {
-    loadScriptOnce("ambientPlaylistAdminScript", "ambient-playlist-admin.js?v=20260706-playlist-ambiente-v2");
+    loadScriptOnce("ambientPlaylistAdminScript", "ambient-playlist-admin.js?v=20260706-playlist-ambiente-v3");
   }
 
   function loadAmbientPlayerFix() {
-    loadScriptOnce("ambientPlayerFixScript", "ambient-player-fix.js?v=20260706-player-volume");
+    loadScriptOnce("ambientPlayerFixScript", "ambient-player-fix.js?v=20260706-player-unico");
   }
 
   function applyFooterPremiumFix() {
