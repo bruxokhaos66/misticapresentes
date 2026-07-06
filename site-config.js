@@ -13,3 +13,24 @@ window.misticaSiteConfig = {
   headerSubtitle: "Xamanismo • Cristais • Aromas",
   promoText: "Transforme sua energia. Eleve sua essência."
 };
+
+(() => {
+  const cfg = window.misticaSiteConfig || {};
+  const productionMode = cfg.serverMode === "production" || cfg.storageMode === "api_first" || cfg.usePublicDomainAccess === true;
+  if (!productionMode || document.getElementById("misticaProductionGuardScript")) return;
+
+  const loadGuard = () => {
+    if (document.getElementById("misticaProductionGuardScript")) return;
+    const script = document.createElement("script");
+    script.id = "misticaProductionGuardScript";
+    script.src = "site-production-guard.js?v=20260706-api-guard";
+    script.defer = true;
+    document.head.appendChild(script);
+  };
+
+  if (document.readyState === "loading") {
+    window.addEventListener("DOMContentLoaded", loadGuard, { once: true });
+  } else {
+    loadGuard();
+  }
+})();
