@@ -7,8 +7,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const domain = cfg.domain || "misticaesotericos.com.br";
   const params = new URLSearchParams(window.location.search);
   const adminAccess = params.get("admin") === "mistica" || window.location.hash === "#admin-mistica";
-  const assetVersion = "20260706-ready-sell";
-  const logoAsset = `assets/logo-mistica-final.webp?v=${assetVersion}`;
+  const assetVersion = "20260706-modern-icon";
+  const logoAsset = `assets/logo-mistica-modern.svg?v=${assetVersion}`;
   const isisSources = [
     `assets/isis-humana-xamanica.webp?v=${assetVersion}`,
     `./assets/isis-humana-xamanica.webp?v=${assetVersion}`,
@@ -22,7 +22,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll('link[rel~="icon"]').forEach(link => link.remove());
   const favicon = document.createElement("link");
   favicon.rel = "icon";
-  favicon.type = "image/webp";
+  favicon.type = "image/svg+xml";
   favicon.href = logoAsset;
   document.head.appendChild(favicon);
 
