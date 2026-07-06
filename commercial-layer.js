@@ -7,7 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const domain = cfg.domain || "misticaesotericos.com.br";
   const params = new URLSearchParams(window.location.search);
   const adminAccess = params.get("admin") === "mistica" || window.location.hash === "#admin-mistica";
-  const assetVersion = "20260706-isis-png-hardlock";
+  const assetVersion = "20260706-commercial-premium";
   const logoAsset = `assets/logo-mistica-modern.svg?v=${assetVersion}`;
   const finalSectionPath = "isis-humana-xamanica-03-produtos.png";
   const finalSectionSrc = `assets/${finalSectionPath}?v=${assetVersion}`;
@@ -108,6 +108,7 @@ document.addEventListener("DOMContentLoaded", () => {
   loadScriptOnce("isisCommerceScript", "isis-commerce.js");
   loadScriptOnce("isisCommandsScript", "isis-commands.js");
   loadScriptOnce("isisSectionProductsLockFinalScript", "isis-section-products-fix.js");
+  loadScriptOnce("commercialPremiumScript", "commercial-premium.js");
 
   const adminPanel = document.getElementById("admin");
   if (adminPanel) {
@@ -179,19 +180,19 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   const heroTitle = document.querySelector(".hero-copy h1");
-  if (heroTitle) heroTitle.textContent = "Produtos místicos para proteção, energia e bem-estar";
+  if (heroTitle) heroTitle.textContent = "Presentes místicos que encantam, protegem e transformam ambientes";
 
   const heroText = document.querySelector(".hero-text");
-  if (heroText) heroText.textContent = "Cristais, incensos, velas, aromas e presentes com significado para transformar ambientes, rituais e momentos especiais.";
+  if (heroText) heroText.textContent = "Cristais, incensos, velas, aromas, banhos e kits especiais para quem busca beleza, significado e boas energias em cada detalhe.";
 
   const heroEyebrow = document.querySelector(".hero-copy .eyebrow");
-  if (heroEyebrow) heroEyebrow.textContent = "Mística Presentes • Pinhalzinho-SC";
+  if (heroEyebrow) heroEyebrow.textContent = "Mística Presentes • Curadoria espiritual em Pinhalzinho-SC";
 
   const productTitle = document.querySelector("#produtos .section-title h2");
-  if (productTitle) productTitle.textContent = "Produtos em destaque";
+  if (productTitle) productTitle.textContent = "Escolha por energia, intenção ou presente";
 
   const productText = document.querySelector("#produtos .section-title p:last-child");
-  if (productText) productText.textContent = "Escolha seus artigos favoritos, adicione ao carrinho e envie o pedido pelo WhatsApp.";
+  if (productText) productText.textContent = "Produtos organizados para facilitar a compra: escolha, coloque no carrinho e finalize pelo WhatsApp.";
 
   const footerContact = document.querySelector(".footer-grid div:nth-child(2)");
   if (footerContact) {
