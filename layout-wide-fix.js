@@ -42,15 +42,15 @@
       }
 
       .hero-section {
-        padding-top: clamp(44px, 5vw, 78px) !important;
-        padding-bottom: clamp(44px, 5vw, 76px) !important;
+        padding-top: clamp(38px, 4.4vw, 64px) !important;
+        padding-bottom: clamp(34px, 4.2vw, 62px) !important;
       }
 
       .hero-grid {
         display: grid !important;
-        grid-template-columns: minmax(0, 1.04fr) minmax(380px, .76fr) !important;
+        grid-template-columns: minmax(0, 1.04fr) minmax(360px, .74fr) !important;
         gap: clamp(42px, 5.4vw, 92px) !important;
-        align-items: center !important;
+        align-items: start !important;
       }
 
       .hero-copy {
@@ -77,48 +77,71 @@
 
       .hero-visual {
         justify-self: center !important;
-        width: min(100%, 500px) !important;
+        align-self: start !important;
+        width: min(100%, 470px) !important;
         min-height: 0 !important;
         height: auto !important;
-        padding: clamp(16px, 1.8vw, 24px) !important;
-        align-self: center !important;
-        border-radius: 32px !important;
+        margin-top: clamp(8px, 1.1vw, 18px) !important;
+        padding: clamp(14px, 1.45vw, 22px) !important;
+        border-radius: 34px !important;
+        background:
+          radial-gradient(circle at 50% 16%, rgba(240,197,106,.14), transparent 34%),
+          radial-gradient(circle at 70% 72%, rgba(83,107,55,.18), transparent 36%),
+          linear-gradient(145deg, rgba(7,9,7,.96), rgba(38,21,48,.82)) !important;
       }
 
       .hero-visual::before {
-        width: 78% !important;
+        width: 72% !important;
+        opacity: .55 !important;
+        top: 7% !important;
+      }
+
+      .visual-orbit.one {
+        width: 74% !important;
+        opacity: .65 !important;
+      }
+
+      .visual-orbit.two {
+        width: 60% !important;
+        opacity: .6 !important;
       }
 
       .mystic-logo-card.hero-card-isis,
       .mystic-logo-card.hero-card-isis-publicitaria {
         width: 100% !important;
-        max-width: 410px !important;
+        max-width: 398px !important;
         min-height: 0 !important;
         height: auto !important;
-        padding: 16px 16px 18px !important;
-        align-self: center !important;
+        padding: 14px 14px 16px !important;
+        align-self: start !important;
         justify-self: center !important;
         justify-content: end !important;
-        gap: 7px !important;
+        gap: 6px !important;
         border-radius: 28px !important;
+        background:
+          linear-gradient(180deg, rgba(255,248,230,.055), rgba(3,3,5,.38)),
+          rgba(3,3,5,.42) !important;
+        box-shadow: 0 24px 70px rgba(0,0,0,.38) !important;
       }
 
       .hero-isis-publicitaria {
-        width: min(100%, 390px) !important;
-        max-height: clamp(330px, 27vw, 430px) !important;
+        width: min(100%, 382px) !important;
+        max-height: clamp(350px, 29vw, 455px) !important;
         object-fit: contain !important;
+        object-position: center top !important;
         margin: 0 auto !important;
+        filter: drop-shadow(0 24px 46px rgba(0,0,0,.42)) !important;
       }
 
       .mystic-logo-card.hero-card-isis strong {
-        font-size: clamp(1.35rem, 1.8vw, 2rem) !important;
+        font-size: clamp(1.32rem, 1.7vw, 1.9rem) !important;
         line-height: 1.1 !important;
       }
 
       .mystic-logo-card.hero-card-isis small {
         max-width: 300px !important;
-        font-size: .68rem !important;
-        line-height: 1.35 !important;
+        font-size: .66rem !important;
+        line-height: 1.32 !important;
         letter-spacing: .08em !important;
       }
 
@@ -297,7 +320,7 @@
         }
 
         .hero-grid {
-          grid-template-columns: minmax(0, 1fr) minmax(330px, .82fr) !important;
+          grid-template-columns: minmax(0, 1fr) minmax(330px, .8fr) !important;
           gap: clamp(30px, 4vw, 58px) !important;
         }
 
@@ -306,7 +329,8 @@
         }
 
         .hero-visual {
-          width: min(100%, 460px) !important;
+          width: min(100%, 440px) !important;
+          margin-top: 6px !important;
         }
 
         .hero-isis-publicitaria {
