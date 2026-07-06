@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Ícone Mística Presentes">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="58%">
+      <stop offset="0" stop-color="#223019"/>
+      <stop offset="0.45" stop-color="#09090c"/>
+      <stop offset="1" stop-color="#050507"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="80" y1="40" x2="430" y2="480" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff2bd"/>
+      <stop offset="0.42" stop-color="#f0c56a"/>
+      <stop offset="1" stop-color="#a77729"/>
+    </linearGradient>
+    <linearGradient id="moss" x1="130" y1="170" x2="390" y2="390" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#b8c977"/>
+      <stop offset="1" stop-color="#536b37"/>
+    </linearGradient>
+    <filter id="glow" x="-45%" y="-45%" width="190%" height="190%">
+      <feGaussianBlur stdDeviation="13" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0.94  0 1 0 0 0.77  0 0 1 0 0.34  0 0 0 0.75 0"/>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <circle cx="256" cy="256" r="222" fill="none" stroke="#f0c56a" stroke-width="22" opacity="0.18" filter="url(#glow)"/>
+  <circle cx="256" cy="256" r="205" fill="url(#bg)" stroke="url(#gold)" stroke-width="14"/>
+  <circle cx="256" cy="256" r="177" fill="none" stroke="#b8c977" stroke-width="7" opacity="0.72"/>
+  <circle cx="256" cy="256" r="143" fill="none" stroke="#f0c56a" stroke-width="3" opacity="0.45"/>
+
+  <path d="M104 264a152 152 0 0 1 304 0" fill="none" stroke="url(#gold)" stroke-width="10" stroke-linecap="round" opacity="0.82"/>
+  <path d="M121 304a143 143 0 0 0 270 0" fill="none" stroke="#f0c56a" stroke-width="7" stroke-linecap="round" opacity="0.68"/>
+  <path d="M152 365a126 126 0 0 0 208 0" fill="none" stroke="#b8c977" stroke-width="5" stroke-linecap="round" opacity="0.72"/>
+
+  <path d="M269 126c-45 15-78 57-78 107 0 58 44 106 100 112-21 17-48 27-78 27-69 0-125-56-125-125 0-61 44-112 101-123 28-5 56-1 80 2Z" fill="url(#gold)"/>
+  <circle cx="291" cy="227" r="82" fill="#08080b"/>
+
+  <path d="M256 248v107" stroke="url(#gold)" stroke-width="10" stroke-linecap="round"/>
+  <path d="M254 298c-39-43-83-48-122-27 18 49 64 69 122 27Z" fill="url(#moss)" stroke="url(#gold)" stroke-width="5"/>
+  <path d="M258 298c39-43 83-48 122-27-18 49-64 69-122 27Z" fill="url(#moss)" stroke="url(#gold)" stroke-width="5"/>
+  <path d="M256 342 304 394 256 462 208 394Z" fill="url(#gold)" stroke="#fff2bd" stroke-width="4"/>
+
+  <path d="M256 48 269 91 312 104 269 117 256 160 243 117 200 104 243 91Z" fill="#fff2bd"/>
+  <path d="M405 167 412 190 435 197 412 204 405 227 398 204 375 197 398 190Z" fill="#f0c56a"/>
+  <path d="M123 177 130 200 153 207 130 214 123 237 116 214 93 207 116 200Z" fill="#f0c56a"/>
+</svg>
