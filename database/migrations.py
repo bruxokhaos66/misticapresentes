@@ -40,6 +40,7 @@ def init_db():
         pass
 
     query_db("CREATE TABLE IF NOT EXISTS logs (id INTEGER PRIMARY KEY, usuario TEXT, acao TEXT, detalhes TEXT, data_hora TEXT)", commit=True)
+    query_db("CREATE TABLE IF NOT EXISTS login_auditoria (id INTEGER PRIMARY KEY, login TEXT, sucesso INTEGER DEFAULT 0, motivo TEXT, ip TEXT, user_agent TEXT, data_hora TEXT)", commit=True)
     query_db("CREATE TABLE IF NOT EXISTS vendas_itens (id INTEGER PRIMARY KEY, venda_id INTEGER, codigo_p TEXT, nome_p TEXT, quantidade INTEGER, custo_unitario REAL DEFAULT 0.0, valor_unitario REAL DEFAULT 0.0, valor_total REAL DEFAULT 0.0)", commit=True)
     query_db("CREATE TABLE IF NOT EXISTS fornecedores (id INTEGER PRIMARY KEY, nome TEXT, whatsapp TEXT, cidade TEXT, observacoes TEXT)", commit=True)
     query_db("CREATE TABLE IF NOT EXISTS contas_a_pagar (id INTEGER PRIMARY KEY, descricao TEXT, valor REAL, data_vencimento TEXT, status TEXT DEFAULT 'Pendente')", commit=True)
@@ -60,6 +61,8 @@ def init_db():
         "CREATE INDEX IF NOT EXISTS idx_isis_logs_data ON isis_logs(data_hora)",
         "CREATE INDEX IF NOT EXISTS idx_pesquisas_online_data ON pesquisas_online(data_hora)",
         "CREATE INDEX IF NOT EXISTS idx_encomendas_status ON encomendas(status)",
+        "CREATE INDEX IF NOT EXISTS idx_login_auditoria_data ON login_auditoria(data_hora)",
+        "CREATE INDEX IF NOT EXISTS idx_login_auditoria_login ON login_auditoria(login)",
     ]:
         try:
             query_db(idx, commit=True)
