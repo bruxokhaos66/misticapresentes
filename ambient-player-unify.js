@@ -42,6 +42,11 @@
       [data-unified-player-panel] {
         width: 100%;
         margin-top: 8px;
+        display: none;
+      }
+
+      [data-unified-player-panel][data-open="true"] {
+        display: block;
       }
 
       .ambient-unified-actions {
@@ -91,7 +96,6 @@
       // Mantém lista anterior se a API oscilar.
     }
     if (next.length) sources = next;
-    updateCount();
     return sources;
   }
 
@@ -108,6 +112,7 @@
     if (!panel) {
       panel = document.createElement("div");
       panel.dataset.unifiedPlayerPanel = "true";
+      panel.dataset.open = "false";
       panel.innerHTML = `
         <div class="ambient-unified-actions">
           <button class="btn btn-secondary" type="button" data-unified-next>Próxima música</button>
@@ -115,9 +120,8 @@
             <input class="ambient-unified-volume" type="range" min="0" max="1" step="0.01" value="${savedVolume()}" data-unified-volume>
             <span data-unified-volume-label>Volume ${Math.round(savedVolume() * 100)}%</span>
           </label>
-          <span class="ambient-unified-status" data-unified-status>Carregando músicas...</span>
+          <span class="ambient-unified-status" data-unified-status>Música pronta.</span>
         </div>
-        <small class="privacy-note" style="display:block;margin-top:8px;" data-unified-count>Verificando músicas...</small>
       `;
       const controls = parent.querySelector(".ambient-controls") || parent;
       controls.appendChild(panel);
@@ -125,6 +129,11 @@
       panel.querySelector("[data-unified-volume]")?.addEventListener("input", (event) => setVolume(event.target.value));
     }
     return panel;
+  }
+
+  function openDrawer(open) {
+    const panel = ensurePanel();
+    if (panel) panel.dataset.open = open ? "true" : "false";
   }
 
   function ensureAudio() {
@@ -142,11 +151,6 @@
     return audio;
   }
 
-  function updateCount() {
-    const count = document.querySelector("[data-unified-count]");
-    if (count) count.textContent = `Encontradas: ${sources.length} música(s).`;
-  }
-
   function updateSource() {
     const player = ensureAudio();
     if (!player || !sources.length) return null;
@@ -157,11 +161,11 @@
       player.load();
     }
     setVolume(savedVolume());
-    updateCount();
     return player;
   }
 
   async function play() {
+    openDrawer(true);
     await loadSources();
     const player = updateSource();
     if (!player) {
@@ -198,6 +202,7 @@
         if (button.getAttribute("aria-pressed") === "true") play();
         else {
           if (audio) audio.pause();
+          openDrawer(false);
           statusText("Aguardando ativação.");
         }
       }, 80);
@@ -208,7 +213,6 @@
     installStyle();
     ensurePanel();
     await loadSources();
-    updateSource();
     hookMainButton();
   }
 
