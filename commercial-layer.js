@@ -7,7 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const domain = cfg.domain || "misticaesotericos.com.br";
   const params = new URLSearchParams(window.location.search);
   const adminAccess = params.get("admin") === "mistica" || window.location.hash === "#admin-mistica";
-  const assetVersion = "20260706-hero-isis-png-lock";
+  const assetVersion = "20260706-audit-visual-audio-isis";
   const logoAsset = `assets/logo-mistica-modern.svg?v=${assetVersion}`;
   const finalSectionPath = "isis-humana-xamanica-03-produtos.png";
   const finalSectionSrc = `assets/${finalSectionPath}?v=${assetVersion}`;
@@ -63,7 +63,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     img.className = "isis-human-img isis-human-produtos";
-    img.alt = "Isis da Mística Presentes apresentando produtos";
+    img.alt = "Isis da Mística Presentes apresentando produtos xamânicos";
     img.width = 720;
     img.height = 900;
     img.loading = "eager";
@@ -78,7 +78,7 @@ document.addEventListener("DOMContentLoaded", () => {
       text = document.createElement("p");
       panel.appendChild(text);
     }
-    text.textContent = "Isis, presença misteriosa e xamânica para guiar escolhas, produtos e atendimento da loja.";
+    text.textContent = "Isis apresenta produtos xamânicos, aromas, banhos, velas e presentes com orientação clara para a escolha do cliente.";
   }
 
   document.querySelectorAll('link[rel~="icon"]').forEach(link => link.remove());
@@ -110,6 +110,7 @@ document.addEventListener("DOMContentLoaded", () => {
   loadScriptOnce("isisCommandsScript", "isis-commands.js");
   loadScriptOnce("isisSectionProductsLockFinalScript", "isis-section-products-fix.js");
   loadScriptOnce("commercialPremiumScript", "commercial-premium.js");
+  loadScriptOnce("ambientExperienceScript", "ambient-experience.js");
 
   const adminPanel = document.getElementById("admin");
   if (adminPanel) {
@@ -140,7 +141,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const heroCard = document.querySelector(".mystic-logo-card");
   if (heroCard) {
     heroCard.classList.add("hero-card-isis", "hero-card-isis-publicitaria");
-    heroCard.innerHTML = `<img class="hero-isis-img hero-isis-publicitaria" src="${heroIsisAsset}" alt="Isis da Mística Presentes" width="720" height="900" loading="eager" decoding="async"><strong>Isis</strong><small>Sua guia espiritual para escolhas conscientes</small>`;
+    heroCard.innerHTML = `<img class="hero-isis-img hero-isis-publicitaria" src="${heroIsisAsset}" alt="Isis da Mística Presentes em destaque publicitário" width="720" height="900" loading="eager" decoding="async"><strong>Isis</strong><small>Guia de presentes, proteção e boas energias</small>`;
     const heroIsis = heroCard.querySelector("img");
     let heroAttempt = 0;
     heroIsis.onload = () => {
@@ -181,19 +182,44 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   const heroTitle = document.querySelector(".hero-copy h1");
-  if (heroTitle) heroTitle.textContent = "Presentes místicos que encantam, protegem e transformam ambientes";
+  if (heroTitle) heroTitle.textContent = "Presentes místicos fáceis de escolher, comprar e enviar pelo WhatsApp";
 
   const heroText = document.querySelector(".hero-text");
-  if (heroText) heroText.textContent = "Cristais, incensos, velas, aromas, banhos e kits especiais para quem busca beleza, significado e boas energias em cada detalhe.";
+  if (heroText) heroText.textContent = "Cristais, incensos, velas, aromas, banhos e kits especiais organizados para o cliente entender rápido, escolher com segurança e finalizar o pedido em poucos cliques.";
 
   const heroEyebrow = document.querySelector(".hero-copy .eyebrow");
-  if (heroEyebrow) heroEyebrow.textContent = "Mística Presentes • Curadoria espiritual em Pinhalzinho-SC";
+  if (heroEyebrow) heroEyebrow.textContent = "Mística Presentes • Atendimento espiritual e comercial em Pinhalzinho-SC";
+
+  const trustItems = document.querySelectorAll(".trust-row span");
+  const trustTexts = [
+    "<strong>Escolha simples</strong> produtos separados por intenção, presente e energia.",
+    "<strong>Pix e WhatsApp</strong> carrinho claro, QR Code e envio do pedido em poucos cliques.",
+    "<strong>Atendimento local</strong> dúvidas respondidas antes da retirada ou entrega combinada."
+  ];
+  trustItems.forEach((item, index) => {
+    if (trustTexts[index]) item.innerHTML = trustTexts[index];
+  });
+
+  const categoryTitle = document.querySelector("#categorias .section-title h2");
+  if (categoryTitle) categoryTitle.textContent = "Categorias claras para o cliente encontrar rápido";
+
+  const categoryText = document.querySelector("#categorias .section-title p:last-child");
+  if (categoryText) categoryText.textContent = "A vitrine destaca os grupos mais procurados e ajuda o cliente a comprar sem confusão.";
 
   const productTitle = document.querySelector("#produtos .section-title h2");
-  if (productTitle) productTitle.textContent = "Escolha por energia, intenção ou presente";
+  if (productTitle) productTitle.textContent = "Produtos organizados por intenção e presente";
 
   const productText = document.querySelector("#produtos .section-title p:last-child");
-  if (productText) productText.textContent = "Produtos organizados para facilitar a compra: escolha, coloque no carrinho e finalize pelo WhatsApp.";
+  if (productText) productText.textContent = "Adicione ao carrinho, confira o total, gere Pix e envie o pedido pelo WhatsApp da loja.";
+
+  const checkoutTitle = document.querySelector("#checkout .form-panel h2");
+  if (checkoutTitle) checkoutTitle.textContent = "Carrinho claro para finalizar o pedido";
+
+  const isisTitle = document.querySelector(".isis-chat-panel h2");
+  if (isisTitle) isisTitle.textContent = "Isis ajuda o cliente a escolher";
+
+  const isisNote = document.querySelector(".isis-chat-panel .privacy-note");
+  if (isisNote) isisNote.textContent = "Assistente preparada para orientar presentes, produtos xamânicos, aromas, estoque e sugestões de compra de forma simples.";
 
   const footerContact = document.querySelector(".footer-grid div:nth-child(2)");
   if (footerContact) {
@@ -202,6 +228,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const footerPublish = document.querySelector(".footer-grid div:nth-child(3)");
   if (footerPublish) {
-    footerPublish.innerHTML = `<h3>Divulgação</h3><p>Produtos para espiritualidade, bem-estar, proteção e energias positivas.</p><p>${domain}</p>`;
+    footerPublish.innerHTML = `<h3>Experiência</h3><p>Visual xamânico premium, textos mais claros e opção de música ambiente ativada pelo visitante.</p><p>${domain}</p>`;
   }
 });
