@@ -56,6 +56,18 @@
   background: radial-gradient(circle at 50% 24%, rgba(240,197,106,.16), transparent 36%), linear-gradient(145deg, rgba(12,9,18,.86), rgba(20,31,15,.34));
 }
 
+.mystic-logo-card.hero-card-isis-publicitaria {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 660px;
+  padding-top: 18px;
+  background:
+    radial-gradient(circle at 55% 18%, rgba(240,197,106,.20), transparent 28%),
+    radial-gradient(circle at 50% 65%, rgba(83,107,55,.22), transparent 44%),
+    linear-gradient(145deg, rgba(8,7,13,.92), rgba(20,31,15,.44));
+}
+
 .hero-isis-img {
   position: relative;
   z-index: 2;
@@ -66,6 +78,15 @@
   margin: 0 auto 18px;
   border-radius: 30px;
   filter: drop-shadow(0 32px 70px rgba(0,0,0,.5));
+}
+
+.hero-isis-publicitaria {
+  width: min(100%, 440px);
+  max-height: 570px;
+  margin: 0 auto -6px;
+  border-radius: 0;
+  object-fit: contain;
+  filter: drop-shadow(0 34px 78px rgba(0,0,0,.58));
 }
 
 .mystic-logo-card.hero-card-isis strong,
@@ -100,9 +121,21 @@
   filter: drop-shadow(0 32px 70px rgba(0,0,0,.5));
 }
 
+.isis-human-publicitaria {
+  width: min(100%, 460px);
+  max-height: 660px;
+  border-radius: 0;
+  object-fit: contain;
+}
+
 .isis-panel-image:has(.isis-human-img) {
   min-height: 560px;
   padding: 24px 24px 18px;
+}
+
+.isis-panel-image:has(.isis-human-publicitaria) {
+  min-height: 640px;
+  padding-top: 10px;
 }
 
 .isis-panel-image:has(.isis-human-img) p {
@@ -225,16 +258,32 @@
     padding: 18px;
   }
 
+  .mystic-logo-card.hero-card-isis-publicitaria {
+    min-height: 560px;
+  }
+
   .hero-isis-img {
     max-height: 390px;
+  }
+
+  .hero-isis-publicitaria {
+    max-height: 470px;
   }
 
   .isis-panel-image:has(.isis-human-img) {
     min-height: 430px;
   }
 
+  .isis-panel-image:has(.isis-human-publicitaria) {
+    min-height: 560px;
+  }
+
   .isis-human-img {
     max-height: 430px;
+  }
+
+  .isis-human-publicitaria {
+    max-height: 500px;
   }
 
   .how-to-buy-grid {
