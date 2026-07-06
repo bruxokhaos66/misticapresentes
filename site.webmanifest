@@ -1,12 +1,20 @@
 {
   "name": "Mística Presentes",
   "short_name": "Mística",
-  "description": "Incensos, cristais, velas ritualísticas, aromaterapia, banhos de ervas e presentes com significado.",
+  "description": "Cristais, incensos, velas, aromas, banhos e presentes com significado em Pinhalzinho-SC.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#090d08",
-  "theme_color": "#172012",
+  "background_color": "#08070d",
+  "theme_color": "#08070d",
+  "lang": "pt-BR",
   "icons": [
+    {
+      "src": "/assets/logo-mistica-modern.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
     {
       "src": "/assets/logo-mistica-final.webp",
       "sizes": "512x512",
