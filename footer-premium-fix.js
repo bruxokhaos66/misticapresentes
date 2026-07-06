@@ -198,6 +198,10 @@
     loadScriptOnce("performanceImagesFixScript", "performance-images-fix.js?v=20260706-performance-images");
   }
 
+  function loadPerformanceSectionsFix() {
+    loadScriptOnce("performanceSectionsFixScript", "performance-sections-fix.js?v=20260706-performance-sections");
+  }
+
   function applyFooterPremiumFix() {
     installFooterStyle();
     enhanceFooter();
@@ -209,6 +213,7 @@
     loadIsisRecommendationsFix();
     loadAdminDashboardPremiumFix();
     loadPerformanceImagesFix();
+    loadPerformanceSectionsFix();
   }
 
   if (document.readyState === "loading") {
