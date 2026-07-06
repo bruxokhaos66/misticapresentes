@@ -34,9 +34,18 @@
     style.id = styleId;
     style.textContent = `
       [data-ambient-player-inline],
-      [data-ambient-player-fix],
-      [data-ambient-playlist-public] {
+      [data-ambient-player-fix] {
         display: none !important;
+      }
+
+      [data-ambient-playlist-public] {
+        position: absolute !important;
+        left: -9999px !important;
+        width: 1px !important;
+        height: 1px !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        overflow: hidden !important;
       }
 
       [data-unified-player-panel] {
@@ -81,20 +90,36 @@
     return String(path).startsWith("http") ? path : `${API_BASE}${path}`;
   }
 
+  function addSource(next, url) {
+    if (url && !next.includes(url)) next.push(url);
+  }
+
   async function loadSources() {
     const next = [];
+
     try {
       const response = await fetch(`${API_BASE}/api/uploads/musicas`, { cache: "no-store" });
       if (response.ok) {
         const data = await response.json();
-        (data.musicas || []).forEach((item) => {
-          const url = apiUrl(item.url);
-          if (url && !next.includes(url)) next.push(url);
-        });
+        (data.musicas || []).forEach((item) => addSource(next, apiUrl(item.url)));
       }
     } catch (error) {
       // Mantém lista anterior se a API oscilar.
     }
+
+    try {
+      if (window.misticaAmbientPlaylist?.tracks) {
+        const tracks = await window.misticaAmbientPlaylist.tracks();
+        (tracks || []).forEach((item) => addSource(next, apiUrl(item.url)));
+      }
+    } catch (error) {
+      // fallback silencioso
+    }
+
+    document.querySelectorAll("[data-ambient-playlist-public] audio, .ambient-playlist-public audio").forEach((oldAudio) => {
+      addSource(next, oldAudio.currentSrc || oldAudio.src);
+    });
+
     if (next.length) sources = next;
     return sources;
   }
@@ -106,7 +131,7 @@
   function ensurePanel() {
     const parent = card();
     if (!parent) return null;
-    document.querySelectorAll("[data-ambient-player-inline], [data-ambient-player-fix], [data-ambient-playlist-public]").forEach((item) => item.remove());
+    document.querySelectorAll("[data-ambient-player-inline], [data-ambient-player-fix]").forEach((item) => item.remove());
 
     let panel = parent.querySelector("[data-unified-player-panel]");
     if (!panel) {

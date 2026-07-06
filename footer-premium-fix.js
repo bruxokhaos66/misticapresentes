@@ -211,7 +211,7 @@
   }
 
   function loadAmbientPlayerUnify() {
-    loadScriptOnce("ambientPlayerUnifyScript", "ambient-player-unify.js?v=20260706-gaveta-fix");
+    loadScriptOnce("ambientPlayerUnifyScript", "ambient-player-unify.js?v=20260706-fallback");
   }
 
   function loadAdminAmbientMusic() {
