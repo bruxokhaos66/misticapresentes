@@ -3,12 +3,53 @@
   const whatsapp = cfg.whatsappNumber || "554999172137";
   const whatsappMsg = "Olá, vim pelo site da Mística Presentes e gostaria de atendimento.";
   const whatsUrl = `https://wa.me/${whatsapp}?text=${encodeURIComponent(whatsappMsg)}`;
+  const heroIsisVersion = "20260706-hero-isis-png";
+  const heroIsisPath = "isis-humana-xamanica-02-publicitaria.png";
+  const heroIsisSrc = `assets/${heroIsisPath}?v=${heroIsisVersion}`;
 
   function el(tag, className, html) {
     const node = document.createElement(tag);
     if (className) node.className = className;
     if (html !== undefined) node.innerHTML = html;
     return node;
+  }
+
+  function forceHeroIsisPng() {
+    const heroCard = document.querySelector(".mystic-logo-card");
+    if (!heroCard) return;
+
+    heroCard.classList.add("hero-card-isis", "hero-card-isis-publicitaria");
+
+    let img = heroCard.querySelector("img.hero-isis-img") || heroCard.querySelector("img");
+    if (!img) {
+      img = document.createElement("img");
+      heroCard.prepend(img);
+    }
+
+    img.className = "hero-isis-img hero-isis-publicitaria";
+    img.alt = "Isis da Mística Presentes";
+    img.width = 720;
+    img.height = 900;
+    img.loading = "eager";
+    img.decoding = "async";
+
+    if (!img.getAttribute("src") || !img.src.includes(heroIsisPath)) {
+      img.src = heroIsisSrc;
+    }
+
+    let title = heroCard.querySelector("strong");
+    if (!title) {
+      title = document.createElement("strong");
+      heroCard.appendChild(title);
+    }
+    title.textContent = "Isis";
+
+    let subtitle = heroCard.querySelector("small");
+    if (!subtitle) {
+      subtitle = document.createElement("small");
+      heroCard.appendChild(subtitle);
+    }
+    subtitle.textContent = "Sua guia espiritual para escolhas conscientes";
   }
 
   function updateCopy() {
@@ -155,6 +196,7 @@
 
   function apply() {
     updateCopy();
+    forceHeroIsisPng();
     mountHeroSellingBar();
     mountIntentSection();
     mountCampaignBand();
@@ -169,7 +211,9 @@
 
   window.addEventListener("load", () => {
     apply();
-    setTimeout(apply, 800);
+    setTimeout(apply, 400);
+    setTimeout(apply, 1200);
+    setTimeout(forceHeroIsisPng, 2600);
     setTimeout(improveProductCards, 2200);
   });
 
