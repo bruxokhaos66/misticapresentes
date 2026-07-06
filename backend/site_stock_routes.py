@@ -55,6 +55,13 @@ class VendaSiteIn(BaseModel):
     itens: list[ItemEstoqueSite] = Field(default_factory=list)
 
 
+class AcessoSiteIn(BaseModel):
+    path: Optional[str] = "/"
+    referrer: Optional[str] = "direto"
+    userAgent: Optional[str] = None
+    origem: Optional[str] = "site"
+
+
 def validar_site_api_key(chave_recebida: str | None):
     chave = os.environ.get("MISTICA_SITE_API_KEY", "").strip()
     if not chave:
@@ -119,6 +126,29 @@ def registrar_movimento(conn, *, produto, quantidade, motivo, usuario, estoque_a
             venda_id,
         ),
     )
+
+
+def garantir_tabela_acessos_site(conn):
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS site_acessos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            path TEXT,
+            referrer TEXT,
+            user_agent TEXT,
+            origem TEXT,
+            criado_em TEXT NOT NULL,
+            dia TEXT NOT NULL
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_site_acessos_dia ON site_acessos(dia)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_site_acessos_criado_em ON site_acessos(criado_em)")
+
+
+def limitar_texto(valor: str | None, limite: int, padrao: str = "") -> str:
+    texto = str(valor or padrao).strip()
+    return texto[:limite]
 
 
 @router.post("/vendas")
@@ -246,3 +276,69 @@ def estoque_site():
         ORDER BY nome COLLATE NOCASE
         """
     )
+
+
+@router.post("/site/acessos")
+def registrar_acesso_site(payload: AcessoSiteIn, x_mistica_api_key: str | None = Header(default=None)):
+    validar_site_api_key(x_mistica_api_key)
+    agora = datetime.now()
+    criado_em = agora.isoformat(timespec="seconds")
+    dia = agora.strftime("%Y-%m-%d")
+
+    with conectar() as conn:
+        garantir_tabela_acessos_site(conn)
+        cur = conn.execute(
+            """
+            INSERT INTO site_acessos (path, referrer, user_agent, origem, criado_em, dia)
+            VALUES (?,?,?,?,?,?)
+            """,
+            (
+                limitar_texto(payload.path, 260, "/"),
+                limitar_texto(payload.referrer, 360, "direto"),
+                limitar_texto(payload.userAgent, 520, "visitante"),
+                limitar_texto(payload.origem, 40, "site"),
+                criado_em,
+                dia,
+            ),
+        )
+        conn.commit()
+        acesso_id = int(cur.lastrowid)
+
+    return {"ok": True, "id": acesso_id, "status": "registrado", "data_hora": criado_em}
+
+
+@router.get("/site/acessos/resumo")
+def resumo_acessos_site(x_mistica_api_key: str | None = Header(default=None)):
+    validar_site_api_key(x_mistica_api_key)
+    hoje = datetime.now().strftime("%Y-%m-%d")
+
+    with conectar() as conn:
+        garantir_tabela_acessos_site(conn)
+        total = conn.execute("SELECT COUNT(*) AS total FROM site_acessos").fetchone()["total"] or 0
+        hoje_total = conn.execute("SELECT COUNT(*) AS total FROM site_acessos WHERE dia=?", (hoje,)).fetchone()["total"] or 0
+        unicos = conn.execute("SELECT COUNT(DISTINCT COALESCE(user_agent,'visitante')) AS total FROM site_acessos").fetchone()["total"] or 0
+        ultimo = conn.execute("SELECT MAX(criado_em) AS ultimo FROM site_acessos").fetchone()["ultimo"]
+        rows = conn.execute(
+            """
+            SELECT criado_em AS at, path, referrer, user_agent AS userAgent
+            FROM site_acessos
+            ORDER BY id DESC
+            LIMIT 50
+            """
+        ).fetchall()
+        visitas = [dict(row) for row in rows]
+
+    return {
+        "mode": "remote",
+        "total": int(total),
+        "today": int(hoje_total),
+        "uniqueVisitors": int(unicos),
+        "lastAccess": ultimo,
+        "visits": visitas,
+        "acessos_total": int(total),
+        "acessos_hoje": int(hoje_total),
+        "visitantes_unicos": int(unicos),
+        "ultimo_acesso": ultimo,
+        "acessos_recentes": visitas,
+        "data_hora": datetime.now().isoformat(timespec="seconds"),
+    }
