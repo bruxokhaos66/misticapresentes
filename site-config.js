@@ -17,7 +17,23 @@ window.misticaSiteConfig = {
 (() => {
   const cfg = window.misticaSiteConfig || {};
   const productionMode = cfg.serverMode === "production" || cfg.storageMode === "api_first" || cfg.usePublicDomainAccess === true;
-  if (!productionMode || document.getElementById("misticaProductionGuardScript")) return;
+  if (!productionMode) return;
+
+  if (!window.__misticaSyncIntervalGuardInstalled) {
+    window.__misticaSyncIntervalGuardInstalled = true;
+    const originalSetInterval = window.setInterval.bind(window);
+    window.setInterval = (handler, timeout, ...args) => {
+      const handlerName = typeof handler === "function" ? handler.name : "";
+      const looksLikeMobileSync = typeof handler === "function" && Number(timeout) === 5000 && handlerName === "sincronizarAgora";
+      if (!looksLikeMobileSync) return originalSetInterval(handler, timeout, ...args);
+
+      const guardedHandler = (...runArgs) => {
+        if (document.hidden) return;
+        return handler(...runArgs);
+      };
+      return originalSetInterval(guardedHandler, 15000, ...args);
+    };
+  }
 
   const loadGuard = () => {
     if (document.getElementById("misticaProductionGuardScript")) return;
