@@ -7,10 +7,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const domain = cfg.domain || "misticaesotericos.com.br";
   const params = new URLSearchParams(window.location.search);
   const adminAccess = params.get("admin") === "mistica" || window.location.hash === "#admin-mistica";
-  const assetVersion = "20260705-isis-reload";
+  const assetVersion = "20260706-isis-hero";
   const logoAsset = `assets/logo-mistica-final.webp?v=${assetVersion}`;
   const isisSources = [
     `assets/isis-humana-xamanica.webp?v=${assetVersion}`,
+    `./assets/isis-humana-xamanica.webp?v=${assetVersion}`,
+    `/assets/isis-humana-xamanica.webp?v=${assetVersion}`,
     `assets/isis-humana-premium.webp?v=${assetVersion}`,
     `assets/isis-xamanica-nova.webp?v=${assetVersion}`,
     `assets/isis-premium.png?v=${assetVersion}`
@@ -70,9 +72,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const heroCard = document.querySelector(".mystic-logo-card");
   if (heroCard) {
-    heroCard.innerHTML = `<img class="hero-logo-img" src="${logoAsset}" alt="Logo Mística Presentes" width="320" height="320" loading="eager" decoding="async"><strong>Mística Presentes</strong><small>Proteção • Energia • Bem-estar</small>`;
-    const heroLogo = heroCard.querySelector("img");
-    heroLogo.onerror = () => {
+    heroCard.classList.add("hero-card-isis");
+    heroCard.innerHTML = `<img class="hero-isis-img" src="${isisAsset}" alt="Isis da Mística Presentes" width="720" height="900" loading="eager" decoding="async"><strong>Isis</strong><small>Sua guia espiritual para escolhas conscientes</small>`;
+    const heroIsis = heroCard.querySelector("img");
+    let heroAttempt = 0;
+    heroIsis.onload = () => {
+      heroCard.classList.remove("asset-failed");
+    };
+    heroIsis.onerror = () => {
+      heroAttempt += 1;
+      if (isisSources[heroAttempt]) {
+        heroIsis.src = isisSources[heroAttempt];
+        return;
+      }
+      heroCard.classList.add("asset-failed");
       heroCard.innerHTML = `<span class="sigil" aria-hidden="true">☾</span><strong>Mística Presentes</strong><small>Proteção • Energia • Bem-estar</small>`;
     };
   }
