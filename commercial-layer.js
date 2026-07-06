@@ -7,7 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const domain = cfg.domain || "misticaesotericos.com.br";
   const params = new URLSearchParams(window.location.search);
   const adminAccess = params.get("admin") === "mistica" || window.location.hash === "#admin-mistica";
-  const assetVersion = "20260706-etapa4-cleanup";
+  const assetVersion = "20260706-etapa4-script-diagnostics";
   const logoAsset = `assets/logo-mistica-modern.svg?v=${assetVersion}`;
   const finalSectionPath = "isis-humana-xamanica-03-produtos.png";
   const finalSectionSrc = `assets/${finalSectionPath}?v=${assetVersion}`;
@@ -88,12 +88,31 @@ document.addEventListener("DOMContentLoaded", () => {
   favicon.href = logoAsset;
   document.head.appendChild(favicon);
 
+  window.misticaScriptLayers = window.misticaScriptLayers || {};
+
   function loadScriptOnce(id, src) {
-    if (document.getElementById(id)) return;
+    if (document.getElementById(id)) {
+      window.misticaScriptLayers[id] = { src, status: "already-loaded" };
+      return;
+    }
+
     const script = document.createElement("script");
     script.id = id;
     script.src = `${src}?v=${assetVersion}`;
     script.defer = true;
+    script.dataset.layerSrc = src;
+
+    window.misticaScriptLayers[id] = { src, status: "loading" };
+
+    script.addEventListener("load", () => {
+      window.misticaScriptLayers[id] = { src, status: "loaded" };
+    });
+
+    script.addEventListener("error", () => {
+      window.misticaScriptLayers[id] = { src, status: "error" };
+      console.warn(`[Mística Presentes] Falha ao carregar camada: ${src}`);
+    });
+
     document.head.appendChild(script);
   }
 
