@@ -1,13 +1,5 @@
 (() => {
   const STORAGE_KEY = "misticaAmbientEnabled";
-  const VOLUME_KEY = "misticaAmbientVolume";
-  const DEFAULT_VOLUME = 0.18;
-
-  let audioContext = null;
-  let masterGain = null;
-  let oscillators = [];
-  let noiseSource = null;
-  let noiseGain = null;
   let isPlaying = false;
 
   function injectStyles() {
@@ -154,82 +146,17 @@
     document.head.appendChild(style);
   }
 
-  function createNoiseBuffer(context) {
-    const length = Math.max(1, Math.floor(context.sampleRate * 2));
-    const buffer = context.createBuffer(1, length, context.sampleRate);
-    const output = buffer.getChannelData(0);
-    for (let i = 0; i < length; i += 1) {
-      output[i] = (Math.random() * 2 - 1) * 0.18;
-    }
-    return buffer;
-  }
-
-  function buildAmbientSound() {
-    if (audioContext) return;
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextClass) throw new Error("Áudio não suportado neste navegador.");
-
-    audioContext = new AudioContextClass();
-    masterGain = audioContext.createGain();
-    masterGain.gain.value = 0;
-    masterGain.connect(audioContext.destination);
-
-    const frequencies = [110, 164.81, 220];
-    oscillators = frequencies.map((frequency, index) => {
-      const oscillator = audioContext.createOscillator();
-      const gain = audioContext.createGain();
-      oscillator.type = index === 1 ? "triangle" : "sine";
-      oscillator.frequency.value = frequency;
-      gain.gain.value = index === 0 ? 0.12 : 0.055;
-      oscillator.connect(gain).connect(masterGain);
-      oscillator.start();
-      return { oscillator, gain };
-    });
-
-    const filter = audioContext.createBiquadFilter();
-    filter.type = "lowpass";
-    filter.frequency.value = 650;
-    filter.Q.value = 0.8;
-
-    noiseGain = audioContext.createGain();
-    noiseGain.gain.value = 0.025;
-    noiseSource = audioContext.createBufferSource();
-    noiseSource.buffer = createNoiseBuffer(audioContext);
-    noiseSource.loop = true;
-    noiseSource.connect(filter).connect(noiseGain).connect(masterGain);
-    noiseSource.start();
-  }
-
-  function selectedVolume() {
-    const saved = Number(localStorage.getItem(VOLUME_KEY));
-    if (Number.isFinite(saved) && saved >= 0 && saved <= 1) return saved;
-    return DEFAULT_VOLUME;
-  }
-
-  function setVolume(value) {
-    const nextVolume = Math.min(0.42, Math.max(0, Number(value) || 0));
-    localStorage.setItem(VOLUME_KEY, String(nextVolume));
-    if (masterGain && audioContext) {
-      masterGain.gain.cancelScheduledValues(audioContext.currentTime);
-      masterGain.gain.setTargetAtTime(isPlaying ? nextVolume : 0, audioContext.currentTime, 0.08);
-    }
-    return nextVolume;
-  }
-
-  async function startAmbient() {
-    buildAmbientSound();
-    if (audioContext.state === "suspended") await audioContext.resume();
+  function startAmbient() {
     isPlaying = true;
     localStorage.setItem(STORAGE_KEY, "true");
-    setVolume(selectedVolume());
   }
 
   function stopAmbient() {
     isPlaying = false;
     localStorage.setItem(STORAGE_KEY, "false");
-    if (masterGain && audioContext) {
-      masterGain.gain.cancelScheduledValues(audioContext.currentTime);
-      masterGain.gain.setTargetAtTime(0, audioContext.currentTime, 0.08);
+    if (window.misticaAmbientPlayerFix?.play) {
+      const player = document.querySelector("[data-ambient-audio-player], .ambient-audio-player");
+      if (player?.pause) player.pause();
     }
   }
 
@@ -238,9 +165,9 @@
     const status = card.querySelector("[data-ambient-status]");
     if (button) {
       button.setAttribute("aria-pressed", String(isPlaying));
-      button.textContent = isPlaying ? "Desligar música ambiente" : "Ativar ambiente xamânico";
+      button.textContent = isPlaying ? "Desligar ambiente xamânico" : "Ativar ambiente xamânico";
     }
-    if (status) status.textContent = isPlaying ? "Música ambiente ligada." : "Toque somente após o cliente ativar.";
+    if (status) status.textContent = isPlaying ? "Música ativada." : "Aguardando ativação.";
   }
 
   function createAmbientCard() {
@@ -252,31 +179,25 @@
     card.dataset.ambientCard = "true";
     card.innerHTML = `
       <strong>🌿 Experiência sonora xamânica</strong>
-      <p>Para uma navegação mais imersiva, o cliente pode ativar uma trilha ambiente suave. Ela não toca sozinha: respeita as regras dos navegadores e a escolha do visitante.</p>
+      <p>Para uma navegação mais imersiva, o cliente pode ativar uma trilha ambiente suave. Ela só começa com a escolha do visitante e pode ser desligada a qualquer momento.</p>
       <div class="ambient-controls">
         <button class="btn ambient-toggle" type="button" data-ambient-toggle aria-pressed="false">Ativar ambiente xamânico</button>
-        <span class="ambient-status" data-ambient-status>Toque somente após o cliente ativar.</span>
+        <span class="ambient-status" data-ambient-status>Aguardando ativação.</span>
       </div>
     `;
 
     const trustRow = heroCopy.querySelector(".trust-row");
-    if (trustRow) {
-      heroCopy.insertBefore(card, trustRow);
-    } else {
-      heroCopy.appendChild(card);
-    }
+    if (trustRow) heroCopy.insertBefore(card, trustRow);
+    else heroCopy.appendChild(card);
 
     const button = card.querySelector("[data-ambient-toggle]");
-
-    button.addEventListener("click", async () => {
-      try {
-        if (isPlaying) stopAmbient();
-        else await startAmbient();
-      } catch (error) {
-        const status = card.querySelector("[data-ambient-status]");
-        if (status) status.textContent = "Não foi possível iniciar o áudio neste navegador.";
-      }
+    button.addEventListener("click", () => {
+      if (isPlaying) stopAmbient();
+      else startAmbient();
       updateUi(card);
+      if (isPlaying && window.misticaAmbientPlayerFix?.play) {
+        window.misticaAmbientPlayerFix.play(true);
+      }
     });
 
     updateUi(card);
@@ -284,21 +205,10 @@
 
   function init() {
     injectStyles();
+    isPlaying = localStorage.getItem(STORAGE_KEY) === "true";
     createAmbientCard();
-    if (localStorage.getItem(STORAGE_KEY) === "true") {
-      const resumeOnInteraction = async () => {
-        try {
-          await startAmbient();
-          const card = document.querySelector("[data-ambient-card]");
-          if (card) updateUi(card);
-        } finally {
-          document.removeEventListener("pointerdown", resumeOnInteraction);
-          document.removeEventListener("keydown", resumeOnInteraction);
-        }
-      };
-      document.addEventListener("pointerdown", resumeOnInteraction, { once: true });
-      document.addEventListener("keydown", resumeOnInteraction, { once: true });
-    }
+    const card = document.querySelector("[data-ambient-card]");
+    if (card) updateUi(card);
   }
 
   if (document.readyState === "loading") {
@@ -311,6 +221,6 @@
     start: startAmbient,
     stop: stopAmbient,
     isPlaying: () => isPlaying,
-    setVolume
+    setVolume: () => 0,
   };
 })();
