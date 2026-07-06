@@ -3,8 +3,10 @@
   const styleId = "misticaAmbientPlaylistStyle";
   const config = window.misticaSiteConfig || {};
   const API_BASE = String(config.apiBaseUrl || "https://api.misticaesotericos.com.br").replace(/\/$/, "");
+  const AUDIO_EXT_RE = /\.(mp3|wav|ogg|webm|m4a)(\?|#|$)/i;
 
-  let remoteLinks = null;
+  let remoteYoutubeLinks = null;
+  let remoteAudioLinks = null;
   let remoteLoaded = false;
   let remoteTracks = [];
   let tracksLoaded = false;
@@ -27,7 +29,7 @@
     return `${API_BASE}${path}`;
   }
 
-  function normalizeUrl(value) {
+  function normalizeYoutubeUrl(value) {
     const text = String(value || "").trim();
     if (!text) return "";
     try {
@@ -40,44 +42,86 @@
     }
   }
 
-  function cleanLinks(links) {
-    return [...new Set((links || []).map(normalizeUrl).filter(Boolean))].slice(0, 12);
+  function normalizeAudioUrl(value) {
+    const text = String(value || "").trim();
+    if (!text) return "";
+    try {
+      const url = new URL(text);
+      if (!["http:", "https:"].includes(url.protocol)) return "";
+      if (!AUDIO_EXT_RE.test(url.pathname + url.search + url.hash)) return "";
+      return url.toString();
+    } catch (error) {
+      return "";
+    }
+  }
+
+  function cleanYoutubeLinks(links) {
+    return [...new Set((links || []).map(normalizeYoutubeUrl).filter(Boolean))].slice(0, 12);
+  }
+
+  function cleanAudioLinks(links) {
+    return [...new Set((links || []).map(normalizeAudioUrl).filter(Boolean))].slice(0, 20);
+  }
+
+  function splitLinks(links) {
+    const youtube = [];
+    const audio = [];
+    (links || []).forEach((item) => {
+      const yt = normalizeYoutubeUrl(item);
+      const aud = normalizeAudioUrl(item);
+      if (yt && !youtube.includes(yt)) youtube.push(yt);
+      else if (aud && !audio.includes(aud)) audio.push(aud);
+    });
+    return { youtube: youtube.slice(0, 12), audio: audio.slice(0, 20) };
   }
 
   function readLocalLinks() {
     try {
       const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
       if (!Array.isArray(parsed)) return [];
-      return cleanLinks(parsed);
+      const split = splitLinks(parsed);
+      return [...split.youtube, ...split.audio];
     } catch (error) {
       return [];
     }
   }
 
   function writeLocalLinks(links) {
-    const clean = cleanLinks(links);
+    const split = splitLinks(links);
+    const clean = [...split.youtube, ...split.audio];
     localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
     return clean;
   }
 
   function readLinks() {
-    return remoteLinks || readLocalLinks();
+    if (remoteYoutubeLinks || remoteAudioLinks) return [...(remoteYoutubeLinks || []), ...(remoteAudioLinks || [])];
+    return readLocalLinks();
   }
 
   async function fetchRemoteLinks() {
+    const local = readLocalLinks();
     try {
       const response = await fetch(`${API_BASE}/api/site/playlist-ambiente`, { cache: "no-store" });
       if (!response.ok) throw new Error("Playlist remota indisponível.");
       const data = await response.json();
-      remoteLinks = cleanLinks(data.links || []);
-      remoteLoaded = true;
-      if (remoteLinks.length) writeLocalLinks(remoteLinks);
-      return remoteLinks;
+      remoteYoutubeLinks = cleanYoutubeLinks(data.links || []);
     } catch (error) {
-      remoteLoaded = true;
-      remoteLinks = null;
-      return readLocalLinks();
+      remoteYoutubeLinks = null;
     }
+
+    try {
+      const response = await fetch(`${API_BASE}/api/uploads/musicas/links`, { cache: "no-store" });
+      if (!response.ok) throw new Error("Links de áudio indisponíveis.");
+      const data = await response.json();
+      remoteAudioLinks = cleanAudioLinks(data.links || []);
+    } catch (error) {
+      remoteAudioLinks = null;
+    }
+
+    remoteLoaded = true;
+    const merged = readLinks();
+    if (merged.length) writeLocalLinks(merged);
+    return merged.length ? merged : local;
   }
 
   async function fetchTracks() {
@@ -96,7 +140,10 @@
   }
 
   async function uploadTrack(file, status) {
-    if (!file) return null;
+    if (!file) {
+      if (status) status.textContent = "Selecione uma música antes de enviar.";
+      return null;
+    }
     const form = new FormData();
     form.append("arquivo", file);
     form.append("nome_base", file.name.replace(/\.[^.]+$/, "") || "ambiente-xamanico");
@@ -109,8 +156,10 @@
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.detail || "Não foi possível enviar a música.");
       if (status) status.textContent = "Música enviada para a API.";
+      tracksLoaded = false;
       await fetchTracks();
-      renderPublicPlaylist(true);
+      await renderPublicPlaylist(true);
+      updateAudioSource(true);
       return data;
     } catch (error) {
       if (status) status.textContent = error.message || "Falha ao enviar música.";
@@ -119,22 +168,47 @@
   }
 
   async function saveLinks(links) {
-    const clean = writeLocalLinks(links);
-    remoteLinks = clean;
+    const split = splitLinks(links);
+    const clean = writeLocalLinks([...split.youtube, ...split.audio]);
+    remoteYoutubeLinks = split.youtube;
+    remoteAudioLinks = split.audio;
+    let savedYoutube = false;
+    let savedAudio = false;
+
     try {
       const response = await fetch(`${API_BASE}/api/site/playlist-ambiente`, {
         method: "POST",
         headers: apiHeaders(),
-        body: JSON.stringify({ links: clean }),
+        body: JSON.stringify({ links: split.youtube }),
       });
-      if (!response.ok) throw new Error("Não foi possível salvar na API.");
-      const data = await response.json();
-      remoteLinks = cleanLinks(data.links || clean);
-      writeLocalLinks(remoteLinks);
-      return { links: remoteLinks, mode: "api" };
+      if (response.ok) {
+        const data = await response.json();
+        remoteYoutubeLinks = cleanYoutubeLinks(data.links || split.youtube);
+        savedYoutube = true;
+      }
     } catch (error) {
-      return { links: clean, mode: "local" };
+      savedYoutube = false;
     }
+
+    try {
+      const response = await fetch(`${API_BASE}/api/uploads/musicas/links`, {
+        method: "POST",
+        headers: apiHeaders(),
+        body: JSON.stringify({ links: split.audio }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        remoteAudioLinks = cleanAudioLinks(data.links || split.audio);
+        savedAudio = true;
+      }
+    } catch (error) {
+      savedAudio = false;
+    }
+
+    const mode = savedYoutube || savedAudio ? "api" : "local";
+    const next = mode === "api" ? [...(remoteYoutubeLinks || []), ...(remoteAudioLinks || [])] : clean;
+    writeLocalLinks(next);
+    return { links: next, youtube: split.youtube.length, audio: split.audio.length, mode };
   }
 
   function installStyles() {
@@ -192,7 +266,8 @@
         margin-top: 10px;
       }
 
-      .ambient-playlist-admin-status {
+      .ambient-playlist-admin-status,
+      .ambient-player-status {
         color: #b8c977;
         font-weight: 800;
         font-size: .86rem;
@@ -230,8 +305,8 @@
     panel.dataset.ambientPlaylistAdmin = "true";
     panel.innerHTML = `
       <h3>Playlist do ambiente xamânico</h3>
-      <p>Cadastre links do YouTube ou envie músicas próprias/licenciadas. Quando a API estiver ativa, isso passa a valer para todos os clientes.</p>
-      <textarea data-ambient-playlist-input placeholder="https://www.youtube.com/watch?v=...">${links.join("\n")}</textarea>
+      <p>Cadastre links do YouTube ou links diretos de áudio, um por linha. Links diretos terminados em MP3, WAV, OGG, WEBM ou M4A podem tocar no player do site.</p>
+      <textarea data-ambient-playlist-input placeholder="https://www.youtube.com/watch?v=...\nhttps://site.com/musica.mp3">${links.join("\n")}</textarea>
       <div class="ambient-playlist-admin-actions">
         <button class="btn" type="button" data-ambient-playlist-save>Salvar links</button>
         <button class="btn btn-secondary" type="button" data-ambient-playlist-clear>Limpar links</button>
@@ -257,15 +332,19 @@
       status.textContent = "Salvando links...";
       const result = await saveLinks(String(input.value || "").split(/\n+/));
       input.value = result.links.join("\n");
-      status.textContent = result.mode === "api" ? `${result.links.length} link(s) salvo(s) na API.` : `${result.links.length} link(s) salvo(s) neste navegador. API indisponível.`;
-      renderPublicPlaylist(true);
+      status.textContent = result.mode === "api"
+        ? `${result.links.length} link(s) salvo(s): ${result.youtube} YouTube e ${result.audio} áudio direto.`
+        : `${result.links.length} link(s) salvo(s) neste navegador. API indisponível.`;
+      await renderPublicPlaylist(true);
+      updateAudioSource(true);
     });
     panel.querySelector("[data-ambient-playlist-clear]")?.addEventListener("click", async () => {
       status.textContent = "Limpando links...";
       const result = await saveLinks([]);
       input.value = "";
       status.textContent = result.mode === "api" ? "Links limpos na API." : "Links limpos neste navegador. API indisponível.";
-      renderPublicPlaylist(true);
+      await renderPublicPlaylist(true);
+      updateAudioSource(true);
     });
 
     const fileInput = panel.querySelector("[data-ambient-audio-file]");
@@ -283,38 +362,70 @@
     });
   }
 
-  function firstPlaylistUrl() {
-    return readLinks()[0] || "";
+  function firstYoutubeUrl() {
+    return (remoteYoutubeLinks || splitLinks(readLocalLinks()).youtube)[0] || "";
   }
 
-  async function ensureAudioPlayer(panel) {
-    if (panel.querySelector("[data-ambient-audio-player]")) return;
-    if (!tracksLoaded) await fetchTracks();
-    const track = remoteTracks[0];
-    if (!track?.url) return;
+  function audioCandidates() {
+    const uploaded = (remoteTracks || []).map((track) => absoluteApiUrl(track.url)).filter(Boolean);
+    const direct = remoteAudioLinks || splitLinks(readLocalLinks()).audio;
+    return [...uploaded, ...direct].filter(Boolean);
+  }
 
-    const audio = document.createElement("audio");
-    audio.className = "ambient-audio-player";
-    audio.controls = true;
-    audio.loop = true;
-    audio.preload = "none";
-    audio.dataset.ambientAudioPlayer = "true";
-    audio.src = absoluteApiUrl(track.url);
-    panel.appendChild(audio);
+  function setPlayerStatus(text) {
+    const status = document.querySelector("[data-ambient-player-status]");
+    if (status) status.textContent = text;
+  }
+
+  function updateAudioSource(force = false) {
+    const panel = document.querySelector("[data-ambient-playlist-public]");
+    if (!panel) return null;
+    let audio = panel.querySelector("[data-ambient-audio-player]");
+    const source = audioCandidates()[0] || "";
+    if (!source) return null;
+
+    if (!audio) {
+      audio = document.createElement("audio");
+      audio.className = "ambient-audio-player";
+      audio.controls = true;
+      audio.loop = true;
+      audio.preload = "auto";
+      audio.dataset.ambientAudioPlayer = "true";
+      panel.appendChild(audio);
+    }
+
+    if (force || audio.src !== source) {
+      audio.pause();
+      audio.src = source;
+      audio.load();
+      setPlayerStatus("Player atualizado com a música ambiente.");
+    }
     currentAudio = audio;
+    return audio;
   }
 
-  async function playUploadedTrack() {
+  async function refreshAudioData() {
+    remoteLoaded = false;
+    tracksLoaded = false;
+    await fetchRemoteLinks();
+    await fetchTracks();
+  }
+
+  async function playPreferredAudio() {
     const panel = document.querySelector("[data-ambient-playlist-public]");
     if (!panel) return;
-    await ensureAudioPlayer(panel);
-    if (currentAudio) {
-      try {
-        currentAudio.volume = 0.22;
-        await currentAudio.play();
-      } catch (error) {
-        // O navegador pode exigir novo clique; o player fica disponível manualmente.
-      }
+    const audio = updateAudioSource(true);
+    if (!audio) {
+      setPlayerStatus("Nenhum áudio direto disponível. Use o botão do YouTube, se houver.");
+      return;
+    }
+
+    try {
+      audio.volume = 0.22;
+      await audio.play();
+      setPlayerStatus("Música ambiente tocando no player do site.");
+    } catch (error) {
+      setPlayerStatus("Clique no player para iniciar a música neste navegador.");
     }
   }
 
@@ -324,9 +435,9 @@
 
     if (!remoteLoaded) await fetchRemoteLinks();
     if (!tracksLoaded) await fetchTracks();
-    const url = firstPlaylistUrl();
-    const hasTrack = remoteTracks.length > 0;
-    if (!url && !hasTrack) return;
+    const youtubeUrl = firstYoutubeUrl();
+    const hasAudio = audioCandidates().length > 0;
+    if (!youtubeUrl && !hasAudio) return;
 
     const card = document.querySelector("[data-ambient-card]");
     if (!card) return;
@@ -336,13 +447,16 @@
     panel.dataset.ambientPlaylistPublic = "true";
     panel.innerHTML = `
       <strong>Playlist especial da loja</strong>
-      <span>Ao ativar o ambiente, o cliente pode ouvir uma música suave da Mística Presentes ou abrir a playlist escolhida no YouTube.</span>
+      <span>Ao ativar o ambiente, o site tenta tocar automaticamente a música cadastrada no player. Links do YouTube ficam como opção externa.</span>
       <div class="ambient-playlist-public-actions">
-        ${url ? `<a class="btn btn-secondary" href="${url}" target="_blank" rel="noopener" data-ambient-playlist-open>Abrir playlist no YouTube</a>` : ""}
+        ${youtubeUrl ? `<a class="btn btn-secondary" href="${youtubeUrl}" target="_blank" rel="noopener" data-ambient-playlist-open>Abrir playlist no YouTube</a>` : ""}
+        ${hasAudio ? `<button class="btn btn-secondary" type="button" data-ambient-player-play>Tocar no site</button>` : ""}
+        <span class="ambient-player-status" data-ambient-player-status>${hasAudio ? "Player pronto para tocar após ativação." : "Sem áudio direto cadastrado."}</span>
       </div>
     `;
     card.appendChild(panel);
-    await ensureAudioPlayer(panel);
+    updateAudioSource(true);
+    panel.querySelector("[data-ambient-player-play]")?.addEventListener("click", playPreferredAudio);
   }
 
   function hookAmbientButton() {
@@ -351,10 +465,14 @@
     button.dataset.playlistHook = "true";
     button.addEventListener("click", () => {
       setTimeout(async () => {
-        await renderPublicPlaylist();
+        await refreshAudioData();
+        await renderPublicPlaylist(true);
         const isOn = button.getAttribute("aria-pressed") === "true";
-        if (isOn) playUploadedTrack();
-        else if (currentAudio) currentAudio.pause();
+        if (isOn) await playPreferredAudio();
+        else if (currentAudio) {
+          currentAudio.pause();
+          setPlayerStatus("Música ambiente pausada.");
+        }
       }, 180);
     });
   }
@@ -384,6 +502,7 @@
     load: fetchRemoteLinks,
     tracks: fetchTracks,
     upload: uploadTrack,
+    play: playPreferredAudio,
     apply,
   };
 })();
