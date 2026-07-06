@@ -2,9 +2,12 @@
   const cfg = window.misticaSiteConfig || {};
   const API_BASE = (cfg.apiBaseUrl || "https://api.misticaesotericos.com.br").replace(/\/$/, "");
   const SITE_API_KEY = String(cfg.siteApiKey || "").trim();
+  const params = new URLSearchParams(window.location.search);
+  const adminAccess = params.get("admin") === "mistica" || window.location.hash === "#admin-mistica";
   let atividadeRows = [];
   let termoBusca = "";
   let painelMontado = false;
+  let refreshTimer = null;
 
   function headers() {
     return {
@@ -93,7 +96,7 @@
 
   async function carregarAtividade() {
     const root = document.getElementById("adminActivityContent");
-    if (!root) return;
+    if (!root || !adminAccess) return;
     root.innerHTML = `<p class="privacy-note">Carregando atividade recente...</p>`;
     try {
       const lista = await api("/api/pedidos/status-log?limite=30");
@@ -105,6 +108,7 @@
   }
 
   function montarPainel() {
+    if (!adminAccess) return false;
     const admin = document.getElementById("adminContent");
     if (!admin || document.getElementById("adminActivityPanel")) return false;
     const panel = document.createElement("section");
@@ -138,14 +142,21 @@
     if (event.target?.dataset?.reloadAdminActivity !== undefined) carregarAtividade();
   });
 
-  window.misticaAdminActivity = { reload: carregarAtividade, search: value => { termoBusca = value || ""; renderizarAtividade(); } };
+  window.misticaAdminActivity = {
+    reload: carregarAtividade,
+    search: value => { termoBusca = value || ""; renderizarAtividade(); },
+    enabled: adminAccess,
+  };
 
   window.addEventListener("load", () => {
+    if (!adminAccess) return;
+
     if (!montarPainel()) {
       const montagem = setInterval(() => {
         if (painelMontado || montarPainel()) clearInterval(montagem);
       }, 1500);
     }
-    setInterval(carregarAtividade, 45000);
+
+    refreshTimer = setInterval(carregarAtividade, 45000);
   });
 })();
