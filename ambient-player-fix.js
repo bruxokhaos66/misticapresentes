@@ -8,7 +8,6 @@
   let sourceIndex = 0;
   let audio = null;
   let lastDiagnostics = { uploads: 0, links: 0, errors: [] };
-  let warmedUp = false;
 
   function apiUrl(path) {
     if (!path) return "";
@@ -114,7 +113,7 @@
           <input class="ambient-volume" type="range" min="0" max="1" step="0.01" value="${savedVolume()}" data-ambient-player-volume>
           <span data-ambient-player-volume-label>Volume ${Math.round(savedVolume() * 100)}%</span>
         </label>
-        <span class="ambient-status" data-ambient-player-status>Toque somente após ativar o ambiente.</span>
+        <span class="ambient-status" data-ambient-player-status>Aguardando ativação.</span>
         <small class="privacy-note" style="display:block;margin-top:8px;" data-ambient-player-diagnostics>Verificando músicas...</small>
       `;
       target.appendChild(panel);
@@ -156,24 +155,7 @@
       player.src = src;
       player.load();
     }
-    setStatus(`Faixa ${sourceIndex + 1} de ${sources.length}.`);
     return player;
-  }
-
-  function warmUpPlayer() {
-    if (warmedUp || !sources.length) return;
-    const player = updateSource();
-    if (!player) return;
-    warmedUp = true;
-    player.volume = 0;
-    player.play().then(() => {
-      player.pause();
-      player.currentTime = 0;
-      player.volume = savedVolume();
-      setStatus("Pronto para iniciar ao ativar.");
-    }).catch(() => {
-      player.volume = savedVolume();
-    });
   }
 
   async function playCurrent(skipReload = false) {
@@ -186,7 +168,9 @@
     try {
       player.volume = savedVolume();
       await player.play();
-      setStatus("Música ambiente tocando.");
+      setStatus("Música ativada.");
+      const ambientStatus = document.querySelector("[data-ambient-status]");
+      if (ambientStatus) ambientStatus.textContent = "Música ativada.";
     } catch (error) {
       setStatus("Clique no player para iniciar neste navegador.");
     }
@@ -207,14 +191,6 @@
     const button = document.querySelector("[data-ambient-toggle]");
     if (!button || button.dataset.playerFixHook === "true") return;
     button.dataset.playerFixHook = "true";
-
-    button.addEventListener("pointerdown", () => {
-      ensurePanel();
-      if (sources.length) {
-        updateSource();
-        playCurrent(true);
-      }
-    });
 
     button.addEventListener("click", () => {
       setTimeout(async () => {
@@ -237,7 +213,6 @@
     ensurePanel();
     await loadSources();
     updateSource();
-    warmUpPlayer();
     hookAmbientButton();
     removeLowerPlaylistBlocks();
   }
