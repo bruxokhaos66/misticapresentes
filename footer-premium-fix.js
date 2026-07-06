@@ -157,9 +157,19 @@
     footer.appendChild(signature);
   }
 
+  function loadCatalogPremiumFix() {
+    if (document.getElementById("catalogPremiumFixScript")) return;
+    const script = document.createElement("script");
+    script.id = "catalogPremiumFixScript";
+    script.defer = true;
+    script.src = "catalog-premium-fix.js?v=20260706-catalogo-premium";
+    document.head.appendChild(script);
+  }
+
   function applyFooterPremiumFix() {
     installFooterStyle();
     enhanceFooter();
+    loadCatalogPremiumFix();
   }
 
   if (document.readyState === "loading") {
