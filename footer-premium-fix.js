@@ -202,6 +202,10 @@
     loadScriptOnce("performanceSectionsFixScript", "performance-sections-fix.js?v=20260706-performance-sections");
   }
 
+  function loadAccessibilityStatusFix() {
+    loadScriptOnce("accessibilityStatusFixScript", "accessibility-status-fix.js?v=20260706-accessibility-status");
+  }
+
   function applyFooterPremiumFix() {
     installFooterStyle();
     enhanceFooter();
@@ -214,6 +218,7 @@
     loadAdminDashboardPremiumFix();
     loadPerformanceImagesFix();
     loadPerformanceSectionsFix();
+    loadAccessibilityStatusFix();
   }
 
   if (document.readyState === "loading") {
