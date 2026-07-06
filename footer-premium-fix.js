@@ -157,31 +157,29 @@
     footer.appendChild(signature);
   }
 
-  function loadCatalogPremiumFix() {
-    if (document.getElementById("catalogPremiumFixScript")) return;
+  function loadScriptOnce(id, src) {
+    if (document.getElementById(id)) return;
     const script = document.createElement("script");
-    script.id = "catalogPremiumFixScript";
+    script.id = id;
     script.defer = true;
-    script.src = "catalog-premium-fix.js?v=20260706-catalogo-premium";
+    script.src = src;
     document.head.appendChild(script);
+  }
+
+  function loadCatalogPremiumFix() {
+    loadScriptOnce("catalogPremiumFixScript", "catalog-premium-fix.js?v=20260706-catalogo-premium");
   }
 
   function loadAmbientPremiumFix() {
-    if (document.getElementById("ambientPremiumFixScript")) return;
-    const script = document.createElement("script");
-    script.id = "ambientPremiumFixScript";
-    script.defer = true;
-    script.src = "ambient-premium-fix.js?v=20260706-ambient-premium";
-    document.head.appendChild(script);
+    loadScriptOnce("ambientPremiumFixScript", "ambient-premium-fix.js?v=20260706-ambient-premium");
   }
 
   function loadCommercialBadgesFix() {
-    if (document.getElementById("commercialBadgesFixScript")) return;
-    const script = document.createElement("script");
-    script.id = "commercialBadgesFixScript";
-    script.defer = true;
-    script.src = "commercial-badges-fix.js?v=20260706-commercial-badges";
-    document.head.appendChild(script);
+    loadScriptOnce("commercialBadgesFixScript", "commercial-badges-fix.js?v=20260706-commercial-badges");
+  }
+
+  function loadAlsoBoughtFix() {
+    loadScriptOnce("alsoBoughtFixScript", "also-bought-fix.js?v=20260706-also-bought");
   }
 
   function applyFooterPremiumFix() {
@@ -190,6 +188,7 @@
     loadCatalogPremiumFix();
     loadAmbientPremiumFix();
     loadCommercialBadgesFix();
+    loadAlsoBoughtFix();
   }
 
   if (document.readyState === "loading") {
