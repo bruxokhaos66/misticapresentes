@@ -194,6 +194,10 @@
     loadScriptOnce("adminDashboardPremiumFixScript", "admin-dashboard-premium-fix.js?v=20260706-admin-dashboard");
   }
 
+  function loadPerformanceImagesFix() {
+    loadScriptOnce("performanceImagesFixScript", "performance-images-fix.js?v=20260706-performance-images");
+  }
+
   function applyFooterPremiumFix() {
     installFooterStyle();
     enhanceFooter();
@@ -204,6 +208,7 @@
     loadCartCtaFix();
     loadIsisRecommendationsFix();
     loadAdminDashboardPremiumFix();
+    loadPerformanceImagesFix();
   }
 
   if (document.readyState === "loading") {
