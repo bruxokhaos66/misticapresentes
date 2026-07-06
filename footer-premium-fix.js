@@ -222,6 +222,10 @@
     loadScriptOnce("ambientSinglePlayerGuardScript", "ambient-single-player-guard.js?v=20260706-single-player");
   }
 
+  function loadSaleApiFirstFix() {
+    loadScriptOnce("misticaSaleApiFirstScript", "mobile-sale-api-first.js?v=20260706-api-first-sale");
+  }
+
   function applyFooterPremiumFix() {
     installFooterStyle();
     enhanceFooter();
@@ -239,6 +243,7 @@
     loadAmbientPlayerUnify();
     loadAdminAmbientMusic();
     loadSinglePlayerGuard();
+    loadSaleApiFirstFix();
   }
 
   if (document.readyState === "loading") {
