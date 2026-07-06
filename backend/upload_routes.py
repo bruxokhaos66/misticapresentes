@@ -7,12 +7,14 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, File, Header, HTTPException, UploadFile
+from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/api", tags=["uploads"])
 
 BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "uploads" / "produtos"
 AUDIO_DIR = BASE_DIR / "uploads" / "musicas"
+AUDIO_LINKS_FILE = AUDIO_DIR / "links-diretos.txt"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -31,6 +33,11 @@ ALLOWED_AUDIO_TYPES = {
     "audio/ogg": ".ogg",
     "audio/webm": ".webm",
 }
+ALLOWED_AUDIO_EXTENSIONS = (".mp3", ".wav", ".ogg", ".webm", ".m4a")
+
+
+class AudioLinksIn(BaseModel):
+    links: list[str] = Field(default_factory=list)
 
 
 def validar_site_api_key(chave_recebida: str | None):
@@ -45,6 +52,27 @@ def validar_site_api_key(chave_recebida: str | None):
 def limpar_nome(value: str) -> str:
     base = re.sub(r"[^a-zA-Z0-9_-]+", "-", value.strip().lower())
     return base.strip("-")[:60] or "arquivo"
+
+
+def normalizar_link_audio(value: str | None) -> str:
+    texto = str(value or "").strip()[:720]
+    if not texto.startswith(("https://", "http://")):
+        return ""
+    sem_query = texto.split("?", 1)[0].lower()
+    if not sem_query.endswith(ALLOWED_AUDIO_EXTENSIONS):
+        return ""
+    return texto
+
+
+def limpar_links_audio(links: list[str]) -> list[str]:
+    limpos = []
+    for item in links:
+        link = normalizar_link_audio(item)
+        if link and link not in limpos:
+            limpos.append(link)
+        if len(limpos) >= 20:
+            break
+    return limpos
 
 
 @router.post("/uploads/produtos")
@@ -117,7 +145,7 @@ def listar_musicas_ambiente():
     musicas = []
     if AUDIO_DIR.exists():
         for arquivo in sorted(AUDIO_DIR.iterdir(), key=lambda item: item.stat().st_mtime, reverse=True):
-            if not arquivo.is_file() or arquivo.suffix.lower() not in {".mp3", ".wav", ".ogg", ".webm"}:
+            if not arquivo.is_file() or arquivo.name == AUDIO_LINKS_FILE.name or arquivo.suffix.lower() not in {".mp3", ".wav", ".ogg", ".webm"}:
                 continue
             stat = arquivo.stat()
             musicas.append(
@@ -132,5 +160,31 @@ def listar_musicas_ambiente():
         "ok": True,
         "musicas": musicas[:30],
         "total": len(musicas),
+        "data_hora": datetime.now().isoformat(timespec="seconds"),
+    }
+
+
+@router.get("/uploads/musicas/links")
+def listar_links_audio_ambiente():
+    links = []
+    if AUDIO_LINKS_FILE.exists():
+        links = limpar_links_audio(AUDIO_LINKS_FILE.read_text(encoding="utf-8").splitlines())
+    return {
+        "ok": True,
+        "links": links,
+        "total": len(links),
+        "data_hora": datetime.now().isoformat(timespec="seconds"),
+    }
+
+
+@router.post("/uploads/musicas/links")
+def salvar_links_audio_ambiente(payload: AudioLinksIn, x_mistica_api_key: str | None = Header(default=None)):
+    validar_site_api_key(x_mistica_api_key)
+    links = limpar_links_audio(payload.links)
+    AUDIO_LINKS_FILE.write_text("\n".join(links), encoding="utf-8")
+    return {
+        "ok": True,
+        "links": links,
+        "total": len(links),
         "data_hora": datetime.now().isoformat(timespec="seconds"),
     }
