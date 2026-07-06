@@ -7,7 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const domain = cfg.domain || "misticaesotericos.com.br";
   const params = new URLSearchParams(window.location.search);
   const adminAccess = params.get("admin") === "mistica" || window.location.hash === "#admin-mistica";
-  const assetVersion = "20260706-isis-final-separado";
+  const assetVersion = "20260706-isis-lock-final";
   const logoAsset = `assets/logo-mistica-modern.svg?v=${assetVersion}`;
   const heroIsisSources = [
     `assets/isis-humana-xamanica-02-publicitaria.webp?v=${assetVersion}`,
@@ -50,7 +50,7 @@ document.addEventListener("DOMContentLoaded", () => {
   loadScriptOnce("siteReadinessScript", "site-readiness.js");
   loadScriptOnce("isisCommerceScript", "isis-commerce.js");
   loadScriptOnce("isisCommandsScript", "isis-commands.js");
-  loadScriptOnce("isisSectionProductsFixScript", "isis-section-products-fix.js");
+  loadScriptOnce("isisSectionProductsLockFinalScript", "isis-section-products-fix.js");
 
   const adminPanel = document.getElementById("admin");
   if (adminPanel) {
@@ -100,17 +100,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const isisPanel = document.querySelector(".isis-panel-image");
   if (isisPanel) {
-    isisPanel.innerHTML = `<img class="isis-human-img isis-human-produtos" src="${sectionIsisAsset}" alt="Isis da Mística Presentes apresentando produtos" width="720" height="900" loading="lazy" decoding="async"><p>Isis, presença misteriosa e xamânica para guiar escolhas, produtos e atendimento da loja.</p>`;
+    isisPanel.dataset.isisProductsPanel = "true";
+    isisPanel.innerHTML = `<img class="isis-human-img isis-human-produtos" src="${sectionIsisAsset}" alt="Isis da Mística Presentes apresentando produtos" width="720" height="900" loading="eager" decoding="async"><p>Isis, presença misteriosa e xamânica para guiar escolhas, produtos e atendimento da loja.</p>`;
     const isisImg = isisPanel.querySelector("img");
     let isisAttempt = 0;
     isisImg.onerror = () => {
       isisAttempt += 1;
       if (sectionIsisSources[isisAttempt]) {
         isisImg.src = sectionIsisSources[isisAttempt];
-        return;
       }
-      isisPanel.classList.add("asset-failed");
-      isisPanel.innerHTML = `<div class="isis-symbol" aria-hidden="true">ISIS</div><p>Isis, presença misteriosa e xamânica para guiar escolhas e atendimento da loja.</p>`;
     };
   }
 
