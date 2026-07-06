@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://misticaesotericos.com.br/sitemap.xml
+Sitemap: https://www.misticaesotericos.com.br/sitemap.xml
