@@ -1,9 +1,20 @@
 (() => {
   const STORAGE_KEY = "misticaAmbientPlaylistLinks";
   const styleId = "misticaAmbientPlaylistStyle";
+  const config = window.misticaSiteConfig || {};
+  const API_BASE = String(config.apiBaseUrl || "https://api.misticaesotericos.com.br").replace(/\/$/, "");
+
+  let remoteLinks = null;
+  let remoteLoaded = false;
 
   function isAdminView() {
     return window.location.search.includes("admin=mistica") || window.location.hash.includes("admin-mistica") || document.body?.classList.contains("admin-mode");
+  }
+
+  function apiHeaders() {
+    const headers = { "Content-Type": "application/json" };
+    if (config.siteApiKey) headers["X-Mistica-Api-Key"] = config.siteApiKey;
+    return headers;
   }
 
   function normalizeUrl(value) {
@@ -19,20 +30,63 @@
     }
   }
 
-  function readLinks() {
+  function cleanLinks(links) {
+    return [...new Set((links || []).map(normalizeUrl).filter(Boolean))].slice(0, 12);
+  }
+
+  function readLocalLinks() {
     try {
       const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
       if (!Array.isArray(parsed)) return [];
-      return parsed.map(normalizeUrl).filter(Boolean).slice(0, 12);
+      return cleanLinks(parsed);
     } catch (error) {
       return [];
     }
   }
 
-  function saveLinks(links) {
-    const clean = [...new Set(links.map(normalizeUrl).filter(Boolean))].slice(0, 12);
+  function writeLocalLinks(links) {
+    const clean = cleanLinks(links);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
     return clean;
+  }
+
+  function readLinks() {
+    return remoteLinks || readLocalLinks();
+  }
+
+  async function fetchRemoteLinks() {
+    try {
+      const response = await fetch(`${API_BASE}/api/site/playlist-ambiente`, { cache: "no-store" });
+      if (!response.ok) throw new Error("Playlist remota indisponível.");
+      const data = await response.json();
+      remoteLinks = cleanLinks(data.links || []);
+      remoteLoaded = true;
+      if (remoteLinks.length) writeLocalLinks(remoteLinks);
+      return remoteLinks;
+    } catch (error) {
+      remoteLoaded = true;
+      remoteLinks = null;
+      return readLocalLinks();
+    }
+  }
+
+  async function saveLinks(links) {
+    const clean = writeLocalLinks(links);
+    remoteLinks = clean;
+    try {
+      const response = await fetch(`${API_BASE}/api/site/playlist-ambiente`, {
+        method: "POST",
+        headers: apiHeaders(),
+        body: JSON.stringify({ links: clean }),
+      });
+      if (!response.ok) throw new Error("Não foi possível salvar na API.");
+      const data = await response.json();
+      remoteLinks = cleanLinks(data.links || clean);
+      writeLocalLinks(remoteLinks);
+      return { links: remoteLinks, mode: "api" };
+    } catch (error) {
+      return { links: clean, mode: "local" };
+    }
   }
 
   function installStyles() {
@@ -99,23 +153,23 @@
     document.head.appendChild(style);
   }
 
-  function renderAdminPanel() {
+  async function renderAdminPanel() {
     if (!isAdminView() || document.querySelector("[data-ambient-playlist-admin]")) return;
     const target = document.querySelector("#adminPanel") || document.querySelector(".admin-panel") || document.querySelector("main") || document.body;
     if (!target) return;
 
-    const links = readLinks();
+    const links = remoteLoaded ? readLinks() : await fetchRemoteLinks();
     const panel = document.createElement("section");
     panel.className = "ambient-playlist-admin";
     panel.dataset.ambientPlaylistAdmin = "true";
     panel.innerHTML = `
       <h3>Playlist do ambiente xamânico</h3>
-      <p>Cadastre links do YouTube, um por linha. Eles serão oferecidos ao cliente somente quando ele ativar o ambiente xamânico.</p>
+      <p>Cadastre links do YouTube, um por linha. Quando a API estiver ativa, a playlist passa a valer para todos os clientes.</p>
       <textarea data-ambient-playlist-input placeholder="https://www.youtube.com/watch?v=...">${links.join("\n")}</textarea>
       <div class="ambient-playlist-admin-actions">
         <button class="btn" type="button" data-ambient-playlist-save>Salvar playlist</button>
         <button class="btn btn-secondary" type="button" data-ambient-playlist-clear>Limpar</button>
-        <span class="ambient-playlist-admin-status" data-ambient-playlist-status>${links.length} link(s) salvo(s).</span>
+        <span class="ambient-playlist-admin-status" data-ambient-playlist-status>${links.length} link(s) carregado(s).</span>
       </div>
     `;
 
@@ -123,16 +177,18 @@
 
     const input = panel.querySelector("[data-ambient-playlist-input]");
     const status = panel.querySelector("[data-ambient-playlist-status]");
-    panel.querySelector("[data-ambient-playlist-save]")?.addEventListener("click", () => {
-      const next = saveLinks(String(input.value || "").split(/\n+/));
-      input.value = next.join("\n");
-      status.textContent = `${next.length} link(s) salvo(s).`;
+    panel.querySelector("[data-ambient-playlist-save]")?.addEventListener("click", async () => {
+      status.textContent = "Salvando playlist...";
+      const result = await saveLinks(String(input.value || "").split(/\n+/));
+      input.value = result.links.join("\n");
+      status.textContent = result.mode === "api" ? `${result.links.length} link(s) salvo(s) na API.` : `${result.links.length} link(s) salvo(s) neste navegador. API indisponível.`;
       renderPublicPlaylist(true);
     });
-    panel.querySelector("[data-ambient-playlist-clear]")?.addEventListener("click", () => {
-      saveLinks([]);
+    panel.querySelector("[data-ambient-playlist-clear]")?.addEventListener("click", async () => {
+      status.textContent = "Limpando playlist...";
+      const result = await saveLinks([]);
       input.value = "";
-      status.textContent = "Playlist limpa.";
+      status.textContent = result.mode === "api" ? "Playlist limpa na API." : "Playlist limpa neste navegador. API indisponível.";
       renderPublicPlaylist(true);
     });
   }
@@ -141,10 +197,11 @@
     return readLinks()[0] || "";
   }
 
-  function renderPublicPlaylist(force = false) {
+  async function renderPublicPlaylist(force = false) {
     if (force) document.querySelectorAll("[data-ambient-playlist-public]").forEach((item) => item.remove());
     if (document.querySelector("[data-ambient-playlist-public]")) return;
 
+    if (!remoteLoaded) await fetchRemoteLinks();
     const url = firstPlaylistUrl();
     if (!url) return;
 
@@ -169,7 +226,7 @@
     if (!button || button.dataset.playlistHook === "true") return;
     button.dataset.playlistHook = "true";
     button.addEventListener("click", () => {
-      setTimeout(renderPublicPlaylist, 120);
+      setTimeout(() => renderPublicPlaylist(), 120);
     });
   }
 
@@ -195,6 +252,7 @@
   window.misticaAmbientPlaylist = {
     read: readLinks,
     save: saveLinks,
+    load: fetchRemoteLinks,
     apply,
   };
 })();
