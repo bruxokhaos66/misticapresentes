@@ -175,11 +175,21 @@
     document.head.appendChild(script);
   }
 
+  function loadCommercialBadgesFix() {
+    if (document.getElementById("commercialBadgesFixScript")) return;
+    const script = document.createElement("script");
+    script.id = "commercialBadgesFixScript";
+    script.defer = true;
+    script.src = "commercial-badges-fix.js?v=20260706-commercial-badges";
+    document.head.appendChild(script);
+  }
+
   function applyFooterPremiumFix() {
     installFooterStyle();
     enhanceFooter();
     loadCatalogPremiumFix();
     loadAmbientPremiumFix();
+    loadCommercialBadgesFix();
   }
 
   if (document.readyState === "loading") {
