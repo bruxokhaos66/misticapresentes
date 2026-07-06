@@ -1,18 +1,29 @@
 from __future__ import annotations
 
+import os
+import secrets
 import shutil
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 
 from config import BACKUP_DIR, DB_PATH
 
 router = APIRouter(prefix="/api", tags=["backup"])
 
 
+def validar_site_api_key(chave_recebida: str | None):
+    chave = os.environ.get("MISTICA_SITE_API_KEY", "").strip() or os.environ.get("MISTICA_SYNC_KEY", "").strip()
+    if not chave:
+        raise HTTPException(status_code=503, detail="Configure MISTICA_SITE_API_KEY ou MISTICA_SYNC_KEY para permitir acesso ao backup.")
+    if not chave_recebida or not secrets.compare_digest(str(chave_recebida), chave):
+        raise HTTPException(status_code=403, detail="Chave da API inválida.")
+
+
 @router.post("/backup/manual")
-def criar_backup_manual():
+def criar_backup_manual(x_mistica_api_key: str | None = Header(default=None)):
+    validar_site_api_key(x_mistica_api_key)
     origem = Path(DB_PATH)
     destino_dir = Path(BACKUP_DIR)
 
@@ -37,7 +48,8 @@ def criar_backup_manual():
 
 
 @router.get("/backup/status")
-def status_backup_manual():
+def status_backup_manual(x_mistica_api_key: str | None = Header(default=None)):
+    validar_site_api_key(x_mistica_api_key)
     origem = Path(DB_PATH)
     destino_dir = Path(BACKUP_DIR)
     backups = []
