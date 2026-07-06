@@ -3,6 +3,9 @@
   const buildOfficialUrl = message => `https://wa.me/${officialWhatsapp}?text=${encodeURIComponent(message)}`;
   const modernIconVersion = "20260706-modern-icon-hardfix";
   const modernIcon = `assets/logo-mistica-modern.svg?v=${modernIconVersion}`;
+  const heroIsisVersion = "20260706-hero-isis-png-lock";
+  const heroIsisPath = "isis-humana-xamanica-02-publicitaria.png";
+  const heroIsisSrc = `assets/${heroIsisPath}?v=${heroIsisVersion}`;
 
   try {
     window.buildWhatsappUrl = buildOfficialUrl;
@@ -16,9 +19,49 @@
     .brand-logo-modern{display:block!important;width:58px!important;height:58px!important;object-fit:contain!important;border-radius:999px!important;filter:drop-shadow(0 12px 26px rgba(240,197,106,.18))!important;}
     .footer-mark .brand-logo-modern{width:48px!important;height:48px!important;}
     .hero-card-isis .isis-hero-fallback{display:none!important;}
+    .mystic-logo-card img:not([src*="${heroIsisPath}"]){opacity:0!important;visibility:hidden!important;position:absolute!important;pointer-events:none!important;}
+    .mystic-logo-card img[src*="${heroIsisPath}"],.mystic-logo-card .hero-isis-publicitaria{opacity:1!important;visibility:visible!important;position:relative!important;display:block!important;}
     @media(max-width:560px){.brand-logo-modern{width:46px!important;height:46px!important;}}
     @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important;}}
   `;
+
+  const forceHeroIsis = () => {
+    const heroCard = document.querySelector(".mystic-logo-card");
+    if (!heroCard) return;
+    heroCard.classList.add("hero-card-isis", "hero-card-isis-publicitaria");
+    heroCard.classList.remove("asset-failed");
+
+    let img = heroCard.querySelector(`img[src*="${heroIsisPath}"]`) || heroCard.querySelector("img.hero-isis-img") || heroCard.querySelector("img");
+    if (!img) {
+      img = document.createElement("img");
+      heroCard.prepend(img);
+    }
+
+    img.className = "hero-isis-img hero-isis-publicitaria";
+    img.alt = "Isis da Mística Presentes";
+    img.width = 720;
+    img.height = 900;
+    img.loading = "eager";
+    img.decoding = "async";
+
+    if (!img.getAttribute("src") || !img.src.includes(heroIsisPath)) {
+      img.src = heroIsisSrc;
+    }
+
+    let title = heroCard.querySelector("strong");
+    if (!title) {
+      title = document.createElement("strong");
+      heroCard.appendChild(title);
+    }
+    title.textContent = "Isis";
+
+    let subtitle = heroCard.querySelector("small");
+    if (!subtitle) {
+      subtitle = document.createElement("small");
+      heroCard.appendChild(subtitle);
+    }
+    subtitle.textContent = "Sua guia espiritual para escolhas conscientes";
+  };
 
   const forceModernIcon = () => {
     document.querySelectorAll('link[rel~="icon"]').forEach(link => link.remove());
@@ -112,10 +155,15 @@
     improveLiveRegions();
     improveImages(document);
     forceModernIcon();
+    forceHeroIsis();
 
     setTimeout(forceModernIcon, 100);
     setTimeout(forceModernIcon, 800);
     setTimeout(forceModernIcon, 2500);
+    setTimeout(forceHeroIsis, 100);
+    setTimeout(forceHeroIsis, 700);
+    setTimeout(forceHeroIsis, 1600);
+    setTimeout(forceHeroIsis, 3200);
 
     const observer = new MutationObserver(records => {
       records.forEach(record => {
@@ -123,6 +171,7 @@
           if (node.nodeType === Node.ELEMENT_NODE) {
             improveImages(node);
             forceModernIcon();
+            forceHeroIsis();
           }
         });
       });
