@@ -1,35 +1,54 @@
 (() => {
   function injectHeroIsisPositionFix() {
-    if (document.getElementById("heroIsisPositionFix")) return;
+    const old = document.getElementById("heroIsisPositionFix");
+    if (old) old.remove();
 
     const style = document.createElement("style");
     style.id = "heroIsisPositionFix";
     style.textContent = `
+      /* Etapa 1: correção isolada apenas do hero/topo */
       .hero-section {
-        padding-top: clamp(30px, 3.6vw, 54px) !important;
+        padding-top: clamp(28px, 3.2vw, 52px) !important;
+        padding-bottom: clamp(28px, 3.6vw, 58px) !important;
+        overflow: hidden !important;
       }
 
       .hero-grid {
         align-items: start !important;
       }
 
+      .hero-copy {
+        position: relative !important;
+        z-index: 2 !important;
+      }
+
       .hero-visual {
+        position: relative !important;
+        z-index: 1 !important;
         align-self: start !important;
+        justify-self: center !important;
         display: flex !important;
         align-items: flex-start !important;
         justify-content: center !important;
         width: min(100%, 430px) !important;
-        margin-top: 0 !important;
-        padding: 12px !important;
         min-height: 0 !important;
         height: auto !important;
-        overflow: visible !important;
+        padding: 10px !important;
+        margin-top: clamp(-98px, -5.2vw, -56px) !important;
+        margin-bottom: clamp(-34px, -2vw, -18px) !important;
+        overflow: hidden !important;
         border-radius: 30px !important;
       }
 
-      .hero-visual::before,
-      .visual-orbit {
-        transform: translateY(-16px) !important;
+      .hero-visual::before {
+        top: -8% !important;
+        width: 72% !important;
+        opacity: .45 !important;
+      }
+
+      .visual-orbit.one,
+      .visual-orbit.two {
+        opacity: .48 !important;
       }
 
       .mystic-logo-card.hero-card-isis,
@@ -38,67 +57,79 @@
         flex-direction: column !important;
         align-items: center !important;
         justify-content: flex-start !important;
-        max-width: 386px !important;
         width: 100% !important;
+        max-width: 386px !important;
         min-height: 0 !important;
         height: auto !important;
         padding: 10px 10px 14px !important;
         margin: 0 auto !important;
-        transform: translateY(-34px) !important;
+        transform: none !important;
         border-radius: 28px !important;
       }
 
       .hero-isis-publicitaria {
         display: block !important;
-        width: min(100%, 370px) !important;
-        max-height: clamp(360px, 30vw, 470px) !important;
+        width: min(100%, 372px) !important;
+        max-height: clamp(390px, 31vw, 500px) !important;
         object-fit: contain !important;
         object-position: center top !important;
-        margin: -18px auto 0 !important;
-        transform: translateY(-18px) !important;
+        margin: 0 auto !important;
+        transform: none !important;
       }
 
       .mystic-logo-card.hero-card-isis strong,
       .mystic-logo-card.hero-card-isis-publicitaria strong {
-        margin-top: -14px !important;
+        margin-top: -10px !important;
+        line-height: 1.1 !important;
       }
 
       .mystic-logo-card.hero-card-isis small,
       .mystic-logo-card.hero-card-isis-publicitaria small {
         margin-top: 0 !important;
+        max-width: 300px !important;
+        line-height: 1.3 !important;
       }
 
-      @media (max-width: 1280px) {
+      @media (min-width: 1400px) {
+        .hero-visual {
+          margin-top: -112px !important;
+        }
+      }
+
+      @media (max-width: 1280px) and (min-width: 981px) {
         .hero-visual {
           width: min(100%, 410px) !important;
-        }
-
-        .mystic-logo-card.hero-card-isis,
-        .mystic-logo-card.hero-card-isis-publicitaria {
-          transform: translateY(-26px) !important;
+          margin-top: -64px !important;
+          margin-bottom: -18px !important;
         }
 
         .hero-isis-publicitaria {
-          max-height: 420px !important;
-          transform: translateY(-14px) !important;
+          max-height: 430px !important;
         }
       }
 
       @media (max-width: 980px) {
+        .hero-section {
+          overflow: hidden !important;
+        }
+
         .hero-visual {
           width: min(100%, 460px) !important;
+          margin: 0 auto !important;
+          padding: 12px !important;
           overflow: hidden !important;
         }
 
         .mystic-logo-card.hero-card-isis,
         .mystic-logo-card.hero-card-isis-publicitaria {
+          max-width: 100% !important;
           transform: none !important;
         }
 
         .hero-isis-publicitaria {
+          max-height: 390px !important;
           margin-top: 0 !important;
           transform: none !important;
-          max-height: 390px !important;
         }
       }
 
@@ -117,9 +148,28 @@
     document.head.appendChild(style);
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", injectHeroIsisPositionFix);
-  } else {
-    injectHeroIsisPositionFix();
+  function applyHeroClass() {
+    const heroVisual = document.querySelector(".hero-visual");
+    const heroCard = document.querySelector(".mystic-logo-card.hero-card-isis, .mystic-logo-card.hero-card-isis-publicitaria");
+    if (heroVisual) heroVisual.dataset.heroIsisFixed = "true";
+    if (heroCard) heroCard.dataset.heroIsisFixed = "true";
   }
+
+  function apply() {
+    injectHeroIsisPositionFix();
+    applyHeroClass();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", apply, { once: true });
+  } else {
+    apply();
+  }
+
+  window.addEventListener("load", () => {
+    apply();
+    setTimeout(apply, 500);
+    setTimeout(apply, 1400);
+    setTimeout(apply, 2800);
+  });
 })();
