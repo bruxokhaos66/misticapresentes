@@ -1,21 +1,31 @@
 (() => {
   const styleId = "misticaAmbientPlayerUnifyStyle";
   const VOLUME_KEY = "misticaAmbientUnifiedVolume";
+  const config = window.misticaSiteConfig || {};
+  const API_BASE = String(config.apiBaseUrl || "https://api.misticaesotericos.com.br").replace(/\/$/, "");
+  let sources = [];
+  let audio = null;
+  let index = 0;
 
   function savedVolume() {
     const value = Number(localStorage.getItem(VOLUME_KEY));
-    return Number.isFinite(value) && value >= 0 && value <= 1 ? value : 0.22;
+    return Number.isFinite(value) && value >= 0 && value <= 1 ? value : 0.30;
   }
 
   function setVolume(value) {
     const volume = Math.max(0, Math.min(1, Number(value) || 0));
     localStorage.setItem(VOLUME_KEY, String(volume));
-    document.querySelectorAll(".ambient-playlist-public audio, .ambient-audio-player").forEach((audio) => {
-      audio.volume = volume;
-    });
+    if (audio) audio.volume = volume;
     document.querySelectorAll("[data-unified-volume-label]").forEach((label) => {
       label.textContent = `Volume ${Math.round(volume * 100)}%`;
     });
+  }
+
+  function statusText(text) {
+    const mainStatus = document.querySelector("[data-ambient-status]");
+    if (mainStatus) mainStatus.textContent = text;
+    const playerStatus = document.querySelector("[data-unified-status]");
+    if (playerStatus) playerStatus.textContent = text;
   }
 
   function installStyle() {
@@ -24,111 +34,158 @@
     style.id = styleId;
     style.textContent = `
       [data-ambient-player-inline],
-      [data-ambient-player-fix] {
+      [data-ambient-player-fix],
+      [data-ambient-playlist-public] {
         display: none !important;
       }
 
-      .ambient-playlist-public {
-        width: 100% !important;
-        margin-top: 8px !important;
-        border: 0 !important;
-        border-radius: 0 !important;
-        padding: 0 !important;
-        background: transparent !important;
-        box-shadow: none !important;
+      [data-unified-player-panel] {
+        width: 100%;
+        margin-top: 8px;
       }
 
-      .ambient-playlist-public strong,
-      .ambient-playlist-public > span,
-      .ambient-playlist-public [data-ambient-player-play],
-      .ambient-playlist-public [data-ambient-playlist-open] {
-        display: none !important;
-      }
-
-      .ambient-playlist-public-actions {
-        display: flex !important;
-        flex-wrap: wrap !important;
-        gap: 10px !important;
-        align-items: center !important;
-        margin-top: 0 !important;
-      }
-
-      .ambient-playlist-public audio {
-        width: 100% !important;
-        margin-top: 10px !important;
+      .ambient-unified-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        margin-top: 10px;
       }
 
       .ambient-unified-volume {
         width: min(420px, 100%);
         accent-color: #f0c56a;
       }
+
+      .ambient-unified-audio {
+        width: 100%;
+        margin-top: 10px;
+      }
+
+      .ambient-unified-status {
+        color: #b8c977;
+        font-weight: 800;
+        font-size: .86rem;
+      }
     `;
     document.head.appendChild(style);
   }
 
-  function lowerPanel() {
-    return document.querySelector("[data-ambient-playlist-public]");
+  function apiUrl(path) {
+    if (!path) return "";
+    return String(path).startsWith("http") ? path : `${API_BASE}${path}`;
   }
 
-  function lowerAudio() {
-    return lowerPanel()?.querySelector("audio") || document.querySelector(".ambient-playlist-public audio");
+  async function loadSources() {
+    const next = [];
+    try {
+      const response = await fetch(`${API_BASE}/api/uploads/musicas`, { cache: "no-store" });
+      if (response.ok) {
+        const data = await response.json();
+        (data.musicas || []).forEach((item) => {
+          const url = apiUrl(item.url);
+          if (url && !next.includes(url)) next.push(url);
+        });
+      }
+    } catch (error) {
+      // Mantém lista anterior se a API oscilar.
+    }
+    if (next.length) sources = next;
+    updateCount();
+    return sources;
   }
 
-  function statusText(text) {
-    const mainStatus = document.querySelector("[data-ambient-status]");
-    if (mainStatus) mainStatus.textContent = text;
-    const playerStatus = lowerPanel()?.querySelector("[data-ambient-player-status]");
-    if (playerStatus) playerStatus.textContent = text;
+  function card() {
+    return document.querySelector("[data-ambient-card]");
   }
 
-  function addControls() {
-    const panel = lowerPanel();
-    if (!panel || panel.dataset.unifiedPlayer === "true") return;
-    panel.dataset.unifiedPlayer = "true";
+  function ensurePanel() {
+    const parent = card();
+    if (!parent) return null;
+    document.querySelectorAll("[data-ambient-player-inline], [data-ambient-player-fix], [data-ambient-playlist-public]").forEach((item) => item.remove());
 
-    const actions = panel.querySelector(".ambient-playlist-public-actions") || panel;
-
-    const next = document.createElement("button");
-    next.className = "btn btn-secondary";
-    next.type = "button";
-    next.textContent = "Próxima música";
-    next.dataset.unifiedNext = "true";
-    next.addEventListener("click", () => {
-      const audio = lowerAudio();
-      if (!audio) return;
-      audio.currentTime = 0;
-      audio.play().then(() => statusText("Música ativada.")).catch(() => statusText("Clique no player para iniciar."));
-    });
-
-    const label = document.createElement("label");
-    label.style.display = "flex";
-    label.style.gap = "8px";
-    label.style.alignItems = "center";
-    label.style.flexWrap = "wrap";
-    label.style.color = "#efe1c5";
-    label.style.fontWeight = "800";
-    label.innerHTML = `Volume <input class="ambient-unified-volume" type="range" min="0" max="1" step="0.01" value="${savedVolume()}" data-unified-volume> <span data-unified-volume-label>Volume ${Math.round(savedVolume() * 100)}%</span>`;
-
-    actions.prepend(label);
-    actions.prepend(next);
-
-    label.querySelector("[data-unified-volume]")?.addEventListener("input", (event) => setVolume(event.target.value));
-    setVolume(savedVolume());
+    let panel = parent.querySelector("[data-unified-player-panel]");
+    if (!panel) {
+      panel = document.createElement("div");
+      panel.dataset.unifiedPlayerPanel = "true";
+      panel.innerHTML = `
+        <div class="ambient-unified-actions">
+          <button class="btn btn-secondary" type="button" data-unified-next>Próxima música</button>
+          <label style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;color:#efe1c5;font-weight:800;">Volume
+            <input class="ambient-unified-volume" type="range" min="0" max="1" step="0.01" value="${savedVolume()}" data-unified-volume>
+            <span data-unified-volume-label>Volume ${Math.round(savedVolume() * 100)}%</span>
+          </label>
+          <span class="ambient-unified-status" data-unified-status>Carregando músicas...</span>
+        </div>
+        <small class="privacy-note" style="display:block;margin-top:8px;" data-unified-count>Verificando músicas...</small>
+      `;
+      const controls = parent.querySelector(".ambient-controls") || parent;
+      controls.appendChild(panel);
+      panel.querySelector("[data-unified-next]")?.addEventListener("click", nextTrack);
+      panel.querySelector("[data-unified-volume]")?.addEventListener("input", (event) => setVolume(event.target.value));
+    }
+    return panel;
   }
 
-  async function playLower() {
-    const audio = lowerAudio();
+  function ensureAudio() {
+    const panel = ensurePanel();
+    if (!panel) return null;
     if (!audio) {
-      statusText("Carregando músicas...");
+      audio = document.createElement("audio");
+      audio.className = "ambient-unified-audio";
+      audio.controls = true;
+      audio.preload = "auto";
+      audio.loop = true;
+      audio.volume = savedVolume();
+      panel.appendChild(audio);
+    }
+    return audio;
+  }
+
+  function updateCount() {
+    const count = document.querySelector("[data-unified-count]");
+    if (count) count.textContent = `Encontradas: ${sources.length} música(s).`;
+  }
+
+  function updateSource() {
+    const player = ensureAudio();
+    if (!player || !sources.length) return null;
+    if (index >= sources.length) index = 0;
+    const src = sources[index];
+    if (player.src !== src) {
+      player.src = src;
+      player.load();
+    }
+    setVolume(savedVolume());
+    updateCount();
+    return player;
+  }
+
+  async function play() {
+    await loadSources();
+    const player = updateSource();
+    if (!player) {
+      statusText("Nenhuma música cadastrada.");
       return;
     }
     try {
-      audio.volume = savedVolume();
-      await audio.play();
+      player.volume = savedVolume();
+      await player.play();
       statusText("Música ativada.");
     } catch (error) {
       statusText("Clique no player para iniciar.");
     }
+  }
+
+  async function nextTrack() {
+    if (!sources.length) await loadSources();
+    if (!sources.length) {
+      statusText("Nenhuma música cadastrada.");
+      return;
+    }
+    index = (index + 1) % sources.length;
+    updateSource();
+    await play();
   }
 
   function hookMainButton() {
@@ -137,31 +194,22 @@
     button.dataset.unifiedHook = "true";
     button.addEventListener("click", () => {
       setTimeout(() => {
-        addControls();
-        if (button.getAttribute("aria-pressed") === "true") playLower();
+        ensurePanel();
+        if (button.getAttribute("aria-pressed") === "true") play();
         else {
-          const audio = lowerAudio();
           if (audio) audio.pause();
           statusText("Aguardando ativação.");
         }
-      }, 260);
+      }, 80);
     });
   }
 
-  function updateCountFromWorkingPanel() {
-    const panel = lowerPanel();
-    if (!panel) return;
-    const audio = lowerAudio();
-    const existing = document.querySelector("[data-ambient-player-diagnostics]");
-    if (existing && audio?.src) existing.textContent = "Música carregada pelo player funcional.";
-  }
-
-  function apply() {
+  async function apply() {
     installStyle();
-    document.querySelectorAll("[data-ambient-player-inline], [data-ambient-player-fix]").forEach((item) => item.remove());
-    addControls();
+    ensurePanel();
+    await loadSources();
+    updateSource();
     hookMainButton();
-    updateCountFromWorkingPanel();
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", apply, { once: true });
@@ -169,7 +217,9 @@
 
   window.addEventListener("load", () => {
     apply();
-    setTimeout(apply, 600);
-    setTimeout(apply, 1500);
+    setTimeout(apply, 700);
+    setTimeout(apply, 1800);
   });
+
+  window.misticaAmbientUnifiedPlayer = { play, next: nextTrack, volume: setVolume, reload: loadSources };
 })();
