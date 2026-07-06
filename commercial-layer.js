@@ -7,7 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const domain = cfg.domain || "misticaesotericos.com.br";
   const params = new URLSearchParams(window.location.search);
   const adminAccess = params.get("admin") === "mistica" || window.location.hash === "#admin-mistica";
-  const assetVersion = "20260706-etapa4-script-diagnostics";
+  const assetVersion = "20260706-form-field-fix";
   const logoAsset = `assets/logo-mistica-modern.svg?v=${assetVersion}`;
   const finalSectionPath = "isis-humana-xamanica-03-produtos.png";
   const finalSectionSrc = `assets/${finalSectionPath}?v=${assetVersion}`;
@@ -131,6 +131,7 @@ document.addEventListener("DOMContentLoaded", () => {
     ["isisSectionProductsLockFinalScript", "isis-section-products-fix.js"],
     ["commercialPremiumScript", "commercial-premium.js"],
     ["ambientExperienceScript", "ambient-experience.js"],
+    ["formFieldAccessibilityFixScript", "form-field-accessibility-fix.js"],
     // Camadas visuais finais. Manter esta ordem para evitar conflitos de layout.
     ["wideLayoutFixScript", "layout-wide-fix.js"],
     ["heroIsisPositionFixScript", "hero-isis-position-fix.js"],
