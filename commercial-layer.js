@@ -7,8 +7,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const domain = cfg.domain || "misticaesotericos.com.br";
   const params = new URLSearchParams(window.location.search);
   const adminAccess = params.get("admin") === "mistica" || window.location.hash === "#admin-mistica";
-  const assetVersion = "20260706-isis-png-final";
+  const assetVersion = "20260706-isis-png-hardlock";
   const logoAsset = `assets/logo-mistica-modern.svg?v=${assetVersion}`;
+  const finalSectionPath = "isis-humana-xamanica-03-produtos.png";
+  const finalSectionSrc = `assets/${finalSectionPath}?v=${assetVersion}`;
   const heroIsisSources = [
     `assets/isis-humana-xamanica-02-publicitaria.webp?v=${assetVersion}`,
     `./assets/isis-humana-xamanica-02-publicitaria.webp?v=${assetVersion}`,
@@ -16,12 +18,67 @@ document.addEventListener("DOMContentLoaded", () => {
     `assets/isis-humana-xamanica.webp?v=${assetVersion}`
   ];
   const sectionIsisSources = [
-    `assets/isis-humana-xamanica-03-produtos.png?v=${assetVersion}`,
-    `./assets/isis-humana-xamanica-03-produtos.png?v=${assetVersion}`,
-    `/assets/isis-humana-xamanica-03-produtos.png?v=${assetVersion}`
+    finalSectionSrc,
+    `./assets/${finalSectionPath}?v=${assetVersion}`,
+    `/assets/${finalSectionPath}?v=${assetVersion}`
   ];
   const heroIsisAsset = heroIsisSources[0];
   const sectionIsisAsset = sectionIsisSources[0];
+
+  function installIsisHardLockStyle() {
+    if (document.getElementById("isis-png-hardlock-style")) return;
+    const style = document.createElement("style");
+    style.id = "isis-png-hardlock-style";
+    style.textContent = `
+      .isis-panel-image .isis-symbol { display: none !important; }
+      .isis-panel-image img:not([src*="${finalSectionPath}"]) {
+        opacity: 0 !important;
+        visibility: hidden !important;
+        position: absolute !important;
+        pointer-events: none !important;
+      }
+      .isis-panel-image img[src*="${finalSectionPath}"],
+      .isis-panel-image .isis-human-produtos {
+        opacity: 1 !important;
+        visibility: visible !important;
+        display: block !important;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function lockAssistantIsisPanel() {
+    installIsisHardLockStyle();
+    const panel = document.querySelector(".isis-panel-image");
+    if (!panel) return;
+
+    panel.dataset.isisProductsPanel = "true";
+    panel.classList.remove("asset-failed");
+
+    let img = panel.querySelector(`img[src*="${finalSectionPath}"]`) || panel.querySelector("img.isis-human-produtos") || panel.querySelector("img");
+    if (!img) {
+      img = document.createElement("img");
+      panel.prepend(img);
+    }
+
+    img.className = "isis-human-img isis-human-produtos";
+    img.alt = "Isis da Mística Presentes apresentando produtos";
+    img.width = 720;
+    img.height = 900;
+    img.loading = "eager";
+    img.decoding = "async";
+
+    if (!img.getAttribute("src") || !img.src.includes(finalSectionPath)) {
+      img.src = sectionIsisAsset;
+    }
+
+    let text = panel.querySelector("p");
+    if (!text) {
+      text = document.createElement("p");
+      panel.appendChild(text);
+    }
+    text.textContent = "Isis, presença misteriosa e xamânica para guiar escolhas, produtos e atendimento da loja.";
+  }
 
   document.querySelectorAll('link[rel~="icon"]').forEach(link => link.remove());
   const favicon = document.createElement("link");
@@ -98,18 +155,22 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   }
 
-  const isisPanel = document.querySelector(".isis-panel-image");
-  if (isisPanel) {
-    isisPanel.dataset.isisProductsPanel = "true";
-    isisPanel.innerHTML = `<img class="isis-human-img isis-human-produtos" src="${sectionIsisAsset}" alt="Isis da Mística Presentes apresentando produtos" width="720" height="900" loading="eager" decoding="async"><p>Isis, presença misteriosa e xamânica para guiar escolhas, produtos e atendimento da loja.</p>`;
-    const isisImg = isisPanel.querySelector("img");
-    let isisAttempt = 0;
-    isisImg.onerror = () => {
-      isisAttempt += 1;
-      if (sectionIsisSources[isisAttempt]) {
-        isisImg.src = sectionIsisSources[isisAttempt];
+  lockAssistantIsisPanel();
+  setTimeout(lockAssistantIsisPanel, 100);
+  setTimeout(lockAssistantIsisPanel, 700);
+  setTimeout(lockAssistantIsisPanel, 1600);
+  setTimeout(lockAssistantIsisPanel, 3200);
+
+  const lockedPanel = document.querySelector(".isis-panel-image");
+  if (lockedPanel && lockedPanel.dataset.hardLockObserver !== "true") {
+    lockedPanel.dataset.hardLockObserver = "true";
+    const observer = new MutationObserver(() => {
+      const current = lockedPanel.querySelector("img");
+      if (!current || !current.src.includes(finalSectionPath)) {
+        requestAnimationFrame(lockAssistantIsisPanel);
       }
-    };
+    });
+    observer.observe(lockedPanel, { childList: true, subtree: true, attributes: true, attributeFilter: ["src", "class"] });
   }
 
   document.querySelectorAll("[data-whatsapp-link]").forEach(link => {
