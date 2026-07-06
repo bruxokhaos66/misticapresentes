@@ -21,7 +21,7 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 
 MAX_IMAGE_BYTES = 4 * 1024 * 1024
-MAX_AUDIO_BYTES = 18 * 1024 * 1024
+MAX_AUDIO_BYTES = 30 * 1024 * 1024
 ALLOWED_CONTENT_TYPES = {
     "image/jpeg": ".jpg",
     "image/png": ".png",
@@ -34,6 +34,8 @@ ALLOWED_AUDIO_TYPES = {
     "audio/x-wav": ".wav",
     "audio/ogg": ".ogg",
     "audio/webm": ".webm",
+    "audio/mp4": ".m4a",
+    "audio/x-m4a": ".m4a",
 }
 ALLOWED_AUDIO_EXTENSIONS = (".mp3", ".wav", ".ogg", ".webm", ".m4a")
 
@@ -93,6 +95,17 @@ def garantir_tabela_musicas_ambiente(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_site_musicas_ambiente_criado ON site_musicas_ambiente(criado_em)")
 
 
+def detectar_extensao_audio(arquivo: UploadFile) -> str:
+    content_type = arquivo.content_type or ""
+    if content_type in ALLOWED_AUDIO_TYPES:
+        return ALLOWED_AUDIO_TYPES[content_type]
+    filename = (arquivo.filename or "").lower()
+    for ext in ALLOWED_AUDIO_EXTENSIONS:
+        if filename.endswith(ext):
+            return ext
+    raise HTTPException(status_code=400, detail="Formato inválido. Use MP3, WAV, OGG, WEBM ou M4A.")
+
+
 @router.post("/uploads/produtos")
 async def upload_imagem_produto(
     arquivo: UploadFile = File(...),
@@ -133,90 +146,74 @@ async def upload_musica_ambiente(
 ):
     validar_site_api_key(x_mistica_api_key)
 
-    content_type = arquivo.content_type or ""
-    if content_type not in ALLOWED_AUDIO_TYPES:
-        raise HTTPException(status_code=400, detail="Formato inválido. Use MP3, WAV, OGG ou WEBM.")
-
+    ext = detectar_extensao_audio(arquivo)
     data = await arquivo.read()
     if not data:
         raise HTTPException(status_code=400, detail="Arquivo vazio.")
     if len(data) > MAX_AUDIO_BYTES:
-        raise HTTPException(status_code=413, detail="Áudio muito grande. Limite: 18 MB.")
+        raise HTTPException(status_code=413, detail="Áudio muito grande. Limite: 30 MB.")
 
-    ext = ALLOWED_AUDIO_TYPES[content_type]
-    nome = f"{limpar_nome(nome_base)}-{uuid4().hex[:10]}{ext}"
+    content_type = arquivo.content_type or "audio/mpeg"
+    nome_original = arquivo.filename or nome_base or "ambiente-xamanico"
+    nome_limpo = limpar_nome(nome_original.rsplit(".", 1)[0] or nome_base)
+    nome = f"{nome_limpo}-{uuid4().hex[:10]}{ext}"
     criado_em = datetime.now().isoformat(timespec="seconds")
 
-    try:
-        destino = AUDIO_DIR / nome
-        destino.write_bytes(data)
-    except Exception:
-        pass
-
-    with conectar() as conn:
-        garantir_tabela_musicas_ambiente(conn)
-        cur = conn.execute(
-            """
-            INSERT INTO site_musicas_ambiente (filename, content_type, size_bytes, dados, criado_em)
-            VALUES (?,?,?,?,?)
-            """,
-            (nome, content_type, len(data), data, criado_em),
-        )
-        conn.commit()
-        musica_id = int(cur.lastrowid)
+    destino = AUDIO_DIR / nome
+    destino.write_bytes(data)
 
     return {
         "ok": True,
-        "id": musica_id,
         "filename": nome,
         "content_type": content_type,
         "size_bytes": len(data),
-        "url": f"/api/uploads/musicas/arquivo/{musica_id}",
+        "url": f"/api/uploads/musicas/arquivo-local/{nome}",
         "data_hora": criado_em,
-        "armazenamento": "banco",
+        "armazenamento": "arquivo",
     }
 
 
 @router.get("/uploads/musicas")
 def listar_musicas_ambiente():
     musicas = []
-    with conectar() as conn:
-        garantir_tabela_musicas_ambiente(conn)
-        rows = conn.execute(
-            """
-            SELECT id, filename, content_type, size_bytes, criado_em
-            FROM site_musicas_ambiente
-            ORDER BY id DESC
-            LIMIT 30
-            """
-        ).fetchall()
-        for row in rows:
-            musicas.append(
-                {
-                    "id": row["id"],
-                    "filename": row["filename"],
-                    "content_type": row["content_type"],
-                    "size_bytes": row["size_bytes"],
-                    "modificado_em": row["criado_em"],
-                    "url": f"/api/uploads/musicas/arquivo/{row['id']}",
-                    "armazenamento": "banco",
-                }
-            )
-
-    if not musicas and AUDIO_DIR.exists():
+    if AUDIO_DIR.exists():
         for arquivo in sorted(AUDIO_DIR.iterdir(), key=lambda item: item.stat().st_mtime, reverse=True):
-            if not arquivo.is_file() or arquivo.name == AUDIO_LINKS_FILE.name or arquivo.suffix.lower() not in {".mp3", ".wav", ".ogg", ".webm"}:
+            if not arquivo.is_file() or arquivo.name == AUDIO_LINKS_FILE.name or arquivo.suffix.lower() not in ALLOWED_AUDIO_EXTENSIONS:
                 continue
             stat = arquivo.stat()
             musicas.append(
                 {
                     "filename": arquivo.name,
-                    "url": f"/uploads/musicas/{arquivo.name}",
+                    "url": f"/api/uploads/musicas/arquivo-local/{arquivo.name}",
                     "size_bytes": stat.st_size,
                     "modificado_em": datetime.fromtimestamp(stat.st_mtime).isoformat(timespec="seconds"),
                     "armazenamento": "arquivo",
                 }
             )
+
+    if not musicas:
+        with conectar() as conn:
+            garantir_tabela_musicas_ambiente(conn)
+            rows = conn.execute(
+                """
+                SELECT id, filename, content_type, size_bytes, criado_em
+                FROM site_musicas_ambiente
+                ORDER BY id DESC
+                LIMIT 30
+                """
+            ).fetchall()
+            for row in rows:
+                musicas.append(
+                    {
+                        "id": row["id"],
+                        "filename": row["filename"],
+                        "content_type": row["content_type"],
+                        "size_bytes": row["size_bytes"],
+                        "modificado_em": row["criado_em"],
+                        "url": f"/api/uploads/musicas/arquivo/{row['id']}",
+                        "armazenamento": "banco",
+                    }
+                )
 
     return {
         "ok": True,
@@ -224,6 +221,36 @@ def listar_musicas_ambiente():
         "total": len(musicas),
         "data_hora": datetime.now().isoformat(timespec="seconds"),
     }
+
+
+@router.get("/uploads/musicas/arquivo-local/{filename}")
+def obter_musica_local_ambiente(filename: str):
+    nome = Path(filename).name
+    if not nome.lower().endswith(ALLOWED_AUDIO_EXTENSIONS):
+        raise HTTPException(status_code=400, detail="Formato de música inválido.")
+    arquivo = AUDIO_DIR / nome
+    if not arquivo.exists() or not arquivo.is_file():
+        raise HTTPException(status_code=404, detail="Música não encontrada.")
+
+    media_type = "audio/mpeg"
+    if nome.lower().endswith(".wav"):
+        media_type = "audio/wav"
+    elif nome.lower().endswith(".ogg"):
+        media_type = "audio/ogg"
+    elif nome.lower().endswith(".webm"):
+        media_type = "audio/webm"
+    elif nome.lower().endswith(".m4a"):
+        media_type = "audio/mp4"
+
+    return Response(
+        content=arquivo.read_bytes(),
+        media_type=media_type,
+        headers={
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "public, max-age=3600",
+            "Content-Disposition": f"inline; filename={nome}",
+        },
+    )
 
 
 @router.get("/uploads/musicas/arquivo/{musica_id}")
