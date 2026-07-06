@@ -210,8 +210,8 @@
     loadScriptOnce("ambientPlaylistAdminScript", "ambient-playlist-admin.js?v=20260706-playlist-ambiente-v3");
   }
 
-  function loadAmbientPlayerFix() {
-    loadScriptOnce("ambientPlayerFixScript", "ambient-player-fix.js?v=20260706-player-final2");
+  function loadAmbientPlayerUnify() {
+    loadScriptOnce("ambientPlayerUnifyScript", "ambient-player-unify.js?v=20260706-player-funcional");
   }
 
   function loadAdminAmbientMusic() {
@@ -232,7 +232,7 @@
     loadPerformanceSectionsFix();
     loadAccessibilityStatusFix();
     loadAmbientPlaylistAdmin();
-    loadAmbientPlayerFix();
+    loadAmbientPlayerUnify();
     loadAdminAmbientMusic();
   }
 
