@@ -207,7 +207,11 @@
   }
 
   function loadAmbientPlaylistAdmin() {
-    loadScriptOnce("ambientPlaylistAdminScript", "ambient-playlist-admin.js?v=20260706-playlist-ambiente");
+    loadScriptOnce("ambientPlaylistAdminScript", "ambient-playlist-admin.js?v=20260706-playlist-ambiente-v2");
+  }
+
+  function loadAmbientPlayerFix() {
+    loadScriptOnce("ambientPlayerFixScript", "ambient-player-fix.js?v=20260706-player-volume");
   }
 
   function applyFooterPremiumFix() {
@@ -224,6 +228,7 @@
     loadPerformanceSectionsFix();
     loadAccessibilityStatusFix();
     loadAmbientPlaylistAdmin();
+    loadAmbientPlayerFix();
   }
 
   if (document.readyState === "loading") {
