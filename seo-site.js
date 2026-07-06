@@ -70,7 +70,7 @@
     upsertMeta('meta[name="twitter:description"]', { name: "twitter:description", content: description });
     upsertMeta('meta[name="twitter:image"]', { name: "twitter:image", content: image });
     upsertLink("canonical", url);
-    upsertLink("manifest", `${baseUrl}/site.webmanifest`);
+    upsertLink("manifest", "/site.webmanifest");
 
     setJsonLd("seo-local-business", {
       "@context": "https://schema.org",
