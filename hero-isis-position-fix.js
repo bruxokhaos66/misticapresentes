@@ -6,7 +6,7 @@
     const style = document.createElement("style");
     style.id = "heroIsisPositionFix";
     style.textContent = `
-      /* Etapa 1: correção isolada apenas do hero/topo */
+      /* Correção estável do hero/topo: sem pulo visual após carregamento */
       .hero-section {
         padding-top: clamp(28px, 3.2vw, 52px) !important;
         padding-bottom: clamp(28px, 3.6vw, 58px) !important;
@@ -34,14 +34,14 @@
         min-height: 0 !important;
         height: auto !important;
         padding: 10px !important;
-        margin-top: clamp(-66px, -3.8vw, -36px) !important;
-        margin-bottom: clamp(-24px, -1.4vw, -12px) !important;
+        margin-top: clamp(8px, 1.4vw, 24px) !important;
+        margin-bottom: 0 !important;
         overflow: hidden !important;
         border-radius: 30px !important;
       }
 
       .hero-visual::before {
-        top: -4% !important;
+        top: 2% !important;
         width: 72% !important;
         opacity: .45 !important;
       }
@@ -92,15 +92,14 @@
 
       @media (min-width: 1400px) {
         .hero-visual {
-          margin-top: -74px !important;
+          margin-top: 18px !important;
         }
       }
 
       @media (max-width: 1280px) and (min-width: 981px) {
         .hero-visual {
           width: min(100%, 410px) !important;
-          margin-top: -40px !important;
-          margin-bottom: -12px !important;
+          margin-top: 14px !important;
         }
 
         .hero-isis-publicitaria {
@@ -165,11 +164,4 @@
   } else {
     apply();
   }
-
-  window.addEventListener("load", () => {
-    apply();
-    setTimeout(apply, 500);
-    setTimeout(apply, 1400);
-    setTimeout(apply, 2800);
-  });
 })();
