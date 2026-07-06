@@ -74,3 +74,25 @@ def test_listagem_musicas_ambiente_responde():
     assert data["ok"] is True
     assert "musicas" in data
     assert isinstance(data["musicas"], list)
+
+
+def test_links_audio_ambiente_salva_apenas_audio_direto():
+    payload = {
+        "links": [
+            "https://cdn.exemplo.com/ambiente.mp3",
+            "https://cdn.exemplo.com/ambiente.wav?versao=1",
+            "https://example.com/pagina",
+        ]
+    }
+    response = client.post("/api/uploads/musicas/links", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["ok"] is True
+    assert data["links"] == [
+        "https://cdn.exemplo.com/ambiente.mp3",
+        "https://cdn.exemplo.com/ambiente.wav?versao=1",
+    ]
+
+    response_get = client.get("/api/uploads/musicas/links")
+    assert response_get.status_code == 200
+    assert response_get.json()["links"] == data["links"]
