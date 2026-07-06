@@ -2,6 +2,7 @@
   const cfg = window.misticaSiteConfig || {};
   const API_BASE = (cfg.apiBaseUrl || "https://api.misticaesotericos.com.br").replace(/\/$/, "");
   const OFFICIAL_WHATSAPP = "554999172137";
+  let whatsappObserverInstalled = false;
 
   function make(tag, className, html) {
     const el = document.createElement(tag);
@@ -21,6 +22,20 @@
       link.target = "_blank";
       link.rel = "noopener";
     });
+  }
+
+  function installWhatsappObserver() {
+    if (whatsappObserverInstalled || !document.body) return;
+    whatsappObserverInstalled = true;
+
+    const observer = new MutationObserver(mutations => {
+      if (mutations.some(mutation => mutation.addedNodes.length > 0)) {
+        requestAnimationFrame(fixWhatsapp);
+      }
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+    window.misticaWhatsappObserver = observer;
   }
 
   function mountHowToBuy() {
@@ -101,11 +116,11 @@
 
   window.addEventListener("load", () => {
     fixWhatsapp();
+    installWhatsappObserver();
     mountHowToBuy();
     mountApiHealthPanel();
     disableDuplicateIsisLocalLayer();
-    setInterval(fixWhatsapp, 3000);
   });
 
-  window.misticaSiteReadiness = { fixWhatsapp, testApiHealth, mountHowToBuy };
+  window.misticaSiteReadiness = { fixWhatsapp, testApiHealth, mountHowToBuy, installWhatsappObserver };
 })();
