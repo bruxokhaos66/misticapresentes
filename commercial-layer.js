@@ -7,7 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const domain = cfg.domain || "misticaesotericos.com.br";
   const params = new URLSearchParams(window.location.search);
   const adminAccess = params.get("admin") === "mistica" || window.location.hash === "#admin-mistica";
-  const assetVersion = "20260706-hero-isis-top-force";
+  const assetVersion = "20260706-etapa2-card-system";
   const logoAsset = `assets/logo-mistica-modern.svg?v=${assetVersion}`;
   const finalSectionPath = "isis-humana-xamanica-03-produtos.png";
   const finalSectionSrc = `assets/${finalSectionPath}?v=${assetVersion}`;
@@ -113,6 +113,7 @@ document.addEventListener("DOMContentLoaded", () => {
   loadScriptOnce("ambientExperienceScript", "ambient-experience.js");
   loadScriptOnce("wideLayoutFixScript", "layout-wide-fix.js");
   loadScriptOnce("heroIsisPositionFixScript", "hero-isis-position-fix.js");
+  loadScriptOnce("cardSystemFixScript", "card-system-fix.js");
 
   const adminPanel = document.getElementById("admin");
   if (adminPanel) {
