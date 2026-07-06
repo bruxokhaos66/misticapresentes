@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-win7-32:
-    runs-on: windows-latest
+    runs-on: windows-2022
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -19,9 +19,24 @@ jobs:
           python-version: "3.8"
           architecture: "x86"
 
+      - name: Show Python info
+        shell: pwsh
+        run: |
+          python --version
+          python -c "import platform, struct; print(platform.platform()); print(struct.calcsize('P') * 8, 'bits')"
+
       - name: Build portable app
         shell: pwsh
         run: .\scripts\build_win7_32.ps1
+
+      - name: Verify portable output
+        shell: pwsh
+        run: |
+          if (!(Test-Path "dist\MisticaPresentes\MisticaPresentes.exe")) {
+            Get-ChildItem -Recurse dist -ErrorAction SilentlyContinue
+            throw "MisticaPresentes.exe não foi gerado."
+          }
+          Get-ChildItem "dist\MisticaPresentes" | Select-Object -First 30
 
       - name: Install Inno Setup
         shell: pwsh
@@ -30,7 +45,17 @@ jobs:
       - name: Build installer
         shell: pwsh
         run: |
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer\mistica_presentes_win7_32.iss"
+          $candidates = @(
+            "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+            "C:\Program Files\Inno Setup 6\ISCC.exe"
+          )
+          $iscc = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (!$iscc) { throw "ISCC.exe não encontrado após instalar Inno Setup." }
+          & $iscc "installer\mistica_presentes_win7_32.iss"
+          if (!(Test-Path "dist\installer\MisticaPresentes-Win7-32bit-Setup.exe")) {
+            Get-ChildItem -Recurse dist -ErrorAction SilentlyContinue
+            throw "Instalador não foi gerado."
+          }
 
       - name: Upload portable artifact
         uses: actions/upload-artifact@v4
