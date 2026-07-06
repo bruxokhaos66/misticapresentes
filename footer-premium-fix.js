@@ -218,6 +218,10 @@
     loadScriptOnce("adminAmbientMusicScript", "admin-ambient-music.js?v=20260706-admin-musicas");
   }
 
+  function loadSinglePlayerGuard() {
+    loadScriptOnce("ambientSinglePlayerGuardScript", "ambient-single-player-guard.js?v=20260706-single-player");
+  }
+
   function applyFooterPremiumFix() {
     installFooterStyle();
     enhanceFooter();
@@ -234,6 +238,7 @@
     loadAmbientPlaylistAdmin();
     loadAmbientPlayerUnify();
     loadAdminAmbientMusic();
+    loadSinglePlayerGuard();
   }
 
   if (document.readyState === "loading") {
