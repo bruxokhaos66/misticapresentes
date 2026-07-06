@@ -1,0 +1,64 @@
+from __future__ import annotations
+
+import shutil
+from datetime import datetime
+from pathlib import Path
+
+from fastapi import APIRouter, HTTPException
+
+from config import BACKUP_DIR, DB_PATH
+
+router = APIRouter(prefix="/api", tags=["backup"])
+
+
+@router.post("/backup/manual")
+def criar_backup_manual():
+    origem = Path(DB_PATH)
+    destino_dir = Path(BACKUP_DIR)
+
+    if not origem.exists():
+        raise HTTPException(status_code=404, detail="Arquivo do banco de dados não encontrado")
+
+    try:
+        destino_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        destino = destino_dir / f"mistica_backup_{timestamp}.db"
+        shutil.copy2(origem, destino)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Falha ao criar backup: {exc}") from exc
+
+    return {
+        "status": "ok",
+        "mensagem": "Backup manual criado com sucesso.",
+        "arquivo": str(destino),
+        "tamanho_bytes": destino.stat().st_size,
+        "data_hora": datetime.now().isoformat(timespec="seconds"),
+    }
+
+
+@router.get("/backup/status")
+def status_backup_manual():
+    origem = Path(DB_PATH)
+    destino_dir = Path(BACKUP_DIR)
+    backups = []
+
+    if destino_dir.exists():
+        arquivos = sorted(destino_dir.glob("mistica_backup_*.db"), key=lambda item: item.stat().st_mtime, reverse=True)
+        for arquivo in arquivos[:10]:
+            backups.append(
+                {
+                    "arquivo": str(arquivo),
+                    "nome": arquivo.name,
+                    "tamanho_bytes": arquivo.stat().st_size,
+                    "modificado_em": datetime.fromtimestamp(arquivo.stat().st_mtime).isoformat(timespec="seconds"),
+                }
+            )
+
+    return {
+        "status": "ok",
+        "banco_existe": origem.exists(),
+        "backup_dir": str(destino_dir),
+        "backup_dir_existe": destino_dir.exists(),
+        "ultimos_backups": backups,
+        "data_hora": datetime.now().isoformat(timespec="seconds"),
+    }
