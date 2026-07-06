@@ -134,8 +134,9 @@ def garantir_colunas_sync_backend():
 
 
 def garantir_admin_api():
-    senha_admin = os.environ.get("MISTICA_ADMIN_PASSWORD", "Mistica@123").strip()
+    senha_admin = os.environ.get("MISTICA_ADMIN_PASSWORD", "").strip()
     if not senha_admin:
+        print("[API] MISTICA_ADMIN_PASSWORD não configurada; admin automático não será criado ou redefinido.")
         return
     salt = "mistica_api_admin"
     senha_hash = hash_password_pbkdf2(senha_admin, salt.encode("utf-8"))

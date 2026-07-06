@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import secrets
 from datetime import datetime
 from typing import Optional
 
@@ -36,11 +37,10 @@ class PedidoObservacaoIn(BaseModel):
 
 
 def validar_site_api_key(chave_recebida: str | None):
-    chave = os.environ.get("MISTICA_SITE_API_KEY", "").strip()
+    chave = os.environ.get("MISTICA_SITE_API_KEY", "").strip() or os.environ.get("MISTICA_SYNC_KEY", "").strip()
     if not chave:
-        print("[API] Aviso: MISTICA_SITE_API_KEY não configurada. Status de pedido em modo desenvolvimento.")
-        return
-    if chave_recebida != chave:
+        raise HTTPException(status_code=503, detail="Configure MISTICA_SITE_API_KEY ou MISTICA_SYNC_KEY para permitir escrita pela API.")
+    if not chave_recebida or not secrets.compare_digest(str(chave_recebida), chave):
         raise HTTPException(status_code=403, detail="Chave da API do site inválida.")
 
 
