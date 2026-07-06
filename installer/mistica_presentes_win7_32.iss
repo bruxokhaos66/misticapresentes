@@ -4,7 +4,7 @@
 #define MyAppExeName "MisticaPresentes.exe"
 
 [Setup]
-AppId={{7D9A2E2F-0C6B-4C5E-8A19-MISTICA32}}
+AppId={{7D9A2E2F-0C6B-4C5E-8A19-4D4953544943}}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
@@ -35,4 +35,4 @@ Name: "{group}\Mistica Presentes"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\Mistica Presentes"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "Abrir Mística Presentes"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "Abrir Mistica Presentes"; Flags: nowait postinstall skipifsilent
