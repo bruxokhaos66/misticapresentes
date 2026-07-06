@@ -65,3 +65,12 @@ def test_playlist_ambiente_salva_links_youtube():
     response_get = client.get("/api/site/playlist-ambiente")
     assert response_get.status_code == 200
     assert response_get.json()["links"] == ["https://www.youtube.com/watch?v=abc123"]
+
+
+def test_listagem_musicas_ambiente_responde():
+    response = client.get("/api/uploads/musicas")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["ok"] is True
+    assert "musicas" in data
+    assert isinstance(data["musicas"], list)
