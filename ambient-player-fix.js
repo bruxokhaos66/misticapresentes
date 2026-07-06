@@ -8,6 +8,7 @@
   let sourceIndex = 0;
   let audio = null;
   let lastDiagnostics = { uploads: 0, links: 0, errors: [] };
+  let warmedUp = false;
 
   function apiUrl(path) {
     if (!path) return "";
@@ -82,14 +83,18 @@
     if (!box) return;
     const total = sources.length;
     const erros = lastDiagnostics.errors.length ? ` • ${lastDiagnostics.errors.join(" • ")}` : "";
-    box.textContent = `Encontradas: ${lastDiagnostics.uploads} música(s) enviadas, ${lastDiagnostics.links} link(s) direto(s), ${total} fonte(s) tocável(is).${erros}`;
+    box.textContent = `Encontradas: ${lastDiagnostics.uploads} música(s), ${lastDiagnostics.links} link(s), ${total} fonte(s).${erros}`;
+  }
+
+  function removeLowerPlaylistBlocks() {
+    document.querySelectorAll("[data-ambient-playlist-public], [data-ambient-player-fix]").forEach((item) => item.remove());
   }
 
   function ensurePanel() {
     const card = document.querySelector("[data-ambient-card]");
     if (!card) return null;
 
-    document.querySelectorAll("[data-ambient-player-fix]").forEach((oldPanel) => oldPanel.remove());
+    removeLowerPlaylistBlocks();
 
     let target = card.querySelector(".ambient-controls");
     if (!target) {
@@ -104,17 +109,15 @@
       panel.dataset.ambientPlayerInline = "true";
       panel.style.width = "100%";
       panel.innerHTML = `
-        <button class="btn btn-secondary" type="button" data-ambient-player-start>Tocar no site</button>
         <button class="btn btn-secondary" type="button" data-ambient-player-next>Próxima música</button>
         <label style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;color:#efe1c5;font-weight:800;">Volume
           <input class="ambient-volume" type="range" min="0" max="1" step="0.01" value="${savedVolume()}" data-ambient-player-volume>
           <span data-ambient-player-volume-label>Volume ${Math.round(savedVolume() * 100)}%</span>
         </label>
-        <span class="ambient-status" data-ambient-player-status>Verificando músicas enviadas...</span>
-        <small class="privacy-note" style="display:block;margin-top:8px;" data-ambient-player-diagnostics>Carregando diagnóstico...</small>
+        <span class="ambient-status" data-ambient-player-status>Toque somente após ativar o ambiente.</span>
+        <small class="privacy-note" style="display:block;margin-top:8px;" data-ambient-player-diagnostics>Verificando músicas...</small>
       `;
       target.appendChild(panel);
-      panel.querySelector("[data-ambient-player-start]")?.addEventListener("click", playCurrent);
       panel.querySelector("[data-ambient-player-next]")?.addEventListener("click", playNext);
       panel.querySelector("[data-ambient-player-volume]")?.addEventListener("input", (event) => setVolume(event.target.value));
     }
@@ -157,19 +160,35 @@
     return player;
   }
 
-  async function playCurrent() {
-    await loadSources();
+  function warmUpPlayer() {
+    if (warmedUp || !sources.length) return;
+    const player = updateSource();
+    if (!player) return;
+    warmedUp = true;
+    player.volume = 0;
+    player.play().then(() => {
+      player.pause();
+      player.currentTime = 0;
+      player.volume = savedVolume();
+      setStatus("Pronto para iniciar ao ativar.");
+    }).catch(() => {
+      player.volume = savedVolume();
+    });
+  }
+
+  async function playCurrent(skipReload = false) {
+    if (!skipReload) await loadSources();
     const player = updateSource();
     if (!player) {
-      setStatus("Nenhuma música tocável encontrada. Verifique se o upload foi salvo na API e se o Render já publicou a versão nova.");
+      setStatus("Nenhuma música tocável encontrada.");
       return;
     }
     try {
       player.volume = savedVolume();
       await player.play();
-      setStatus("Música tocando no player do site.");
+      setStatus("Música ambiente tocando.");
     } catch (error) {
-      setStatus("O navegador bloqueou o início. Clique no botão Tocar no site ou no player.");
+      setStatus("Clique no player para iniciar neste navegador.");
     }
   }
 
@@ -181,7 +200,7 @@
     }
     sourceIndex = (sourceIndex + 1) % sources.length;
     updateSource();
-    await playCurrent();
+    await playCurrent(true);
   }
 
   function hookAmbientButton() {
@@ -189,25 +208,38 @@
     if (!button || button.dataset.playerFixHook === "true") return;
     button.dataset.playerFixHook = "true";
 
+    button.addEventListener("pointerdown", () => {
+      ensurePanel();
+      if (sources.length) {
+        updateSource();
+        playCurrent(true);
+      }
+    });
+
     button.addEventListener("click", () => {
       setTimeout(async () => {
         ensurePanel();
         await loadSources();
         updateSource();
-        if (button.getAttribute("aria-pressed") === "true") await playCurrent();
+        const isOn = button.getAttribute("aria-pressed") === "true";
+        if (isOn) await playCurrent(true);
         else if (audio) {
           audio.pause();
           setStatus("Música pausada.");
         }
-      }, 40);
+        removeLowerPlaylistBlocks();
+      }, 20);
     });
   }
 
   async function apply() {
+    removeLowerPlaylistBlocks();
     ensurePanel();
     await loadSources();
     updateSource();
+    warmUpPlayer();
     hookAmbientButton();
+    removeLowerPlaylistBlocks();
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", apply, { once: true });

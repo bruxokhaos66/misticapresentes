@@ -211,7 +211,7 @@
   }
 
   function loadAmbientPlayerFix() {
-    loadScriptOnce("ambientPlayerFixScript", "ambient-player-fix.js?v=20260706-player-unico");
+    loadScriptOnce("ambientPlayerFixScript", "ambient-player-fix.js?v=20260706-player-limpo");
   }
 
   function loadAdminAmbientMusic() {
