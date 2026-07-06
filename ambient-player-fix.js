@@ -7,6 +7,7 @@
   let sources = [];
   let sourceIndex = 0;
   let audio = null;
+  let lastDiagnostics = { uploads: 0, links: 0, errors: [] };
 
   function apiUrl(path) {
     if (!path) return "";
@@ -42,63 +43,82 @@
 
   async function loadSources() {
     const next = [];
+    lastDiagnostics = { uploads: 0, links: 0, errors: [] };
 
     try {
       const response = await fetch(`${API_BASE}/api/uploads/musicas`, { cache: "no-store" });
-      if (response.ok) {
-        const data = await response.json();
-        (data.musicas || []).forEach((item) => {
-          const url = apiUrl(item.url);
-          if (url && !next.includes(url)) next.push(url);
-        });
-      }
+      if (!response.ok) throw new Error(`uploads ${response.status}`);
+      const data = await response.json();
+      const list = Array.isArray(data.musicas) ? data.musicas : [];
+      lastDiagnostics.uploads = list.length;
+      list.forEach((item) => {
+        const url = apiUrl(item.url);
+        if (url && !next.includes(url)) next.push(url);
+      });
     } catch (error) {
-      // Mantém apenas as fontes já conhecidas.
+      lastDiagnostics.errors.push("falha ao ler músicas enviadas");
     }
 
     try {
       const response = await fetch(`${API_BASE}/api/uploads/musicas/links`, { cache: "no-store" });
-      if (response.ok) {
-        const data = await response.json();
-        (data.links || []).forEach((url) => {
-          if (isAudioLink(url) && !next.includes(url)) next.push(url);
-        });
-      }
+      if (!response.ok) throw new Error(`links ${response.status}`);
+      const data = await response.json();
+      const list = Array.isArray(data.links) ? data.links : [];
+      lastDiagnostics.links = list.length;
+      list.forEach((url) => {
+        if (isAudioLink(url) && !next.includes(url)) next.push(url);
+      });
     } catch (error) {
-      // Mantém apenas as fontes já conhecidas.
+      lastDiagnostics.errors.push("falha ao ler links diretos");
     }
 
-    if (next.length) sources = next;
+    sources = next;
+    updateDiagnostics();
     return sources;
+  }
+
+  function updateDiagnostics() {
+    const box = document.querySelector("[data-ambient-player-diagnostics]");
+    if (!box) return;
+    const total = sources.length;
+    const erros = lastDiagnostics.errors.length ? ` • ${lastDiagnostics.errors.join(" • ")}` : "";
+    box.textContent = `Encontradas: ${lastDiagnostics.uploads} música(s) enviadas, ${lastDiagnostics.links} link(s) direto(s), ${total} fonte(s) tocável(is).${erros}`;
   }
 
   function ensurePanel() {
     const card = document.querySelector("[data-ambient-card]");
     if (!card) return null;
 
-    let panel = document.querySelector("[data-ambient-player-fix]");
+    document.querySelectorAll("[data-ambient-player-fix]").forEach((oldPanel) => oldPanel.remove());
+
+    let target = card.querySelector(".ambient-controls");
+    if (!target) {
+      target = document.createElement("div");
+      target.className = "ambient-controls";
+      card.appendChild(target);
+    }
+
+    let panel = card.querySelector("[data-ambient-player-inline]");
     if (!panel) {
       panel = document.createElement("div");
-      panel.className = "ambient-playlist-public";
-      panel.dataset.ambientPlayerFix = "true";
+      panel.dataset.ambientPlayerInline = "true";
+      panel.style.width = "100%";
       panel.innerHTML = `
-        <strong>Música ambiente da loja</strong>
-        <span>Player do site para músicas enviadas no ADM ou links diretos de áudio.</span>
-        <div class="ambient-playlist-public-actions">
-          <button class="btn btn-secondary" type="button" data-ambient-player-start>Tocar no site</button>
-          <button class="btn btn-secondary" type="button" data-ambient-player-next>Próxima música</button>
-          <span class="ambient-player-status" data-ambient-player-status>Carregando músicas...</span>
-        </div>
-        <div class="ambient-volume-row">
-          <label>Volume <input class="ambient-volume-control" type="range" min="0" max="1" step="0.01" value="${savedVolume()}" data-ambient-player-volume></label>
-          <span class="ambient-player-status" data-ambient-player-volume-label>Volume ${Math.round(savedVolume() * 100)}%</span>
-        </div>
+        <button class="btn btn-secondary" type="button" data-ambient-player-start>Tocar no site</button>
+        <button class="btn btn-secondary" type="button" data-ambient-player-next>Próxima música</button>
+        <label style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;color:#efe1c5;font-weight:800;">Volume
+          <input class="ambient-volume" type="range" min="0" max="1" step="0.01" value="${savedVolume()}" data-ambient-player-volume>
+          <span data-ambient-player-volume-label>Volume ${Math.round(savedVolume() * 100)}%</span>
+        </label>
+        <span class="ambient-status" data-ambient-player-status>Verificando músicas enviadas...</span>
+        <small class="privacy-note" style="display:block;margin-top:8px;" data-ambient-player-diagnostics>Carregando diagnóstico...</small>
       `;
-      card.appendChild(panel);
+      target.appendChild(panel);
       panel.querySelector("[data-ambient-player-start]")?.addEventListener("click", playCurrent);
       panel.querySelector("[data-ambient-player-next]")?.addEventListener("click", playNext);
       panel.querySelector("[data-ambient-player-volume]")?.addEventListener("input", (event) => setVolume(event.target.value));
     }
+    updateDiagnostics();
     return panel;
   }
 
@@ -112,8 +132,10 @@
       audio.controls = true;
       audio.loop = true;
       audio.preload = "auto";
+      audio.style.width = "100%";
+      audio.style.marginTop = "10px";
       audio.addEventListener("error", () => {
-        setStatus("Esta música falhou. Tentando a próxima...");
+        setStatus("Esta faixa falhou. Tentando a próxima...");
         playNext();
       });
       panel.appendChild(audio);
@@ -136,10 +158,10 @@
   }
 
   async function playCurrent() {
-    if (!sources.length) await loadSources();
+    await loadSources();
     const player = updateSource();
     if (!player) {
-      setStatus("Nenhuma música de áudio direto encontrada.");
+      setStatus("Nenhuma música tocável encontrada. Verifique se o upload foi salvo na API e se o Render já publicou a versão nova.");
       return;
     }
     try {
@@ -147,13 +169,16 @@
       await player.play();
       setStatus("Música tocando no player do site.");
     } catch (error) {
-      setStatus("Clique no player ou no botão Tocar no site para iniciar.");
+      setStatus("O navegador bloqueou o início. Clique no botão Tocar no site ou no player.");
     }
   }
 
   async function playNext() {
     if (!sources.length) await loadSources();
-    if (!sources.length) return;
+    if (!sources.length) {
+      setStatus("Nenhuma música tocável encontrada.");
+      return;
+    }
     sourceIndex = (sourceIndex + 1) % sources.length;
     updateSource();
     await playCurrent();
@@ -164,14 +189,10 @@
     if (!button || button.dataset.playerFixHook === "true") return;
     button.dataset.playerFixHook = "true";
 
-    button.addEventListener("pointerdown", () => {
-      if (sources.length) playCurrent();
-    });
-
     button.addEventListener("click", () => {
       setTimeout(async () => {
-        await loadSources();
         ensurePanel();
+        await loadSources();
         updateSource();
         if (button.getAttribute("aria-pressed") === "true") await playCurrent();
         else if (audio) {
@@ -183,11 +204,9 @@
   }
 
   async function apply() {
+    ensurePanel();
     await loadSources();
-    if (sources.length) {
-      ensurePanel();
-      updateSource();
-    }
+    updateSource();
     hookAmbientButton();
   }
 
