@@ -1,5 +1,7 @@
 # Mística Presentes
 
+[![Testes da API](https://github.com/bruxokhaos66/misticapresentes/actions/workflows/testes-api.yml/badge.svg)](https://github.com/bruxokhaos66/misticapresentes/actions/workflows/testes-api.yml)
+
 Sistema desktop em Python para gestão da loja Mística Presentes.
 
 ## Recursos principais
