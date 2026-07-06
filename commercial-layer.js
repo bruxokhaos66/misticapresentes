@@ -7,7 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const domain = cfg.domain || "misticaesotericos.com.br";
   const params = new URLSearchParams(window.location.search);
   const adminAccess = params.get("admin") === "mistica" || window.location.hash === "#admin-mistica";
-  const assetVersion = "20260706-modern-icon";
+  const assetVersion = "20260706-modern-icon-hardfix";
   const logoAsset = `assets/logo-mistica-modern.svg?v=${assetVersion}`;
   const isisSources = [
     `assets/isis-humana-xamanica.webp?v=${assetVersion}`,
@@ -35,6 +35,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.head.appendChild(script);
   }
 
+  loadScriptOnce("modernIconFixScript", "modern-icon-fix.js");
   loadScriptOnce("seoSiteScript", "seo-site.js");
   loadScriptOnce("adminAccessScript", "admin-access.js");
   loadScriptOnce("productExtrasScript", "product-extras.js");
@@ -69,7 +70,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   document.querySelectorAll(".brand-mark").forEach(mark => {
-    injectImage(mark, logoAsset, "Logo Mística Presentes", "brand-logo-img", "<span>☾</span>");
+    injectImage(mark, logoAsset, "Logo Mística Presentes", "brand-logo-img brand-logo-modern", "<span>☾</span>");
   });
 
   const heroCard = document.querySelector(".mystic-logo-card");
