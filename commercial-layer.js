@@ -7,15 +7,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const domain = cfg.domain || "misticaesotericos.com.br";
   const params = new URLSearchParams(window.location.search);
   const adminAccess = params.get("admin") === "mistica" || window.location.hash === "#admin-mistica";
-  const assetVersion = "20260706-modern-icon-hardfix";
+  const assetVersion = "20260706-isis-publicitaria";
   const logoAsset = `assets/logo-mistica-modern.svg?v=${assetVersion}`;
   const isisSources = [
-    `assets/isis-humana-xamanica.webp?v=${assetVersion}`,
-    `./assets/isis-humana-xamanica.webp?v=${assetVersion}`,
-    `/assets/isis-humana-xamanica.webp?v=${assetVersion}`,
-    `assets/isis-humana-premium.webp?v=${assetVersion}`,
-    `assets/isis-xamanica-nova.webp?v=${assetVersion}`,
-    `assets/isis-premium.png?v=${assetVersion}`
+    `assets/isis-humana-xamanica-02-publicitaria.webp?v=${assetVersion}`,
+    `./assets/isis-humana-xamanica-02-publicitaria.webp?v=${assetVersion}`,
+    `/assets/isis-humana-xamanica-02-publicitaria.webp?v=${assetVersion}`,
+    `assets/isis-humana-xamanica.webp?v=${assetVersion}`
   ];
   const isisAsset = isisSources[0];
 
@@ -75,8 +73,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const heroCard = document.querySelector(".mystic-logo-card");
   if (heroCard) {
-    heroCard.classList.add("hero-card-isis");
-    heroCard.innerHTML = `<img class="hero-isis-img" src="${isisAsset}" alt="Isis da Mística Presentes" width="720" height="900" loading="eager" decoding="async"><strong>Isis</strong><small>Sua guia espiritual para escolhas conscientes</small>`;
+    heroCard.classList.add("hero-card-isis", "hero-card-isis-publicitaria");
+    heroCard.innerHTML = `<img class="hero-isis-img hero-isis-publicitaria" src="${isisAsset}" alt="Isis da Mística Presentes" width="720" height="900" loading="eager" decoding="async"><strong>Isis</strong><small>Sua guia espiritual para escolhas conscientes</small>`;
     const heroIsis = heroCard.querySelector("img");
     let heroAttempt = 0;
     heroIsis.onload = () => {
@@ -95,7 +93,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const isisPanel = document.querySelector(".isis-panel-image");
   if (isisPanel) {
-    isisPanel.innerHTML = `<img class="isis-human-img" src="${isisAsset}" alt="Isis da Mística Presentes" width="720" height="900" loading="lazy" decoding="async"><p>Isis, presença misteriosa e xamânica para guiar escolhas e atendimento da loja.</p>`;
+    isisPanel.innerHTML = `<img class="isis-human-img isis-human-publicitaria" src="${isisAsset}" alt="Isis da Mística Presentes" width="720" height="900" loading="lazy" decoding="async"><p>Isis, presença misteriosa e xamânica para guiar escolhas e atendimento da loja.</p>`;
     const isisImg = isisPanel.querySelector("img");
     let isisAttempt = 0;
     isisImg.onerror = () => {
