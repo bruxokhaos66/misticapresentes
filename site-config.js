@@ -35,13 +35,18 @@ window.misticaSiteConfig = {
     };
   }
 
-  const loadGuard = () => {
-    if (document.getElementById("misticaProductionGuardScript")) return;
+  const loadScript = (id, src) => {
+    if (document.getElementById(id)) return;
     const script = document.createElement("script");
-    script.id = "misticaProductionGuardScript";
-    script.src = "site-production-guard.js?v=20260706-api-guard";
+    script.id = id;
+    script.src = src;
     script.defer = true;
     document.head.appendChild(script);
+  };
+
+  const loadGuard = () => {
+    loadScript("misticaWriteKeyGuardScript", "site-write-key-guard.js?v=20260706-write-key");
+    loadScript("misticaProductionGuardScript", "site-production-guard.js?v=20260706-api-guard");
   };
 
   if (document.readyState === "loading") {
