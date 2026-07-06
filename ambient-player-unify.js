@@ -214,6 +214,10 @@
     ensurePanel();
     await loadSources();
     hookMainButton();
+    const button = document.querySelector("[data-ambient-toggle]");
+    if (button?.getAttribute("aria-pressed") === "true" || localStorage.getItem("misticaAmbientEnabled") === "true") {
+      openDrawer(true);
+    }
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", apply, { once: true });
@@ -226,4 +230,5 @@
   });
 
   window.misticaAmbientUnifiedPlayer = { play, next: nextTrack, volume: setVolume, reload: loadSources };
+  window.misticaAmbientPlayerFix = { play, next: nextTrack, volume: setVolume, reload: loadSources };
 })();
