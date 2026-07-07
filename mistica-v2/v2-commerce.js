@@ -88,15 +88,15 @@
     applyFilter();
   }
 
-  function syncIsisImage() {
-    const source = document.querySelector('#isis .isis-panel-image');
+  function protectHeroIsisImage() {
     const target = document.querySelector('.isis-photo');
-    if (!source || !target) return;
-    const bg = getComputedStyle(source).backgroundImage;
-    if (bg && bg !== 'none') {
-      target.style.backgroundImage = bg;
-      target.classList.add('has-real-isis');
-    }
+    if (!target) return;
+
+    // A imagem do topo agora vem do CSS em assets/isis-hero.webp.
+    // Não copiamos mais a imagem inferior para o topo, pois isso deixava a hero borrada.
+    target.style.removeProperty('background-image');
+    target.style.removeProperty('background');
+    target.classList.remove('has-real-isis');
   }
 
   function appendIsisMessage(role, text) {
@@ -132,8 +132,8 @@
   }
 
   function apply() {
+    protectHeroIsisImage();
     createToolbar();
-    syncIsisImage();
     setupIsisQuickActions();
     improveCartAnchor();
   }
