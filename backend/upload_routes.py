@@ -13,6 +13,7 @@ from fastapi import APIRouter, BackgroundTasks, File, Header, HTTPException, Res
 from pydantic import BaseModel, Field
 
 from backend.database import conectar
+from backend.drive_storage import drive_configured, upload_bytes_to_drive
 from config import DB_PATH
 
 router = APIRouter(prefix="/api", tags=["uploads"])
@@ -27,11 +28,7 @@ AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 
 MAX_IMAGE_BYTES = 4 * 1024 * 1024
 MAX_AUDIO_BYTES = 30 * 1024 * 1024
-ALLOWED_CONTENT_TYPES = {
-    "image/jpeg": ".jpg",
-    "image/png": ".png",
-    "image/webp": ".webp",
-}
+ALLOWED_CONTENT_TYPES = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
 ALLOWED_AUDIO_TYPES = {
     "audio/mpeg": ".mp3",
     "audio/mp3": ".mp3",
@@ -64,11 +61,7 @@ def conectar_rapido(timeout: float = 0.08):
 
 
 def validar_site_api_key(chave_recebida: str | None):
-    chaves_validas = [
-        os.environ.get("MISTICA_SITE_API_KEY", "").strip(),
-        os.environ.get("MISTICA_SYNC_KEY", "").strip(),
-        PUBLIC_SITE_KEY,
-    ]
+    chaves_validas = [os.environ.get("MISTICA_SITE_API_KEY", "").strip(), os.environ.get("MISTICA_SYNC_KEY", "").strip(), PUBLIC_SITE_KEY]
     chaves_validas = [chave for chave in chaves_validas if chave]
     if not chave_recebida:
         raise HTTPException(status_code=403, detail="Chave da API não enviada pelo site.")
@@ -86,6 +79,8 @@ def normalizar_link_audio(value: str | None) -> str:
     if not texto.startswith(("https://", "http://")):
         return ""
     sem_query = texto.split("?", 1)[0].lower()
+    if "drive.google.com/uc" in texto or "drive.google.com/file" in texto:
+        return texto
     if not sem_query.endswith(ALLOWED_AUDIO_EXTENSIONS):
         return ""
     return texto
@@ -97,9 +92,19 @@ def limpar_links_audio(links: list[str]) -> list[str]:
         link = normalizar_link_audio(item)
         if link and link not in limpos:
             limpos.append(link)
-        if len(limpos) >= 20:
+        if len(limpos) >= 30:
             break
     return limpos
+
+
+def adicionar_link_audio_persistente(link: str):
+    if not normalizar_link_audio(link):
+        return
+    links = []
+    if AUDIO_LINKS_FILE.exists():
+        links = AUDIO_LINKS_FILE.read_text(encoding="utf-8").splitlines()
+    limpos = limpar_links_audio([link] + links)
+    AUDIO_LINKS_FILE.write_text("\n".join(limpos), encoding="utf-8")
 
 
 def garantir_tabela_musicas_ambiente(conn):
@@ -128,7 +133,7 @@ def salvar_musica_no_banco(nome: str, content_type: str, data: bytes, criado_em:
                 INSERT INTO site_musicas_ambiente (filename, content_type, size_bytes, dados, criado_em)
                 VALUES (?,?,?,?,?)
                 """,
-                (nome, content_type, len(data), criado_em, data) if False else (nome, content_type, len(data), data, criado_em),
+                (nome, content_type, len(data), data, criado_em),
             )
             conn.commit()
         log_tempo("backup_banco_ok", inicio, nome)
@@ -160,6 +165,16 @@ def media_type_por_nome(nome: str, fallback: str = "audio/mpeg") -> str:
     return fallback or "audio/mpeg"
 
 
+def listar_musicas_links() -> list[dict]:
+    if not AUDIO_LINKS_FILE.exists():
+        return []
+    links = limpar_links_audio(AUDIO_LINKS_FILE.read_text(encoding="utf-8").splitlines())
+    return [
+        {"filename": f"Música Drive {idx}", "url": link, "size_bytes": 0, "modificado_em": "", "armazenamento": "google_drive"}
+        for idx, link in enumerate(links, start=1)
+    ]
+
+
 def listar_musicas_arquivo_local(nomes_existentes: set[str]) -> list[dict]:
     musicas = []
     if not AUDIO_DIR.exists():
@@ -170,15 +185,7 @@ def listar_musicas_arquivo_local(nomes_existentes: set[str]) -> list[dict]:
         if arquivo.name in nomes_existentes:
             continue
         stat = arquivo.stat()
-        musicas.append(
-            {
-                "filename": arquivo.name,
-                "url": f"/api/uploads/musicas/arquivo-local/{arquivo.name}",
-                "size_bytes": stat.st_size,
-                "modificado_em": datetime.fromtimestamp(stat.st_mtime).isoformat(timespec="seconds"),
-                "armazenamento": "arquivo",
-            }
-        )
+        musicas.append({"filename": arquivo.name, "url": f"/api/uploads/musicas/arquivo-local/{arquivo.name}", "size_bytes": stat.st_size, "modificado_em": datetime.fromtimestamp(stat.st_mtime).isoformat(timespec="seconds"), "armazenamento": "arquivo"})
         if len(musicas) >= 30:
             break
     return musicas
@@ -190,27 +197,10 @@ def listar_musicas_banco_rapido() -> tuple[list[dict], set[str], str | None]:
     try:
         conn = conectar_rapido(timeout=0.08)
         try:
-            rows = conn.execute(
-                """
-                SELECT id, filename, content_type, size_bytes, criado_em
-                FROM site_musicas_ambiente
-                ORDER BY id DESC
-                LIMIT 30
-                """
-            ).fetchall()
+            rows = conn.execute("SELECT id, filename, content_type, size_bytes, criado_em FROM site_musicas_ambiente ORDER BY id DESC LIMIT 30").fetchall()
             for row in rows:
                 nomes.add(row["filename"])
-                musicas.append(
-                    {
-                        "id": row["id"],
-                        "filename": row["filename"],
-                        "content_type": row["content_type"],
-                        "size_bytes": row["size_bytes"],
-                        "modificado_em": row["criado_em"],
-                        "url": f"/api/uploads/musicas/arquivo/{row['id']}",
-                        "armazenamento": "banco",
-                    }
-                )
+                musicas.append({"id": row["id"], "filename": row["filename"], "content_type": row["content_type"], "size_bytes": row["size_bytes"], "modificado_em": row["criado_em"], "url": f"/api/uploads/musicas/arquivo/{row['id']}", "armazenamento": "banco"})
         finally:
             conn.close()
     except Exception as exc:
@@ -219,11 +209,7 @@ def listar_musicas_banco_rapido() -> tuple[list[dict], set[str], str | None]:
 
 
 @router.post("/uploads/produtos")
-async def upload_imagem_produto(
-    arquivo: UploadFile = File(...),
-    produto_id: str = "produto",
-    x_mistica_api_key: str | None = Header(default=None),
-):
+async def upload_imagem_produto(arquivo: UploadFile = File(...), produto_id: str = "produto", x_mistica_api_key: str | None = Header(default=None)):
     validar_site_api_key(x_mistica_api_key)
     content_type = arquivo.content_type or ""
     if content_type not in ALLOWED_CONTENT_TYPES:
@@ -241,12 +227,7 @@ async def upload_imagem_produto(
 
 
 @router.post("/uploads/musicas")
-async def upload_musica_ambiente(
-    background_tasks: BackgroundTasks,
-    arquivo: UploadFile = File(...),
-    nome_base: str = "ambiente-xamanico",
-    x_mistica_api_key: str | None = Header(default=None),
-):
+async def upload_musica_ambiente(background_tasks: BackgroundTasks, arquivo: UploadFile = File(...), nome_base: str = "ambiente-xamanico", x_mistica_api_key: str | None = Header(default=None)):
     validar_site_api_key(x_mistica_api_key)
     ext = detectar_extensao_audio(arquivo)
     data = await arquivo.read()
@@ -259,6 +240,20 @@ async def upload_musica_ambiente(
     nome_limpo = limpar_nome(nome_original.rsplit(".", 1)[0] or nome_base)
     nome = f"{nome_limpo}-{uuid4().hex[:10]}{ext}"
     criado_em = datetime.now().isoformat(timespec="seconds")
+
+    if drive_configured():
+        folder_id = os.environ.get("GOOGLE_DRIVE_FOLDER_MUSICAS", "").strip() or None
+        try:
+            drive_file = upload_bytes_to_drive(data=data, filename=nome, mime_type=content_type, folder_id=folder_id)
+            link = drive_file.get("download_url") or drive_file.get("web_content_link") or drive_file.get("web_view_link")
+            if link:
+                adicionar_link_audio_persistente(link)
+            _MUSICAS_CACHE["at"] = 0.0
+            _MUSICAS_CACHE["data"] = None
+            return {"ok": True, "filename": nome, "content_type": content_type, "size_bytes": len(data), "url": link, "drive_id": drive_file.get("id"), "data_hora": criado_em, "armazenamento": "google_drive"}
+        except Exception as exc:
+            log_tempo("drive_upload_falhou", time.perf_counter(), str(exc))
+
     destino = AUDIO_DIR / nome
     destino.write_bytes(data)
     background_tasks.add_task(salvar_musica_no_banco, nome, content_type, data, criado_em)
@@ -275,11 +270,10 @@ def listar_musicas_ambiente():
     if cache_data and agora - float(_MUSICAS_CACHE.get("at") or 0) < 20:
         return cache_data
     musicas_banco, nomes_banco, erro_banco = listar_musicas_banco_rapido()
-    log_tempo("consulta_banco", inicio, erro_banco or f"{len(musicas_banco)} registro(s)")
     musicas_arquivos = listar_musicas_arquivo_local(nomes_banco)
-    log_tempo("consulta_arquivos", inicio, f"{len(musicas_arquivos)} arquivo(s)")
-    musicas = (musicas_arquivos + musicas_banco)[:30]
-    resposta = {"ok": True, "musicas": musicas, "total": len(musicas), "fonte": "arquivo+banco_rapido", "banco_erro": erro_banco, "data_hora": datetime.now().isoformat(timespec="seconds")}
+    musicas_links = listar_musicas_links()
+    musicas = (musicas_links + musicas_arquivos + musicas_banco)[:30]
+    resposta = {"ok": True, "musicas": musicas, "total": len(musicas), "fonte": "drive+arquivo+banco_rapido", "banco_erro": erro_banco, "data_hora": datetime.now().isoformat(timespec="seconds")}
     _MUSICAS_CACHE["at"] = agora
     _MUSICAS_CACHE["data"] = resposta
     log_tempo("fim_resposta", inicio, f"total={len(musicas)}")
