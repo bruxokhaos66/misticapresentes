@@ -41,7 +41,7 @@
     const style = document.createElement("style");
     style.id = styleId;
     style.textContent = `
-      .admin-ambient-music { margin: 22px auto; border: 1px solid rgba(240,197,106,.24); border-radius: 24px; padding: clamp(16px, 2.4vw, 24px); background: linear-gradient(145deg, rgba(255,248,230,.07), rgba(83,107,55,.08)); box-shadow: 0 18px 54px rgba(0,0,0,.18); }
+      .admin-ambient-music { width: min(1180px, calc(100% - 32px)); margin: 22px auto; border: 1px solid rgba(240,197,106,.24); border-radius: 24px; padding: clamp(16px, 2.4vw, 24px); background: linear-gradient(145deg, rgba(255,248,230,.07), rgba(83,107,55,.08)); box-shadow: 0 18px 54px rgba(0,0,0,.18); }
       .admin-ambient-music h3 { margin: 0 0 8px; color: #fff6dc; font-family: Cinzel, Georgia, serif; letter-spacing: .05em; }
       .admin-ambient-music p, .admin-ambient-music small { color: #e7dac1; line-height: 1.45; }
       .admin-ambient-music input[type="file"] { width: 100%; margin-top: 10px; border: 1px solid rgba(240,197,106,.28); border-radius: 16px; padding: 12px; color: #fff6dc; background: rgba(0,0,0,.24); }
@@ -55,7 +55,10 @@
   }
 
   function findAdminTarget() {
-    return document.querySelector("#adminContent") || document.querySelector(".admin-content") || document.querySelector("#admin") || document.querySelector("main") || document.body;
+    const adminSection = document.querySelector("#admin");
+    const adminContent = document.querySelector("#adminContent");
+    if (adminSection && adminContent) return adminSection;
+    return document.querySelector("main") || document.body;
   }
 
   async function listTracks(panel) {
@@ -155,8 +158,8 @@
       <div class="admin-ambient-list" data-admin-ambient-list><span>A lista só será atualizada quando você clicar em Atualizar lista ou após enviar uma música.</span></div>
     `;
     target.appendChild(panel);
-    panel.querySelector("[data-admin-ambient-upload]")?.addEventListener("click", () => uploadTrack(panel));
-    panel.querySelector("[data-admin-ambient-refresh]")?.addEventListener("click", () => listTracks(panel));
+    panel.querySelector("[data-admin-ambient-upload]")?.addEventListener("click", event => { event.preventDefault(); event.stopPropagation(); uploadTrack(panel); });
+    panel.querySelector("[data-admin-ambient-refresh]")?.addEventListener("click", event => { event.preventDefault(); event.stopPropagation(); listTracks(panel); });
   }
 
   function apply() { installStyle(); renderPanel(); }
