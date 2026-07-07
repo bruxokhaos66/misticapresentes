@@ -16,9 +16,18 @@
 
   function formatBytes(bytes) {
     const value = Number(bytes) || 0;
+    if (!value) return "link externo";
     if (value >= 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`;
     if (value >= 1024) return `${Math.round(value / 1024)} KB`;
     return `${value} B`;
+  }
+
+  function storageLabel(item) {
+    const s = String(item?.armazenamento || "").toLowerCase();
+    if (s.includes("google")) return "Google Drive";
+    if (s.includes("banco")) return "Backup banco";
+    if (s.includes("arquivo")) return "Servidor temporário";
+    return "API";
   }
 
   function fetchWithTimeout(url, options = {}, timeoutMs = 12000) {
@@ -53,16 +62,15 @@
     const list = panel.querySelector("[data-admin-ambient-list]");
     const status = panel.querySelector("[data-admin-ambient-status]");
     if (status) status.textContent = "Atualizando lista de músicas...";
-
     try {
       const response = await fetchWithTimeout(`${API_BASE}/api/uploads/musicas?t=${Date.now()}`, { cache: "no-store" }, 12000);
       if (!response.ok) throw new Error(`API respondeu ${response.status}`);
       const data = await response.json();
       const musicas = Array.isArray(data.musicas) ? data.musicas : [];
-      if (status) status.textContent = `${musicas.length} música(s) encontrada(s) na API.`;
+      if (status) status.textContent = `${musicas.length} música(s) encontrada(s). Fonte: ${data.fonte || "API"}.`;
       if (list) {
         list.innerHTML = musicas.length
-          ? musicas.slice(0, 12).map((item) => `<span>🎵 ${item.filename || "música"} • ${formatBytes(item.size_bytes || 0)}</span>`).join("")
+          ? musicas.slice(0, 12).map((item) => `<span>🎵 ${item.filename || "música"} • ${formatBytes(item.size_bytes || 0)} • ${storageLabel(item)}</span>`).join("")
           : "<span>Nenhuma música encontrada. Envie uma música e aguarde a confirmação.</span>";
       }
       return musicas;
@@ -78,7 +86,7 @@
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open("POST", url, true);
-      xhr.timeout = 90000;
+      xhr.timeout = 120000;
       Object.entries(headers || {}).forEach(([key, value]) => xhr.setRequestHeader(key, value));
       xhr.upload.onprogress = (event) => {
         if (event.lengthComputable && onProgress) onProgress(Math.round((event.loaded / event.total) * 100));
@@ -101,21 +109,11 @@
     const button = panel.querySelector("[data-admin-ambient-upload]");
     const progress = panel.querySelector("[data-admin-ambient-progress]");
     const file = input?.files?.[0];
-
-    if (!file) {
-      if (status) status.textContent = "Selecione uma música antes de enviar.";
-      return;
-    }
-
-    if (file.size > MAX_AUDIO_BYTES) {
-      if (status) status.textContent = `Arquivo muito grande: ${formatBytes(file.size)}. Limite: 30 MB.`;
-      return;
-    }
-
+    if (!file) { if (status) status.textContent = "Selecione uma música antes de enviar."; return; }
+    if (file.size > MAX_AUDIO_BYTES) { if (status) status.textContent = `Arquivo muito grande: ${formatBytes(file.size)}. Limite: 30 MB.`; return; }
     const form = new FormData();
     form.append("arquivo", file);
     form.append("nome_base", file.name.replace(/\.[^.]+$/, "") || "ambiente-xamanico");
-
     try {
       if (button) button.disabled = true;
       if (progress) progress.style.width = "0%";
@@ -124,7 +122,7 @@
         if (progress) progress.style.width = `${percent}%`;
         if (status) status.textContent = `Enviando ${file.name}: ${percent}%`;
       });
-      if (status) status.textContent = `Música enviada: ${data.filename || file.name}`;
+      if (status) status.textContent = `Música enviada: ${data.filename || file.name} • ${data.armazenamento || "API"}`;
       if (progress) progress.style.width = "100%";
       input.value = "";
       setTimeout(() => listTracks(panel), 900);
@@ -138,16 +136,14 @@
   function renderPanel() {
     if (!isAdminView()) return;
     if (document.querySelector("[data-admin-ambient-music]")) return;
-
     const target = findAdminTarget();
     if (!target) return;
-
     const panel = document.createElement("section");
     panel.className = "admin-ambient-music";
     panel.dataset.adminAmbientMusic = "true";
     panel.innerHTML = `
       <h3>Músicas do ambiente xamânico</h3>
-      <p>Envie músicas próprias, autorizadas ou livres para uso comercial. Elas serão usadas no player do site quando o cliente ativar o ambiente xamânico.</p>
+      <p>Envie músicas próprias, autorizadas ou livres para uso comercial. Se o Google Drive estiver configurado, o arquivo será salvo permanentemente no Drive.</p>
       <input type="file" accept="audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/webm,audio/mp4,audio/x-m4a" data-admin-ambient-file>
       <div class="admin-ambient-actions">
         <button class="btn" type="button" data-admin-ambient-upload>Enviar música</button>
@@ -158,25 +154,14 @@
       <small>Formatos aceitos: MP3, WAV, OGG, WEBM e M4A. Limite atual: 30 MB por arquivo.</small>
       <div class="admin-ambient-list" data-admin-ambient-list><span>A lista só será atualizada quando você clicar em Atualizar lista ou após enviar uma música.</span></div>
     `;
-
     target.appendChild(panel);
     panel.querySelector("[data-admin-ambient-upload]")?.addEventListener("click", () => uploadTrack(panel));
     panel.querySelector("[data-admin-ambient-refresh]")?.addEventListener("click", () => listTracks(panel));
   }
 
-  function apply() {
-    installStyle();
-    renderPanel();
-  }
-
+  function apply() { installStyle(); renderPanel(); }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", apply, { once: true });
   else apply();
-
-  window.addEventListener("load", () => {
-    apply();
-    setTimeout(apply, 600);
-    setTimeout(apply, 1800);
-  });
-
+  window.addEventListener("load", () => { apply(); setTimeout(apply, 600); setTimeout(apply, 1800); });
   document.addEventListener("click", () => setTimeout(apply, 250));
 })();
