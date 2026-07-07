@@ -1,16 +1,9 @@
 (() => {
+  if (window.__MISTICA_AUDIT_FIXES_LOADED__) return;
+  window.__MISTICA_AUDIT_FIXES_LOADED__ = true;
+
   const officialWhatsapp = "554999172137";
   const buildOfficialUrl = message => `https://wa.me/${officialWhatsapp}?text=${encodeURIComponent(message)}`;
-  const modernIconVersion = "20260706-modern-icon-hardfix";
-  const modernIcon = `assets/logo-mistica-modern.svg?v=${modernIconVersion}`;
-  const heroIsisVersion = "20260706-hero-isis-png-lock";
-  const heroIsisPath = "isis-humana-xamanica-02-publicitaria.png";
-  const heroIsisSrc = `assets/${heroIsisPath}?v=${heroIsisVersion}`;
-
-  try {
-    window.buildWhatsappUrl = buildOfficialUrl;
-    if (typeof buildWhatsappUrl !== "undefined") buildWhatsappUrl = buildOfficialUrl;
-  } catch {}
 
   const css = `
     .skip-link{position:absolute!important;left:16px!important;top:12px!important;z-index:9999!important;transform:translateY(-160%)!important;padding:12px 16px!important;border-radius:999px!important;background:#f0c56a!important;color:#08070d!important;font-weight:900!important;text-decoration:none!important;box-shadow:0 12px 32px rgba(0,0,0,.32)!important;}
@@ -18,68 +11,16 @@
     a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid #f0c56a!important;outline-offset:4px!important;box-shadow:0 0 0 6px rgba(240,197,106,.18)!important;}
     .brand-logo-modern{display:block!important;width:58px!important;height:58px!important;object-fit:contain!important;border-radius:999px!important;filter:drop-shadow(0 12px 26px rgba(240,197,106,.18))!important;}
     .footer-mark .brand-logo-modern{width:48px!important;height:48px!important;}
-    .hero-card-isis .isis-hero-fallback{display:none!important;}
-    .mystic-logo-card img:not([src*="${heroIsisPath}"]){opacity:0!important;visibility:hidden!important;position:absolute!important;pointer-events:none!important;}
-    .mystic-logo-card img[src*="${heroIsisPath}"],.mystic-logo-card .hero-isis-publicitaria{opacity:1!important;visibility:visible!important;position:relative!important;display:block!important;}
     @media(max-width:560px){.brand-logo-modern{width:46px!important;height:46px!important;}}
     @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important;}}
   `;
 
-  const forceHeroIsis = () => {
-    const heroCard = document.querySelector(".mystic-logo-card");
-    if (!heroCard) return;
-    heroCard.classList.add("hero-card-isis", "hero-card-isis-publicitaria");
-    heroCard.classList.remove("asset-failed");
+  try {
+    window.buildWhatsappUrl = buildOfficialUrl;
+    if (typeof buildWhatsappUrl !== "undefined") buildWhatsappUrl = buildOfficialUrl;
+  } catch {}
 
-    let img = heroCard.querySelector(`img[src*="${heroIsisPath}"]`) || heroCard.querySelector("img.hero-isis-img") || heroCard.querySelector("img");
-    if (!img) {
-      img = document.createElement("img");
-      heroCard.prepend(img);
-    }
-
-    img.className = "hero-isis-img hero-isis-publicitaria";
-    img.alt = "Isis da Mística Presentes";
-    img.width = 720;
-    img.height = 900;
-    img.loading = "eager";
-    img.decoding = "async";
-
-    if (!img.getAttribute("src") || !img.src.includes(heroIsisPath)) {
-      img.src = heroIsisSrc;
-    }
-
-    let title = heroCard.querySelector("strong");
-    if (!title) {
-      title = document.createElement("strong");
-      heroCard.appendChild(title);
-    }
-    title.textContent = "Isis";
-
-    let subtitle = heroCard.querySelector("small");
-    if (!subtitle) {
-      subtitle = document.createElement("small");
-      heroCard.appendChild(subtitle);
-    }
-    subtitle.textContent = "Sua guia espiritual para escolhas conscientes";
-  };
-
-  const forceModernIcon = () => {
-    document.querySelectorAll('link[rel~="icon"]').forEach(link => link.remove());
-    const favicon = document.createElement("link");
-    favicon.rel = "icon";
-    favicon.type = "image/svg+xml";
-    favicon.href = modernIcon;
-    document.head.appendChild(favicon);
-
-    document.querySelectorAll(".brand-mark, .footer-mark").forEach(mark => {
-      const current = mark.querySelector("img");
-      if (current && current.src.includes("logo-mistica-modern.svg")) return;
-      mark.classList.remove("asset-failed");
-      mark.innerHTML = `<img class="brand-logo-img brand-logo-modern" src="${modernIcon}" alt="Logo Mística Presentes" width="64" height="64" loading="eager" decoding="async">`;
-    });
-  };
-
-  const ensureSkipLink = () => {
+  function ensureSkipLink() {
     if (document.querySelector(".skip-link")) return;
     const main = document.querySelector("main");
     if (main && !main.id) main.id = "conteudo";
@@ -88,20 +29,21 @@
     skip.href = main ? `#${main.id}` : "#inicio";
     skip.textContent = "Pular para o conteúdo";
     document.body.prepend(skip);
-  };
+  }
 
-  const improveImages = root => {
+  function improveImages(root) {
     root.querySelectorAll("img").forEach(img => {
       if (!img.hasAttribute("loading")) img.loading = img.closest(".hero-section") ? "eager" : "lazy";
       if (!img.hasAttribute("decoding")) img.decoding = "async";
       if (!img.alt && !img.getAttribute("aria-hidden")) img.alt = "Imagem da Mística Presentes";
     });
-  };
+  }
 
-  const improveButtons = () => {
+  function improveButtons() {
     const menuButton = document.querySelector("[data-menu-toggle]");
     const navLinks = document.querySelector("[data-nav-links]");
-    if (menuButton && navLinks) {
+    if (menuButton && navLinks && !menuButton.dataset.auditReady) {
+      menuButton.dataset.auditReady = "true";
       if (!navLinks.id) navLinks.id = "menu-principal";
       menuButton.setAttribute("aria-controls", navLinks.id);
       menuButton.setAttribute("aria-expanded", String(navLinks.classList.contains("is-open") || navLinks.classList.contains("open")));
@@ -114,18 +56,18 @@
       const text = button.textContent.trim();
       if (text) button.setAttribute("aria-label", text);
     });
-  };
+  }
 
-  const improveLiveRegions = () => {
+  function improveLiveRegions() {
     ["cartTotal", "pixStatus", "publishWarning", "adminLoginStatus", "backupStatus"].forEach(id => {
       const el = document.getElementById(id);
       if (!el) return;
       el.setAttribute("aria-live", "polite");
       el.setAttribute("role", "status");
     });
-  };
+  }
 
-  const improveLinks = () => {
+  function improveLinks() {
     document.querySelectorAll("[data-whatsapp-link], .floating-whatsapp").forEach(link => {
       link.href = buildOfficialUrl("Olá, vim pelo site da Mística Presentes e gostaria de atendimento.");
       link.target = "_blank";
@@ -138,9 +80,9 @@
       rel.add("noopener");
       link.rel = Array.from(rel).join(" ");
     });
-  };
+  }
 
-  const applyVisualFixes = () => {
+  function applyVisualFixes() {
     let style = document.getElementById("mistica-final-audit-fixes");
     if (!style) {
       style = document.createElement("style");
@@ -148,36 +90,12 @@
       document.head.appendChild(style);
     }
     style.textContent = css;
-
     ensureSkipLink();
     improveLinks();
     improveButtons();
     improveLiveRegions();
     improveImages(document);
-    forceModernIcon();
-    forceHeroIsis();
-
-    setTimeout(forceModernIcon, 100);
-    setTimeout(forceModernIcon, 800);
-    setTimeout(forceModernIcon, 2500);
-    setTimeout(forceHeroIsis, 100);
-    setTimeout(forceHeroIsis, 700);
-    setTimeout(forceHeroIsis, 1600);
-    setTimeout(forceHeroIsis, 3200);
-
-    const observer = new MutationObserver(records => {
-      records.forEach(record => {
-        record.addedNodes.forEach(node => {
-          if (node.nodeType === Node.ELEMENT_NODE) {
-            improveImages(node);
-            forceModernIcon();
-            forceHeroIsis();
-          }
-        });
-      });
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-  };
+  }
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", applyVisualFixes, { once: true });
