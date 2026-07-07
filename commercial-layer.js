@@ -2,6 +2,40 @@
   if (window.__MISTICA_COMMERCIAL_LAYER_LOADED__) return;
   window.__MISTICA_COMMERCIAL_LAYER_LOADED__ = true;
 
+  const ISIS_BLOB_API = "https://api.github.com/repos/bruxokhaos66/misticapresentes/git/blobs/46bbd80db241d72954aec61e94bbbaa034794366";
+  let isisObjectUrl = "";
+
+  async function loadIsisImageSrc() {
+    if (isisObjectUrl) return isisObjectUrl;
+    try {
+      const response = await fetch(ISIS_BLOB_API, { cache: "force-cache" });
+      if (!response.ok) throw new Error("blob indisponivel");
+      const data = await response.json();
+      const raw = atob(String(data.content || "").replace(/\s/g, ""));
+      const bytes = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i += 1) bytes[i] = raw.charCodeAt(i);
+      isisObjectUrl = URL.createObjectURL(new Blob([bytes], { type: "image/webp" }));
+      return isisObjectUrl;
+    } catch {
+      return "";
+    }
+  }
+
+  function applyIsisPhoto(card) {
+    if (!card || card.querySelector(".legacy-isis-photo")) return;
+    const img = document.createElement("img");
+    img.className = "legacy-isis-photo";
+    img.alt = "Isis xamânica da Mística Presentes";
+    img.loading = "eager";
+    img.decoding = "async";
+    card.prepend(img);
+    loadIsisImageSrc().then(src => {
+      if (!src) return;
+      img.src = src;
+      card.classList.add("has-isis-photo");
+    });
+  }
+
   function restoreHero() {
     const hero = document.querySelector("#inicio.hero-section");
     if (!hero) return;
@@ -29,6 +63,9 @@
       caption.append(strong, span);
       card.append(orb, symbol, caption);
       visual.appendChild(card);
+      applyIsisPhoto(card);
+    } else if (visual) {
+      applyIsisPhoto(visual.querySelector(".legacy-isis-card"));
     }
   }
 
