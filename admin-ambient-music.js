@@ -52,7 +52,7 @@
   async function listTracks(panel) {
     const list = panel.querySelector("[data-admin-ambient-list]");
     const status = panel.querySelector("[data-admin-ambient-status]");
-    if (status) status.textContent = "Verificando músicas na API...";
+    if (status) status.textContent = "Atualizando lista de músicas...";
 
     try {
       const response = await fetchWithTimeout(`${API_BASE}/api/uploads/musicas?t=${Date.now()}`, { cache: "no-store" }, 12000);
@@ -67,7 +67,7 @@
       }
       return musicas;
     } catch (error) {
-      const msg = error.name === "AbortError" ? "A API demorou para responder. Tente enviar a música mesmo assim ou recarregue o ADM." : (error.message || "API indisponível");
+      const msg = error.name === "AbortError" ? "A API demorou para responder. Você ainda pode clicar em Enviar música." : (error.message || "API indisponível");
       if (status) status.textContent = msg;
       if (list) list.innerHTML = `<span>${msg}</span>`;
       return [];
@@ -152,17 +152,16 @@
       <div class="admin-ambient-actions">
         <button class="btn" type="button" data-admin-ambient-upload>Enviar música</button>
         <button class="btn btn-secondary" type="button" data-admin-ambient-refresh>Atualizar lista</button>
-        <span class="admin-ambient-status" data-admin-ambient-status>Pronto para enviar.</span>
+        <span class="admin-ambient-status" data-admin-ambient-status>Pronto para enviar. Selecione uma música e clique em Enviar.</span>
       </div>
       <div class="admin-ambient-progress-wrap"><div class="admin-ambient-progress-bar" data-admin-ambient-progress></div></div>
       <small>Formatos aceitos: MP3, WAV, OGG, WEBM e M4A. Limite atual: 30 MB por arquivo.</small>
-      <div class="admin-ambient-list" data-admin-ambient-list></div>
+      <div class="admin-ambient-list" data-admin-ambient-list><span>A lista só será atualizada quando você clicar em Atualizar lista ou após enviar uma música.</span></div>
     `;
 
     target.appendChild(panel);
     panel.querySelector("[data-admin-ambient-upload]")?.addEventListener("click", () => uploadTrack(panel));
     panel.querySelector("[data-admin-ambient-refresh]")?.addEventListener("click", () => listTracks(panel));
-    setTimeout(() => listTracks(panel), 200);
   }
 
   function apply() {
