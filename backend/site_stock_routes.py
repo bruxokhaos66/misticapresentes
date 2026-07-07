@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 import secrets
+import sqlite3
+import time
 from datetime import datetime
 from typing import Optional
 
@@ -9,6 +11,7 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.database import conectar, listar
+from config import DB_PATH
 
 router = APIRouter(prefix="/api", tags=["site-estoque"])
 
@@ -65,6 +68,19 @@ class AcessoSiteIn(BaseModel):
 
 class PlaylistAmbienteIn(BaseModel):
     links: list[str] = Field(default_factory=list)
+
+
+def log_playlist(etapa: str, inicio: float, detalhe: str = ""):
+    duracao_ms = int((time.perf_counter() - inicio) * 1000)
+    sufixo = f" | {detalhe}" if detalhe else ""
+    print(f"[API][playlist-ambiente] {etapa}: {duracao_ms}ms{sufixo}")
+
+
+def conectar_rapido(timeout: float = 0.35):
+    conn = sqlite3.connect(DB_PATH, timeout=timeout)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA query_only = ON")
+    return conn
 
 
 def validar_site_api_key(chave_recebida: str | None):
@@ -314,22 +330,36 @@ def estoque_site():
 
 @router.get("/site/playlist-ambiente")
 def obter_playlist_ambiente():
-    with conectar() as conn:
-        garantir_tabela_playlist_ambiente(conn)
-        row = conn.execute("SELECT links, atualizado_em FROM site_playlist_ambiente WHERE id=1").fetchone()
-
+    inicio = time.perf_counter()
+    log_playlist("inicio", inicio)
     links = []
     atualizado_em = None
-    if row:
-        links = [item for item in str(row["links"] or "").split("\n") if item]
-        atualizado_em = row["atualizado_em"]
+    erro_banco = None
 
-    return {
+    try:
+        conn = conectar_rapido(timeout=0.35)
+        try:
+            row = conn.execute("SELECT links, atualizado_em FROM site_playlist_ambiente WHERE id=1").fetchone()
+        finally:
+            conn.close()
+        if row:
+            links = [item for item in str(row["links"] or "").split("\n") if item]
+            atualizado_em = row["atualizado_em"]
+        log_playlist("consulta_banco", inicio, f"{len(links)} link(s)")
+    except Exception as exc:
+        erro_banco = str(exc)
+        log_playlist("consulta_banco_falhou", inicio, erro_banco)
+
+    resposta = {
         "ok": True,
         "links": limpar_links_playlist(links),
+        "total": len(limpar_links_playlist(links)),
         "atualizado_em": atualizado_em,
+        "banco_erro": erro_banco,
         "data_hora": datetime.now().isoformat(timespec="seconds"),
     }
+    log_playlist("fim_resposta", inicio, f"total={resposta['total']}")
+    return resposta
 
 
 @router.post("/site/playlist-ambiente")
@@ -384,41 +414,35 @@ def registrar_acesso_site(payload: AcessoSiteIn, x_mistica_api_key: str | None =
         conn.commit()
         acesso_id = int(cur.lastrowid)
 
-    return {"ok": True, "id": acesso_id, "status": "registrado", "data_hora": criado_em}
+    return {"ok": True, "id": acesso_id, "data_hora": criado_em}
 
 
 @router.get("/site/acessos/resumo")
-def resumo_acessos_site(x_mistica_api_key: str | None = Header(default=None)):
-    validar_site_api_key(x_mistica_api_key)
+def resumo_acessos_site():
     hoje = datetime.now().strftime("%Y-%m-%d")
-
     with conectar() as conn:
         garantir_tabela_acessos_site(conn)
-        total = conn.execute("SELECT COUNT(*) AS total FROM site_acessos").fetchone()["total"] or 0
-        hoje_total = conn.execute("SELECT COUNT(*) AS total FROM site_acessos WHERE dia=?", (hoje,)).fetchone()["total"] or 0
-        unicos = conn.execute("SELECT COUNT(DISTINCT COALESCE(user_agent,'visitante')) AS total FROM site_acessos").fetchone()["total"] or 0
-        ultimo = conn.execute("SELECT MAX(criado_em) AS ultimo FROM site_acessos").fetchone()["ultimo"]
-        rows = conn.execute(
+        total = conn.execute("SELECT COUNT(*) AS total FROM site_acessos").fetchone()["total"]
+        hoje_total = conn.execute("SELECT COUNT(*) AS total FROM site_acessos WHERE dia=?", (hoje,)).fetchone()["total"]
+        visitantes_unicos = conn.execute("SELECT COUNT(DISTINCT COALESCE(user_agent,'')) AS total FROM site_acessos").fetchone()["total"]
+        ultimo = conn.execute(
             """
-            SELECT criado_em AS at, path, referrer, user_agent AS userAgent
+            SELECT path, referrer, user_agent, origem, criado_em, dia
             FROM site_acessos
             ORDER BY id DESC
-            LIMIT 50
+            LIMIT 1
             """
-        ).fetchall()
-        visitas = [dict(row) for row in rows]
+        ).fetchone()
 
     return {
-        "mode": "remote",
-        "total": int(total),
-        "today": int(hoje_total),
-        "uniqueVisitors": int(unicos),
-        "lastAccess": ultimo,
-        "visits": visitas,
-        "acessos_total": int(total),
-        "acessos_hoje": int(hoje_total),
-        "visitantes_unicos": int(unicos),
-        "ultimo_acesso": ultimo,
-        "acessos_recentes": visitas,
+        "ok": True,
+        "total": int(total or 0),
+        "acessos_total": int(total or 0),
+        "today": int(hoje_total or 0),
+        "acessos_hoje": int(hoje_total or 0),
+        "uniqueVisitors": int(visitantes_unicos or 0),
+        "visitantes_unicos": int(visitantes_unicos or 0),
+        "lastAccess": dict(ultimo) if ultimo else None,
+        "ultimo_acesso": dict(ultimo) if ultimo else None,
         "data_hora": datetime.now().isoformat(timespec="seconds"),
     }

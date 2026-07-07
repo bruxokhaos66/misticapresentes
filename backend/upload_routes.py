@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 import re
 import secrets
+import sqlite3
+import time
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
@@ -11,6 +13,7 @@ from fastapi import APIRouter, BackgroundTasks, File, Header, HTTPException, Res
 from pydantic import BaseModel, Field
 
 from backend.database import conectar
+from config import DB_PATH
 
 router = APIRouter(prefix="/api", tags=["uploads"])
 
@@ -44,6 +47,19 @@ ALLOWED_AUDIO_EXTENSIONS = (".mp3", ".wav", ".ogg", ".webm", ".m4a")
 
 class AudioLinksIn(BaseModel):
     links: list[str] = Field(default_factory=list)
+
+
+def log_tempo(etapa: str, inicio: float, detalhe: str = ""):
+    duracao_ms = int((time.perf_counter() - inicio) * 1000)
+    sufixo = f" | {detalhe}" if detalhe else ""
+    print(f"[API][musicas] {etapa}: {duracao_ms}ms{sufixo}")
+
+
+def conectar_rapido(timeout: float = 0.35):
+    conn = sqlite3.connect(DB_PATH, timeout=timeout)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA query_only = ON")
+    return conn
 
 
 def validar_site_api_key(chave_recebida: str | None):
@@ -102,6 +118,7 @@ def garantir_tabela_musicas_ambiente(conn):
 
 
 def salvar_musica_no_banco(nome: str, content_type: str, data: bytes, criado_em: str):
+    inicio = time.perf_counter()
     try:
         with conectar() as conn:
             garantir_tabela_musicas_ambiente(conn)
@@ -113,8 +130,9 @@ def salvar_musica_no_banco(nome: str, content_type: str, data: bytes, criado_em:
                 (nome, content_type, len(data), data, criado_em),
             )
             conn.commit()
+        log_tempo("backup_banco_ok", inicio, nome)
     except Exception as exc:
-        print(f"[API] Falha ao salvar música no banco: {exc}")
+        log_tempo("backup_banco_falhou", inicio, str(exc))
 
 
 def detectar_extensao_audio(arquivo: UploadFile) -> str:
@@ -139,6 +157,65 @@ def media_type_por_nome(nome: str, fallback: str = "audio/mpeg") -> str:
     if nome_lower.endswith(".m4a"):
         return "audio/mp4"
     return fallback or "audio/mpeg"
+
+
+def listar_musicas_arquivo_local(nomes_existentes: set[str]) -> list[dict]:
+    musicas = []
+    if not AUDIO_DIR.exists():
+        return musicas
+    for arquivo in sorted(AUDIO_DIR.iterdir(), key=lambda item: item.stat().st_mtime, reverse=True):
+        if not arquivo.is_file() or arquivo.name == AUDIO_LINKS_FILE.name or arquivo.suffix.lower() not in ALLOWED_AUDIO_EXTENSIONS:
+            continue
+        if arquivo.name in nomes_existentes:
+            continue
+        stat = arquivo.stat()
+        musicas.append(
+            {
+                "filename": arquivo.name,
+                "url": f"/api/uploads/musicas/arquivo-local/{arquivo.name}",
+                "size_bytes": stat.st_size,
+                "modificado_em": datetime.fromtimestamp(stat.st_mtime).isoformat(timespec="seconds"),
+                "armazenamento": "arquivo",
+            }
+        )
+        if len(musicas) >= 30:
+            break
+    return musicas
+
+
+def listar_musicas_banco_rapido() -> tuple[list[dict], set[str], str | None]:
+    musicas = []
+    nomes = set()
+    erro = None
+    try:
+        conn = conectar_rapido(timeout=0.35)
+        try:
+            rows = conn.execute(
+                """
+                SELECT id, filename, content_type, size_bytes, criado_em
+                FROM site_musicas_ambiente
+                ORDER BY id DESC
+                LIMIT 30
+                """
+            ).fetchall()
+            for row in rows:
+                nomes.add(row["filename"])
+                musicas.append(
+                    {
+                        "id": row["id"],
+                        "filename": row["filename"],
+                        "content_type": row["content_type"],
+                        "size_bytes": row["size_bytes"],
+                        "modificado_em": row["criado_em"],
+                        "url": f"/api/uploads/musicas/arquivo/{row['id']}",
+                        "armazenamento": "banco",
+                    }
+                )
+        finally:
+            conn.close()
+    except Exception as exc:
+        erro = str(exc)
+    return musicas, nomes, erro
 
 
 @router.post("/uploads/produtos")
@@ -212,56 +289,26 @@ async def upload_musica_ambiente(
 
 @router.get("/uploads/musicas")
 def listar_musicas_ambiente():
-    musicas = []
-    nomes = set()
+    inicio = time.perf_counter()
+    log_tempo("inicio_listagem", inicio)
 
-    with conectar() as conn:
-        garantir_tabela_musicas_ambiente(conn)
-        rows = conn.execute(
-            """
-            SELECT id, filename, content_type, size_bytes, criado_em
-            FROM site_musicas_ambiente
-            ORDER BY id DESC
-            LIMIT 30
-            """
-        ).fetchall()
-        for row in rows:
-            nomes.add(row["filename"])
-            musicas.append(
-                {
-                    "id": row["id"],
-                    "filename": row["filename"],
-                    "content_type": row["content_type"],
-                    "size_bytes": row["size_bytes"],
-                    "modificado_em": row["criado_em"],
-                    "url": f"/api/uploads/musicas/arquivo/{row['id']}",
-                    "armazenamento": "banco",
-                }
-            )
+    musicas_banco, nomes_banco, erro_banco = listar_musicas_banco_rapido()
+    log_tempo("consulta_banco", inicio, erro_banco or f"{len(musicas_banco)} registro(s)")
 
-    if AUDIO_DIR.exists():
-        for arquivo in sorted(AUDIO_DIR.iterdir(), key=lambda item: item.stat().st_mtime, reverse=True):
-            if not arquivo.is_file() or arquivo.name == AUDIO_LINKS_FILE.name or arquivo.suffix.lower() not in ALLOWED_AUDIO_EXTENSIONS:
-                continue
-            if arquivo.name in nomes:
-                continue
-            stat = arquivo.stat()
-            musicas.append(
-                {
-                    "filename": arquivo.name,
-                    "url": f"/api/uploads/musicas/arquivo-local/{arquivo.name}",
-                    "size_bytes": stat.st_size,
-                    "modificado_em": datetime.fromtimestamp(stat.st_mtime).isoformat(timespec="seconds"),
-                    "armazenamento": "arquivo",
-                }
-            )
+    musicas_arquivos = listar_musicas_arquivo_local(nomes_banco)
+    log_tempo("consulta_arquivos", inicio, f"{len(musicas_arquivos)} arquivo(s)")
 
-    return {
+    musicas = (musicas_arquivos + musicas_banco)[:30]
+    resposta = {
         "ok": True,
-        "musicas": musicas[:30],
+        "musicas": musicas,
         "total": len(musicas),
+        "fonte": "arquivo+banco_rapido",
+        "banco_erro": erro_banco,
         "data_hora": datetime.now().isoformat(timespec="seconds"),
     }
+    log_tempo("fim_resposta", inicio, f"total={len(musicas)}")
+    return resposta
 
 
 @router.get("/uploads/musicas/arquivo-local/{filename}")
