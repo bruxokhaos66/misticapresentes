@@ -63,56 +63,17 @@ body.mistica-home-premium .legacy-premium-hero .hero-visual {
   border: 1px solid rgba(240,197,106,.30);
   border-radius: 34px;
   background:
-    radial-gradient(circle at 50% 22%, rgba(240,197,106,.18), transparent 30%),
-    radial-gradient(circle at 52% 54%, rgba(83,107,55,.24), transparent 44%),
-    linear-gradient(145deg, rgba(8,7,13,.94), rgba(34,24,44,.54));
+    linear-gradient(180deg, rgba(3,3,5,.05), rgba(3,3,5,.18) 42%, rgba(3,3,5,.82) 100%),
+    radial-gradient(circle at 50% 20%, rgba(240,197,106,.14), transparent 30%),
+    url('data:image/webp;base64,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') center top / cover no-repeat;
   box-shadow: 0 30px 96px rgba(0,0,0,.42), 0 0 64px rgba(240,197,106,.11);
 }
 
-.legacy-isis-card::before {
-  content: "ISIS";
-  position: absolute;
-  inset: 44px 18px auto;
-  text-align: center;
-  font-family: Cinzel, Georgia, serif;
-  font-size: clamp(3.4rem, 8vw, 6.4rem);
-  font-weight: 900;
-  letter-spacing: .10em;
-  color: rgba(240,197,106,.13);
-  text-shadow: 0 0 54px rgba(240,197,106,.22);
-}
-
+.legacy-isis-card::before,
+.legacy-isis-orb,
+.legacy-isis-symbol,
 .legacy-isis-photo {
-  display: none;
-}
-
-.legacy-isis-orb {
-  position: absolute;
-  top: 138px;
-  left: 50%;
-  width: 250px;
-  height: 250px;
-  transform: translateX(-50%);
-  border-radius: 999px;
-  background: radial-gradient(circle, rgba(240,197,106,.28), rgba(184,201,119,.16) 45%, transparent 68%);
-  filter: blur(1px);
-}
-
-.legacy-isis-symbol {
-  position: relative;
-  z-index: 2;
-  display: grid;
-  place-items: center;
-  width: 166px;
-  height: 166px;
-  margin: 108px auto 82px;
-  border: 1px solid rgba(240,197,106,.36);
-  border-radius: 999px;
-  background: rgba(3,3,5,.42);
-  color: #f0c56a;
-  font-family: Cinzel, Georgia, serif;
-  font-size: 4.5rem;
-  box-shadow: inset 0 0 34px rgba(240,197,106,.12), 0 24px 70px rgba(0,0,0,.35);
+  display: none !important;
 }
 
 .legacy-isis-caption {
