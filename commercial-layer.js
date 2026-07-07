@@ -1,263 +1,94 @@
 document.addEventListener("DOMContentLoaded", () => {
   const cfg = window.misticaSiteConfig || {};
-
-  const whatsapp = cfg.whatsappNumber || "554999172137";
-  const whatsappDisplay = cfg.whatsappDisplay || "(49) 99917-2137";
-  const instagram = cfg.instagram || "@misticaprodutos";
-  const domain = cfg.domain || "misticaesotericos.com.br";
-  const params = new URLSearchParams(window.location.search);
-  const adminAccess = params.get("admin") === "mistica" || window.location.hash === "#admin-mistica";
-  const assetVersion = "20260706-access-counter-v2";
-  const logoAsset = `assets/logo-mistica-modern.svg?v=${assetVersion}`;
-  const finalSectionPath = "isis-humana-xamanica-03-produtos.png";
-  const finalSectionSrc = `assets/${finalSectionPath}?v=${assetVersion}`;
-  const heroIsisPath = "isis-humana-xamanica-02-publicitaria.png";
-  const heroIsisSources = [
-    `assets/${heroIsisPath}?v=${assetVersion}`,
-    `./assets/${heroIsisPath}?v=${assetVersion}`,
-    `/assets/${heroIsisPath}?v=${assetVersion}`,
-    `assets/isis-humana-xamanica-02-publicitaria.webp?v=${assetVersion}`
-  ];
-  const sectionIsisSources = [
-    finalSectionSrc,
-    `./assets/${finalSectionPath}?v=${assetVersion}`,
-    `/assets/${finalSectionPath}?v=${assetVersion}`
-  ];
-  const heroIsisAsset = heroIsisSources[0];
-  const sectionIsisAsset = sectionIsisSources[0];
-
-  function installIsisHardLockStyle() {
-    if (document.getElementById("isis-png-hardlock-style")) return;
-    const style = document.createElement("style");
-    style.id = "isis-png-hardlock-style";
-    style.textContent = `
-      .isis-panel-image .isis-symbol { display: none !important; }
-      .isis-panel-image img:not([src*="${finalSectionPath}"]) {
-        opacity: 0 !important;
-        visibility: hidden !important;
-        position: absolute !important;
-        pointer-events: none !important;
-      }
-      .isis-panel-image img[src*="${finalSectionPath}"],
-      .isis-panel-image .isis-human-produtos {
-        opacity: 1 !important;
-        visibility: visible !important;
-        display: block !important;
-      }
-    `;
-    document.head.appendChild(style);
-  }
-
-  function lockAssistantIsisPanel() {
-    installIsisHardLockStyle();
-    const panel = document.querySelector(".isis-panel-image");
-    if (!panel) return;
-
-    panel.dataset.isisProductsPanel = "true";
-    panel.classList.remove("asset-failed");
-
-    let img = panel.querySelector(`img[src*="${finalSectionPath}"]`) || panel.querySelector("img.isis-human-produtos") || panel.querySelector("img");
-    if (!img) {
-      img = document.createElement("img");
-      panel.prepend(img);
-    }
-
-    img.className = "isis-human-img isis-human-produtos";
-    img.alt = "Isis da Mística Presentes apresentando produtos xamânicos";
-    img.width = 720;
-    img.height = 900;
-    img.loading = "eager";
-    img.decoding = "async";
-
-    if (!img.getAttribute("src") || !img.src.includes(finalSectionPath)) {
-      img.src = sectionIsisAsset;
-    }
-
-    let text = panel.querySelector("p");
-    if (!text) {
-      text = document.createElement("p");
-      panel.appendChild(text);
-    }
-    text.textContent = "Isis apresenta produtos xamânicos, aromas, banhos, velas e presentes com orientação clara para a escolha do cliente.";
-  }
-
-  document.querySelectorAll('link[rel~="icon"]').forEach(link => link.remove());
-  const favicon = document.createElement("link");
-  favicon.rel = "icon";
-  favicon.type = "image/svg+xml";
-  favicon.href = logoAsset;
-  document.head.appendChild(favicon);
-
-  window.misticaScriptLayers = window.misticaScriptLayers || {};
+  const version = "20260707-clean-shell-v1";
+  const adminAccess = new URLSearchParams(window.location.search).get("admin") === "mistica" || window.location.hash === "#admin-mistica";
 
   function loadScriptOnce(id, src) {
-    if (document.getElementById(id)) {
-      window.misticaScriptLayers[id] = { src, status: "already-loaded" };
-      return;
-    }
-
+    if (document.getElementById(id)) return;
     const script = document.createElement("script");
     script.id = id;
-    script.src = `${src}?v=${assetVersion}`;
+    script.src = `${src}?v=${version}`;
     script.defer = true;
-    script.dataset.layerSrc = src;
-
-    window.misticaScriptLayers[id] = { src, status: "loading" };
-
-    script.addEventListener("load", () => {
-      window.misticaScriptLayers[id] = { src, status: "loaded" };
-    });
-
-    script.addEventListener("error", () => {
-      window.misticaScriptLayers[id] = { src, status: "error" };
-      console.warn(`[Mística Presentes] Falha ao carregar camada: ${src}`);
-    });
-
     document.head.appendChild(script);
   }
 
-  const scriptLayers = [
-    ["modernIconFixScript", "modern-icon-fix.js"],
-    ["seoSiteScript", "seo-site.js"],
-    ["adminAccessScript", "admin-access.js"],
-    ["productExtrasScript", "product-extras.js"],
-    ["pedidoStatusScript", "pedido-status.js"],
-    ["adminAlertsScript", "admin-alerts.js"],
-    ["adminActivityScript", "admin-activity.js"],
-    ["siteAccessCounterScript", "site-access-counter.js"],
-    ["painelAuthScript", "painel-auth.js"],
-    ["siteReadinessScript", "site-readiness.js"],
-    ["isisCommerceScript", "isis-commerce.js"],
-    ["isisCommandsScript", "isis-commands.js"],
-    ["isisSectionProductsLockFinalScript", "isis-section-products-fix.js"],
-    ["commercialPremiumScript", "commercial-premium.js"],
-    ["ambientExperienceScript", "ambient-experience.js"],
-    ["formFieldAccessibilityFixScript", "form-field-accessibility-fix.js"],
-    // Camadas visuais finais. Manter esta ordem para evitar conflitos de layout.
-    ["wideLayoutFixScript", "layout-wide-fix.js"],
-    ["heroIsisPositionFixScript", "hero-isis-position-fix.js"],
-    ["cardSystemFixScript", "card-system-fix.js"],
-    ["sectionSpacingFixScript", "section-spacing-fix.js"]
-  ];
+  function setText(selector, text) {
+    const el = document.querySelector(selector);
+    if (el) el.textContent = text;
+  }
 
-  scriptLayers.forEach(([id, src]) => loadScriptOnce(id, src));
+  function setHtml(selector, html) {
+    const el = document.querySelector(selector);
+    if (el) el.innerHTML = html;
+  }
 
-  const adminPanel = document.getElementById("admin");
-  if (adminPanel) {
+  function configureWhatsApp() {
+    const whatsapp = cfg.whatsappNumber || "554999172137";
+    document.querySelectorAll("[data-whatsapp-link]").forEach(link => {
+      link.href = `https://wa.me/${whatsapp}?text=${encodeURIComponent("Olá, vim pelo site da Mística Presentes e gostaria de atendimento.")}`;
+      if (!link.dataset.keepText) link.textContent = "Chamar no WhatsApp";
+    });
+  }
+
+  function configureAdminVisibility() {
+    const adminPanel = document.getElementById("admin");
+    if (!adminPanel) return;
     adminPanel.hidden = !adminAccess;
     if (adminAccess) setTimeout(() => adminPanel.scrollIntoView({ behavior: "smooth" }), 250);
-  }
-  document.querySelectorAll(".internal-section").forEach(section => { section.hidden = true; });
-
-  function injectImage(target, src, alt, className, fallbackText) {
-    if (!target) return;
-    const img = document.createElement("img");
-    img.src = src;
-    img.alt = alt;
-    img.className = className;
-    img.loading = "lazy";
-    img.decoding = "async";
-    img.onerror = () => {
-      target.classList.add("asset-failed");
-      target.innerHTML = fallbackText;
-    };
-    target.replaceChildren(img);
+    document.querySelectorAll(".internal-section").forEach(section => { section.hidden = true; });
   }
 
-  document.querySelectorAll(".brand-mark").forEach(mark => {
-    injectImage(mark, logoAsset, "Logo Mística Presentes", "brand-logo-img brand-logo-modern", "<span>☾</span>");
-  });
-
-  const heroCard = document.querySelector(".mystic-logo-card");
-  if (heroCard) {
-    heroCard.classList.add("hero-card-isis", "hero-card-isis-publicitaria");
-    heroCard.innerHTML = `<img class="hero-isis-img hero-isis-publicitaria" src="${heroIsisAsset}" alt="Isis da Mística Presentes em destaque publicitário" width="720" height="900" loading="eager" decoding="async"><strong>Isis</strong><small>Guia de presentes, proteção e boas energias</small>`;
-    const heroIsis = heroCard.querySelector("img");
-    let heroAttempt = 0;
-    heroIsis.onload = () => {
-      heroCard.classList.remove("asset-failed");
-    };
-    heroIsis.onerror = () => {
-      heroAttempt += 1;
-      if (heroIsisSources[heroAttempt]) {
-        heroIsis.src = heroIsisSources[heroAttempt];
-        return;
-      }
-      heroCard.classList.add("asset-failed");
-      heroCard.innerHTML = `<span class="sigil" aria-hidden="true">☾</span><strong>Mística Presentes</strong><small>Proteção • Energia • Bem-estar</small>`;
-    };
+  function applyCommercialText() {
+    setText(".hero-copy h1", "Presentes místicos fáceis de escolher, comprar e enviar pelo WhatsApp");
+    setText(".hero-text", "Cristais, incensos, velas, aromas, banhos e kits especiais organizados para o cliente entender rápido, escolher com segurança e finalizar o pedido em poucos cliques.");
+    setText(".hero-copy .eyebrow", "Mística Presentes • Atendimento espiritual e comercial em Pinhalzinho-SC");
+    setHtml(".trust-row span:nth-child(1)", "<strong>Escolha simples</strong> produtos separados por intenção, presente e energia.");
+    setHtml(".trust-row span:nth-child(2)", "<strong>Pix e WhatsApp</strong> carrinho claro, QR Code e envio do pedido em poucos cliques.");
+    setHtml(".trust-row span:nth-child(3)", "<strong>Atendimento local</strong> dúvidas respondidas antes da retirada ou entrega combinada.");
+    setText("#categorias .section-title h2", "Categorias claras para o cliente encontrar rápido");
+    setText("#categorias .section-title p:last-child", "A vitrine destaca os grupos mais procurados e ajuda o cliente a comprar sem confusão.");
+    setText("#produtos .section-title h2", "Produtos organizados por intenção e presente");
+    setText("#produtos .section-title p:last-child", "Adicione ao carrinho, confira o total, gere Pix e envie o pedido pelo WhatsApp da loja.");
+    setText("#checkout .form-panel h2", "Carrinho claro para finalizar o pedido");
+    setText(".isis-chat-panel h2", "Isis ajuda o cliente a escolher");
+    setText(".isis-chat-panel .privacy-note", "Assistente preparada para orientar presentes, produtos xamânicos, aromas, estoque e sugestões de compra de forma simples.");
   }
 
-  lockAssistantIsisPanel();
-  setTimeout(lockAssistantIsisPanel, 100);
-  setTimeout(lockAssistantIsisPanel, 700);
-  setTimeout(lockAssistantIsisPanel, 1600);
-  setTimeout(lockAssistantIsisPanel, 3200);
+  function applyLogoAndIsis() {
+    const logoAsset = `assets/logo-mistica-modern.svg?v=${version}`;
+    const heroAsset = `assets/isis-humana-xamanica-02-publicitaria.png?v=${version}`;
+    const sectionAsset = `assets/isis-humana-xamanica-03-produtos.png?v=${version}`;
 
-  const lockedPanel = document.querySelector(".isis-panel-image");
-  if (lockedPanel && lockedPanel.dataset.hardLockObserver !== "true") {
-    lockedPanel.dataset.hardLockObserver = "true";
-    const observer = new MutationObserver(() => {
-      const current = lockedPanel.querySelector("img");
-      if (!current || !current.src.includes(finalSectionPath)) {
-        requestAnimationFrame(lockAssistantIsisPanel);
-      }
+    document.querySelectorAll(".brand-mark").forEach(mark => {
+      if (mark.dataset.logoApplied === "true") return;
+      mark.dataset.logoApplied = "true";
+      mark.innerHTML = `<img src="${logoAsset}" alt="Logo Mística Presentes" class="brand-logo-img brand-logo-modern" loading="eager" decoding="async">`;
     });
-    observer.observe(lockedPanel, { childList: true, subtree: true, attributes: true, attributeFilter: ["src", "class"] });
+
+    const heroCard = document.querySelector(".mystic-logo-card");
+    if (heroCard && heroCard.dataset.isisApplied !== "true") {
+      heroCard.dataset.isisApplied = "true";
+      heroCard.classList.add("hero-card-isis", "hero-card-isis-publicitaria");
+      heroCard.innerHTML = `<img class="hero-isis-img hero-isis-publicitaria" src="${heroAsset}" alt="Isis da Mística Presentes" width="720" height="900" loading="eager" decoding="async"><strong>Isis</strong><small>Guia de presentes, proteção e boas energias</small>`;
+    }
+
+    const isisPanel = document.querySelector(".isis-panel-image");
+    if (isisPanel && isisPanel.dataset.isisProductsPanel !== "true") {
+      isisPanel.dataset.isisProductsPanel = "true";
+      isisPanel.innerHTML = `<img class="isis-human-img isis-human-produtos" src="${sectionAsset}" alt="Isis da Mística Presentes apresentando produtos xamânicos" width="720" height="900" loading="lazy" decoding="async"><p>Isis apresenta produtos xamânicos, aromas, banhos, velas e presentes com orientação clara para a escolha do cliente.</p>`;
+    }
   }
 
-  document.querySelectorAll("[data-whatsapp-link]").forEach(link => {
-    link.href = `https://wa.me/${whatsapp}?text=${encodeURIComponent("Olá, vim pelo site da Mística Presentes e gostaria de atendimento.")}`;
-    if (!link.dataset.keepText) link.textContent = "Chamar no WhatsApp";
-  });
+  configureWhatsApp();
+  configureAdminVisibility();
+  applyCommercialText();
+  applyLogoAndIsis();
 
-  const heroTitle = document.querySelector(".hero-copy h1");
-  if (heroTitle) heroTitle.textContent = "Presentes místicos fáceis de escolher, comprar e enviar pelo WhatsApp";
-
-  const heroText = document.querySelector(".hero-text");
-  if (heroText) heroText.textContent = "Cristais, incensos, velas, aromas, banhos e kits especiais organizados para o cliente entender rápido, escolher com segurança e finalizar o pedido em poucos cliques.";
-
-  const heroEyebrow = document.querySelector(".hero-copy .eyebrow");
-  if (heroEyebrow) heroEyebrow.textContent = "Mística Presentes • Atendimento espiritual e comercial em Pinhalzinho-SC";
-
-  const trustItems = document.querySelectorAll(".trust-row span");
-  const trustTexts = [
-    "<strong>Escolha simples</strong> produtos separados por intenção, presente e energia.",
-    "<strong>Pix e WhatsApp</strong> carrinho claro, QR Code e envio do pedido em poucos cliques.",
-    "<strong>Atendimento local</strong> dúvidas respondidas antes da retirada ou entrega combinada."
-  ];
-  trustItems.forEach((item, index) => {
-    if (trustTexts[index]) item.innerHTML = trustTexts[index];
-  });
-
-  const categoryTitle = document.querySelector("#categorias .section-title h2");
-  if (categoryTitle) categoryTitle.textContent = "Categorias claras para o cliente encontrar rápido";
-
-  const categoryText = document.querySelector("#categorias .section-title p:last-child");
-  if (categoryText) categoryText.textContent = "A vitrine destaca os grupos mais procurados e ajuda o cliente a comprar sem confusão.";
-
-  const productTitle = document.querySelector("#produtos .section-title h2");
-  if (productTitle) productTitle.textContent = "Produtos organizados por intenção e presente";
-
-  const productText = document.querySelector("#produtos .section-title p:last-child");
-  if (productText) productText.textContent = "Adicione ao carrinho, confira o total, gere Pix e envie o pedido pelo WhatsApp da loja.";
-
-  const checkoutTitle = document.querySelector("#checkout .form-panel h2");
-  if (checkoutTitle) checkoutTitle.textContent = "Carrinho claro para finalizar o pedido";
-
-  const isisTitle = document.querySelector(".isis-chat-panel h2");
-  if (isisTitle) isisTitle.textContent = "Isis ajuda o cliente a escolher";
-
-  const isisNote = document.querySelector(".isis-chat-panel .privacy-note");
-  if (isisNote) isisNote.textContent = "Assistente preparada para orientar presentes, produtos xamânicos, aromas, estoque e sugestões de compra de forma simples.";
-
-  const footerContact = document.querySelector(".footer-grid div:nth-child(2)");
-  if (footerContact) {
-    footerContact.innerHTML = `<h3>Contato</h3><p>WhatsApp: ${whatsappDisplay}</p><p>Instagram: ${instagram}</p><p>Site: ${domain}</p>`;
-  }
-
-  const footerPublish = document.querySelector(".footer-grid div:nth-child(3)");
-  if (footerPublish) {
-    footerPublish.innerHTML = `<h3>Experiência</h3><p>Visual xamânico premium, textos mais claros e opção de música ambiente ativada pelo visitante.</p><p>${domain}</p>`;
-  }
+  loadScriptOnce("ambientExperienceScript", "ambient-experience.js");
+  loadScriptOnce("ambientStartOffGuardScript", "ambient-start-off-guard.js");
+  loadScriptOnce("formFieldAccessibilityFixScript", "form-field-accessibility-fix.js");
+  loadScriptOnce("layoutWideFixScript", "layout-wide-fix.js");
+  loadScriptOnce("heroIsisPositionFixScript", "hero-isis-position-fix.js");
+  loadScriptOnce("cardSystemFixScript", "card-system-fix.js");
+  loadScriptOnce("sectionSpacingFixScript", "section-spacing-fix.js");
 });
