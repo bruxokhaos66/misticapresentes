@@ -1,0 +1,13 @@
+# Dependencias recomendadas para gerar executavel 32 bits compatível com Windows 7
+# Use Python 3.8.10 32 bits neste ambiente.
+customtkinter
+SpeechRecognition
+pyttsx3
+pyinstaller==5.13.2
+ddgs
+Pillow
+fastapi
+uvicorn[standard]
+httpx
+python-multipart
+pytest
