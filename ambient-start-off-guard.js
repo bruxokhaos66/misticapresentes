@@ -2,6 +2,15 @@
   const STORAGE_KEY = "misticaAmbientEnabled";
   let userClicked = false;
 
+  function loadPremiumCss() {
+    if (document.getElementById("homePremiumFinishCss")) return;
+    const link = document.createElement("link");
+    link.id = "homePremiumFinishCss";
+    link.rel = "stylesheet";
+    link.href = "home-premium-finish.css?v=20260707-premium-css";
+    document.head.appendChild(link);
+  }
+
   function pauseAllAmbientAudio() {
     document.querySelectorAll("audio").forEach(audio => {
       try { audio.pause(); } catch {}
@@ -30,9 +39,11 @@
     }
   }, true);
 
+  loadPremiumCss();
   forceOff();
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", forceOff, { once: true });
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => { loadPremiumCss(); forceOff(); }, { once: true });
   window.addEventListener("load", () => {
+    loadPremiumCss();
     forceOff();
     setTimeout(forceOff, 250);
     setTimeout(forceOff, 900);
