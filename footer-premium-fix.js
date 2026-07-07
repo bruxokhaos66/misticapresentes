@@ -20,6 +20,7 @@
     loadScriptOnce("commercialBadgesFixScript", "commercial-badges-fix.js?v=20260707-safe-badges");
     loadScriptOnce("ambientExperienceScript", "ambient-experience.js?v=20260707-safe-ambient");
     loadScriptOnce("ambientPlayerUnifyScript", "ambient-player-unify.js?v=20260707-safe-player");
+    loadScriptOnce("ambientPlayerClickFixScript", "ambient-player-click-fix.js?v=20260707-click-bridge");
 
     const params = new URLSearchParams(window.location.search);
     const adminMode = params.get("admin") === "mistica" || window.location.hash === "#admin-mistica";
