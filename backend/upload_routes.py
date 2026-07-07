@@ -43,6 +43,7 @@ ALLOWED_AUDIO_TYPES = {
     "audio/x-m4a": ".m4a",
 }
 ALLOWED_AUDIO_EXTENSIONS = (".mp3", ".wav", ".ogg", ".webm", ".m4a")
+_MUSICAS_CACHE = {"at": 0.0, "data": None}
 
 
 class AudioLinksIn(BaseModel):
@@ -55,7 +56,7 @@ def log_tempo(etapa: str, inicio: float, detalhe: str = ""):
     print(f"[API][musicas] {etapa}: {duracao_ms}ms{sufixo}")
 
 
-def conectar_rapido(timeout: float = 0.35):
+def conectar_rapido(timeout: float = 0.08):
     conn = sqlite3.connect(DB_PATH, timeout=timeout)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA query_only = ON")
@@ -117,19 +118,6 @@ def garantir_tabela_musicas_ambiente(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_site_musicas_ambiente_criado ON site_musicas_ambiente(criado_em)")
 
 
-def garantir_tabela_musicas_startup():
-    inicio = time.perf_counter()
-    try:
-        with conectar() as conn:
-            garantir_tabela_musicas_ambiente(conn)
-            conn.commit()
-        log_tempo("garantir_tabela", inicio, "ok")
-        return None
-    except Exception as exc:
-        log_tempo("garantir_tabela_falhou", inicio, str(exc))
-        return str(exc)
-
-
 def salvar_musica_no_banco(nome: str, content_type: str, data: bytes, criado_em: str):
     inicio = time.perf_counter()
     try:
@@ -140,7 +128,7 @@ def salvar_musica_no_banco(nome: str, content_type: str, data: bytes, criado_em:
                 INSERT INTO site_musicas_ambiente (filename, content_type, size_bytes, dados, criado_em)
                 VALUES (?,?,?,?,?)
                 """,
-                (nome, content_type, len(data), data, criado_em),
+                (nome, content_type, len(data), criado_em, data) if False else (nome, content_type, len(data), data, criado_em),
             )
             conn.commit()
         log_tempo("backup_banco_ok", inicio, nome)
@@ -199,11 +187,8 @@ def listar_musicas_arquivo_local(nomes_existentes: set[str]) -> list[dict]:
 def listar_musicas_banco_rapido() -> tuple[list[dict], set[str], str | None]:
     musicas = []
     nomes = set()
-    erro = garantir_tabela_musicas_startup()
-    if erro:
-        return musicas, nomes, erro
     try:
-        conn = conectar_rapido(timeout=0.35)
+        conn = conectar_rapido(timeout=0.08)
         try:
             rows = conn.execute(
                 """
@@ -229,8 +214,8 @@ def listar_musicas_banco_rapido() -> tuple[list[dict], set[str], str | None]:
         finally:
             conn.close()
     except Exception as exc:
-        erro = str(exc)
-    return musicas, nomes, erro
+        return musicas, nomes, str(exc)
+    return musicas, nomes, None
 
 
 @router.post("/uploads/produtos")
@@ -240,29 +225,19 @@ async def upload_imagem_produto(
     x_mistica_api_key: str | None = Header(default=None),
 ):
     validar_site_api_key(x_mistica_api_key)
-
     content_type = arquivo.content_type or ""
     if content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(status_code=400, detail="Formato inválido. Use JPG, PNG ou WEBP.")
-
     data = await arquivo.read()
     if not data:
         raise HTTPException(status_code=400, detail="Arquivo vazio.")
     if len(data) > MAX_IMAGE_BYTES:
         raise HTTPException(status_code=413, detail="Imagem muito grande. Limite: 4 MB.")
-
     ext = ALLOWED_CONTENT_TYPES[content_type]
     nome = f"{limpar_nome(produto_id)}-{uuid4().hex[:10]}{ext}"
     destino = UPLOAD_DIR / nome
     destino.write_bytes(data)
-
-    return {
-        "ok": True,
-        "filename": nome,
-        "content_type": content_type,
-        "size_bytes": len(data),
-        "url": f"/uploads/produtos/{nome}",
-    }
+    return {"ok": True, "filename": nome, "content_type": content_type, "size_bytes": len(data), "url": f"/uploads/produtos/{nome}"}
 
 
 @router.post("/uploads/musicas")
@@ -273,55 +248,40 @@ async def upload_musica_ambiente(
     x_mistica_api_key: str | None = Header(default=None),
 ):
     validar_site_api_key(x_mistica_api_key)
-
     ext = detectar_extensao_audio(arquivo)
     data = await arquivo.read()
     if not data:
         raise HTTPException(status_code=400, detail="Arquivo vazio.")
     if len(data) > MAX_AUDIO_BYTES:
         raise HTTPException(status_code=413, detail="Áudio muito grande. Limite: 30 MB.")
-
     content_type = arquivo.content_type or media_type_por_nome(arquivo.filename or "")
     nome_original = arquivo.filename or nome_base or "ambiente-xamanico"
     nome_limpo = limpar_nome(nome_original.rsplit(".", 1)[0] or nome_base)
     nome = f"{nome_limpo}-{uuid4().hex[:10]}{ext}"
     criado_em = datetime.now().isoformat(timespec="seconds")
-
     destino = AUDIO_DIR / nome
     destino.write_bytes(data)
     background_tasks.add_task(salvar_musica_no_banco, nome, content_type, data, criado_em)
-
-    return {
-        "ok": True,
-        "filename": nome,
-        "content_type": content_type,
-        "size_bytes": len(data),
-        "url": f"/api/uploads/musicas/arquivo-local/{nome}",
-        "data_hora": criado_em,
-        "armazenamento": "arquivo+backup_banco",
-    }
+    _MUSICAS_CACHE["at"] = 0.0
+    _MUSICAS_CACHE["data"] = None
+    return {"ok": True, "filename": nome, "content_type": content_type, "size_bytes": len(data), "url": f"/api/uploads/musicas/arquivo-local/{nome}", "data_hora": criado_em, "armazenamento": "arquivo+backup_banco"}
 
 
 @router.get("/uploads/musicas")
 def listar_musicas_ambiente():
     inicio = time.perf_counter()
-    log_tempo("inicio_listagem", inicio)
-
+    agora = time.monotonic()
+    cache_data = _MUSICAS_CACHE.get("data")
+    if cache_data and agora - float(_MUSICAS_CACHE.get("at") or 0) < 20:
+        return cache_data
     musicas_banco, nomes_banco, erro_banco = listar_musicas_banco_rapido()
     log_tempo("consulta_banco", inicio, erro_banco or f"{len(musicas_banco)} registro(s)")
-
     musicas_arquivos = listar_musicas_arquivo_local(nomes_banco)
     log_tempo("consulta_arquivos", inicio, f"{len(musicas_arquivos)} arquivo(s)")
-
     musicas = (musicas_arquivos + musicas_banco)[:30]
-    resposta = {
-        "ok": True,
-        "musicas": musicas,
-        "total": len(musicas),
-        "fonte": "arquivo+banco_rapido",
-        "banco_erro": erro_banco,
-        "data_hora": datetime.now().isoformat(timespec="seconds"),
-    }
+    resposta = {"ok": True, "musicas": musicas, "total": len(musicas), "fonte": "arquivo+banco_rapido", "banco_erro": erro_banco, "data_hora": datetime.now().isoformat(timespec="seconds")}
+    _MUSICAS_CACHE["at"] = agora
+    _MUSICAS_CACHE["data"] = resposta
     log_tempo("fim_resposta", inicio, f"total={len(musicas)}")
     return resposta
 
@@ -334,43 +294,17 @@ def obter_musica_local_ambiente(filename: str):
     arquivo = AUDIO_DIR / nome
     if not arquivo.exists() or not arquivo.is_file():
         raise HTTPException(status_code=404, detail="Música não encontrada.")
-
-    return Response(
-        content=arquivo.read_bytes(),
-        media_type=media_type_por_nome(nome),
-        headers={
-            "Accept-Ranges": "bytes",
-            "Cache-Control": "public, max-age=3600",
-            "Content-Disposition": f"inline; filename={nome}",
-        },
-    )
+    return Response(content=arquivo.read_bytes(), media_type=media_type_por_nome(nome), headers={"Accept-Ranges": "bytes", "Cache-Control": "public, max-age=3600", "Content-Disposition": f"inline; filename={nome}"})
 
 
 @router.get("/uploads/musicas/arquivo/{musica_id}")
 def obter_musica_ambiente(musica_id: int):
     with conectar() as conn:
         garantir_tabela_musicas_ambiente(conn)
-        row = conn.execute(
-            """
-            SELECT filename, content_type, dados
-            FROM site_musicas_ambiente
-            WHERE id=?
-            """,
-            (musica_id,),
-        ).fetchone()
-
+        row = conn.execute("SELECT filename, content_type, dados FROM site_musicas_ambiente WHERE id=?", (musica_id,)).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Música não encontrada.")
-
-    return Response(
-        content=row["dados"],
-        media_type=row["content_type"],
-        headers={
-            "Accept-Ranges": "bytes",
-            "Cache-Control": "public, max-age=3600",
-            "Content-Disposition": f"inline; filename={row['filename']}",
-        },
-    )
+    return Response(content=row["dados"], media_type=row["content_type"], headers={"Accept-Ranges": "bytes", "Cache-Control": "public, max-age=3600", "Content-Disposition": f"inline; filename={row['filename']}"})
 
 
 @router.get("/uploads/musicas/links")
@@ -378,12 +312,7 @@ def listar_links_audio_ambiente():
     links = []
     if AUDIO_LINKS_FILE.exists():
         links = limpar_links_audio(AUDIO_LINKS_FILE.read_text(encoding="utf-8").splitlines())
-    return {
-        "ok": True,
-        "links": links,
-        "total": len(links),
-        "data_hora": datetime.now().isoformat(timespec="seconds"),
-    }
+    return {"ok": True, "links": links, "total": len(links), "data_hora": datetime.now().isoformat(timespec="seconds")}
 
 
 @router.post("/uploads/musicas/links")
@@ -391,9 +320,6 @@ def salvar_links_audio_ambiente(payload: AudioLinksIn, x_mistica_api_key: str | 
     validar_site_api_key(x_mistica_api_key)
     links = limpar_links_audio(payload.links)
     AUDIO_LINKS_FILE.write_text("\n".join(links), encoding="utf-8")
-    return {
-        "ok": True,
-        "links": links,
-        "total": len(links),
-        "data_hora": datetime.now().isoformat(timespec="seconds"),
-    }
+    _MUSICAS_CACHE["at"] = 0.0
+    _MUSICAS_CACHE["data"] = None
+    return {"ok": True, "links": links, "total": len(links), "data_hora": datetime.now().isoformat(timespec="seconds")}
