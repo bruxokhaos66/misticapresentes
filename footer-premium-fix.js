@@ -166,6 +166,7 @@
   function loadAdminAmbientMusic() { loadScriptOnce("adminAmbientMusicScript", "admin-ambient-music.js?v=20260707-key-fallback"); }
   function loadSinglePlayerGuard() { loadScriptOnce("ambientSinglePlayerGuardScript", "ambient-single-player-guard.js?v=20260706-single-player"); }
   function loadSaleApiFirstFix() { loadScriptOnce("misticaSaleApiFirstScript", "mobile-sale-api-first.js?v=20260706-api-first-sale"); }
+  function loadAdminApiLoginFix() { loadScriptOnce("adminApiLoginFixScript", "admin-api-login-fix.js?v=20260707-api-login"); }
 
   function applyFooterPremiumFix() {
     installFooterStyle();
@@ -185,6 +186,7 @@
     loadAdminAmbientMusic();
     loadSinglePlayerGuard();
     loadSaleApiFirstFix();
+    loadAdminApiLoginFix();
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", applyFooterPremiumFix, { once: true });
