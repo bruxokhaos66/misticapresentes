@@ -29,6 +29,7 @@
     loadCss("isisCommerceLegacyCss", "isis-commerce-legacy.css?v=20260707-final-isis");
     loadCss("footerContactLegacyCss", "footer-contact-legacy.css?v=20260707-final-footer");
     loadCss("heroModernFinalCss", "hero-modern-final.css?v=20260707-hero-comercial-ajuste");
+    loadCss("heroAuthorityFinalCss", "hero-authority-final.css?v=20260707-authority-isis-final");
     loadScript("localBusinessSchemaScript", "local-business-schema.js?v=20260707-final-seo");
   }
 
