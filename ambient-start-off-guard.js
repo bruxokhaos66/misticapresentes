@@ -11,14 +11,24 @@
     document.head.appendChild(link);
   }
 
+  function loadScript(id, src) {
+    if (document.getElementById(id)) return;
+    const script = document.createElement("script");
+    script.id = id;
+    script.defer = true;
+    script.src = src;
+    document.head.appendChild(script);
+  }
+
   function loadVisualCss() {
-    loadCss("homePremiumFinishCss", "home-premium-finish.css?v=20260707-premium-css");
-    loadCss("mobilePolishCss", "mobile-polish.css?v=20260707-mobile-polish");
-    loadCss("heroLegacyPremiumCss", "hero-legacy-premium.css?v=20260707-hero-legacy");
-    loadCss("ambientLegacyCompleteCss", "ambient-legacy-complete.css?v=20260707-ambient-complete");
-    loadCss("productsIntentLegacyCss", "products-intent-legacy.css?v=20260707-products-intent");
-    loadCss("isisCommerceLegacyCss", "isis-commerce-legacy.css?v=20260707-isis-commerce");
-    loadCss("footerContactLegacyCss", "footer-contact-legacy.css?v=20260707-footer-contact");
+    loadCss("homePremiumFinishCss", "home-premium-finish.css?v=20260707-final-premium");
+    loadCss("mobilePolishCss", "mobile-polish.css?v=20260707-final-mobile");
+    loadCss("heroLegacyPremiumCss", "hero-legacy-premium.css?v=20260707-final-hero");
+    loadCss("ambientLegacyCompleteCss", "ambient-legacy-complete.css?v=20260707-final-ambient");
+    loadCss("productsIntentLegacyCss", "products-intent-legacy.css?v=20260707-final-products");
+    loadCss("isisCommerceLegacyCss", "isis-commerce-legacy.css?v=20260707-final-isis");
+    loadCss("footerContactLegacyCss", "footer-contact-legacy.css?v=20260707-final-footer");
+    loadScript("localBusinessSchemaScript", "local-business-schema.js?v=20260707-final-seo");
   }
 
   function pauseAllAmbientAudio() {
