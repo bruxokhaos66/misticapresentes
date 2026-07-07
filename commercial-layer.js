@@ -6,10 +6,12 @@
     const hero = document.querySelector("#inicio.hero-section");
     if (!hero) return;
     hero.classList.add("legacy-premium-hero");
+    const eyebrow = hero.querySelector(".hero-copy .eyebrow");
+    if (eyebrow) eyebrow.textContent = "Mística Presentes • atendimento espiritual e comercial em Pinhalzinho-SC";
     const title = hero.querySelector(".hero-copy h1");
-    if (title) title.textContent = "Produtos místicos para escolher, presentear e comprar pelo WhatsApp";
+    if (title) title.textContent = "Presentes místicos fáceis de escolher, comprar e enviar pelo WhatsApp";
     const text = hero.querySelector(".hero-text");
-    if (text) text.textContent = "Cristais, incensos, velas, aromas, banhos de ervas e presentes com significado para proteção, energia, beleza e bem-estar.";
+    if (text) text.textContent = "Cristais, incensos, velas, aromas, banhos e kits especiais organizados para o cliente entender rápido, escolher com segurança e finalizar o pedido em poucos cliques.";
     const visual = hero.querySelector(".hero-visual");
     if (visual && !visual.querySelector(".legacy-isis-card")) {
       visual.replaceChildren();
@@ -25,7 +27,7 @@
       const strong = document.createElement("strong");
       strong.textContent = "Curadoria Mística";
       const span = document.createElement("span");
-      span.textContent = "Produtos escolhidos para intenção, beleza, proteção e presentes com significado.";
+      span.textContent = "Produtos escolhidos para intenção, beleza e significado.";
       caption.append(strong, span);
       card.append(orb, symbol, caption);
       visual.appendChild(card);
