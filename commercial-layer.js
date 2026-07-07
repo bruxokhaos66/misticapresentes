@@ -3,12 +3,12 @@
   window.__MISTICA_COMMERCIAL_LAYER_LOADED__ = true;
 
   function init() {
+    document.body.classList.add("mistica-home-premium");
     const params = new URLSearchParams(window.location.search);
     const adminAccess = params.get("admin") === "mistica" || window.location.hash === "#admin-mistica";
     const adminPanel = document.getElementById("admin");
     if (adminPanel) adminPanel.hidden = !adminAccess;
     document.querySelectorAll(".internal-section").forEach(section => { section.hidden = true; });
-
     const cfg = window.misticaSiteConfig || {};
     const whatsapp = cfg.whatsappNumber || "554999172137";
     document.querySelectorAll("[data-whatsapp-link]").forEach(link => {
