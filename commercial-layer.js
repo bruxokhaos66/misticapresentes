@@ -46,21 +46,13 @@
     if (!grid || section.querySelector(".intent-legacy-strip")) return;
     const strip = document.createElement("div");
     strip.className = "container intent-legacy-strip";
-    const items = [
-      ["🌿", "Limpeza e proteção", "Incensos, banhos de ervas e itens para renovar a energia do ambiente."],
-      ["💎", "Presentes com significado", "Cristais, kits e lembranças para surpreender com propósito."],
-      ["🕯️", "Fé e intenção", "Velas, artigos de oração e produtos para momentos especiais."],
-      ["✨", "Casa perfumada", "Aromas, essências e Via Aroma para deixar o lar mais acolhedor."]
-    ];
+    const items = [["🌿", "Limpeza e proteção", "Incensos, banhos de ervas e itens para renovar a energia do ambiente."], ["💎", "Presentes com significado", "Cristais, kits e lembranças para surpreender com propósito."], ["🕯️", "Fé e intenção", "Velas, artigos de oração e produtos para momentos especiais."], ["✨", "Casa perfumada", "Aromas, essências e Via Aroma para deixar o lar mais acolhedor."]];
     items.forEach(([icon, name, desc]) => {
       const card = document.createElement("article");
       card.className = "intent-legacy-card";
-      const span = document.createElement("span");
-      span.textContent = icon;
-      const strong = document.createElement("strong");
-      strong.textContent = name;
-      const small = document.createElement("small");
-      small.textContent = desc;
+      const span = document.createElement("span"); span.textContent = icon;
+      const strong = document.createElement("strong"); strong.textContent = name;
+      const small = document.createElement("small"); small.textContent = desc;
       card.append(span, strong, small);
       strip.appendChild(card);
     });
@@ -83,27 +75,61 @@
     if (!chatPanel || chatPanel.querySelector(".legacy-isis-cards")) return;
     const cards = document.createElement("div");
     cards.className = "legacy-isis-cards";
-    const items = [
-      ["🔮", "Produtos combinados", "Sugestões de kits com incensos, cristais, velas, banhos e aromas."],
-      ["🎁", "Presentes humanos", "Ideias com significado para datas especiais, carinho e proteção."],
-      ["⚡", "Atendimento rápido", "Comandos prontos para encontrar produtos e enviar o pedido pelo WhatsApp."],
-      ["📈", "Apoio nas vendas", "Ajuda para consultar vendas, estoque baixo e oportunidades de reposição."]
-    ];
+    const items = [["🔮", "Produtos combinados", "Sugestões de kits com incensos, cristais, velas, banhos e aromas."], ["🎁", "Presentes humanos", "Ideias com significado para datas especiais, carinho e proteção."], ["⚡", "Atendimento rápido", "Comandos prontos para encontrar produtos e enviar o pedido pelo WhatsApp."], ["📈", "Apoio nas vendas", "Ajuda para consultar vendas, estoque baixo e oportunidades de reposição."]];
     items.forEach(([icon, name, desc]) => {
       const card = document.createElement("article");
       card.className = "legacy-isis-card";
-      const span = document.createElement("span");
-      span.textContent = icon;
-      const strong = document.createElement("strong");
-      strong.textContent = name;
-      const small = document.createElement("small");
-      small.textContent = desc;
+      const span = document.createElement("span"); span.textContent = icon;
+      const strong = document.createElement("strong"); strong.textContent = name;
+      const small = document.createElement("small"); small.textContent = desc;
       card.append(span, strong, small);
       cards.appendChild(card);
     });
     const form = chatPanel.querySelector("#isisForm");
     if (form) chatPanel.insertBefore(cards, form);
     else chatPanel.appendChild(cards);
+  }
+
+  function restoreContactFooter() {
+    const contact = document.querySelector("#contato.contact-section");
+    if (contact) {
+      contact.classList.add("legacy-contact-premium");
+      const title = contact.querySelector("h2");
+      if (title) title.textContent = "Atendimento próximo, rápido e com significado";
+      const desc = contact.querySelector(".split > div:first-child p:not(.eyebrow)");
+      if (desc) desc.textContent = "Fale com a Mística Presentes pelo WhatsApp para escolher produtos, montar kits e tirar dúvidas antes da compra.";
+      const first = contact.querySelector(".split > div:first-child");
+      if (first && !first.querySelector(".legacy-contact-highlights")) {
+        const highlights = document.createElement("div");
+        highlights.className = "legacy-contact-highlights";
+        [["Compra guiada", "Ajudamos você a escolher por intenção."], ["Retirada local", "Atendimento em Pinhalzinho-SC."], ["WhatsApp rápido", "Pedido direto e humanizado."]].forEach(([a, b]) => {
+          const item = document.createElement("span");
+          const strong = document.createElement("strong"); strong.textContent = a;
+          const small = document.createElement("small"); small.textContent = b;
+          item.append(strong, small);
+          highlights.appendChild(item);
+        });
+        first.appendChild(highlights);
+      }
+      const card = contact.querySelector(".contact-card");
+      if (card) card.classList.add("legacy-contact-card");
+    }
+
+    const footer = document.querySelector(".footer");
+    if (footer) {
+      footer.classList.add("legacy-footer-premium");
+      const grid = footer.querySelector(".footer-grid");
+      if (grid && !grid.querySelector(".footer-trust-line")) {
+        const trust = document.createElement("div");
+        trust.className = "footer-trust-line";
+        ["Cristais", "Incensos", "Velas", "Aromas", "Presentes com significado", "Pinhalzinho-SC"].forEach(text => {
+          const span = document.createElement("span");
+          span.textContent = text;
+          trust.appendChild(span);
+        });
+        grid.appendChild(trust);
+      }
+    }
   }
 
   function init() {
@@ -121,6 +147,7 @@
     restoreHero();
     restoreProductsIntent();
     restoreIsisCommerce();
+    restoreContactFooter();
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once: true });
