@@ -17,6 +17,7 @@
     loadCss("heroLegacyPremiumCss", "hero-legacy-premium.css?v=20260707-hero-legacy");
     loadCss("ambientLegacyCompleteCss", "ambient-legacy-complete.css?v=20260707-ambient-complete");
     loadCss("productsIntentLegacyCss", "products-intent-legacy.css?v=20260707-products-intent");
+    loadCss("isisCommerceLegacyCss", "isis-commerce-legacy.css?v=20260707-isis-commerce");
   }
 
   function pauseAllAmbientAudio() {
