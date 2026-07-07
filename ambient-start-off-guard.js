@@ -2,13 +2,18 @@
   const STORAGE_KEY = "misticaAmbientEnabled";
   let userClicked = false;
 
-  function loadPremiumCss() {
-    if (document.getElementById("homePremiumFinishCss")) return;
+  function loadCss(id, href) {
+    if (document.getElementById(id)) return;
     const link = document.createElement("link");
-    link.id = "homePremiumFinishCss";
+    link.id = id;
     link.rel = "stylesheet";
-    link.href = "home-premium-finish.css?v=20260707-premium-css";
+    link.href = href;
     document.head.appendChild(link);
+  }
+
+  function loadVisualCss() {
+    loadCss("homePremiumFinishCss", "home-premium-finish.css?v=20260707-premium-css");
+    loadCss("mobilePolishCss", "mobile-polish.css?v=20260707-mobile-polish");
   }
 
   function pauseAllAmbientAudio() {
@@ -39,11 +44,11 @@
     }
   }, true);
 
-  loadPremiumCss();
+  loadVisualCss();
   forceOff();
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => { loadPremiumCss(); forceOff(); }, { once: true });
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => { loadVisualCss(); forceOff(); }, { once: true });
   window.addEventListener("load", () => {
-    loadPremiumCss();
+    loadVisualCss();
     forceOff();
     setTimeout(forceOff, 250);
     setTimeout(forceOff, 900);
