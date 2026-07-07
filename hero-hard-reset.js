@@ -34,6 +34,7 @@
         place-items: center !important;
       }
       #inicio .hero-isis-final-card {
+        position: relative !important;
         width: min(440px,100%) !important;
         min-height: 620px !important;
         display: grid !important;
@@ -42,12 +43,45 @@
         border: 1px solid rgba(240,197,106,.34) !important;
         border-radius: 34px !important;
         overflow: hidden !important;
-        background: linear-gradient(180deg, rgba(3,3,5,.04), rgba(3,3,5,.12) 44%, rgba(3,3,5,.83)), var(--isisHeroImage), radial-gradient(circle at 50% 20%, rgba(240,197,106,.18), transparent 30%), linear-gradient(145deg, rgba(8,7,13,.94), rgba(34,24,44,.54)) !important;
-        background-size: cover, cover, auto, auto !important;
-        background-position: center top, center top, center, center !important;
+        background:
+          radial-gradient(circle at 50% 22%, rgba(240,197,106,.20), transparent 30%),
+          radial-gradient(circle at 50% 54%, rgba(83,107,55,.24), transparent 44%),
+          linear-gradient(145deg, rgba(8,7,13,.94), rgba(34,24,44,.54)) !important;
         box-shadow: 0 34px 110px rgba(0,0,0,.44), 0 0 70px rgba(240,197,106,.13) !important;
       }
+      #inicio .hero-isis-final-card::before {
+        content: "ISIS" !important;
+        position: absolute !important;
+        top: 46px !important;
+        left: 0 !important;
+        right: 0 !important;
+        text-align: center !important;
+        color: rgba(240,197,106,.15) !important;
+        font-family: Cinzel, Georgia, serif !important;
+        font-size: clamp(4rem,8vw,7rem) !important;
+        font-weight: 900 !important;
+        letter-spacing: .10em !important;
+      }
+      #inicio .hero-isis-final-card::after {
+        content: "☾" !important;
+        position: absolute !important;
+        top: 190px !important;
+        left: 50% !important;
+        width: 180px !important;
+        height: 180px !important;
+        display: grid !important;
+        place-items: center !important;
+        transform: translateX(-50%) !important;
+        border: 1px solid rgba(240,197,106,.34) !important;
+        border-radius: 999px !important;
+        color: #f0c56a !important;
+        font-size: 4rem !important;
+        background: rgba(3,3,5,.38) !important;
+        box-shadow: inset 0 0 34px rgba(240,197,106,.10), 0 24px 70px rgba(0,0,0,.35) !important;
+      }
       #inicio .hero-isis-final-caption {
+        position: relative !important;
+        z-index: 3 !important;
         border: 1px solid rgba(240,197,106,.28) !important;
         border-radius: 22px !important;
         padding: 18px !important;
