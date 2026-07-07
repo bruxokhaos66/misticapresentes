@@ -32,6 +32,41 @@
     }
   }
 
+  function restoreProductsIntent() {
+    const section = document.querySelector("#produtos.products-section");
+    if (!section) return;
+    section.classList.add("legacy-products-intent");
+    const eyebrow = section.querySelector(".section-title .eyebrow");
+    if (eyebrow) eyebrow.textContent = "Escolha por intenção";
+    const title = section.querySelector(".section-title h2");
+    if (title) title.textContent = "Escolha produtos por intenção, presente e energia";
+    const text = section.querySelector(".section-title p:not(.eyebrow)");
+    if (text) text.textContent = "Encontre rapidamente produtos para proteção, limpeza energética, aromas, fé, decoração e presentes especiais.";
+    const grid = section.querySelector("[data-product-grid]");
+    if (!grid || section.querySelector(".intent-legacy-strip")) return;
+    const strip = document.createElement("div");
+    strip.className = "container intent-legacy-strip";
+    const items = [
+      ["🌿", "Limpeza e proteção", "Incensos, banhos de ervas e itens para renovar a energia do ambiente."],
+      ["💎", "Presentes com significado", "Cristais, kits e lembranças para surpreender com propósito."],
+      ["🕯️", "Fé e intenção", "Velas, artigos de oração e produtos para momentos especiais."],
+      ["✨", "Casa perfumada", "Aromas, essências e Via Aroma para deixar o lar mais acolhedor."]
+    ];
+    items.forEach(([icon, name, desc]) => {
+      const card = document.createElement("article");
+      card.className = "intent-legacy-card";
+      const span = document.createElement("span");
+      span.textContent = icon;
+      const strong = document.createElement("strong");
+      strong.textContent = name;
+      const small = document.createElement("small");
+      small.textContent = desc;
+      card.append(span, strong, small);
+      strip.appendChild(card);
+    });
+    section.insertBefore(strip, grid);
+  }
+
   function init() {
     document.body.classList.add("mistica-home-premium");
     const params = new URLSearchParams(window.location.search);
@@ -45,6 +80,7 @@
       link.href = `https://wa.me/${whatsapp}?text=${encodeURIComponent("Olá, vim pelo site da Mística Presentes e gostaria de atendimento.")}`;
     });
     restoreHero();
+    restoreProductsIntent();
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once: true });
