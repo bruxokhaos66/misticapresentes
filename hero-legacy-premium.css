@@ -1,0 +1,123 @@
+body.mistica-home-premium .hero-section.legacy-premium-hero {
+  min-height: 760px;
+  display: grid;
+  align-items: center;
+  background:
+    radial-gradient(circle at 76% 22%, rgba(240,197,106,.20), transparent 26rem),
+    radial-gradient(circle at 22% 32%, rgba(184,201,119,.15), transparent 28rem),
+    radial-gradient(circle at 54% 92%, rgba(84,47,104,.18), transparent 34rem),
+    linear-gradient(180deg, #08070d 0%, #050509 100%);
+}
+
+body.mistica-home-premium .legacy-premium-hero .hero-copy h1 {
+  max-width: 980px;
+  font-size: clamp(3rem, 7.2vw, 6.6rem);
+  line-height: .9;
+  text-transform: uppercase;
+}
+
+body.mistica-home-premium .legacy-premium-hero .hero-text {
+  max-width: 720px;
+  font-size: clamp(1.05rem, 2vw, 1.35rem);
+}
+
+body.mistica-home-premium .legacy-premium-hero .hero-visual {
+  display: grid;
+  align-items: center;
+  justify-items: center;
+}
+
+.legacy-isis-card {
+  position: relative;
+  width: min(440px, 100%);
+  min-height: 610px;
+  display: grid;
+  align-content: end;
+  gap: 16px;
+  padding: 28px;
+  overflow: hidden;
+  border: 1px solid rgba(240,197,106,.34);
+  border-radius: 38px;
+  background:
+    radial-gradient(circle at 50% 18%, rgba(240,197,106,.24), transparent 26%),
+    radial-gradient(circle at 50% 54%, rgba(83,107,55,.28), transparent 44%),
+    linear-gradient(145deg, rgba(8,7,13,.95), rgba(32,22,42,.58));
+  box-shadow: 0 34px 110px rgba(0,0,0,.46), 0 0 70px rgba(240,197,106,.13);
+}
+
+.legacy-isis-card::before {
+  content: "ISIS";
+  position: absolute;
+  inset: 56px 22px auto;
+  text-align: center;
+  font-family: Cinzel, Georgia, serif;
+  font-size: clamp(4.2rem, 10vw, 7.4rem);
+  font-weight: 900;
+  letter-spacing: .08em;
+  color: rgba(240,197,106,.13);
+  text-shadow: 0 0 54px rgba(240,197,106,.22);
+}
+
+.legacy-isis-orb {
+  position: absolute;
+  top: 150px;
+  left: 50%;
+  width: 270px;
+  height: 270px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle, rgba(240,197,106,.28), rgba(184,201,119,.16) 45%, transparent 68%);
+  filter: blur(1px);
+}
+
+.legacy-isis-symbol {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 180px;
+  height: 180px;
+  margin: 120px auto 90px;
+  border: 1px solid rgba(240,197,106,.36);
+  border-radius: 999px;
+  background: rgba(3,3,5,.42);
+  color: #f0c56a;
+  font-family: Cinzel, Georgia, serif;
+  font-size: 5rem;
+  box-shadow: inset 0 0 34px rgba(240,197,106,.12), 0 24px 70px rgba(0,0,0,.35);
+}
+
+.legacy-isis-caption {
+  position: relative;
+  z-index: 3;
+  border: 1px solid rgba(240,197,106,.24);
+  border-radius: 24px;
+  padding: 18px;
+  background: rgba(3,3,5,.70);
+  backdrop-filter: blur(14px);
+}
+
+.legacy-isis-caption strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #f0c56a;
+  font-family: Cinzel, Georgia, serif;
+  font-size: 1.25rem;
+}
+
+.legacy-isis-caption span {
+  display: block;
+  color: #efe1c5;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+@media (max-width: 980px) {
+  body.mistica-home-premium .hero-section.legacy-premium-hero {
+    min-height: auto;
+  }
+  .legacy-isis-card {
+    min-height: 520px;
+  }
+}
