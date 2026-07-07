@@ -24,7 +24,7 @@ from database.migrations import init_db
 app = FastAPI(
     title="Mística Presentes API",
     description="API oficial para sincronização do app Mística Presentes.",
-    version="0.3.8",
+    version="0.3.9",
 )
 
 app.add_middleware(
@@ -138,26 +138,35 @@ def garantir_admin_api():
     if not senha_admin:
         print("[API] MISTICA_ADMIN_PASSWORD não configurada; admin automático não será criado ou redefinido.")
         return
+
     salt = "mistica_api_admin"
     senha_hash = hash_password_pbkdf2(senha_admin, salt.encode("utf-8"))
-    existente = obter("SELECT id FROM usuarios WHERE login='admin'")
-    if existente:
-        executar(
-            """
-            UPDATE usuarios
-            SET nome=?, senha_hash=?, senha_salt=?, perfil=?, ativo=1
-            WHERE login='admin'
-            """,
-            ("Administrador", senha_hash, salt, "adm"),
-        )
-    else:
-        executar(
-            """
-            INSERT INTO usuarios (nome, login, senha_hash, senha_salt, perfil, ativo)
-            VALUES (?,?,?,?,?,1)
-            """,
-            ("Administrador", "admin", senha_hash, salt, "adm"),
-        )
+    admins = [
+        ("admin", "Administrador"),
+        ("bruxo", "Fredi Bach"),
+        ("bruxa", "Natalia Grunwald"),
+    ]
+
+    for login, nome in admins:
+        existente = obter("SELECT id FROM usuarios WHERE lower(trim(login))=lower(trim(?))", (login,))
+        if existente:
+            executar(
+                """
+                UPDATE usuarios
+                SET nome=?, login=?, senha_hash=?, senha_salt=?, perfil=?, ativo=1
+                WHERE id=?
+                """,
+                (nome, login, senha_hash, salt, "adm", existente["id"]),
+            )
+        else:
+            executar(
+                """
+                INSERT INTO usuarios (nome, login, senha_hash, senha_salt, perfil, ativo)
+                VALUES (?,?,?,?,?,1)
+                """,
+                (nome, login, senha_hash, salt, "adm"),
+            )
+    print("[API] Administradores da API garantidos: admin, bruxo, bruxa.")
 
 
 def _normalizar_perfil(perfil: str | None):
@@ -234,12 +243,12 @@ def status():
 
 @app.post("/api/auth/login")
 def login_painel(entrada: LoginIn):
-    login = entrada.login.strip()
+    login = entrada.login.strip().lower()
     usuario = obter(
         """
         SELECT id, nome, login, senha_hash, senha_salt, perfil, ativo
         FROM usuarios
-        WHERE login=? AND COALESCE(ativo,1)=1
+        WHERE lower(trim(login))=? AND COALESCE(ativo,1)=1
         """,
         (login,),
     )
@@ -302,438 +311,6 @@ def listar_produtos(busca: str = "", limite: int = Query(100, ge=1, le=500)):
         FROM produtos
         WHERE COALESCE(ativo,1)=1
         ORDER BY nome COLLATE NOCASE
-        LIMIT ?
-        """,
-        (limite,),
-    )
-
-
-@app.post("/api/produtos")
-def criar_produto(produto: ProdutoIn):
-    novo_id = executar(
-        """
-        INSERT INTO produtos (codigo_p, nome, preco, quantidade, categoria, custo, lucro, estoque_minimo, ativo)
-        VALUES (?,?,?,?,?,?,?,?,1)
-        """,
-        (
-            produto.codigo_p,
-            produto.nome,
-            produto.preco,
-            produto.quantidade,
-            produto.categoria,
-            produto.custo,
-            produto.lucro,
-            produto.estoque_minimo,
-        ),
-    )
-    return {"id": novo_id, "status": "criado"}
-
-
-@app.post("/api/sync/produtos-lote")
-def sincronizar_produtos_lote(payload: ProdutosLotePayload, x_mistica_sync_key: str | None = Header(default=None)):
-    _validar_chave_sync(x_mistica_sync_key)
-    criados = 0
-    atualizados = 0
-    ignorados = 0
-    with conectar() as conn:
-        for produto in payload.produtos:
-            nome = str(produto.nome or "").strip()
-            codigo = str(produto.codigo_p or "").strip()
-            if not nome:
-                ignorados += 1
-                continue
-            existente = None
-            if codigo:
-                existente = conn.execute(
-                    "SELECT id FROM produtos WHERE codigo_p=?",
-                    (codigo,),
-                ).fetchone()
-            if not existente:
-                existente = conn.execute(
-                    "SELECT id FROM produtos WHERE lower(trim(nome))=lower(trim(?))",
-                    (nome,),
-                ).fetchone()
-            if existente:
-                conn.execute(
-                    """
-                    UPDATE produtos
-                       SET codigo_p=?, nome=?, preco=?, quantidade=?, categoria=?,
-                           custo=?, lucro=?, estoque_minimo=?, ativo=1
-                     WHERE id=?
-                    """,
-                    (
-                        codigo or None,
-                        nome,
-                        produto.preco,
-                        produto.quantidade,
-                        produto.categoria,
-                        produto.custo,
-                        produto.lucro,
-                        produto.estoque_minimo,
-                        existente["id"],
-                    ),
-                )
-                atualizados += 1
-            else:
-                conn.execute(
-                    """
-                    INSERT INTO produtos (codigo_p, nome, preco, quantidade, categoria, custo, lucro, estoque_minimo, ativo)
-                    VALUES (?,?,?,?,?,?,?,?,1)
-                    """,
-                    (
-                        codigo or None,
-                        nome,
-                        produto.preco,
-                        produto.quantidade,
-                        produto.categoria,
-                        produto.custo,
-                        produto.lucro,
-                        produto.estoque_minimo,
-                    ),
-                )
-                criados += 1
-    return {
-        "status": "ok",
-        "criados": criados,
-        "atualizados": atualizados,
-        "ignorados": ignorados,
-        "total": criados + atualizados,
-        "data_hora": datetime.now().isoformat(timespec="seconds"),
-    }
-
-
-@app.get("/api/produtos/{produto_id}")
-def obter_produto(produto_id: int):
-    produto = obter(
-        """
-        SELECT id, codigo_p, nome, preco, quantidade, categoria, custo, lucro, estoque_minimo
-        FROM produtos
-        WHERE id=? AND COALESCE(ativo,1)=1
-        """,
-        (produto_id,),
-    )
-    if not produto:
-        raise HTTPException(status_code=404, detail="Produto não encontrado")
-    return produto
-
-
-@app.get("/api/clientes")
-def listar_clientes(busca: str = "", limite: int = Query(100, ge=1, le=500)):
-    termo = f"%{busca.strip()}%"
-    if busca.strip():
-        return listar(
-            """
-            SELECT id, nome, telefone, cpf, endereco, nascimento
-            FROM clientes
-            WHERE COALESCE(ativo,1)=1 AND (nome LIKE ? OR telefone LIKE ? OR cpf LIKE ?)
-            ORDER BY nome COLLATE NOCASE
-            LIMIT ?
-            """,
-            (termo, termo, termo, limite),
-        )
-    return listar(
-        """
-        SELECT id, nome, telefone, cpf, endereco, nascimento
-        FROM clientes
-        WHERE COALESCE(ativo,1)=1
-        ORDER BY nome COLLATE NOCASE
-        LIMIT ?
-        """,
-        (limite,),
-    )
-
-
-@app.post("/api/clientes")
-def criar_cliente(cliente: ClienteIn):
-    novo_id = executar(
-        """
-        INSERT INTO clientes (nome, telefone, cpf, endereco, nascimento, ativo)
-        VALUES (?,?,?,?,?,1)
-        """,
-        (cliente.nome, cliente.telefone, cliente.cpf, cliente.endereco, cliente.nascimento),
-    )
-    return {"id": novo_id, "status": "criado"}
-
-
-@app.get("/api/vendas")
-def listar_vendas(limite: int = Query(100, ge=1, le=500)):
-    vendas = listar(
-        """
-        SELECT id, cliente, data_venda, subtotal, desconto, taxa, total_final,
-               forma_pagamento, vendedor, status, data_iso, dia_operacional,
-               origem_sync, local_id
-        FROM vendas
-        ORDER BY id DESC
-        LIMIT ?
-        """,
-        (limite,),
-    )
-    if not vendas:
-        return vendas
-
-    ids = [int(venda["id"]) for venda in vendas if venda.get("id") is not None]
-    if not ids:
-        return vendas
-
-    placeholders = ",".join("?" for _ in ids)
-    itens_por_venda = {venda_id: [] for venda_id in ids}
-    with conectar() as conn:
-        itens = conn.execute(
-            f"""
-            SELECT venda_id, codigo_p, nome_p, quantidade, valor_unitario, valor_total
-            FROM vendas_itens
-            WHERE venda_id IN ({placeholders})
-            ORDER BY id
-            """,
-            ids,
-        ).fetchall()
-        for item in itens:
-            itens_por_venda.setdefault(int(item["venda_id"]), []).append(
-                {
-                    "codigo_p": item["codigo_p"],
-                    "nome_p": item["nome_p"],
-                    "quantidade": int(item["quantidade"] or 0),
-                    "valor_unitario": float(item["valor_unitario"] or 0),
-                    "valor_total": float(item["valor_total"] or 0),
-                }
-            )
-
-    for venda in vendas:
-        venda["itens"] = itens_por_venda.get(int(venda.get("id") or 0), [])
-    return vendas
-
-
-def _intervalo_vendas_hoje_backend(agora=None):
-    from datetime import time, timedelta
-
-    agora = agora or datetime.now()
-    fechamento = time(23, 0, 0)
-    inicio = datetime.combine(agora.date(), time.min)
-    if agora.time() >= fechamento:
-        inicio = datetime.combine(agora.date(), fechamento)
-        fim = datetime.combine((inicio + timedelta(days=1)).date(), fechamento)
-        dia_ref = agora.date() + timedelta(days=1)
-    else:
-        fim = datetime.combine(inicio.date(), fechamento)
-        dia_ref = agora.date()
-    return (
-        inicio.strftime("%Y-%m-%d %H:%M:%S"),
-        fim.strftime("%Y-%m-%d %H:%M:%S"),
-        dia_ref.strftime("%d/%m/%Y"),
-    )
-
-
-def _anexar_itens_vendas(vendas: list[dict]) -> list[dict]:
-    ids = [int(venda["id"]) for venda in vendas if venda.get("id") is not None]
-    if not ids:
-        return vendas
-
-    placeholders = ",".join("?" for _ in ids)
-    itens_por_venda = {venda_id: [] for venda_id in ids}
-    with conectar() as conn:
-        itens = conn.execute(
-            f"""
-            SELECT venda_id, codigo_p, nome_p, quantidade, valor_unitario, valor_total
-            FROM vendas_itens
-            WHERE venda_id IN ({placeholders})
-            ORDER BY id
-            """,
-            ids,
-        ).fetchall()
-        for item in itens:
-            itens_por_venda.setdefault(int(item["venda_id"]), []).append(
-                {
-                    "codigo_p": item["codigo_p"],
-                    "nome_p": item["nome_p"],
-                    "quantidade": int(item["quantidade"] or 0),
-                    "valor_unitario": float(item["valor_unitario"] or 0),
-                    "valor_total": float(item["valor_total"] or 0),
-                }
-            )
-
-    for venda in vendas:
-        venda["itens"] = itens_por_venda.get(int(venda.get("id") or 0), [])
-    return vendas
-
-
-@app.get("/api/painel/dashboard")
-def painel_dashboard(meta_mes: float = Query(1500.0, ge=0)):
-    inicio_hoje, fim_hoje, dia_operacional = _intervalo_vendas_hoje_backend()
-    mes = datetime.now().strftime("/%m/%Y")
-    with conectar() as conn:
-        vendas_hoje = conn.execute(
-            """
-            SELECT COALESCE(SUM(total_final),0) AS total
-            FROM vendas
-            WHERE COALESCE(status,'Concluído') != 'Cancelado'
-              AND (
-                  COALESCE(dia_operacional,'') = ?
-                  OR (datetime(data_iso) >= datetime(?) AND datetime(data_iso) < datetime(?))
-              )
-            """,
-            (dia_operacional, inicio_hoje, fim_hoje),
-        ).fetchone()["total"] or 0.0
-        vendas_mes = conn.execute(
-            """
-            SELECT COALESCE(SUM(total_final),0) AS total
-            FROM vendas
-            WHERE COALESCE(status,'Concluído') != 'Cancelado'
-              AND (COALESCE(data_venda,'') LIKE ? OR COALESCE(data_iso,'') LIKE ?)
-            """,
-            (f"%{mes}%", f"%{mes}%"),
-        ).fetchone()["total"] or 0.0
-        vendas_do_dia = [
-            dict(row)
-            for row in conn.execute(
-                """
-                SELECT id, cliente, data_venda, subtotal, desconto, taxa, total_final,
-                       forma_pagamento, vendedor, status, data_iso, dia_operacional,
-                       origem_sync, local_id
-                FROM vendas
-                WHERE COALESCE(status,'Concluído') != 'Cancelado'
-                  AND (
-                      COALESCE(dia_operacional,'') = ?
-                      OR (datetime(data_iso) >= datetime(?) AND datetime(data_iso) < datetime(?))
-                  )
-                ORDER BY id DESC
-                LIMIT 300
-                """,
-                (dia_operacional, inicio_hoje, fim_hoje),
-            ).fetchall()
-        ]
-
-    falta_meta = max(float(meta_mes or 0) - float(vendas_mes or 0), 0.0)
-    return {
-        "vendas_hoje": float(vendas_hoje or 0),
-        "vendas_mes": float(vendas_mes or 0),
-        "meta_mes": float(meta_mes or 0),
-        "falta_meta": falta_meta,
-        "meta_completa": falta_meta <= 0,
-        "dia_operacional": dia_operacional,
-        "inicio_vendas_hoje": inicio_hoje,
-        "fim_vendas_hoje": fim_hoje,
-        "ultima_atualizacao": datetime.now().strftime("%H:%M:%S"),
-        "vendas_do_dia": _anexar_itens_vendas(vendas_do_dia),
-    }
-
-
-def _buscar_produto_para_baixa(conn, item: VendaItemIn):
-    if item.produto_id:
-        produto = conn.execute(
-            "SELECT id, codigo_p, nome, quantidade FROM produtos WHERE id=? AND COALESCE(ativo,1)=1",
-            (item.produto_id,),
-        ).fetchone()
-        if produto:
-            return produto
-    if item.codigo_p:
-        produto = conn.execute(
-            "SELECT id, codigo_p, nome, quantidade FROM produtos WHERE codigo_p=? AND COALESCE(ativo,1)=1",
-            (item.codigo_p,),
-        ).fetchone()
-        if produto:
-            return produto
-    return None
-
-
-def _baixar_estoque_venda(conn, itens: list[VendaItemIn]):
-    for item in itens:
-        produto = _buscar_produto_para_baixa(conn, item)
-        if not produto:
-            raise HTTPException(status_code=404, detail=f"Produto não encontrado: {item.codigo_p or item.nome_p}")
-        estoque_atual = int(produto["quantidade"] or 0)
-        quantidade = int(item.quantidade or 0)
-        if estoque_atual < quantidade:
-            raise HTTPException(status_code=409, detail=f"Estoque insuficiente para {produto['nome']}. Disponível: {estoque_atual}")
-
-    for item in itens:
-        produto = _buscar_produto_para_baixa(conn, item)
-        conn.execute("UPDATE produtos SET quantidade = quantidade - ? WHERE id=?", (int(item.quantidade or 0), produto["id"]))
-
-
-def salvar_venda_online(venda: VendaIn, origem_sync="api"):
-    garantir_colunas_sync_backend()
-    agora = datetime.now()
-    data_venda = venda.data_venda or agora.strftime("%d/%m/%Y %H:%M:%S")
-    data_iso = venda.data_iso or agora.isoformat(timespec="seconds")
-    dia_operacional = venda.dia_operacional or agora.strftime("%d/%m/%Y")
-
-    if venda.local_id:
-        existente = obter(
-            "SELECT id FROM vendas WHERE local_id=? AND origem_sync='desktop'",
-            (venda.local_id,),
-        )
-        if existente:
-            return {"id": existente["id"], "local_id": venda.local_id, "status": "ja_sincronizado"}
-
-    with conectar() as conn:
-        if venda.baixa_estoque:
-            _baixar_estoque_venda(conn, venda.itens)
-
-        cur = conn.execute(
-            """
-            INSERT INTO vendas (
-                cliente, data_venda, subtotal, desconto, taxa, total_final,
-                forma_pagamento, vendedor, status, data_iso, dia_operacional,
-                origem_sync, local_id
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
-            """,
-            (
-                venda.cliente,
-                data_venda,
-                venda.subtotal,
-                venda.desconto,
-                venda.taxa,
-                venda.total_final,
-                venda.forma_pagamento,
-                venda.vendedor,
-                venda.status or "Concluído",
-                data_iso,
-                dia_operacional,
-                origem_sync,
-                venda.local_id,
-            ),
-        )
-        venda_id = int(cur.lastrowid)
-        for item in venda.itens:
-            conn.execute(
-                """
-                INSERT INTO vendas_itens
-                (venda_id, codigo_p, nome_p, quantidade, custo_unitario, valor_unitario, valor_total)
-                VALUES (?,?,?,?,?,?,?)
-                """,
-                (
-                    venda_id,
-                    item.codigo_p,
-                    item.nome_p,
-                    int(item.quantidade or 0),
-                    item.custo_unitario,
-                    item.valor_unitario,
-                    item.valor_total,
-                ),
-            )
-    return {"id": venda_id, "local_id": venda.local_id, "status": "criado", "estoque_baixado": venda.baixa_estoque}
-
-
-@app.post("/api/vendas")
-def criar_venda(venda: VendaIn):
-    return salvar_venda_online(venda, origem_sync="api")
-
-
-@app.post("/api/sync/venda")
-def sincronizar_venda(venda: VendaIn):
-    return salvar_venda_online(venda, origem_sync="desktop")
-
-
-@app.get("/api/estoque/baixo")
-def estoque_baixo(limite: int = Query(100, ge=1, le=500)):
-    return listar(
-        """
-        SELECT id, codigo_p, nome, quantidade, estoque_minimo, categoria
-        FROM produtos
-        WHERE COALESCE(ativo,1)=1
-          AND COALESCE(estoque_minimo,0) > 0
-          AND quantidade <= estoque_minimo
-        ORDER BY quantidade ASC, nome COLLATE NOCASE
         LIMIT ?
         """,
         (limite,),
