@@ -34,105 +34,40 @@
     style.id = styleId;
     style.textContent = `
       [data-ambient-player-inline],
-      [data-ambient-player-fix] {
-        display: none !important;
-      }
-
-      [data-ambient-playlist-public] {
-        position: absolute !important;
-        left: -9999px !important;
-        width: 1px !important;
-        height: 1px !important;
-        opacity: 0 !important;
-        pointer-events: none !important;
-        overflow: hidden !important;
-      }
-
-      [data-unified-player-panel] {
-        width: 100%;
-        margin-top: 8px;
-        display: none;
-      }
-
-      [data-unified-player-panel][data-open="true"] {
-        display: block;
-      }
-
-      .ambient-unified-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        align-items: center;
-        margin-top: 10px;
-      }
-
-      .ambient-unified-volume {
-        width: min(420px, 100%);
-        accent-color: #f0c56a;
-      }
-
-      .ambient-unified-audio {
-        width: 100%;
-        margin-top: 10px;
-      }
-
-      .ambient-unified-status {
-        color: #b8c977;
-        font-weight: 800;
-        font-size: .86rem;
-      }
+      [data-ambient-player-fix] { display: none !important; }
+      [data-ambient-playlist-public] { position: absolute !important; left: -9999px !important; width: 1px !important; height: 1px !important; opacity: 0 !important; pointer-events: none !important; overflow: hidden !important; }
+      [data-unified-player-panel] { width: 100%; margin-top: 12px; display: none; border: 1px solid rgba(240,197,106,.22); border-radius: 20px; padding: 12px; background: rgba(0,0,0,.20); }
+      [data-unified-player-panel][data-open="true"] { display: block; }
+      .ambient-unified-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 10px; }
+      .ambient-unified-volume { width: min(420px, 100%); accent-color: #f0c56a; }
+      .ambient-unified-audio { width: 100%; margin-top: 10px; }
+      .ambient-unified-status { color: #b8c977; font-weight: 800; font-size: .86rem; }
     `;
     document.head.appendChild(style);
   }
 
-  function apiUrl(path) {
-    if (!path) return "";
-    return String(path).startsWith("http") ? path : `${API_BASE}${path}`;
-  }
-
-  function addSource(next, url) {
-    if (url && !next.includes(url)) next.push(url);
-  }
+  function apiUrl(path) { return path ? (String(path).startsWith("http") ? path : `${API_BASE}${path}`) : ""; }
+  function addSource(next, url) { if (url && !next.includes(url)) next.push(url); }
 
   async function loadSources() {
     const next = [];
-
     try {
       const response = await fetch(`${API_BASE}/api/uploads/musicas`, { cache: "no-store" });
       if (response.ok) {
         const data = await response.json();
         (data.musicas || []).forEach((item) => addSource(next, apiUrl(item.url)));
       }
-    } catch (error) {
-      // Mantém lista anterior se a API oscilar.
-    }
-
-    try {
-      if (window.misticaAmbientPlaylist?.tracks) {
-        const tracks = await window.misticaAmbientPlaylist.tracks();
-        (tracks || []).forEach((item) => addSource(next, apiUrl(item.url)));
-      }
-    } catch (error) {
-      // fallback silencioso
-    }
-
-    document.querySelectorAll("[data-ambient-playlist-public] audio, .ambient-playlist-public audio").forEach((oldAudio) => {
-      addSource(next, oldAudio.currentSrc || oldAudio.src);
-    });
-
+    } catch {}
     if (next.length) sources = next;
     return sources;
   }
 
-  function card() {
-    return document.querySelector("[data-ambient-card]");
-  }
+  function card() { return document.querySelector("[data-ambient-card]"); }
 
   function ensurePanel() {
     const parent = card();
     if (!parent) return null;
     document.querySelectorAll("[data-ambient-player-inline], [data-ambient-player-fix]").forEach((item) => item.remove());
-
     let panel = parent.querySelector("[data-unified-player-panel]");
     if (!panel) {
       panel = document.createElement("div");
@@ -145,7 +80,7 @@
             <input class="ambient-unified-volume" type="range" min="0" max="1" step="0.01" value="${savedVolume()}" data-unified-volume>
             <span data-unified-volume-label>Volume ${Math.round(savedVolume() * 100)}%</span>
           </label>
-          <span class="ambient-unified-status" data-unified-status>Música pronta.</span>
+          <span class="ambient-unified-status" data-unified-status>Aguardando ativação.</span>
         </div>
       `;
       const controls = parent.querySelector(".ambient-controls") || parent;
@@ -156,10 +91,7 @@
     return panel;
   }
 
-  function openDrawer(open) {
-    const panel = ensurePanel();
-    if (panel) panel.dataset.open = open ? "true" : "false";
-  }
+  function openDrawer(open) { const panel = ensurePanel(); if (panel) panel.dataset.open = open ? "true" : "false"; }
 
   function ensureAudio() {
     const panel = ensurePanel();
@@ -168,7 +100,7 @@
       audio = document.createElement("audio");
       audio.className = "ambient-unified-audio";
       audio.controls = true;
-      audio.preload = "auto";
+      audio.preload = "metadata";
       audio.loop = true;
       audio.volume = savedVolume();
       panel.appendChild(audio);
@@ -181,10 +113,7 @@
     if (!player || !sources.length) return null;
     if (index >= sources.length) index = 0;
     const src = sources[index];
-    if (player.src !== src) {
-      player.src = src;
-      player.load();
-    }
+    if (player.src !== src) { player.src = src; player.load(); }
     setVolume(savedVolume());
     return player;
   }
@@ -193,25 +122,14 @@
     openDrawer(true);
     await loadSources();
     const player = updateSource();
-    if (!player) {
-      statusText("Nenhuma música cadastrada.");
-      return;
-    }
-    try {
-      player.volume = savedVolume();
-      await player.play();
-      statusText("Música ativada.");
-    } catch (error) {
-      statusText("Clique no player para iniciar.");
-    }
+    if (!player) return statusText("Nenhuma música cadastrada.");
+    try { player.volume = savedVolume(); await player.play(); statusText("Música ativada."); }
+    catch { statusText("Clique no player para iniciar."); }
   }
 
   async function nextTrack() {
     if (!sources.length) await loadSources();
-    if (!sources.length) {
-      statusText("Nenhuma música cadastrada.");
-      return;
-    }
+    if (!sources.length) return statusText("Nenhuma música cadastrada.");
     index = (index + 1) % sources.length;
     updateSource();
     await play();
@@ -221,15 +139,16 @@
     const button = document.querySelector("[data-ambient-toggle]");
     if (!button || button.dataset.unifiedHook === "true") return;
     button.dataset.unifiedHook = "true";
+    button.setAttribute("aria-pressed", "false");
+    button.textContent = "Ativar ambiente xamânico";
+    localStorage.removeItem("misticaAmbientEnabled");
+    statusText("Aguardando ativação.");
     button.addEventListener("click", () => {
       setTimeout(() => {
         ensurePanel();
-        if (button.getAttribute("aria-pressed") === "true") play();
-        else {
-          if (audio) audio.pause();
-          openDrawer(false);
-          statusText("Aguardando ativação.");
-        }
+        const active = button.getAttribute("aria-pressed") === "true";
+        if (active) play();
+        else { if (audio) audio.pause(); openDrawer(false); statusText("Aguardando ativação."); }
       }, 80);
     });
   }
@@ -237,23 +156,13 @@
   async function apply() {
     installStyle();
     ensurePanel();
-    await loadSources();
+    openDrawer(false);
     hookMainButton();
-    const button = document.querySelector("[data-ambient-toggle]");
-    if (button?.getAttribute("aria-pressed") === "true" || localStorage.getItem("misticaAmbientEnabled") === "true") {
-      openDrawer(true);
-    }
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", apply, { once: true });
   else apply();
-
-  window.addEventListener("load", () => {
-    apply();
-    setTimeout(apply, 700);
-    setTimeout(apply, 1800);
-  });
-
+  window.addEventListener("load", () => { apply(); setTimeout(apply, 700); setTimeout(apply, 1800); });
   window.misticaAmbientUnifiedPlayer = { play, next: nextTrack, volume: setVolume, reload: loadSources };
   window.misticaAmbientPlayerFix = { play, next: nextTrack, volume: setVolume, reload: loadSources };
 })();
