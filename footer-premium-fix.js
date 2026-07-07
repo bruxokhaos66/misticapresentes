@@ -41,6 +41,7 @@
 
     loadStyleOnce("isisLowerImageStyle", "isis-lower-image.css?v=20260707-isis-lower-image");
     loadStyleOnce("isisLowerImageFixStyle", "isis-lower-image-fix.css?v=20260707-isis-fix-v2");
+    loadStyleOnce("restoreVideoLayoutStyle", "restore-video-layout.css?v=20260707-layout-video-antigo");
     cleanIsisImagePanel();
     window.setTimeout(cleanIsisImagePanel, 150);
     window.setTimeout(cleanIsisImagePanel, 600);
@@ -50,6 +51,7 @@
     loadScriptOnce("ambientExperienceScript", "ambient-experience.js?v=20260707-safe-ambient");
     loadScriptOnce("ambientPlayerUnifyScript", "ambient-player-unify.js?v=20260707-safe-player");
     loadScriptOnce("ambientPlayerClickFixScript", "ambient-player-click-fix.js?v=20260707-click-bridge");
+    loadScriptOnce("restoreVideoLayoutScript", "restore-video-layout.js?v=20260707-layout-video-antigo");
 
     const params = new URLSearchParams(window.location.search);
     const adminMode = params.get("admin") === "mistica" || window.location.hash === "#admin-mistica";
