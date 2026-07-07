@@ -1,0 +1,56 @@
+/* Correção da imagem inferior da Isis: evita corte, esticamento e remove o texto ISIS sobreposto. */
+#isis .isis-panel-image,
+body #isis .isis-panel-image,
+body.mistica-home-premium #isis .isis-panel-image {
+  min-height: clamp(520px, 58vw, 720px) !important;
+  align-content: end !important;
+  place-items: stretch !important;
+  padding: 22px !important;
+  background-size: auto, auto, contain !important;
+  background-repeat: no-repeat, no-repeat, no-repeat !important;
+  background-position: center center, center center, center center !important;
+  background-color: #050509 !important;
+}
+
+#isis .isis-symbol,
+body #isis .isis-symbol,
+body.mistica-home-premium #isis .isis-symbol,
+#isis .isis-panel-image .isis-symbol,
+body #isis .isis-panel-image .isis-symbol {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+}
+
+#isis .isis-panel-image p,
+body #isis .isis-panel-image p,
+body.mistica-home-premium #isis .isis-panel-image p {
+  max-width: 440px !important;
+  margin: auto 0 0 0 !important;
+  color: #efe1c5 !important;
+  background: rgba(3, 3, 5, .72) !important;
+  border: 1px solid rgba(240, 197, 106, .28) !important;
+  backdrop-filter: blur(12px);
+}
+
+@media (min-width: 981px) {
+  #isis .isis-panel-image,
+  body #isis .isis-panel-image,
+  body.mistica-home-premium #isis .isis-panel-image {
+    background-position: center center, center center, center center !important;
+  }
+}
+
+@media (max-width: 680px) {
+  #isis .isis-panel-image,
+  body #isis .isis-panel-image,
+  body.mistica-home-premium #isis .isis-panel-image {
+    min-height: 520px !important;
+    background-size: auto, auto, cover !important;
+    background-position: center center, center center, center top !important;
+  }
+}
