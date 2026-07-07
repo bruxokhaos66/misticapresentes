@@ -1,0 +1,117 @@
+.v2-product-toolbar {
+  margin: -18px auto 26px;
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto;
+  gap: 16px;
+  align-items: end;
+  padding: 18px;
+  border: 1px solid rgba(242,201,109,.24);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(242,201,109,.10), transparent 28rem),
+    linear-gradient(180deg, rgba(255,248,230,.08), rgba(255,248,230,.04)),
+    rgba(6,6,9,.72);
+  box-shadow: 0 22px 70px rgba(0,0,0,.28);
+  backdrop-filter: blur(16px);
+}
+
+.v2-search-label {
+  color: #d7c8ad;
+  font-weight: 850;
+  gap: 8px;
+}
+
+.v2-search-label input {
+  min-height: 52px;
+  border-radius: 18px;
+  background: rgba(0,0,0,.34);
+}
+
+.v2-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.v2-chip {
+  border: 1px solid rgba(242,201,109,.28);
+  border-radius: 999px;
+  padding: 10px 13px;
+  color: #ffe7a3;
+  background: rgba(255,255,255,.045);
+  font-size: .82rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.v2-chip.active,
+.v2-chip:hover {
+  color: #1b1204;
+  background: linear-gradient(135deg, #fff0b6, #e3b64f 62%, #fff0bd);
+  border-color: rgba(242,201,109,.68);
+}
+
+.v2-product-count {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #bdd17a;
+  font-size: .88rem;
+  font-weight: 850;
+}
+
+.product-card[hidden] {
+  display: none !important;
+}
+
+.isis-photo.has-real-isis {
+  background-size: auto, auto, cover !important;
+  background-repeat: no-repeat !important;
+  background-position: center center, center center, center top !important;
+}
+
+.isis-photo.has-real-isis::before {
+  content: "" !important;
+  background:
+    linear-gradient(180deg, rgba(3,3,5,.03), transparent 44%, rgba(3,3,5,.82)),
+    radial-gradient(circle at 50% 20%, rgba(242,201,109,.14), transparent 24rem);
+}
+
+.v2-checkout-note {
+  margin: 8px auto 0;
+  max-width: 740px;
+  color: #d7c8ad;
+  font-weight: 700;
+}
+
+.isis-message.user {
+  border-color: rgba(189,209,122,.26);
+  background: rgba(189,209,122,.08);
+}
+
+.isis-message.bot {
+  border-color: rgba(242,201,109,.22);
+  background: rgba(242,201,109,.07);
+}
+
+@media (max-width: 980px) {
+  .v2-product-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .v2-filter-chips {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 680px) {
+  .v2-product-toolbar {
+    margin-top: -8px;
+    padding: 14px;
+  }
+
+  .v2-chip {
+    flex: 1 1 auto;
+    text-align: center;
+  }
+}
