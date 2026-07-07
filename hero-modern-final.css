@@ -1,0 +1,75 @@
+body.mistica-home-premium .hero-section.legacy-premium-hero {
+  min-height: 650px !important;
+  padding: clamp(44px, 6vw, 74px) 0 !important;
+}
+
+body.mistica-home-premium .legacy-premium-hero .hero-grid {
+  grid-template-columns: minmax(0, .92fr) minmax(300px, .68fr) !important;
+  gap: clamp(28px, 5vw, 64px) !important;
+  align-items: center !important;
+}
+
+body.mistica-home-premium .legacy-premium-hero .hero-copy h1 {
+  max-width: 680px !important;
+  font-size: clamp(2.25rem, 4.25vw, 4.15rem) !important;
+  line-height: 1.02 !important;
+  letter-spacing: -.035em !important;
+  text-transform: uppercase !important;
+}
+
+body.mistica-home-premium .legacy-premium-hero .hero-text {
+  max-width: 610px !important;
+  font-size: clamp(.98rem, 1.15vw, 1.08rem) !important;
+  line-height: 1.58 !important;
+}
+
+body.mistica-home-premium .legacy-premium-hero .hero-actions .btn {
+  min-height: 48px !important;
+  padding-inline: 22px !important;
+}
+
+.legacy-isis-card {
+  width: min(395px, 100%) !important;
+  min-height: 500px !important;
+  border-radius: 30px !important;
+}
+
+.legacy-isis-caption {
+  border-radius: 20px !important;
+  padding: 15px !important;
+}
+
+.legacy-isis-caption strong {
+  font-size: .98rem !important;
+}
+
+.legacy-isis-caption span {
+  font-size: .92rem !important;
+}
+
+@media (max-width: 980px) {
+  body.mistica-home-premium .legacy-premium-hero .hero-grid {
+    grid-template-columns: 1fr !important;
+  }
+  body.mistica-home-premium .legacy-premium-hero .hero-copy {
+    text-align: center !important;
+  }
+  body.mistica-home-premium .legacy-premium-hero .hero-copy h1 {
+    margin-left: auto !important;
+    margin-right: auto !important;
+    font-size: clamp(2.05rem, 8vw, 3.25rem) !important;
+  }
+  body.mistica-home-premium .legacy-premium-hero .hero-text {
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+}
+
+@media (max-width: 560px) {
+  body.mistica-home-premium .legacy-premium-hero .hero-copy h1 {
+    font-size: clamp(1.9rem, 10vw, 2.8rem) !important;
+  }
+  .legacy-isis-card {
+    min-height: 420px !important;
+  }
+}
