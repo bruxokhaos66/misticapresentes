@@ -1,24 +1,48 @@
 body.mistica-home-premium .hero-section.legacy-premium-hero {
-  min-height: 760px;
+  min-height: 720px;
   display: grid;
   align-items: center;
+  padding: clamp(58px, 8vw, 96px) 0;
   background:
-    radial-gradient(circle at 76% 22%, rgba(240,197,106,.20), transparent 26rem),
-    radial-gradient(circle at 22% 32%, rgba(184,201,119,.15), transparent 28rem),
-    radial-gradient(circle at 54% 92%, rgba(84,47,104,.18), transparent 34rem),
+    radial-gradient(circle at 78% 24%, rgba(240,197,106,.18), transparent 28rem),
+    radial-gradient(circle at 18% 26%, rgba(184,201,119,.14), transparent 28rem),
+    radial-gradient(circle at 54% 92%, rgba(84,47,104,.16), transparent 34rem),
     linear-gradient(180deg, #08070d 0%, #050509 100%);
 }
 
+body.mistica-home-premium .legacy-premium-hero .hero-grid {
+  grid-template-columns: minmax(0, 1.03fr) minmax(320px, .72fr);
+  gap: clamp(34px, 6vw, 78px);
+  align-items: center;
+}
+
+body.mistica-home-premium .legacy-premium-hero .hero-copy .eyebrow {
+  margin-bottom: 18px;
+}
+
 body.mistica-home-premium .legacy-premium-hero .hero-copy h1 {
-  max-width: 980px;
-  font-size: clamp(3rem, 7.2vw, 6.6rem);
-  line-height: .9;
+  max-width: 760px;
+  margin-bottom: 22px;
+  color: #fff6dc;
+  font-size: clamp(2.45rem, 5.15vw, 4.95rem);
+  line-height: .96;
+  letter-spacing: -.045em;
   text-transform: uppercase;
+  text-wrap: balance;
+  text-shadow: 0 20px 70px rgba(0,0,0,.46);
 }
 
 body.mistica-home-premium .legacy-premium-hero .hero-text {
-  max-width: 720px;
-  font-size: clamp(1.05rem, 2vw, 1.35rem);
+  max-width: 650px;
+  margin-bottom: 24px;
+  color: #efe1c5;
+  font-size: clamp(1rem, 1.35vw, 1.18rem);
+  line-height: 1.6;
+  font-weight: 760;
+}
+
+body.mistica-home-premium .legacy-premium-hero .hero-actions {
+  margin-bottom: 18px;
 }
 
 body.mistica-home-premium .legacy-premium-hero .hero-visual {
@@ -29,76 +53,48 @@ body.mistica-home-premium .legacy-premium-hero .hero-visual {
 
 .legacy-isis-card {
   position: relative;
-  width: min(460px, 100%);
-  min-height: 650px;
+  width: min(430px, 100%);
+  min-height: 560px;
   display: grid;
   align-content: end;
   gap: 16px;
-  padding: 28px;
+  padding: 26px;
   overflow: hidden;
-  border: 1px solid rgba(240,197,106,.34);
-  border-radius: 38px;
+  border: 1px solid rgba(240,197,106,.30);
+  border-radius: 34px;
   background:
-    radial-gradient(circle at 50% 18%, rgba(240,197,106,.24), transparent 26%),
-    radial-gradient(circle at 50% 54%, rgba(83,107,55,.28), transparent 44%),
-    linear-gradient(145deg, rgba(8,7,13,.95), rgba(32,22,42,.58));
-  box-shadow: 0 34px 110px rgba(0,0,0,.46), 0 0 70px rgba(240,197,106,.13);
+    radial-gradient(circle at 50% 22%, rgba(240,197,106,.18), transparent 30%),
+    radial-gradient(circle at 52% 54%, rgba(83,107,55,.24), transparent 44%),
+    linear-gradient(145deg, rgba(8,7,13,.94), rgba(34,24,44,.54));
+  box-shadow: 0 30px 96px rgba(0,0,0,.42), 0 0 64px rgba(240,197,106,.11);
 }
 
 .legacy-isis-card::before {
   content: "ISIS";
   position: absolute;
-  inset: 56px 22px auto;
+  inset: 44px 18px auto;
   text-align: center;
   font-family: Cinzel, Georgia, serif;
-  font-size: clamp(4.2rem, 10vw, 7.4rem);
+  font-size: clamp(3.4rem, 8vw, 6.4rem);
   font-weight: 900;
-  letter-spacing: .08em;
+  letter-spacing: .10em;
   color: rgba(240,197,106,.13);
   text-shadow: 0 0 54px rgba(240,197,106,.22);
 }
 
 .legacy-isis-photo {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center top;
-  filter: saturate(1.06) contrast(1.04) brightness(.92);
-}
-
-.legacy-isis-card.has-isis-photo::before {
-  opacity: .16;
-}
-
-.legacy-isis-card.has-isis-photo::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-  background:
-    linear-gradient(180deg, rgba(3,3,5,.05), rgba(3,3,5,.14) 44%, rgba(3,3,5,.78) 100%),
-    radial-gradient(circle at 50% 22%, rgba(240,197,106,.12), transparent 34%);
-}
-
-.legacy-isis-card.has-isis-photo .legacy-isis-orb,
-.legacy-isis-card.has-isis-photo .legacy-isis-symbol {
   display: none;
 }
 
 .legacy-isis-orb {
   position: absolute;
-  top: 150px;
+  top: 138px;
   left: 50%;
-  width: 270px;
-  height: 270px;
+  width: 250px;
+  height: 250px;
   transform: translateX(-50%);
   border-radius: 999px;
-  background:
-    radial-gradient(circle, rgba(240,197,106,.28), rgba(184,201,119,.16) 45%, transparent 68%);
+  background: radial-gradient(circle, rgba(240,197,106,.28), rgba(184,201,119,.16) 45%, transparent 68%);
   filter: blur(1px);
 }
 
@@ -107,15 +103,15 @@ body.mistica-home-premium .legacy-premium-hero .hero-visual {
   z-index: 2;
   display: grid;
   place-items: center;
-  width: 180px;
-  height: 180px;
-  margin: 120px auto 90px;
+  width: 166px;
+  height: 166px;
+  margin: 108px auto 82px;
   border: 1px solid rgba(240,197,106,.36);
   border-radius: 999px;
   background: rgba(3,3,5,.42);
   color: #f0c56a;
   font-family: Cinzel, Georgia, serif;
-  font-size: 5rem;
+  font-size: 4.5rem;
   box-shadow: inset 0 0 34px rgba(240,197,106,.12), 0 24px 70px rgba(0,0,0,.35);
 }
 
@@ -125,30 +121,54 @@ body.mistica-home-premium .legacy-premium-hero .hero-visual {
   border: 1px solid rgba(240,197,106,.24);
   border-radius: 24px;
   padding: 18px;
-  background: rgba(3,3,5,.70);
+  background: rgba(3,3,5,.72);
   backdrop-filter: blur(14px);
 }
 
 .legacy-isis-caption strong {
   display: block;
-  margin-bottom: 6px;
+  margin-bottom: 7px;
   color: #f0c56a;
   font-family: Cinzel, Georgia, serif;
-  font-size: 1.25rem;
+  font-size: 1.08rem;
+  letter-spacing: .02em;
 }
 
 .legacy-isis-caption span {
   display: block;
   color: #efe1c5;
-  font-weight: 700;
-  line-height: 1.45;
+  font-size: .98rem;
+  font-weight: 750;
+  line-height: 1.48;
 }
 
 @media (max-width: 980px) {
   body.mistica-home-premium .hero-section.legacy-premium-hero {
     min-height: auto;
+    padding-top: 46px;
+  }
+  body.mistica-home-premium .legacy-premium-hero .hero-grid {
+    grid-template-columns: 1fr;
+  }
+  body.mistica-home-premium .legacy-premium-hero .hero-copy {
+    text-align: center;
+  }
+  body.mistica-home-premium .legacy-premium-hero .hero-copy h1,
+  body.mistica-home-premium .legacy-premium-hero .hero-text {
+    margin-left: auto;
+    margin-right: auto;
   }
   .legacy-isis-card {
-    min-height: 560px;
+    min-height: 500px;
+  }
+}
+
+@media (max-width: 560px) {
+  body.mistica-home-premium .legacy-premium-hero .hero-copy h1 {
+    font-size: clamp(2.15rem, 11vw, 3.25rem);
+  }
+  .legacy-isis-card {
+    min-height: 440px;
+    border-radius: 28px;
   }
 }
