@@ -2,6 +2,11 @@ const CUSTOM_PRODUCTS_KEY = "misticaCustomProducts";
 let customProducts = loadStorage(CUSTOM_PRODUCTS_KEY, []);
 let catalogFilters = { search: "", category: "todos", sort: "destaques" };
 
+function isMisticaAdminMode() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get("admin") === "mistica" || window.location.hash === "#admin-mistica";
+}
+
 function parseMoney(value) {
   const normalized = String(value || "").replace(/\./g, "").replace(",", ".");
   const number = Number(normalized);
@@ -9,11 +14,7 @@ function parseMoney(value) {
 }
 
 function parseImages(value) {
-  return String(value || "")
-    .split("\n")
-    .map(item => item.trim())
-    .filter(item => item.startsWith("http://") || item.startsWith("https://"))
-    .slice(0, 8);
+  return String(value || "").split("\n").map(item => item.trim()).filter(item => item.startsWith("http://") || item.startsWith("https://")).slice(0, 8);
 }
 
 function safeUrl(value) {
@@ -51,20 +52,14 @@ function productImages(product) {
   return [];
 }
 
-function clearNode(node) {
-  while (node.firstChild) node.removeChild(node.firstChild);
-}
-
+function clearNode(node) { while (node.firstChild) node.removeChild(node.firstChild); }
 function make(tag, className, text) {
   const el = document.createElement(tag);
   if (className) el.className = className;
   if (text !== undefined) el.textContent = text;
   return el;
 }
-
-function normalizeText(value) {
-  return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-}
+function normalizeText(value) { return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase(); }
 
 function getProductTag(product, available) {
   if (product.tag) return product.tag;
@@ -84,45 +79,25 @@ function mountCatalogTools() {
   const section = document.getElementById("produtos");
   const grid = productGrid;
   if (!section || !grid || document.getElementById("catalogTools")) return;
-
   const tools = make("div", "container catalog-tools");
   tools.id = "catalogTools";
-
   const search = document.createElement("input");
   search.type = "search";
   search.placeholder = "Buscar por produto, intenção ou categoria...";
   search.setAttribute("aria-label", "Buscar produtos");
-  search.addEventListener("input", () => {
-    catalogFilters.search = search.value;
-    renderProducts();
-  });
-
+  search.addEventListener("input", () => { catalogFilters.search = search.value; renderProducts(); });
   const category = document.createElement("select");
   category.setAttribute("aria-label", "Filtrar categoria");
-  category.addEventListener("change", () => {
-    catalogFilters.category = category.value;
-    renderProducts();
-  });
-
+  category.addEventListener("change", () => { catalogFilters.category = category.value; renderProducts(); });
   const sort = document.createElement("select");
   sort.setAttribute("aria-label", "Ordenar produtos");
-  [
-    ["destaques", "Destaques"],
-    ["preco-menor", "Menor preço"],
-    ["preco-maior", "Maior preço"],
-    ["estoque", "Mais estoque"],
-    ["nome", "Nome A-Z"],
-  ].forEach(([value, label]) => {
+  [["destaques", "Destaques"], ["preco-menor", "Menor preço"], ["preco-maior", "Maior preço"], ["estoque", "Mais estoque"], ["nome", "Nome A-Z"]].forEach(([value, label]) => {
     const option = document.createElement("option");
     option.value = value;
     option.textContent = label;
     sort.appendChild(option);
   });
-  sort.addEventListener("change", () => {
-    catalogFilters.sort = sort.value;
-    renderProducts();
-  });
-
+  sort.addEventListener("change", () => { catalogFilters.sort = sort.value; renderProducts(); });
   tools.append(search, category, sort);
   grid.parentNode.insertBefore(tools, grid);
   updateCategoryOptions();
@@ -150,11 +125,8 @@ function getFilteredProducts() {
   const search = normalizeText(catalogFilters.search);
   let list = products.filter(product => {
     const text = normalizeText(`${product.name} ${product.category} ${product.description} ${product.tag || ""}`);
-    const matchesSearch = !search || text.includes(search);
-    const matchesCategory = catalogFilters.category === "todos" || product.category === catalogFilters.category;
-    return matchesSearch && matchesCategory;
+    return (!search || text.includes(search)) && (catalogFilters.category === "todos" || product.category === catalogFilters.category);
   });
-
   list = [...list].sort((a, b) => {
     if (catalogFilters.sort === "preco-menor") return Number(a.price || 0) - Number(b.price || 0);
     if (catalogFilters.sort === "preco-maior") return Number(b.price || 0) - Number(a.price || 0);
@@ -162,17 +134,12 @@ function getFilteredProducts() {
     if (catalogFilters.sort === "nome") return String(a.name).localeCompare(String(b.name), "pt-BR");
     return Number(Boolean(b.tag)) - Number(Boolean(a.tag));
   });
-
   return list;
 }
 
 function renderProductGallery(card, product) {
   const images = productImages(product);
-  if (!images.length) {
-    card.appendChild(make("div", "product-image", product.icon || "✨"));
-    return;
-  }
-
+  if (!images.length) { card.appendChild(make("div", "product-image", product.icon || "✨")); return; }
   const wrap = make("div", "product-gallery");
   const img = document.createElement("img");
   img.className = "product-photo";
@@ -180,7 +147,6 @@ function renderProductGallery(card, product) {
   img.alt = product.name;
   img.loading = "lazy";
   wrap.appendChild(img);
-
   if (images.length > 1) {
     const dots = make("div", "gallery-dots");
     images.forEach(url => {
@@ -199,31 +165,23 @@ renderProducts = function renderProductsWithAdminItems() {
   updateCategoryOptions();
   clearNode(productGrid);
   const list = getFilteredProducts();
-
   if (!list.length) {
-    const empty = make("div", "empty-catalog", "Nenhum produto encontrado. Tente outra busca ou categoria.");
-    productGrid.appendChild(empty);
+    productGrid.appendChild(make("div", "empty-catalog", "Nenhum produto encontrado. Tente outra busca ou categoria."));
     return;
   }
-
   list.forEach(product => {
     const available = getStock(product.id);
     const card = make("article", "product-card");
-    const tag = make("span", "product-tag", getProductTag(product, available));
-    card.appendChild(tag);
+    card.appendChild(make("span", "product-tag", getProductTag(product, available)));
     renderProductGallery(card, product);
-
     const info = make("div");
     info.appendChild(make("p", "eyebrow", product.category));
     info.appendChild(make("h3", "", product.name));
     info.appendChild(make("p", "", product.description));
     card.appendChild(info);
-
     card.appendChild(make("strong", "product-price", currency.format(product.price)));
-
     const stockText = available > 0 ? `Estoque: ${available}` : `Sob encomenda${product.deliveryDate ? " • entrega: " + product.deliveryDate : ""}`;
     card.appendChild(make("span", `stock-badge ${available <= storeConfig.minStock ? "stock-low" : ""}`, stockText));
-
     const qtyRow = make("div", "qty-row");
     const input = document.createElement("input");
     input.id = `qty-${safeId(product.id)}`;
@@ -233,19 +191,16 @@ renderProducts = function renderProductsWithAdminItems() {
     input.step = "1";
     input.value = "1";
     if (available <= 0) input.disabled = true;
-
     const add = make("button", "btn", "Adicionar");
     add.type = "button";
     add.disabled = available <= 0;
     add.addEventListener("click", () => addToCart(product.id));
     qtyRow.append(input, add);
     card.appendChild(qtyRow);
-
     const whats = make("button", "btn btn-ghost btn-full", available > 0 ? "Comprar pelo WhatsApp" : "Consultar entrega pelo WhatsApp");
     whats.type = "button";
     whats.addEventListener("click", () => buyProductWhatsapp(product.id));
     card.appendChild(whats);
-
     if (product.externalUrl) {
       const external = document.createElement("a");
       external.className = "btn btn-ghost btn-full";
@@ -255,7 +210,6 @@ renderProducts = function renderProductsWithAdminItems() {
       external.textContent = "Ver na loja parceira";
       card.appendChild(external);
     }
-
     productGrid.appendChild(card);
   });
 };
@@ -273,13 +227,12 @@ function addField(form, labelText, id, type, placeholder, required) {
 }
 
 function mountProductAdmin() {
+  if (!isMisticaAdminMode()) return;
   if (!adminContent || document.getElementById("productAdminForm")) return;
-
   const grid = make("div", "checkout-grid admin-grid");
   const panel = make("div", "form-panel");
   panel.appendChild(make("p", "eyebrow", "Produtos"));
   panel.appendChild(make("h2", "", "Cadastrar item"));
-
   const form = document.createElement("form");
   form.id = "productAdminForm";
   form.className = "form";
@@ -293,27 +246,22 @@ function mountProductAdmin() {
   addField(form, "Ícone", "productIcon", "text", "Ex.: 🌿", false);
   addField(form, "Imagens", "productImages", "textarea", "Cole uma URL de imagem por linha", false);
   addField(form, "Link externo ou afiliado", "productExternal", "url", "Ex.: link da Shopee afiliado", false);
-
   const status = make("div", "saved-box");
   status.id = "productAdminStatus";
   status.hidden = true;
   form.appendChild(status);
-
   const submit = make("button", "btn", "Salvar produto");
   submit.type = "submit";
   form.appendChild(submit);
   panel.appendChild(form);
-
   const listPanel = make("div", "form-panel dark-panel");
   listPanel.appendChild(make("p", "eyebrow", "Catálogo"));
   listPanel.appendChild(make("h2", "", "Itens adicionados"));
   const list = make("div", "history-list");
   list.id = "productAdminList";
   listPanel.appendChild(list);
-
   grid.append(panel, listPanel);
   adminContent.insertBefore(grid, adminContent.firstChild);
-
   form.addEventListener("submit", event => {
     event.preventDefault();
     const rawExternalUrl = document.getElementById("productExternal").value.trim();
@@ -331,14 +279,8 @@ function mountProductAdmin() {
       images: parseImages(document.getElementById("productImages").value),
       externalUrl: safeUrl(rawExternalUrl)
     };
-
     const errors = validateProduct(product, rawExternalUrl);
-    if (errors.length) {
-      status.hidden = false;
-      status.textContent = errors.join(" ");
-      return;
-    }
-
+    if (errors.length) { status.hidden = false; status.textContent = errors.join(" "); return; }
     customProducts.unshift(product);
     products.unshift(product);
     stock[product.id] = product.stock;
@@ -350,7 +292,6 @@ function mountProductAdmin() {
     status.textContent = `Produto salvo: ${product.name}`;
     form.reset();
   });
-
   renderProductAdminList();
 }
 
@@ -358,10 +299,7 @@ function renderProductAdminList() {
   const list = document.getElementById("productAdminList");
   if (!list) return;
   clearNode(list);
-  if (!customProducts.length) {
-    list.appendChild(make("div", "history-item", "Nenhum produto cadastrado pelo painel ainda."));
-    return;
-  }
+  if (!customProducts.length) { list.appendChild(make("div", "history-item", "Nenhum produto cadastrado pelo painel ainda.")); return; }
   customProducts.forEach(product => {
     const item = make("div", "history-item");
     item.appendChild(make("strong", "", product.name));
