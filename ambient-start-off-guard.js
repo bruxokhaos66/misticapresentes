@@ -23,13 +23,12 @@
   function loadVisualCss() {
     loadCss("homePremiumFinishCss", "home-premium-finish.css?v=20260707-final-premium");
     loadCss("mobilePolishCss", "mobile-polish.css?v=20260707-final-mobile");
-    loadCss("heroLegacyPremiumCss", "hero-legacy-premium.css?v=20260707-final-hero-v2");
+    loadCss("heroLegacyPremiumCss", "hero-legacy-premium.css?v=20260707-hero-comercial-isis");
     loadCss("ambientLegacyCompleteCss", "ambient-legacy-complete.css?v=20260707-final-ambient");
     loadCss("productsIntentLegacyCss", "products-intent-legacy.css?v=20260707-final-products");
     loadCss("isisCommerceLegacyCss", "isis-commerce-legacy.css?v=20260707-final-isis");
     loadCss("footerContactLegacyCss", "footer-contact-legacy.css?v=20260707-final-footer");
-    loadCss("heroModernFinalCss", "hero-modern-final.css?v=20260707-hero-modern-final");
-    loadScript("heroCopyFinalScript", "hero-copy-final.js?v=20260707-hero-copy-final");
+    loadCss("heroModernFinalCss", "hero-modern-final.css?v=20260707-hero-comercial-ajuste");
     loadScript("localBusinessSchemaScript", "local-business-schema.js?v=20260707-final-seo");
   }
 
