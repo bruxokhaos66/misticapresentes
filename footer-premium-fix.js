@@ -17,6 +17,7 @@
     const footer = document.querySelector(".footer");
     if (footer) footer.dataset.singleStoreFooter = "true";
 
+    loadScriptOnce("publicHomeSafetyScript", "public-home-safety.js?v=20260707-public-safe");
     loadScriptOnce("commercialBadgesFixScript", "commercial-badges-fix.js?v=20260707-safe-badges");
     loadScriptOnce("ambientExperienceScript", "ambient-experience.js?v=20260707-safe-ambient");
     loadScriptOnce("ambientPlayerUnifyScript", "ambient-player-unify.js?v=20260707-safe-player");
