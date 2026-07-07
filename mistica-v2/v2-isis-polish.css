@@ -9,10 +9,12 @@
   display: grid !important;
   align-content: end !important;
   padding: 24px !important;
-  background-size: auto, auto, cover !important;
-  background-position: center center, center center, center top !important;
+  background-size: cover !important;
+  background-position: center 38% !important;
   background-repeat: no-repeat !important;
-  box-shadow: 0 34px 110px rgba(0,0,0,.46), 0 0 64px rgba(242,201,109,.14) !important;
+  box-shadow: 0 34px 110px rgba(0,0,0,.38), 0 0 64px rgba(242,201,109,.12) !important;
+  filter: none !important;
+  image-rendering: auto !important;
 }
 
 #isis .isis-panel-image::before {
@@ -22,8 +24,9 @@
   z-index: 1;
   pointer-events: none;
   background:
-    linear-gradient(180deg, rgba(3,3,5,.08), transparent 42%, rgba(3,3,5,.88)),
-    radial-gradient(circle at 50% 22%, rgba(242,201,109,.16), transparent 26rem) !important;
+    linear-gradient(180deg, rgba(3,3,5,0) 0%, rgba(3,3,5,.03) 52%, rgba(3,3,5,.30) 100%) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 #isis .isis-panel-image p {
@@ -31,13 +34,14 @@
   z-index: 3 !important;
   max-width: 430px !important;
   margin: auto auto 0 !important;
-  border: 1px solid rgba(242,201,109,.36) !important;
+  border: 1px solid rgba(242,201,109,.30) !important;
   border-radius: 22px !important;
-  padding: 18px 22px !important;
+  padding: 16px 20px !important;
   color: #fff1ce !important;
-  background: rgba(3,3,5,.78) !important;
-  box-shadow: 0 20px 54px rgba(0,0,0,.36) !important;
-  backdrop-filter: blur(12px);
+  background: rgba(3,3,5,.56) !important;
+  box-shadow: 0 16px 42px rgba(0,0,0,.26) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
   text-align: center !important;
   font-weight: 800 !important;
   line-height: 1.55 !important;
@@ -116,13 +120,15 @@
 
 .isis-photo,
 .isis-photo.has-real-isis {
-  min-height: clamp(360px, 38vw, 520px) !important;
+  min-height: clamp(420px, 42vw, 590px) !important;
   background:
-    linear-gradient(180deg, rgba(3,3,5,0) 0%, rgba(3,3,5,.03) 62%, rgba(3,3,5,.22) 100%),
+    linear-gradient(180deg, rgba(3,3,5,0) 0%, rgba(3,3,5,.02) 70%, rgba(3,3,5,.16) 100%),
     url("assets/isis-hero.webp") !important;
   background-size: cover, cover !important;
-  background-position: center center, center center !important;
+  background-position: center 34%, center 34% !important;
   background-repeat: no-repeat !important;
+  filter: none !important;
+  image-rendering: auto !important;
 }
 
 .isis-photo::before,
@@ -143,6 +149,7 @@
   background: transparent !important;
   box-shadow: none !important;
   backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 .product-card,
@@ -197,8 +204,8 @@
 
   #isis .isis-panel-image {
     min-height: 560px !important;
-    background-size: auto, auto, cover !important;
-    background-position: center center, center center, center top !important;
+    background-size: cover !important;
+    background-position: center 34% !important;
   }
 
   .hero-section::after {
@@ -218,11 +225,12 @@
 
   .isis-photo,
   .isis-photo.has-real-isis {
-    min-height: 360px !important;
+    min-height: 430px !important;
+    background-position: center 30%, center 30% !important;
   }
 
   #isis .isis-panel-image {
-    min-height: 500px !important;
+    min-height: 520px !important;
     border-radius: 24px !important;
   }
 
