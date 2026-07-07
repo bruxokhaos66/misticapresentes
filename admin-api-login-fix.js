@@ -19,7 +19,7 @@
 
   function loadMusicAdminAfterLogin() {
     setTimeout(() => {
-      loadScriptOnce("adminAmbientMusicScript", "admin-ambient-music.js?v=20260707-google-drive");
+      loadScriptOnce("adminAmbientMusicScript", "admin-ambient-music.js?v=20260707-upload-outside-guard");
       loadScriptOnce("ambientPlayerUnifyScript", "ambient-player-unify.js?v=20260707-google-drive");
       loadScriptOnce("ambientSinglePlayerGuardScript", "ambient-single-player-guard.js?v=20260707-google-drive");
     }, 1000);
@@ -124,8 +124,8 @@
     normalizeLoginField();
     window.unlockAdmin = () => { submitAdminLogin(); };
     f.onsubmit = submitAdminLogin;
-    if (f.dataset.apiLoginFix !== "4") {
-      f.dataset.apiLoginFix = "4";
+    if (f.dataset.apiLoginFix !== "5") {
+      f.dataset.apiLoginFix = "5";
       f.addEventListener("submit", submitAdminLogin, true);
       const button = f.querySelector('button[type="submit"], button');
       if (button) button.addEventListener("click", event => submitAdminLogin(event), true);
