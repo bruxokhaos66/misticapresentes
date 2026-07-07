@@ -16,6 +16,7 @@
     loadCss("mobilePolishCss", "mobile-polish.css?v=20260707-mobile-polish");
     loadCss("heroLegacyPremiumCss", "hero-legacy-premium.css?v=20260707-hero-legacy");
     loadCss("ambientLegacyCompleteCss", "ambient-legacy-complete.css?v=20260707-ambient-complete");
+    loadCss("productsIntentLegacyCss", "products-intent-legacy.css?v=20260707-products-intent");
   }
 
   function pauseAllAmbientAudio() {
