@@ -86,7 +86,20 @@
   pointer-events: none;
 }
 
+.hero-copy h1 {
+  font-size: clamp(2.15rem, 4.05vw, 4.35rem) !important;
+  line-height: 1.03 !important;
+  letter-spacing: -.035em !important;
+  max-width: 760px !important;
+}
+
+.hero-text {
+  max-width: 690px !important;
+  font-size: clamp(.98rem, 1.08vw, 1.08rem) !important;
+}
+
 .isis-portrait-card {
+  position: relative;
   transform: translateZ(0);
 }
 
@@ -98,9 +111,48 @@
   pointer-events: none;
   background: linear-gradient(135deg, rgba(242,201,109,.24), transparent 42%, rgba(189,209,122,.18));
   opacity: .48;
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   padding: 1px;
+}
+
+.isis-photo,
+.isis-photo.has-real-isis {
+  min-height: clamp(300px, 34vw, 440px) !important;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(242,201,109,.20), transparent 31%),
+    radial-gradient(circle at 50% 68%, rgba(189,209,122,.15), transparent 40%),
+    linear-gradient(145deg, rgba(8,10,7,.96), rgba(45,27,55,.82)) !important;
+  background-size: auto !important;
+  background-position: center !important;
+}
+
+.isis-photo::before,
+.isis-photo.has-real-isis::before {
+  content: "☾" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  display: grid !important;
+  place-items: center !important;
+  color: rgba(242,201,109,.22) !important;
+  font-family: Cinzel, serif !important;
+  font-size: clamp(4.8rem, 9vw, 8rem) !important;
+  background: none !important;
+}
+
+.isis-photo::after,
+.isis-photo.has-real-isis::after {
+  content: "Produtos místicos com curadoria" !important;
+  position: absolute !important;
+  left: 20px !important;
+  right: 20px !important;
+  bottom: 20px !important;
+  border: 1px solid rgba(242,201,109,.24) !important;
+  border-radius: 18px !important;
+  padding: 14px 16px !important;
+  color: #fff1ce !important;
+  background: rgba(3,3,5,.72) !important;
+  font-weight: 900 !important;
+  text-align: center !important;
+  backdrop-filter: blur(10px);
 }
 
 .product-card,
@@ -149,6 +201,10 @@
 }
 
 @media (max-width: 980px) {
+  .hero-copy h1 {
+    font-size: clamp(2rem, 7.6vw, 3.7rem) !important;
+  }
+
   #isis .isis-panel-image {
     min-height: 560px !important;
     background-size: auto, auto, cover !important;
@@ -161,6 +217,20 @@
 }
 
 @media (max-width: 680px) {
+  .hero-copy h1 {
+    font-size: clamp(1.75rem, 9vw, 2.55rem) !important;
+    line-height: 1.08 !important;
+  }
+
+  .hero-text {
+    font-size: .98rem !important;
+  }
+
+  .isis-photo,
+  .isis-photo.has-real-isis {
+    min-height: 300px !important;
+  }
+
   #isis .isis-panel-image {
     min-height: 500px !important;
     border-radius: 24px !important;
