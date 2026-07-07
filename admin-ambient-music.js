@@ -1,6 +1,7 @@
 (() => {
   const config = window.misticaSiteConfig || {};
   const API_BASE = String(config.apiBaseUrl || "https://api.misticaesotericos.com.br").replace(/\/$/, "");
+  const PUBLIC_SITE_KEY = "c4e9012d72c6bb42f52457c6d6ba916a";
   const styleId = "adminAmbientMusicStyle";
   const MAX_AUDIO_BYTES = 30 * 1024 * 1024;
 
@@ -9,9 +10,8 @@
   }
 
   function apiHeaders() {
-    const headers = {};
-    if (config.siteApiKey) headers["X-Mistica-Api-Key"] = config.siteApiKey;
-    return headers;
+    const key = config.siteApiKey || window.misticaSiteConfig?.siteApiKey || PUBLIC_SITE_KEY;
+    return { "X-Mistica-Api-Key": key };
   }
 
   function formatBytes(bytes) {
