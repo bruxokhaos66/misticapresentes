@@ -11,11 +11,22 @@
     document.head.appendChild(script);
   }
 
+  function loadStyleOnce(id, href) {
+    if (document.getElementById(id)) return;
+    const link = document.createElement("link");
+    link.id = id;
+    link.rel = "stylesheet";
+    link.href = href;
+    document.head.appendChild(link);
+  }
+
   function init() {
     const contact = document.querySelector("#contato");
     if (contact) contact.dataset.singleContact = "true";
     const footer = document.querySelector(".footer");
     if (footer) footer.dataset.singleStoreFooter = "true";
+
+    loadStyleOnce("isisLowerImageStyle", "isis-lower-image.css?v=20260707-isis-lower-image");
 
     loadScriptOnce("publicHomeSafetyScript", "public-home-safety.js?v=20260707-public-safe");
     loadScriptOnce("commercialBadgesFixScript", "commercial-badges-fix.js?v=20260707-safe-badges");
