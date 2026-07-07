@@ -14,6 +14,7 @@
   function loadVisualCss() {
     loadCss("homePremiumFinishCss", "home-premium-finish.css?v=20260707-premium-css");
     loadCss("mobilePolishCss", "mobile-polish.css?v=20260707-mobile-polish");
+    loadCss("heroLegacyPremiumCss", "hero-legacy-premium.css?v=20260707-hero-legacy");
   }
 
   function pauseAllAmbientAudio() {
