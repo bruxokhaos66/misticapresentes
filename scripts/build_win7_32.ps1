@@ -1,11 +1,9 @@
 $ErrorActionPreference = "Stop"
 
-Write-Host "== Mística Presentes - Build Windows 7 32 bits =="
-Write-Host "Use Python 3.8.x 32-bit. Em GitHub Actions, setup-python usa architecture x86."
+Write-Host "== Mistica Presentes - Build Windows 7 32 bits =="
 
 python -m pip install --upgrade "pip<25"
 python -m pip install -r requirements-win7-32.txt
-
 python -c "import sqlite3, sys; print('SQLite OK:', sqlite3.sqlite_version); print('Python:', sys.version)"
 
 if (Test-Path build) { Remove-Item build -Recurse -Force }
@@ -16,8 +14,8 @@ $dllDir = Join-Path $pythonPrefix "DLLs"
 $sqlitePyd = Join-Path $dllDir "_sqlite3.pyd"
 $sqliteDll = Join-Path $dllDir "sqlite3.dll"
 
-if (!(Test-Path $sqlitePyd)) { throw "_sqlite3.pyd não encontrado em $dllDir" }
-if (!(Test-Path $sqliteDll)) { throw "sqlite3.dll não encontrado em $dllDir" }
+if (!(Test-Path $sqlitePyd)) { throw "_sqlite3.pyd not found in $dllDir" }
+if (!(Test-Path $sqliteDll)) { throw "sqlite3.dll not found in $dllDir" }
 
 $addData = @(
   "mistica_presentes.py;."
@@ -29,6 +27,7 @@ $addData = @(
   "app_painel_guard_patch.py;."
   "app_scroll_patch.py;."
   "database;database"
+  "repositories;repositories"
   "services;services"
   "assets;assets"
 )
@@ -43,6 +42,10 @@ $args = @(
   "--hidden-import=sqlite3"
   "--hidden-import=_sqlite3"
   "--collect-submodules=sqlite3"
+  "--hidden-import=repositories"
+  "--collect-submodules=repositories"
+  "--hidden-import=services"
+  "--collect-submodules=services"
   "--add-binary", "$sqlitePyd;."
   "--add-binary", "$sqliteDll;."
 )
@@ -62,17 +65,10 @@ $args += "app.py"
 
 python -m PyInstaller @args
 
-if (!(Test-Path dist\MisticaPresentes\MisticaPresentes.exe)) {
-  throw "Build falhou: exe não encontrado."
-}
+if (!(Test-Path dist\MisticaPresentes\MisticaPresentes.exe)) { throw "Build failed: exe not found." }
+if (!(Test-Path dist\MisticaPresentes\_sqlite3.pyd)) { throw "Build failed: _sqlite3.pyd missing." }
+if (!(Test-Path dist\MisticaPresentes\sqlite3.dll)) { throw "Build failed: sqlite3.dll missing." }
+if (!(Test-Path dist\MisticaPresentes\repositories)) { throw "Build failed: repositories folder missing." }
+if (!(Test-Path dist\MisticaPresentes\services)) { throw "Build failed: services folder missing." }
 
-if (!(Test-Path dist\MisticaPresentes\_sqlite3.pyd)) {
-  throw "Build falhou: _sqlite3.pyd não foi empacotado."
-}
-
-if (!(Test-Path dist\MisticaPresentes\sqlite3.dll)) {
-  throw "Build falhou: sqlite3.dll não foi empacotado."
-}
-
-Write-Host "Build concluído: dist\MisticaPresentes\MisticaPresentes.exe"
-Write-Host "SQLite empacotado com sucesso."
+Write-Host "Build OK: dist\MisticaPresentes\MisticaPresentes.exe"
