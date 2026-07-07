@@ -1,4 +1,7 @@
 (() => {
+  if (window.__MISTICA_AMBIENT_EXPERIENCE_LOADED__) return;
+  window.__MISTICA_AMBIENT_EXPERIENCE_LOADED__ = true;
+
   const STORAGE_KEY = "misticaAmbientEnabled";
   let isPlaying = false;
 
@@ -13,18 +16,7 @@
       .ambient-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
       .ambient-toggle[aria-pressed="true"] { border-color: rgba(184,201,119,.52); color: #10150e; background: linear-gradient(135deg, #dfeab2, #b8c977 62%, #fff6cc); }
       .ambient-status { color: #b8c977; font-size: .86rem; font-weight: 800; }
-      .hero-copy h1 { max-width: 820px; font-size: clamp(2.25rem, 4.25vw, 4.55rem); }
-      .hero-text, .section-title p, .category-grid p, .confidence-grid span, .product-card p, .privacy-note, .contact-card p { font-size: clamp(.98rem, 1.04vw, 1.08rem); }
-      .hero-visual { align-self: stretch; }
-      .mystic-logo-card.hero-card-isis-publicitaria { width: min(96%, 450px); min-height: clamp(540px, 58vw, 650px); justify-content: end; }
-      .hero-isis-publicitaria { width: min(106%, 470px) !important; max-height: 575px !important; margin-bottom: -2px !important; }
-      .isis-layout { align-items: center; }
-      .isis-panel-image:has(.isis-human-img) { min-height: clamp(560px, 58vw, 680px); padding: 18px 18px 16px; }
-      .isis-human-img, .isis-human-produtos { width: min(104%, 540px) !important; max-height: 650px !important; }
-      .isis-chat-panel h2 { font-size: clamp(2rem, 3vw, 3.1rem); }
-      .isis-chat-panel .privacy-note { color: #efe1c5; font-weight: 600; }
-      @media (max-width: 980px) { .mystic-logo-card.hero-card-isis-publicitaria { width: min(100%, 420px); min-height: 520px; } .hero-isis-publicitaria { max-height: 455px !important; } }
-      @media (max-width: 680px) { .ambient-card { text-align: left; } .ambient-controls .btn { width: 100%; } .mystic-logo-card.hero-card-isis-publicitaria { min-height: 500px !important; } .isis-panel-image:has(.isis-human-img) { min-height: 500px !important; } .isis-human-img, .isis-human-produtos { max-height: 485px !important; } }
+      @media (max-width: 680px) { .ambient-card { text-align: left; } .ambient-controls .btn { width: 100%; } }
     `;
     document.head.appendChild(style);
   }
@@ -50,12 +42,8 @@
     const button = card.querySelector("[data-ambient-toggle]");
     const status = card.querySelector("[data-ambient-status]");
     if (button) {
-      button.setAttribute("aria-pressed", "false");
-      button.textContent = "Ativar ambiente xamânico";
-      if (isPlaying) {
-        button.setAttribute("aria-pressed", "true");
-        button.textContent = "Desligar ambiente xamânico";
-      }
+      button.setAttribute("aria-pressed", isPlaying ? "true" : "false");
+      button.textContent = isPlaying ? "Desligar ambiente xamânico" : "Ativar ambiente xamânico";
     }
     if (status) status.textContent = isPlaying ? "Música ativada." : "Aguardando ativação.";
   }
@@ -83,7 +71,7 @@
       else startAmbient();
       updateUi(card);
       if (isPlaying && window.misticaAmbientPlayerFix?.play) window.misticaAmbientPlayerFix.play(true);
-      if (!isPlaying && window.misticaAmbientUnifiedPlayer) {
+      if (!isPlaying) {
         try { document.querySelector("[data-unified-player-panel]").dataset.open = "false"; } catch {}
       }
     });
@@ -108,11 +96,9 @@
     createAmbientCard();
     const card = document.querySelector("[data-ambient-card]");
     if (card) updateUi(card);
-    setTimeout(forceInitialOff, 300);
-    setTimeout(forceInitialOff, 1200);
   }
 
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once: true });
   else init();
 
   window.misticaAmbientExperience = { start: startAmbient, stop: stopAmbient, isPlaying: () => isPlaying, setVolume: () => 0 };
