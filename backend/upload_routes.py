@@ -117,6 +117,19 @@ def garantir_tabela_musicas_ambiente(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_site_musicas_ambiente_criado ON site_musicas_ambiente(criado_em)")
 
 
+def garantir_tabela_musicas_startup():
+    inicio = time.perf_counter()
+    try:
+        with conectar() as conn:
+            garantir_tabela_musicas_ambiente(conn)
+            conn.commit()
+        log_tempo("garantir_tabela", inicio, "ok")
+        return None
+    except Exception as exc:
+        log_tempo("garantir_tabela_falhou", inicio, str(exc))
+        return str(exc)
+
+
 def salvar_musica_no_banco(nome: str, content_type: str, data: bytes, criado_em: str):
     inicio = time.perf_counter()
     try:
@@ -186,7 +199,9 @@ def listar_musicas_arquivo_local(nomes_existentes: set[str]) -> list[dict]:
 def listar_musicas_banco_rapido() -> tuple[list[dict], set[str], str | None]:
     musicas = []
     nomes = set()
-    erro = None
+    erro = garantir_tabela_musicas_startup()
+    if erro:
+        return musicas, nomes, erro
     try:
         conn = conectar_rapido(timeout=0.35)
         try:
