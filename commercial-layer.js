@@ -67,6 +67,45 @@
     section.insertBefore(strip, grid);
   }
 
+  function restoreIsisCommerce() {
+    const section = document.querySelector("#isis.isis-section");
+    if (!section) return;
+    section.classList.add("legacy-isis-commerce");
+    const panelText = section.querySelector(".isis-panel-image p");
+    if (panelText) panelText.textContent = "A Isis guia o cliente por produtos, intenções, presentes e sugestões rápidas para facilitar a compra.";
+    const eyebrow = section.querySelector(".isis-chat-panel .eyebrow");
+    if (eyebrow) eyebrow.textContent = "Isis a Bruxinha";
+    const title = section.querySelector(".isis-chat-panel h2");
+    if (title) title.textContent = "Atendimento místico, comercial e inteligente";
+    const note = section.querySelector(".isis-chat-panel .privacy-note");
+    if (note) note.textContent = "Peça sugestões de produtos, kits para presente, itens por intenção ou apoio para encontrar o que combina com cada momento.";
+    const chatPanel = section.querySelector(".isis-chat-panel");
+    if (!chatPanel || chatPanel.querySelector(".legacy-isis-cards")) return;
+    const cards = document.createElement("div");
+    cards.className = "legacy-isis-cards";
+    const items = [
+      ["🔮", "Produtos combinados", "Sugestões de kits com incensos, cristais, velas, banhos e aromas."],
+      ["🎁", "Presentes humanos", "Ideias com significado para datas especiais, carinho e proteção."],
+      ["⚡", "Atendimento rápido", "Comandos prontos para encontrar produtos e enviar o pedido pelo WhatsApp."],
+      ["📈", "Apoio nas vendas", "Ajuda para consultar vendas, estoque baixo e oportunidades de reposição."]
+    ];
+    items.forEach(([icon, name, desc]) => {
+      const card = document.createElement("article");
+      card.className = "legacy-isis-card";
+      const span = document.createElement("span");
+      span.textContent = icon;
+      const strong = document.createElement("strong");
+      strong.textContent = name;
+      const small = document.createElement("small");
+      small.textContent = desc;
+      card.append(span, strong, small);
+      cards.appendChild(card);
+    });
+    const form = chatPanel.querySelector("#isisForm");
+    if (form) chatPanel.insertBefore(cards, form);
+    else chatPanel.appendChild(cards);
+  }
+
   function init() {
     document.body.classList.add("mistica-home-premium");
     const params = new URLSearchParams(window.location.search);
@@ -81,6 +120,7 @@
     });
     restoreHero();
     restoreProductsIntent();
+    restoreIsisCommerce();
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once: true });
