@@ -18,6 +18,7 @@
     loadCss("ambientLegacyCompleteCss", "ambient-legacy-complete.css?v=20260707-ambient-complete");
     loadCss("productsIntentLegacyCss", "products-intent-legacy.css?v=20260707-products-intent");
     loadCss("isisCommerceLegacyCss", "isis-commerce-legacy.css?v=20260707-isis-commerce");
+    loadCss("footerContactLegacyCss", "footer-contact-legacy.css?v=20260707-footer-contact");
   }
 
   function pauseAllAmbientAudio() {
