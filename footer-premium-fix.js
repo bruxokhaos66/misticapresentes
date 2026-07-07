@@ -168,9 +168,19 @@
     document.head.appendChild(script);
   }
 
-  function isAdminPage() { return location.hash === "#admin" || Boolean(document.getElementById("adminLoginForm")); }
-  function isAdminLogged() { try { return JSON.parse(sessionStorage.getItem("misticaAdminApiUser") || "null")?.status === "ok"; } catch { return false; } }
-  function canLoadHeavyMusic() { return !isAdminPage() || isAdminLogged(); }
+  function isAdminRoute() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("admin") === "mistica" || window.location.hash === "#admin-mistica" || window.location.hash === "#admin";
+  }
+
+  function isAdminLogged() {
+    try { return JSON.parse(sessionStorage.getItem("misticaAdminApiUser") || "null")?.status === "ok"; }
+    catch { return false; }
+  }
+
+  function canLoadHeavyMusic() {
+    return !isAdminRoute() || isAdminLogged();
+  }
 
   function loadCatalogPremiumFix() { loadScriptOnce("catalogPremiumFixScript", "catalog-premium-fix.js?v=20260706-catalogo-premium"); }
   function loadAmbientPremiumFix() { loadScriptOnce("ambientPremiumFixScript", "ambient-premium-fix.js?v=20260706-ambient-premium"); }
@@ -187,7 +197,7 @@
   function loadHeavyMusicFixes() {
     if (!canLoadHeavyMusic()) return;
     loadScriptOnce("ambientPlaylistAdminScript", "ambient-playlist-admin.js?v=20260706-playlist-ambiente-v3");
-    loadScriptOnce("ambientPlayerUnifyScript", "ambient-player-unify.js?v=20260706-fallback");
+    loadScriptOnce("ambientPlayerUnifyScript", "ambient-player-unify.js?v=20260707-player-drawer");
     loadScriptOnce("adminAmbientMusicScript", "admin-ambient-music.js?v=20260707-key-fallback");
     loadScriptOnce("ambientSinglePlayerGuardScript", "ambient-single-player-guard.js?v=20260706-single-player");
   }
