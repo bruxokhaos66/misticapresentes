@@ -8,6 +8,23 @@
   function adminContent() { return document.getElementById("adminContent"); }
   function passwordInput() { return document.getElementById("adminPassword"); }
 
+  function loadScriptOnce(id, src) {
+    if (document.getElementById(id)) return;
+    const script = document.createElement("script");
+    script.id = id;
+    script.defer = true;
+    script.src = src;
+    document.head.appendChild(script);
+  }
+
+  function loadMusicAdminAfterLogin() {
+    setTimeout(() => {
+      loadScriptOnce("adminAmbientMusicScript", "admin-ambient-music.js?v=20260707-google-drive");
+      loadScriptOnce("ambientPlayerUnifyScript", "ambient-player-unify.js?v=20260707-google-drive");
+      loadScriptOnce("ambientSinglePlayerGuardScript", "ambient-single-player-guard.js?v=20260707-google-drive");
+    }, 1000);
+  }
+
   function showStatus(message, ok = false) {
     const box = statusBox();
     if (!box) return;
@@ -78,6 +95,7 @@
     showStatus("Login administrativo autorizado pela API.", true);
     try { if (typeof renderAll === "function") renderAll(); } catch {}
     try { if (typeof renderAdminDashboard === "function") renderAdminDashboard(); } catch {}
+    loadMusicAdminAfterLogin();
   }
 
   async function submitAdminLogin(event) {
@@ -106,8 +124,8 @@
     normalizeLoginField();
     window.unlockAdmin = () => { submitAdminLogin(); };
     f.onsubmit = submitAdminLogin;
-    if (f.dataset.apiLoginFix !== "3") {
-      f.dataset.apiLoginFix = "3";
+    if (f.dataset.apiLoginFix !== "4") {
+      f.dataset.apiLoginFix = "4";
       f.addEventListener("submit", submitAdminLogin, true);
       const button = f.querySelector('button[type="submit"], button');
       if (button) button.addEventListener("click", event => submitAdminLogin(event), true);
