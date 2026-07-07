@@ -21,7 +21,6 @@
     if (!f) return null;
     const pass = passwordInput();
     let login = document.getElementById("adminUser") || document.getElementById("adminLogin") || f.querySelector('input[name="login"]');
-
     if (!login) {
       login = document.createElement("input");
       login.id = "adminUser";
@@ -36,12 +35,10 @@
       if (pass?.closest("label")) f.insertBefore(label, pass.closest("label"));
       else f.prepend(label);
     }
-
     login.value = "admin";
     login.placeholder = "admin";
     login.autocomplete = "username";
-    const labels = Array.from(f.querySelectorAll("label"));
-    labels.forEach(label => {
+    Array.from(f.querySelectorAll("label")).forEach(label => {
       if (label.contains(login)) label.childNodes[0].textContent = "Usuário";
       if (pass && label.contains(pass)) label.childNodes[0].textContent = "Senha administrativa";
     });
@@ -50,16 +47,26 @@
   }
 
   async function loginApi(login, senha) {
-    const response = await fetch(`${API_BASE}/api/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Accept": "application/json" },
-      body: JSON.stringify({ login, senha }),
-    });
-    const text = await response.text();
-    let body = {};
-    try { body = text ? JSON.parse(text) : {}; } catch {}
-    if (!response.ok) throw new Error(body.detail || `Erro ${response.status}`);
-    return body;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    try {
+      const response = await fetch(`${API_BASE}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify({ login, senha }),
+        signal: controller.signal,
+      });
+      const text = await response.text();
+      let body = {};
+      try { body = text ? JSON.parse(text) : {}; } catch {}
+      if (!response.ok) throw new Error(body.detail || `Erro ${response.status}`);
+      return body;
+    } catch (error) {
+      if (error && error.name === "AbortError") throw new Error("API demorou mais de 15 segundos. Aguarde o Render responder e tente novamente.");
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   function liberarAdmin(data) {
@@ -99,8 +106,8 @@
     normalizeLoginField();
     window.unlockAdmin = () => { submitAdminLogin(); };
     f.onsubmit = submitAdminLogin;
-    if (f.dataset.apiLoginFix !== "2") {
-      f.dataset.apiLoginFix = "2";
+    if (f.dataset.apiLoginFix !== "3") {
+      f.dataset.apiLoginFix = "3";
       f.addEventListener("submit", submitAdminLogin, true);
       const button = f.querySelector('button[type="submit"], button');
       if (button) button.addEventListener("click", event => submitAdminLogin(event), true);
@@ -108,10 +115,7 @@
   }
 
   const saved = (() => { try { return JSON.parse(sessionStorage.getItem("misticaAdminApiUser") || "null"); } catch { return null; } })();
-  if (saved?.status === "ok") {
-    window.addEventListener("load", () => liberarAdmin(saved));
-  }
-
+  if (saved?.status === "ok") window.addEventListener("load", () => liberarAdmin(saved));
   window.addEventListener("DOMContentLoaded", install);
   window.addEventListener("load", () => { install(); setTimeout(install, 300); setTimeout(install, 1200); });
 })();
