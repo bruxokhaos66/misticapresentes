@@ -2,6 +2,15 @@
   if (window.__MISTICA_FOOTER_PREMIUM_FIX_LOADED__) return;
   window.__MISTICA_FOOTER_PREMIUM_FIX_LOADED__ = true;
 
+  function loadScriptOnce(id, src) {
+    if (document.getElementById(id)) return;
+    const script = document.createElement("script");
+    script.id = id;
+    script.defer = true;
+    script.src = src;
+    document.head.appendChild(script);
+  }
+
   function init() {
     if (!document.getElementById("mistica-footer-premium-style")) {
       const style = document.createElement("style");
@@ -23,6 +32,7 @@
     if (contact) contact.dataset.singleContact = "true";
     const footer = document.querySelector(".footer");
     if (footer) footer.dataset.singleStoreFooter = "true";
+    loadScriptOnce("commercialBadgesFixScript", "commercial-badges-fix.js?v=20260707-safe-badges");
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once: true });
