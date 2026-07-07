@@ -145,15 +145,10 @@
   function enhanceFooter() {
     const footer = document.querySelector(".footer");
     if (!footer || footer.dataset.premiumFooter === "true") return;
-
     footer.dataset.premiumFooter = "true";
-
     const signature = document.createElement("div");
     signature.className = "footer-premium-signature";
-    signature.innerHTML = `
-      <span>Mística Presentes</span>
-      <span>Produtos com significado • Atendimento local • Compra pelo WhatsApp</span>
-    `;
+    signature.innerHTML = `<span>Mística Presentes</span><span>Produtos com significado • Atendimento local • Compra pelo WhatsApp</span>`;
     footer.appendChild(signature);
   }
 
@@ -178,7 +173,7 @@
   function loadAccessibilityStatusFix() { loadScriptOnce("accessibilityStatusFixScript", "accessibility-status-fix.js?v=20260706-accessibility-status"); }
   function loadAmbientPlaylistAdmin() { loadScriptOnce("ambientPlaylistAdminScript", "ambient-playlist-admin.js?v=20260706-playlist-ambiente-v3"); }
   function loadAmbientPlayerUnify() { loadScriptOnce("ambientPlayerUnifyScript", "ambient-player-unify.js?v=20260706-fallback"); }
-  function loadAdminAmbientMusic() { loadScriptOnce("adminAmbientMusicScript", "admin-ambient-music.js?v=20260706-audio-timeout"); }
+  function loadAdminAmbientMusic() { loadScriptOnce("adminAmbientMusicScript", "admin-ambient-music.js?v=20260707-no-auto-list"); }
   function loadSinglePlayerGuard() { loadScriptOnce("ambientSinglePlayerGuardScript", "ambient-single-player-guard.js?v=20260706-single-player"); }
   function loadSaleApiFirstFix() { loadScriptOnce("misticaSaleApiFirstScript", "mobile-sale-api-first.js?v=20260706-api-first-sale"); }
 
@@ -202,14 +197,7 @@
     loadSaleApiFirstFix();
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", applyFooterPremiumFix, { once: true });
-  } else {
-    applyFooterPremiumFix();
-  }
-
-  window.addEventListener("load", () => {
-    applyFooterPremiumFix();
-    setTimeout(applyFooterPremiumFix, 600);
-  });
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", applyFooterPremiumFix, { once: true });
+  else applyFooterPremiumFix();
+  window.addEventListener("load", () => { applyFooterPremiumFix(); setTimeout(applyFooterPremiumFix, 600); });
 })();
