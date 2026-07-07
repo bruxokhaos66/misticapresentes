@@ -3,7 +3,6 @@
 
   function installFooterStyle() {
     if (document.getElementById(styleId)) return;
-
     const style = document.createElement("style");
     style.id = styleId;
     style.textContent = `
@@ -28,7 +27,6 @@
       .footer-premium-signature { display: none !important; }
       @media (max-width: 680px) { .footer { padding-bottom: 100px; } .footer-grid > div:first-child { border-radius: 24px; align-items: flex-start; justify-content: flex-start; } .contact-section .split > div:first-child, .contact-section .contact-card { border-radius: 24px; } }
     `;
-
     document.head.appendChild(style);
   }
 
@@ -85,18 +83,8 @@
     document.head.appendChild(script);
   }
 
-  function isAdminRoute() {
-    const params = new URLSearchParams(window.location.search);
-    return params.get("admin") === "mistica" || window.location.hash === "#admin-mistica" || window.location.hash === "#admin" || Boolean(document.querySelector("#adminContent"));
-  }
-
-  function isAdminLogged() {
-    try { return JSON.parse(sessionStorage.getItem("misticaAdminApiUser") || "null")?.status === "ok"; }
-    catch { return false; }
-  }
-
+  function loadAdminApiLoginFix() { loadScriptOnce("adminApiLoginFixScript", "admin-api-login-fix.js?v=20260707-api-login"); }
   function loadCatalogPremiumFix() { loadScriptOnce("catalogPremiumFixScript", "catalog-premium-fix.js?v=20260706-catalogo-premium"); }
-  function loadAmbientPremiumFix() { loadScriptOnce("ambientPremiumFixScript", "ambient-premium-fix.js?v=20260706-ambient-premium"); }
   function loadCommercialBadgesFix() { loadScriptOnce("commercialBadgesFixScript", "commercial-badges-fix.js?v=20260706-commercial-badges"); }
   function loadAlsoBoughtFix() { loadScriptOnce("alsoBoughtFixScript", "also-bought-fix.js?v=20260706-also-bought"); }
   function loadCartCtaFix() { loadScriptOnce("cartCtaFixScript", "cart-cta-fix.js?v=20260706-cart-cta"); }
@@ -106,17 +94,6 @@
   function loadPerformanceSectionsFix() { loadScriptOnce("performanceSectionsFixScript", "performance-sections-fix.js?v=20260706-performance-sections"); }
   function loadAccessibilityStatusFix() { loadScriptOnce("accessibilityStatusFixScript", "accessibility-status-fix.js?v=20260706-accessibility-status"); }
   function loadSaleApiFirstFix() { loadScriptOnce("misticaSaleApiFirstScript", "mobile-sale-api-first.js?v=20260706-api-first-sale"); }
-  function loadAdminApiLoginFix() { loadScriptOnce("adminApiLoginFixScript", "admin-api-login-fix.js?v=20260707-api-login"); }
-  function loadHeavyMusicFixes() {
-    if (isAdminRoute()) {
-      if (!isAdminLogged()) return;
-      loadScriptOnce("adminAmbientMusicScript", "admin-ambient-music.js?v=20260707-single-admin-music");
-      return;
-    }
-    loadScriptOnce("ambientPlaylistAdminScript", "ambient-playlist-admin.js?v=20260707-public-player-only");
-    loadScriptOnce("ambientPlayerUnifyScript", "ambient-player-unify.js?v=20260707-player-drawer");
-    loadScriptOnce("ambientSinglePlayerGuardScript", "ambient-single-player-guard.js?v=20260706-single-player");
-  }
 
   function applyFooterPremiumFix() {
     installFooterStyle();
@@ -124,7 +101,6 @@
     enhanceFooter();
     loadAdminApiLoginFix();
     loadCatalogPremiumFix();
-    loadAmbientPremiumFix();
     loadCommercialBadgesFix();
     loadAlsoBoughtFix();
     loadCartCtaFix();
@@ -134,7 +110,6 @@
     loadPerformanceSectionsFix();
     loadAccessibilityStatusFix();
     loadSaleApiFirstFix();
-    loadHeavyMusicFixes();
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", applyFooterPremiumFix, { once: true });
