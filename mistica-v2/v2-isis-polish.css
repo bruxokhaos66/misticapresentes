@@ -118,7 +118,7 @@
 .isis-photo.has-real-isis {
   min-height: clamp(360px, 38vw, 520px) !important;
   background:
-    linear-gradient(180deg, rgba(3,3,5,.02) 0%, rgba(3,3,5,.12) 46%, rgba(3,3,5,.80) 100%),
+    linear-gradient(180deg, rgba(3,3,5,0) 0%, rgba(3,3,5,.03) 62%, rgba(3,3,5,.22) 100%),
     url("assets/isis-hero.webp") !important;
   background-size: cover, cover !important;
   background-position: center center, center center !important;
@@ -126,26 +126,23 @@
 }
 
 .isis-photo::before,
-.isis-photo.has-real-isis::before {
-  content: "" !important;
-  background: none !important;
-}
-
+.isis-photo.has-real-isis::before,
 .isis-photo::after,
 .isis-photo.has-real-isis::after {
-  content: "Curadoria xamânica Mística" !important;
-  position: absolute !important;
-  left: 18px !important;
-  right: 18px !important;
-  bottom: 18px !important;
-  border: 1px solid rgba(242,201,109,.30) !important;
-  border-radius: 18px !important;
-  padding: 14px 16px !important;
-  color: #fff1ce !important;
-  background: rgba(3,3,5,.72) !important;
-  font-weight: 900 !important;
-  text-align: center !important;
-  backdrop-filter: blur(10px);
+  content: none !important;
+  display: none !important;
+  inset: auto !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: auto !important;
+  width: 0 !important;
+  height: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
 }
 
 .product-card,
