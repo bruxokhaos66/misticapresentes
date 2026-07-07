@@ -1,6 +1,6 @@
 document.addEventListener("DOMContentLoaded", () => {
   const cfg = window.misticaSiteConfig || {};
-  const version = "20260707-clean-shell-v1";
+  const version = "20260707-single-ambient-controller-v1";
   const adminAccess = new URLSearchParams(window.location.search).get("admin") === "mistica" || window.location.hash === "#admin-mistica";
 
   function loadScriptOnce(id, src) {
@@ -85,6 +85,7 @@ document.addEventListener("DOMContentLoaded", () => {
   applyLogoAndIsis();
 
   loadScriptOnce("ambientExperienceScript", "ambient-experience.js");
+  loadScriptOnce("ambientPlayerUnifyScript", "ambient-player-unify.js");
   loadScriptOnce("ambientStartOffGuardScript", "ambient-start-off-guard.js");
   loadScriptOnce("formFieldAccessibilityFixScript", "form-field-accessibility-fix.js");
   loadScriptOnce("layoutWideFixScript", "layout-wide-fix.js");
