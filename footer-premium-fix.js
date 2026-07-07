@@ -123,19 +123,9 @@
       }
 
       @media (max-width: 680px) {
-        .footer {
-          padding-bottom: 86px;
-        }
-
-        .footer-grid > div {
-          border-radius: 24px;
-        }
-
-        .footer-premium-signature {
-          border-radius: 24px;
-          align-items: flex-start;
-          justify-content: flex-start;
-        }
+        .footer { padding-bottom: 86px; }
+        .footer-grid > div { border-radius: 24px; }
+        .footer-premium-signature { border-radius: 24px; align-items: flex-start; justify-content: flex-start; }
       }
     `;
 
@@ -173,7 +163,7 @@
   function loadAccessibilityStatusFix() { loadScriptOnce("accessibilityStatusFixScript", "accessibility-status-fix.js?v=20260706-accessibility-status"); }
   function loadAmbientPlaylistAdmin() { loadScriptOnce("ambientPlaylistAdminScript", "ambient-playlist-admin.js?v=20260706-playlist-ambiente-v3"); }
   function loadAmbientPlayerUnify() { loadScriptOnce("ambientPlayerUnifyScript", "ambient-player-unify.js?v=20260706-fallback"); }
-  function loadAdminAmbientMusic() { loadScriptOnce("adminAmbientMusicScript", "admin-ambient-music.js?v=20260707-no-auto-list"); }
+  function loadAdminAmbientMusic() { loadScriptOnce("adminAmbientMusicScript", "admin-ambient-music.js?v=20260707-key-fallback"); }
   function loadSinglePlayerGuard() { loadScriptOnce("ambientSinglePlayerGuardScript", "ambient-single-player-guard.js?v=20260706-single-player"); }
   function loadSaleApiFirstFix() { loadScriptOnce("misticaSaleApiFirstScript", "mobile-sale-api-first.js?v=20260706-api-first-sale"); }
 
