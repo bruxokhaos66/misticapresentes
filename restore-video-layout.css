@@ -1,24 +1,126 @@
-/* Restauração visual conforme vídeo enviado da página anterior. */
+/* Restauração visual conforme vídeo enviado, com acabamento comercial e xamânico. */
+body.mistica-video-restore {
+  background:
+    radial-gradient(circle at 12% 18%, rgba(84, 106, 52, .24), transparent 34rem),
+    radial-gradient(circle at 82% 20%, rgba(240, 197, 106, .16), transparent 30rem),
+    radial-gradient(circle at 78% 76%, rgba(60, 34, 74, .22), transparent 34rem),
+    linear-gradient(135deg, #040407 0%, #090b07 44%, #130b18 100%) !important;
+}
+
+body.mistica-video-restore .site-header {
+  background: rgba(4, 4, 7, .9) !important;
+  box-shadow: 0 18px 58px rgba(0,0,0,.28);
+}
+
+body.mistica-video-restore #inicio.hero-section {
+  min-height: clamp(650px, 78vh, 830px) !important;
+  display: grid !important;
+  align-items: center !important;
+  padding: clamp(48px, 6vw, 82px) 0 !important;
+}
+
+body.mistica-video-restore #inicio .hero-grid {
+  grid-template-columns: minmax(0, 1.04fr) minmax(360px, .72fr) !important;
+  gap: clamp(42px, 6vw, 86px) !important;
+  align-items: center !important;
+}
+
 body.mistica-video-restore #inicio .hero-copy h1,
 body.mistica-video-restore #inicio.legacy-premium-hero .hero-copy h1 {
   max-width: 820px !important;
-  font-size: clamp(2.85rem, 5.2vw, 5.3rem) !important;
+  color: #fff8e8 !important;
+  font-size: clamp(2.85rem, 5.1vw, 5.25rem) !important;
   line-height: .98 !important;
-  letter-spacing: -.035em !important;
+  letter-spacing: -.04em !important;
+  text-transform: uppercase !important;
+  text-shadow: 0 26px 80px rgba(0,0,0,.48) !important;
+}
+
+body.mistica-video-restore #inicio .hero-text {
+  max-width: 760px !important;
+  color: #efe4cc !important;
+  font-size: clamp(1rem, 1.22vw, 1.16rem) !important;
+  font-weight: 750 !important;
+  line-height: 1.68 !important;
 }
 
 body.mistica-video-restore #inicio .hero-actions [data-scroll-categorias] {
   display: none !important;
 }
 
+body.mistica-video-restore .btn-ghost {
+  background: rgba(5,5,8,.45) !important;
+  color: #ffdd8d !important;
+}
+
+body.mistica-video-restore .trust-row span,
+body.mistica-video-restore .confidence-grid article,
+body.mistica-video-restore .category-grid article,
+body.mistica-video-restore .product-card,
+body.mistica-video-restore .form-panel,
+body.mistica-video-restore .contact-card {
+  border-color: rgba(240,197,106,.26) !important;
+  background:
+    linear-gradient(180deg, rgba(255,248,230,.09), rgba(255,248,230,.045)),
+    rgba(6,6,9,.58) !important;
+  backdrop-filter: blur(14px);
+  box-shadow: 0 20px 68px rgba(0,0,0,.24) !important;
+}
+
+body.mistica-video-restore .category-grid {
+  grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)) !important;
+}
+
+body.mistica-video-restore .category-grid article,
+body.mistica-video-restore .product-card {
+  transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease !important;
+}
+
+body.mistica-video-restore .category-grid article:hover,
+body.mistica-video-restore .product-card:hover {
+  transform: translateY(-4px) !important;
+  border-color: rgba(240,197,106,.5) !important;
+  box-shadow: 0 26px 82px rgba(0,0,0,.35), 0 0 34px rgba(240,197,106,.08) !important;
+}
+
 body.mistica-video-restore #produtos .section-title h2 {
   max-width: 860px;
   margin-left: auto;
   margin-right: auto;
+  color: #fff8e8 !important;
+}
+
+body.mistica-video-restore .product-grid {
+  grid-template-columns: repeat(auto-fit, minmax(255px, 1fr)) !important;
+  align-items: stretch !important;
+}
+
+body.mistica-video-restore .product-card {
+  min-height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden;
+}
+
+body.mistica-video-restore .product-image,
+body.mistica-video-restore .product-photo {
+  min-height: 154px !important;
+  border: 1px solid rgba(240,197,106,.2) !important;
+  border-radius: 20px !important;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(240,197,106,.22), transparent 38%),
+    radial-gradient(circle at 50% 70%, rgba(184,201,119,.18), transparent 48%),
+    linear-gradient(145deg, rgba(10,12,8,.94), rgba(35,20,44,.76)) !important;
+}
+
+body.mistica-video-restore .product-card .qty-row,
+body.mistica-video-restore .product-card .btn-full {
+  margin-top: auto !important;
 }
 
 body.mistica-video-restore #isis .isis-layout {
   align-items: stretch !important;
+  gap: clamp(24px, 4vw, 40px) !important;
 }
 
 body.mistica-video-restore #isis .isis-panel-image {
@@ -27,6 +129,8 @@ body.mistica-video-restore #isis .isis-panel-image {
   align-content: end !important;
   place-items: stretch !important;
   overflow: hidden !important;
+  border-color: rgba(240,197,106,.28) !important;
+  border-radius: 30px !important;
   background-size: auto, auto, cover !important;
   background-position: center center, center center, center center !important;
   background-repeat: no-repeat !important;
@@ -57,33 +161,61 @@ body.mistica-video-restore #isis .isis-panel-image .isis-symbol {
 body.mistica-video-restore #isis .isis-panel-image p {
   position: relative !important;
   z-index: 3 !important;
-  max-width: 420px !important;
+  max-width: 430px !important;
   margin: auto auto 0 !important;
   padding: 18px 22px !important;
   border-radius: 20px !important;
-  border: 1px solid rgba(240,197,106,.32) !important;
+  border: 1px solid rgba(240,197,106,.34) !important;
   background: rgba(3,3,5,.82) !important;
   color: #efe1c5 !important;
   text-align: center !important;
+  font-weight: 750 !important;
   line-height: 1.55 !important;
-  box-shadow: 0 18px 48px rgba(0,0,0,.34) !important;
+  box-shadow: 0 20px 54px rgba(0,0,0,.35) !important;
   backdrop-filter: blur(12px);
 }
 
 body.mistica-video-restore #isis .isis-chat-panel h2 {
-  font-size: clamp(2.6rem, 4.3vw, 4.45rem) !important;
-  line-height: 1.03 !important;
+  color: #fff8e8 !important;
+  font-size: clamp(2.45rem, 4.25vw, 4.2rem) !important;
+  line-height: 1.04 !important;
   margin-top: 0 !important;
 }
 
 body.mistica-video-restore .legacy-isis-cards {
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+}
+
+body.mistica-video-restore .legacy-isis-card {
+  border-color: rgba(240,197,106,.25) !important;
+  background: radial-gradient(circle at 50% 0%, rgba(240,197,106,.08), transparent 60%), rgba(255,255,255,.045) !important;
 }
 
 @media (max-width: 980px) {
+  body.mistica-video-restore #inicio .hero-grid,
+  body.mistica-video-restore #isis .isis-layout,
+  body.mistica-video-restore .checkout-grid,
+  body.mistica-video-restore .split {
+    grid-template-columns: 1fr !important;
+  }
+
+  body.mistica-video-restore #inicio .hero-copy {
+    text-align: center !important;
+  }
+
   body.mistica-video-restore #inicio .hero-copy h1,
   body.mistica-video-restore #inicio.legacy-premium-hero .hero-copy h1 {
     font-size: clamp(2.25rem, 9vw, 4rem) !important;
+  }
+
+  body.mistica-video-restore #inicio .hero-text {
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  body.mistica-video-restore #inicio .hero-actions {
+    justify-content: center !important;
   }
 
   body.mistica-video-restore #isis .isis-panel-image {
@@ -94,11 +226,25 @@ body.mistica-video-restore .legacy-isis-cards {
 }
 
 @media (max-width: 680px) {
-  body.mistica-video-restore #isis .isis-panel-image {
-    min-height: 500px !important;
+  body.mistica-video-restore #inicio.hero-section {
+    min-height: auto !important;
+    padding-top: 34px !important;
   }
 
-  body.mistica-video-restore .legacy-isis-cards {
+  body.mistica-video-restore #inicio .hero-copy h1,
+  body.mistica-video-restore #inicio.legacy-premium-hero .hero-copy h1 {
+    font-size: clamp(2.05rem, 10.5vw, 3.1rem) !important;
+  }
+
+  body.mistica-video-restore .trust-row,
+  body.mistica-video-restore .confidence-grid,
+  body.mistica-video-restore .legacy-isis-cards,
+  body.mistica-video-restore .footer-grid {
     grid-template-columns: 1fr !important;
+  }
+
+  body.mistica-video-restore #isis .isis-panel-image {
+    min-height: 500px !important;
+    border-radius: 24px !important;
   }
 }
