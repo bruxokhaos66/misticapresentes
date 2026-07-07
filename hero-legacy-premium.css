@@ -29,8 +29,8 @@ body.mistica-home-premium .legacy-premium-hero .hero-visual {
 
 .legacy-isis-card {
   position: relative;
-  width: min(440px, 100%);
-  min-height: 610px;
+  width: min(460px, 100%);
+  min-height: 650px;
   display: grid;
   align-content: end;
   gap: 16px;
@@ -56,6 +56,37 @@ body.mistica-home-premium .legacy-premium-hero .hero-visual {
   letter-spacing: .08em;
   color: rgba(240,197,106,.13);
   text-shadow: 0 0 54px rgba(240,197,106,.22);
+}
+
+.legacy-isis-photo {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  filter: saturate(1.06) contrast(1.04) brightness(.92);
+}
+
+.legacy-isis-card.has-isis-photo::before {
+  opacity: .16;
+}
+
+.legacy-isis-card.has-isis-photo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(3,3,5,.05), rgba(3,3,5,.14) 44%, rgba(3,3,5,.78) 100%),
+    radial-gradient(circle at 50% 22%, rgba(240,197,106,.12), transparent 34%);
+}
+
+.legacy-isis-card.has-isis-photo .legacy-isis-orb,
+.legacy-isis-card.has-isis-photo .legacy-isis-symbol {
+  display: none;
 }
 
 .legacy-isis-orb {
@@ -118,6 +149,6 @@ body.mistica-home-premium .legacy-premium-hero .hero-visual {
     min-height: auto;
   }
   .legacy-isis-card {
-    min-height: 520px;
+    min-height: 560px;
   }
 }
