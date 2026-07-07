@@ -6,11 +6,7 @@ Write-Host "Use Python 3.8.x 32-bit. Em GitHub Actions, setup-python usa archite
 python -m pip install --upgrade "pip<25"
 python -m pip install -r requirements-win7-32.txt
 
-python - <<'PY'
-import sqlite3, sys
-print('SQLite OK:', sqlite3.sqlite_version)
-print('Python:', sys.version)
-PY
+python -c "import sqlite3, sys; print('SQLite OK:', sqlite3.sqlite_version); print('Python:', sys.version)"
 
 if (Test-Path build) { Remove-Item build -Recurse -Force }
 if (Test-Path dist\MisticaPresentes) { Remove-Item dist\MisticaPresentes -Recurse -Force }
