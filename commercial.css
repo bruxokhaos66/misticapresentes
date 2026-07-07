@@ -1,5 +1,4 @@
-/* Camada comercial premium da Mística Presentes.
-   Visual moderno, xamânico, publicitário e orientado à venda. */
+/* Camada comercial principal da Mística Presentes — versão estável e moderna. */
 
 :root {
   --premium-glow: 0 0 42px rgba(240,197,106,.16);
@@ -24,16 +23,30 @@ body::before {
 }
 
 .nav {
-  min-height: 88px;
+  min-height: 82px;
 }
 
 .brand-copy strong {
   text-shadow: 0 0 24px rgba(240,197,106,.13);
 }
 
+body.mistica-home-premium .hero-section.legacy-premium-hero,
 .hero-section {
-  min-height: auto;
+  min-height: 620px !important;
   isolation: isolate;
+  padding: clamp(42px, 5.4vw, 72px) 0 !important;
+  background:
+    radial-gradient(circle at 78% 24%, rgba(240,197,106,.16), transparent 28rem),
+    radial-gradient(circle at 18% 26%, rgba(184,201,119,.12), transparent 28rem),
+    radial-gradient(circle at 54% 92%, rgba(84,47,104,.14), transparent 34rem),
+    linear-gradient(180deg, #08070d 0%, #050509 100%) !important;
+}
+
+body.mistica-home-premium .legacy-premium-hero .hero-grid,
+.hero-grid {
+  grid-template-columns: minmax(0, .92fr) minmax(300px, .62fr) !important;
+  gap: clamp(26px, 4.6vw, 58px) !important;
+  align-items: center !important;
 }
 
 .hero-section::after {
@@ -41,31 +54,45 @@ body::before {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: min(920px, 80vw);
+  width: min(820px, 74vw);
   aspect-ratio: 1;
   transform: translate(-50%, -50%);
   border-radius: 999px;
-  background: radial-gradient(circle, rgba(240,197,106,.065), transparent 62%);
+  background: radial-gradient(circle, rgba(240,197,106,.055), transparent 62%);
   pointer-events: none;
   z-index: 0;
 }
 
 .hero-copy .eyebrow {
   width: fit-content;
-  border: 1px solid rgba(184, 201, 119, 0.34);
+  border: 1px solid rgba(184,201,119,.34);
   border-radius: 999px;
   padding: 8px 13px;
-  background: rgba(184, 201, 119, 0.08);
+  background: rgba(184,201,119,.08);
   box-shadow: inset 0 0 28px rgba(184,201,119,.05);
 }
 
+body.mistica-home-premium .legacy-premium-hero .hero-copy h1,
 .hero-copy h1 {
-  margin-bottom: 0;
-  text-shadow: 0 24px 80px rgba(0,0,0,.46);
+  max-width: 640px !important;
+  margin-bottom: 20px !important;
+  color: #fff6dc !important;
+  font-size: clamp(2.05rem, 3.55vw, 3.65rem) !important;
+  line-height: 1.04 !important;
+  letter-spacing: -.03em !important;
+  text-transform: uppercase !important;
+  text-wrap: balance;
+  text-shadow: 0 20px 60px rgba(0,0,0,.46) !important;
 }
 
+body.mistica-home-premium .legacy-premium-hero .hero-text,
 .hero-text {
-  font-weight: 600;
+  max-width: 580px !important;
+  margin-bottom: 22px !important;
+  color: #efe1c5 !important;
+  font-size: clamp(.96rem, 1.05vw, 1.06rem) !important;
+  line-height: 1.58 !important;
+  font-weight: 720 !important;
 }
 
 .hero-actions .btn:first-child::after {
@@ -95,205 +122,98 @@ body::before {
   background: linear-gradient(90deg, transparent, rgba(240,197,106,.12), transparent);
 }
 
-.brand-logo-img {
-  position: relative;
-  z-index: 2;
-  width: 52px;
-  height: 52px;
-  object-fit: contain;
+body.mistica-home-premium .legacy-premium-hero .hero-visual,
+.hero-visual {
+  display: grid !important;
+  align-items: center !important;
+  justify-items: center !important;
+}
+
+.legacy-isis-card {
+  position: relative !important;
+  width: min(365px, 100%) !important;
+  min-height: 445px !important;
+  display: grid !important;
+  align-content: end !important;
+  gap: 14px !important;
+  padding: 20px !important;
+  overflow: hidden !important;
+  border: 1px solid rgba(240,197,106,.28) !important;
+  border-radius: 28px !important;
+  background:
+    radial-gradient(circle at 50% 22%, rgba(240,197,106,.18), transparent 30%),
+    radial-gradient(circle at 52% 54%, rgba(83,107,55,.24), transparent 44%),
+    linear-gradient(145deg, rgba(8,7,13,.94), rgba(34,24,44,.54)) !important;
+  box-shadow: 0 26px 80px rgba(0,0,0,.38), 0 0 48px rgba(240,197,106,.10) !important;
+}
+
+.legacy-isis-card::before {
+  content: "ISIS";
+  position: absolute;
+  inset: 38px 16px auto;
+  text-align: center;
+  font-family: Cinzel, Georgia, serif;
+  font-size: clamp(3rem, 6.4vw, 5.3rem);
+  font-weight: 900;
+  letter-spacing: .10em;
+  color: rgba(240,197,106,.13);
+  text-shadow: 0 0 54px rgba(240,197,106,.22);
+}
+
+.legacy-isis-orb {
+  position: absolute;
+  top: 126px;
+  left: 50%;
+  width: 220px;
+  height: 220px;
+  transform: translateX(-50%);
   border-radius: 999px;
+  background: radial-gradient(circle, rgba(240,197,106,.28), rgba(184,201,119,.16) 45%, transparent 68%);
+  filter: blur(1px);
 }
 
-.footer-mark .brand-logo-img {
-  width: 48px;
-  height: 48px;
-}
-
-.hero-logo-img {
-  width: min(72%, 260px);
-  aspect-ratio: 1;
-  object-fit: contain;
-  border-radius: 34px;
-  filter: drop-shadow(0 26px 46px rgba(0,0,0,.42));
-}
-
-.mystic-logo-card:has(.hero-logo-img) {
-  padding: 24px;
-  background: radial-gradient(circle at 50% 30%, rgba(240,197,106,.13), rgba(3,3,5,.5) 68%);
-}
-
-.mystic-logo-card.hero-card-isis {
-  min-height: 610px;
-  padding: 24px 24px 22px;
-  overflow: hidden;
-  background: radial-gradient(circle at 50% 24%, rgba(240,197,106,.16), transparent 36%), linear-gradient(145deg, rgba(12,9,18,.86), rgba(20,31,15,.34));
-}
-
-.mystic-logo-card.hero-card-isis-publicitaria {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  min-height: 660px;
-  padding-top: 18px;
-  border-color: rgba(240,197,106,.35);
-  background:
-    radial-gradient(circle at 55% 18%, rgba(240,197,106,.20), transparent 28%),
-    radial-gradient(circle at 50% 65%, rgba(83,107,55,.22), transparent 44%),
-    linear-gradient(145deg, rgba(8,7,13,.92), rgba(20,31,15,.44));
-  box-shadow: var(--shadow), var(--premium-glow);
-}
-
-.hero-isis-img {
+.legacy-isis-symbol {
   position: relative;
   z-index: 2;
-  display: block;
-  width: min(100%, 430px);
-  max-height: 520px;
-  object-fit: contain;
-  margin: 0 auto 18px;
-  border-radius: 30px;
-  filter: drop-shadow(0 32px 70px rgba(0,0,0,.5));
-}
-
-.hero-isis-publicitaria {
-  width: min(100%, 440px);
-  max-height: 570px;
-  margin: 0 auto -6px;
-  border-radius: 0;
-  object-fit: contain;
-  filter: drop-shadow(0 34px 78px rgba(0,0,0,.58));
-}
-
-.mystic-logo-card.hero-card-isis strong,
-.mystic-logo-card.hero-card-isis small {
-  position: relative;
-  z-index: 3;
-}
-
-.mystic-logo-card.hero-card-isis strong {
-  font-family: Cinzel, serif;
-  font-size: clamp(1.8rem, 3vw, 3rem);
+  display: grid;
+  place-items: center;
+  width: 140px;
+  height: 140px;
+  margin: 96px auto 70px;
+  border: 1px solid rgba(240,197,106,.36);
+  border-radius: 999px;
+  background: rgba(3,3,5,.42);
   color: #f0c56a;
+  font-family: Cinzel, Georgia, serif;
+  font-size: 3.7rem;
+  box-shadow: inset 0 0 34px rgba(240,197,106,.12), 0 24px 70px rgba(0,0,0,.35);
 }
 
-.mystic-logo-card.hero-card-isis small {
+.legacy-isis-caption {
+  position: relative !important;
+  z-index: 3 !important;
+  border: 1px solid rgba(240,197,106,.24) !important;
+  border-radius: 18px !important;
+  padding: 14px !important;
+  background: rgba(3,3,5,.72) !important;
+  backdrop-filter: blur(14px);
+}
+
+.legacy-isis-caption strong {
   display: block;
-  max-width: 360px;
-  margin: 6px auto 0;
-  color: #fff6dc;
-  font-weight: 800;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-}
-
-.premium-hero-selling-bar {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 4px;
-}
-
-.premium-hero-selling-bar span {
-  display: grid;
-  gap: 3px;
-  border: 1px solid rgba(240,197,106,.20);
-  border-radius: 20px;
-  padding: 15px;
-  background: rgba(255,248,230,.055);
-  color: #d8cbb6;
-  box-shadow: 0 16px 48px rgba(0,0,0,.18);
-}
-
-.premium-hero-selling-bar strong {
+  margin-bottom: 6px;
   color: #f0c56a;
-  font-size: .78rem;
-  text-transform: uppercase;
-  letter-spacing: .12em;
+  font-family: Cinzel, Georgia, serif;
+  font-size: .95rem !important;
+  letter-spacing: .02em;
 }
 
-.intent-section {
-  padding-top: 20px;
-  background: linear-gradient(180deg, rgba(7,7,11,.12), rgba(240,197,106,.035));
-}
-
-.intent-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 18px;
-}
-
-.intent-grid a {
-  min-height: 220px;
-  display: grid;
-  align-content: end;
-  gap: 7px;
-  text-decoration: none;
-  border: 1px solid rgba(240,197,106,.24);
-  border-radius: 30px;
-  padding: 22px;
-  background:
-    radial-gradient(circle at 20% 16%, rgba(240,197,106,.18), transparent 32%),
-    linear-gradient(145deg, rgba(255,248,230,.08), rgba(83,107,55,.10));
-  box-shadow: 0 24px 70px rgba(0,0,0,.18);
-  transition: transform .18s ease, border-color .18s ease, background .18s ease;
-}
-
-.intent-grid a:hover {
-  transform: translateY(-4px);
-  border-color: rgba(240,197,106,.42);
-  background:
-    radial-gradient(circle at 20% 16%, rgba(240,197,106,.24), transparent 32%),
-    linear-gradient(145deg, rgba(255,248,230,.11), rgba(83,107,55,.14));
-}
-
-.intent-grid span {
-  font-size: 2.2rem;
-}
-
-.intent-grid strong {
-  color: #fff6dc;
-  font-family: Cinzel, serif;
-  font-size: 1.25rem;
-}
-
-.intent-grid small {
-  color: #d8cbb6;
-  font-weight: 700;
-}
-
-.premium-campaign-band {
-  padding: 28px 0 8px;
-}
-
-.campaign-card {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 24px;
-  align-items: center;
-  border: 1px solid rgba(240,197,106,.26);
-  border-radius: 34px;
-  padding: clamp(24px, 4vw, 42px);
-  background:
-    radial-gradient(circle at 18% 10%, rgba(240,197,106,.16), transparent 28%),
-    radial-gradient(circle at 88% 88%, rgba(184,201,119,.13), transparent 34%),
-    linear-gradient(145deg, rgba(8,7,13,.92), rgba(54,32,68,.32));
-  box-shadow: var(--shadow);
-}
-
-.campaign-card h2 {
-  margin-bottom: 8px;
-}
-
-.campaign-card p:last-child {
-  margin-bottom: 0;
-  max-width: 760px;
-}
-
-.campaign-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 12px;
+.legacy-isis-caption span {
+  display: block;
+  color: #efe1c5;
+  font-size: .88rem !important;
+  font-weight: 740;
+  line-height: 1.45;
 }
 
 .category-grid article,
@@ -338,171 +258,6 @@ body::before {
   box-shadow: 0 28px 80px rgba(0,0,0,.30);
 }
 
-.premium-product-badge {
-  width: fit-content;
-  border: 1px solid rgba(184,201,119,.26);
-  border-radius: 999px;
-  padding: 6px 10px;
-  color: #f0c56a;
-  background: rgba(184,201,119,.08);
-  font-size: .72rem;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: .1em;
-}
-
-.premium-product-note {
-  display: block;
-  margin-top: -4px;
-  color: #b8c977;
-  font-weight: 800;
-}
-
-.product-image {
-  min-height: 138px;
-  border: 1px solid rgba(240,197,106,.16);
-}
-
-.qty-row {
-  align-items: stretch;
-}
-
-.qty-row input {
-  min-height: 46px;
-  border-color: rgba(240,197,106,.24);
-}
-
-.isis-section {
-  background: radial-gradient(circle at 20% 50%, rgba(240,197,106,.08), transparent 28rem), linear-gradient(180deg, rgba(255,255,255,.015), rgba(54,32,68,.12));
-}
-
-.isis-layout {
-  align-items: stretch;
-}
-
-.isis-panel-image {
-  min-height: 680px;
-  display: grid;
-  place-items: center;
-  padding: 26px 24px 28px;
-  border-color: rgba(240,197,106,.28);
-  background:
-    radial-gradient(circle at 48% 24%, rgba(240,197,106,.13), transparent 32%),
-    radial-gradient(circle at 72% 70%, rgba(83,107,55,.15), transparent 34%),
-    linear-gradient(145deg, rgba(8,7,13,.94), rgba(44,26,53,.52));
-}
-
-.isis-human-img {
-  position: relative;
-  z-index: 2;
-  width: min(100%, 500px);
-  max-height: 690px;
-  object-fit: contain;
-  border-radius: 22px;
-  filter: drop-shadow(0 32px 74px rgba(0,0,0,.5));
-}
-
-.isis-human-produtos {
-  width: min(100%, 520px);
-  max-height: 700px;
-  object-fit: contain;
-}
-
-.isis-panel-image:has(.isis-human-img) {
-  min-height: 680px;
-  padding: 24px 24px 18px;
-}
-
-.isis-panel-image:has(.isis-human-img) p {
-  position: absolute;
-  left: 24px;
-  right: 24px;
-  bottom: 22px;
-  z-index: 3;
-  margin: 0;
-  border: 1px solid rgba(240,197,106,.24);
-  border-radius: 20px;
-  padding: 14px 16px;
-  background: rgba(3,3,5,.72);
-  backdrop-filter: blur(12px);
-}
-
-.how-to-buy-section {
-  position: relative;
-  overflow: hidden;
-  background: radial-gradient(circle at 20% 20%, rgba(240,197,106,.10), transparent 34%), linear-gradient(180deg, rgba(8,7,13,.98), rgba(20,31,15,.42));
-}
-
-.how-to-buy-grid,
-.trust-footer-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 18px;
-}
-
-.trust-footer-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.how-to-buy-grid article,
-.trust-footer-grid article {
-  position: relative;
-  min-height: 190px;
-  padding: 24px;
-  border: 1px solid rgba(240,197,106,.20);
-  border-radius: 28px;
-  background: linear-gradient(145deg, rgba(255,248,230,.08), rgba(83,107,55,.10));
-  box-shadow: 0 24px 70px rgba(0,0,0,.20);
-}
-
-.how-to-buy-grid span {
-  display: inline-grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  margin-bottom: 18px;
-  border-radius: 999px;
-  background: linear-gradient(135deg, #f0c56a, #fff2bd);
-  color: #08070d;
-  font-weight: 900;
-}
-
-.how-to-buy-grid strong,
-.trust-footer-grid strong {
-  display: block;
-  margin-bottom: 10px;
-  color: #fff6dc;
-  font-size: 1.1rem;
-}
-
-.trust-footer-grid strong {
-  font-family: Cinzel, serif;
-  color: #f0c56a;
-}
-
-.how-to-buy-grid p,
-.trust-footer-grid span {
-  color: #d8cdb9;
-}
-
-.api-health-panel {
-  border-color: rgba(184,201,119,.22);
-}
-
-.api-health-panel .history-item strong:first-child {
-  color: #f0c56a;
-}
-
-.category-grid article:nth-child(1),
-.category-grid article:nth-child(4) {
-  background: linear-gradient(180deg, rgba(184, 201, 119, 0.11), rgba(255, 248, 230, 0.055));
-}
-
-.category-grid article:nth-child(2),
-.category-grid article:nth-child(3) {
-  background: linear-gradient(180deg, rgba(240, 197, 106, 0.12), rgba(255, 248, 230, 0.055));
-}
-
 .product-card .btn {
   width: 100%;
 }
@@ -511,82 +266,43 @@ body::before {
   background: linear-gradient(145deg, rgba(83,107,55,.18), rgba(255,248,230,.06));
 }
 
-@media (max-width: 1100px) {
-  .intent-grid,
-  .how-to-buy-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .campaign-card {
-    grid-template-columns: 1fr;
-  }
-
-  .campaign-actions {
-    justify-content: flex-start;
-  }
-}
-
 @media (max-width: 980px) {
-  .premium-hero-selling-bar,
-  .trust-row,
-  .confidence-grid,
-  .trust-footer-grid {
-    grid-template-columns: 1fr;
+  body.mistica-home-premium .legacy-premium-hero .hero-grid,
+  .hero-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  body.mistica-home-premium .legacy-premium-hero .hero-copy,
+  .hero-copy {
+    text-align: center !important;
+  }
+
+  .hero-copy .eyebrow,
+  body.mistica-home-premium .legacy-premium-hero .hero-copy h1,
+  body.mistica-home-premium .legacy-premium-hero .hero-text,
+  .hero-copy h1,
+  .hero-text {
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  body.mistica-home-premium .legacy-premium-hero .hero-copy h1,
+  .hero-copy h1 {
+    font-size: clamp(2rem, 8vw, 3.1rem) !important;
   }
 }
 
 @media (max-width: 680px) {
-  .hero-copy .eyebrow {
-    margin-left: auto;
-    margin-right: auto;
-  }
-
-  .hero-actions .btn,
-  .campaign-actions .btn {
+  .hero-actions .btn {
     width: 100%;
   }
 
-  .brand-logo-img {
-    width: 42px;
-    height: 42px;
+  body.mistica-home-premium .legacy-premium-hero .hero-copy h1,
+  .hero-copy h1 {
+    font-size: clamp(1.85rem, 9.5vw, 2.65rem) !important;
   }
 
-  .hero-logo-img {
-    width: min(74%, 210px);
-  }
-
-  .mystic-logo-card.hero-card-isis {
-    min-height: 480px;
-    padding: 18px;
-  }
-
-  .mystic-logo-card.hero-card-isis-publicitaria {
-    min-height: 560px;
-  }
-
-  .hero-isis-img {
-    max-height: 390px;
-  }
-
-  .hero-isis-publicitaria {
-    max-height: 470px;
-  }
-
-  .isis-panel-image:has(.isis-human-img) {
-    min-height: 540px;
-  }
-
-  .isis-human-img,
-  .isis-human-produtos {
-    max-height: 540px;
-  }
-
-  .how-to-buy-grid,
-  .intent-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .intent-grid a {
-    min-height: 170px;
+  .legacy-isis-card {
+    min-height: 400px !important;
   }
 }
