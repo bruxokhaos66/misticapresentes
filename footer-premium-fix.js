@@ -27,6 +27,7 @@
     if (footer) footer.dataset.singleStoreFooter = "true";
 
     loadStyleOnce("isisLowerImageStyle", "isis-lower-image.css?v=20260707-isis-lower-image");
+    loadStyleOnce("isisLowerImageFixStyle", "isis-lower-image-fix.css?v=20260707-isis-proporcao-sem-texto");
 
     loadScriptOnce("publicHomeSafetyScript", "public-home-safety.js?v=20260707-public-safe");
     loadScriptOnce("commercialBadgesFixScript", "commercial-badges-fix.js?v=20260707-safe-badges");
