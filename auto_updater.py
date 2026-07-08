@@ -22,6 +22,7 @@ STATUS_PATH = APP_DATA_DIR / "atualizador_status.json"
 CURRENT_PATH = APP_DATA_DIR / "current.json"
 BAD_VERSIONS_PATH = APP_DATA_DIR / "bad_versions.json"
 UPDATE_BASE_URL = "https://misticaesotericos.com.br/updates"
+GITHUB_UPDATE_BASE_URL = "https://raw.githubusercontent.com/bruxokhaos66/misticapresentes/main/updates"
 DEFAULT_MANIFEST_URL = f"{UPDATE_BASE_URL}/manifest.json"
 
 
@@ -68,6 +69,7 @@ def detectar_windows():
         "canal": canal,
         "manifest": manifest,
         "manifest_url": f"{UPDATE_BASE_URL}/{manifest}",
+        "manifest_url_fallback": f"{GITHUB_UPDATE_BASE_URL}/{manifest}",
     }
 
 
@@ -176,13 +178,32 @@ def versoes_bloqueadas():
 def carregar_manifest(ambiente=None):
     ambiente = ambiente or detectar_windows()
     cfg = ler_json(CONFIG_PATH)
-    manifest_url = str(cfg.get("manifest_url", "")).strip() or ambiente.get("manifest_url") or DEFAULT_MANIFEST_URL
-    if manifest_url:
-        if not manifest_url.lower().startswith("https://"):
-            raise ValueError("URL de atualizacao precisa usar HTTPS.")
-        return baixar_json(manifest_url)
+    cfg_url = str(cfg.get("manifest_url", "")).strip()
+    urls = []
+    if cfg_url:
+        urls.append(cfg_url)
+    else:
+        urls.append(ambiente.get("manifest_url") or DEFAULT_MANIFEST_URL)
+        urls.append(ambiente.get("manifest_url_fallback") or f"{GITHUB_UPDATE_BASE_URL}/{ambiente.get('manifest', 'manifest.json')}")
+        urls.append(DEFAULT_MANIFEST_URL)
+
+    ultimo_erro = None
+    for url in urls:
+        if not url:
+            continue
+        if not url.lower().startswith("https://"):
+            ultimo_erro = ValueError("URL de atualizacao precisa usar HTTPS.")
+            continue
+        try:
+            return baixar_json(url)
+        except Exception as exc:
+            ultimo_erro = exc
+            continue
+
     if LOCAL_MANIFEST_PATH.exists():
         return ler_json(LOCAL_MANIFEST_PATH)
+    if ultimo_erro:
+        raise ultimo_erro
     return None
 
 
@@ -199,8 +220,13 @@ def obter_pacote(manifest, progress_callback=None):
             raise ValueError("Pacote online precisa usar HTTPS.")
         nome = package_url.rsplit("/", 1)[-1] or "update.zip"
         destino = Path(tempfile.gettempdir()) / f"mistica_update_{nome}"
-        baixar_arquivo_com_progresso(package_url, destino, progress_callback=progress_callback)
-        return destino
+        try:
+            baixar_arquivo_com_progresso(package_url, destino, progress_callback=progress_callback)
+            return destino
+        except Exception:
+            fallback_url = f"{GITHUB_UPDATE_BASE_URL}/{nome}"
+            baixar_arquivo_com_progresso(fallback_url, destino, progress_callback=progress_callback)
+            return destino
     return None
 
 
@@ -251,7 +277,7 @@ def validar_sha256(caminho, esperado):
         raise ValueError("Manifesto sem sha256 do pacote.")
     h = hashlib.sha256()
     with open(caminho, "rb") as f:
-        for bloco in iter(lambda: f.read(1024 * 1024), b=""):
+        for bloco in iter(lambda: f.read(1024 * 1024), b""):
             h.update(bloco)
     if h.hexdigest().lower() != esperado.lower():
         raise ValueError("Pacote de atualizacao com hash diferente do manifesto.")
