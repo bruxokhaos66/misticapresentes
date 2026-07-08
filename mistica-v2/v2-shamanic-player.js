@@ -4,14 +4,13 @@
   const STORE_NAME = 'tracks';
   const UPLOADED_KEY = 'uploaded-main';
   const PUBLIC_AUDIO_PATH = 'mistica-v2/assets/audio/xamanico-ambiente.mp3';
-  const FALLBACK_TRACKS = [
-    { title: 'Ambiente xamânico da loja', src: 'assets/audio/xamanico-ambiente.mp3', note: 'Usando trilha da pasta do site. Se não existir, faça upload pelo Admin.' },
-    { title: 'Tambor e floresta', src: 'assets/audio/tambor-floresta.mp3', note: 'Faixa opcional da pasta mistica-v2/assets/audio.' },
-    { title: 'Cristais e incensos', src: 'assets/audio/cristais-incensos.mp3', note: 'Faixa opcional da pasta mistica-v2/assets/audio.' }
-  ];
+  const FALLBACK_TRACK = {
+    title: 'Ambiente xamânico da loja',
+    src: 'assets/audio/xamanico-ambiente.mp3',
+    note: 'Arquivo de áudio não encontrado. Use upload no Admin ou coloque a faixa em mistica-v2/assets/audio.'
+  };
 
   const ready = (fn) => document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', fn) : fn();
-  const supportsIndexedDb = () => 'indexedDB' in window;
   const formatBytes = (bytes) => {
     if (!Number.isFinite(bytes) || bytes <= 0) return '0 KB';
     const units = ['bytes', 'KB', 'MB', 'GB'];
@@ -21,7 +20,7 @@
 
   function openDb() {
     return new Promise((resolve, reject) => {
-      if (!supportsIndexedDb()) return reject(new Error('IndexedDB indisponível'));
+      if (!('indexedDB' in window)) return reject(new Error('IndexedDB indisponível'));
       const request = indexedDB.open(DB_NAME, DB_VERSION);
       request.onupgradeneeded = () => {
         const db = request.result;
@@ -63,7 +62,14 @@
     const buffer = await readAudioFile(file, onProgress);
     onProgress?.(85, 'Salvando música localmente no navegador...');
     const db = await openDb();
-    const payload = { id: UPLOADED_KEY, name: file.name, type: file.type || 'audio/mpeg', size: file.size, updatedAt: new Date().toISOString(), blob: new Blob([buffer], { type: file.type || 'audio/mpeg' }) };
+    const payload = {
+      id: UPLOADED_KEY,
+      name: file.name,
+      type: file.type || 'audio/mpeg',
+      size: file.size,
+      updatedAt: new Date().toISOString(),
+      blob: new Blob([buffer], { type: file.type || 'audio/mpeg' })
+    };
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       tx.objectStore(STORE_NAME).put(payload);
@@ -91,10 +97,9 @@
     audio.loop = true;
     audio.volume = 0.35;
 
-    let currentIndex = 0;
     let uploadedUrl = '';
+    let activeTrack = { ...FALLBACK_TRACK };
     let audioUnlocked = false;
-    let tracks = [...FALLBACK_TRACKS];
 
     const title = root.querySelector('[data-player-title]');
     const status = root.querySelector('[data-player-status]');
@@ -121,47 +126,39 @@
     };
 
     if (adminPath) adminPath.textContent = PUBLIC_AUDIO_PATH;
+    if (list) list.replaceChildren();
 
     const revokeUploadedUrl = () => {
       if (uploadedUrl) URL.revokeObjectURL(uploadedUrl);
       uploadedUrl = '';
     };
 
-    const loadTracks = async () => {
+    const applyTrack = (track) => {
+      activeTrack = track;
+      audio.src = activeTrack.src;
+      audio.load();
+      if (title) title.textContent = activeTrack.title;
+      setStatus('Ambiente pronto. Clique em tocar para iniciar.');
+      if (list) list.replaceChildren();
+    };
+
+    const loadTrack = async () => {
       revokeUploadedUrl();
-      tracks = [...FALLBACK_TRACKS];
       try {
         const uploaded = await readUploadedTrack();
         if (uploaded?.blob) {
           uploadedUrl = URL.createObjectURL(uploaded.blob);
-          tracks.unshift({ title: `Música enviada no Admin: ${uploaded.name}`, src: uploadedUrl, note: `Arquivo local salvo neste navegador em ${new Date(uploaded.updatedAt).toLocaleString('pt-BR')}.` });
-          setAdminStatus(`Música local ativa: ${uploaded.name} (${formatBytes(uploaded.size)}). Se a música da rede falhar, esta versão local pode tocar neste navegador.`);
+          applyTrack({ title: 'Música enviada no Admin', src: uploadedUrl });
+          setAdminStatus(`Música local ativa: ${uploaded.name} (${formatBytes(uploaded.size)}).`);
           setUploadProgress(100);
-        } else {
-          setAdminStatus(`Nenhuma música local enviada. Para todos os visitantes, envie o MP3 como ${PUBLIC_AUDIO_PATH}.`);
-          setUploadProgress(0);
+          return;
         }
-      } catch (error) {
+        setAdminStatus(`Nenhuma música local enviada. Para todos os visitantes, envie o MP3 como ${PUBLIC_AUDIO_PATH}.`);
+        setUploadProgress(0);
+      } catch {
         setAdminStatus('Não foi possível acessar o armazenamento local de música neste navegador.');
       }
-    };
-
-    const renderList = () => {
-      if (!list) return;
-      list.innerHTML = tracks.map((track, index) => `<button class="track-button" type="button" data-track-index="${index}">${track.title}</button>`).join('');
-      list.querySelectorAll('[data-track-index]').forEach((button) => {
-        button.classList.toggle('is-active', Number(button.dataset.trackIndex) === currentIndex);
-      });
-    };
-
-    const setActiveTrack = (index) => {
-      currentIndex = Math.max(0, Math.min(index, tracks.length - 1));
-      const track = tracks[currentIndex];
-      audio.src = track.src;
-      audio.load();
-      if (title) title.textContent = track.title;
-      setStatus(track.note || 'Trilha pronta. Clique em tocar para iniciar.');
-      renderList();
+      applyTrack({ ...FALLBACK_TRACK });
     };
 
     const setPlayingUi = (isPlaying) => {
@@ -182,31 +179,34 @@
       });
     }
 
-    if (list) {
-      list.addEventListener('click', async (event) => {
-        const button = event.target.closest('[data-track-index]');
-        if (!button) return;
-        const wasPlaying = !audio.paused;
-        setActiveTrack(Number(button.dataset.trackIndex));
-        if (wasPlaying) {
-          try { await audio.play(); setPlayingUi(true); setStatus('Ambiente tocando.'); }
-          catch { setPlayingUi(false); setStatus('Arquivo de áudio não encontrado ou bloqueado pelo navegador. Use o upload no Admin ou coloque a faixa na pasta assets/audio.'); }
+    if (playButton) {
+      playButton.addEventListener('click', async () => {
+        audioUnlocked = true;
+        if (!audio.src) applyTrack(activeTrack);
+        if (!audio.paused) {
+          audio.pause();
+          setPlayingUi(false);
+          setStatus('Ambiente pausado.');
+          return;
+        }
+        try {
+          await audio.play();
+          setPlayingUi(true);
+          setStatus('Ambiente tocando.');
+        } catch {
+          setPlayingUi(false);
+          setStatus('Arquivo de áudio não encontrado. Use upload no Admin ou coloque a faixa em mistica-v2/assets/audio.');
         }
       });
     }
 
-    if (playButton) {
-      playButton.addEventListener('click', async () => {
-        audioUnlocked = true;
-        if (!audio.src) setActiveTrack(currentIndex);
-        if (!audio.paused) { audio.pause(); setPlayingUi(false); setStatus('Ambiente pausado.'); return; }
-        try { await audio.play(); setPlayingUi(true); setStatus('Ambiente tocando.'); }
-        catch { setPlayingUi(false); setStatus('Não foi possível tocar agora. Confirme se existe áudio na pasta assets/audio ou envie uma música pelo Admin.'); }
-      });
-    }
-
     if (stopButton) {
-      stopButton.addEventListener('click', () => { audio.pause(); audio.currentTime = 0; setPlayingUi(false); setStatus(audioUnlocked ? 'Ambiente parado.' : 'Ambiente pronto. Clique em tocar para iniciar.'); });
+      stopButton.addEventListener('click', () => {
+        audio.pause();
+        audio.currentTime = 0;
+        setPlayingUi(false);
+        setStatus(audioUnlocked ? 'Ambiente parado.' : 'Ambiente pronto. Clique em tocar para iniciar.');
+      });
     }
 
     if (adminSave) {
@@ -217,9 +217,7 @@
         setUploadProgress(0, 'Iniciando upload local...');
         try {
           await saveUploadedTrack(file, setUploadProgress);
-          await loadTracks();
-          currentIndex = 0;
-          setActiveTrack(0);
+          await loadTrack();
           setUploadProgress(100, `Música enviada e salva localmente: ${file.name}.`);
         } catch (error) {
           setUploadProgress(0, `Erro ao salvar música: ${error.message || 'verifique o arquivo.'}`);
@@ -233,9 +231,7 @@
       adminRemove.addEventListener('click', async () => {
         try {
           await deleteUploadedTrack();
-          await loadTracks();
-          currentIndex = 0;
-          setActiveTrack(0);
+          await loadTrack();
           setUploadProgress(0, 'Música local removida. O player voltou para a pasta assets/audio.');
         } catch {
           setAdminStatus('Não foi possível remover a música local.');
@@ -246,9 +242,7 @@
     audio.addEventListener('error', () => { setPlayingUi(false); setStatus('Arquivo de áudio não encontrado. Use upload no Admin ou coloque a faixa em mistica-v2/assets/audio.'); });
     audio.addEventListener('ended', () => setPlayingUi(false));
 
-    await loadTracks();
-    renderList();
-    setActiveTrack(0);
+    await loadTrack();
     window.addEventListener('beforeunload', revokeUploadedUrl);
   });
 })();
