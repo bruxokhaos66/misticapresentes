@@ -6,7 +6,7 @@ def aplicar_manutencao_segura_runtime(fonte):
         frame.pack(fill="both", expand=True, padx=18, pady=18)
 
         ctk.CTkLabel(frame, text="MANUTENÇÃO E SEGURANÇA", font=("Georgia", 28, "bold"), text_color=self.cor_ouro).pack(pady=(18, 6))
-        ctk.CTkLabel(frame, text="Backups, sincronização e ferramentas de proteção do sistema.", font=self.font_label, text_color="#efe1c5").pack(pady=(0, 18))
+        ctk.CTkLabel(frame, text="Backups, sincronização, atualizações e ferramentas de proteção do sistema.", font=self.font_label, text_color="#efe1c5").pack(pady=(0, 18))
 
         grid = ctk.CTkFrame(frame, fg_color="transparent")
         grid.pack(fill="x", padx=24, pady=8)
@@ -17,7 +17,7 @@ def aplicar_manutencao_segura_runtime(fonte):
 
         ctk.CTkButton(grid, text="VER STATUS DA SINCRONIZAÇÃO", height=44, font=self.font_button, fg_color="#6f5f91", command=self.status_sincronizacao_manutencao).grid(row=1, column=0, padx=8, pady=8, sticky="ew")
         ctk.CTkButton(grid, text="RODAR SINCRONIZAÇÃO", height=44, font=self.font_button, fg_color="#7f6a4c", command=self.rodar_sincronizacao_manutencao).grid(row=1, column=1, padx=8, pady=8, sticky="ew")
-        ctk.CTkButton(grid, text="VERIFICAR ATUALIZADOR", height=44, font=self.font_button, fg_color="#4c4c4c", command=self.status_atualizador_manutencao).grid(row=1, column=2, padx=8, pady=8, sticky="ew")
+        ctk.CTkButton(grid, text="VERSÃO E NOTAS DA ATUALIZAÇÃO", height=44, font=self.font_button, fg_color="#4c4c4c", command=self.status_atualizador_manutencao).grid(row=1, column=2, padx=8, pady=8, sticky="ew")
 
         for col in range(3):
             grid.grid_columnconfigure(col, weight=1)
@@ -27,7 +27,7 @@ def aplicar_manutencao_segura_runtime(fonte):
 
         info = ctk.CTkFrame(frame, fg_color="#211b29", corner_radius=14)
         info.pack(fill="x", padx=24, pady=12)
-        ctk.CTkLabel(info, text="Recomendação: faça backup manual antes de alterações grandes, fechamento mensal ou manutenção no computador.", font=("Arial", 13, "bold"), text_color="#efe1c5", wraplength=900).pack(padx=18, pady=16)
+        ctk.CTkLabel(info, text="Recomendação: após cada atualização, clique em 'Versão e Notas da Atualização' para conferir o que mudou no sistema.", font=("Arial", 13, "bold"), text_color="#efe1c5", wraplength=900).pack(padx=18, pady=16)
 
     def status_sincronizacao_manutencao(self):
         try:
@@ -46,12 +46,70 @@ def aplicar_manutencao_segura_runtime(fonte):
         except Exception as exc:
             messagebox.showerror("Sincronização", f"Erro ao sincronizar: {exc}")
 
+    def _release_notes_locais(self):
+        dados = {}
+        try:
+            from auto_updater import CURRENT_PATH, STATUS_PATH, ler_json
+            dados = ler_json(CURRENT_PATH) or {}
+            if not dados:
+                dados = ler_json(STATUS_PATH) or {}
+        except Exception:
+            dados = {}
+        try:
+            import release_notes
+            if not dados.get("title"):
+                dados["title"] = getattr(release_notes, "RELEASE_TITLE", "")
+            if not dados.get("notes"):
+                dados["notes"] = getattr(release_notes, "RELEASE_NOTES", "")
+            if not dados.get("changes"):
+                dados["changes"] = getattr(release_notes, "RELEASE_CHANGES", [])
+        except Exception:
+            pass
+        return dados
+
     def status_atualizador_manutencao(self):
         try:
             from auto_updater import detectar_windows, versao_atual_ativa
             ambiente = detectar_windows()
-            texto = f"Versão ativa: {versao_atual_ativa()}\nWindows: {ambiente.get('nome')}\nBits: {ambiente.get('bits')}\nCanal: {ambiente.get('canal')}\nManifest: {ambiente.get('manifest_url')}"
-            messagebox.showinfo("Atualizador", texto)
+            notas = self._release_notes_locais()
+            titulo = notas.get("title") or "Atualização Mística Presentes"
+            resumo = notas.get("notes") or "Nenhuma nota registrada para esta versão."
+            mudancas = notas.get("changes") or []
+            if isinstance(mudancas, str):
+                mudancas = [mudancas]
+
+            win = ctk.CTkToplevel(self)
+            win.title("Versão e notas da atualização")
+            win.geometry("760x620")
+            win.grab_set()
+
+            box = ctk.CTkFrame(win, fg_color=self.cor_vinho, corner_radius=16)
+            box.pack(fill="both", expand=True, padx=16, pady=16)
+            ctk.CTkLabel(box, text="VERSÃO E NOTAS DA ATUALIZAÇÃO", font=("Georgia", 24, "bold"), text_color=self.cor_ouro).pack(pady=(14, 6))
+
+            texto = ctk.CTkTextbox(box, font=("Arial", 14, "bold"), fg_color="#fff9e6", text_color="#111111")
+            texto.pack(fill="both", expand=True, padx=14, pady=12)
+
+            conteudo = ""
+            conteudo += f"Versão ativa: {versao_atual_ativa()}\n"
+            conteudo += f"Windows: {ambiente.get('nome')}\n"
+            conteudo += f"Bits: {ambiente.get('bits')}\n"
+            conteudo += f"Canal: {ambiente.get('canal')}\n"
+            conteudo += f"Manifest: {ambiente.get('manifest_url')}\n"
+            conteudo += f"Fallback: {ambiente.get('manifest_url_fallback')}\n"
+            conteudo += "\n"
+            conteudo += f"Título: {titulo}\n\n"
+            conteudo += f"Resumo:\n{resumo}\n\n"
+            conteudo += "O que foi atualizado:\n"
+            if mudancas:
+                for item in mudancas:
+                    conteudo += f"- {item}\n"
+            else:
+                conteudo += "- Nenhuma alteração detalhada registrada.\n"
+
+            texto.insert("0.0", conteudo)
+            texto.configure(state="disabled")
+            ctk.CTkButton(box, text="FECHAR", height=42, font=self.font_button, fg_color=self.cor_botao, command=win.destroy).pack(fill="x", padx=14, pady=(0, 14))
         except Exception as exc:
             messagebox.showerror("Atualizador", f"Erro ao consultar atualizador: {exc}")
 
