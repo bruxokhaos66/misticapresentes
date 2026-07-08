@@ -1,6 +1,6 @@
 @import url("v2-commerce.css");
 
-/* Imagens da Isis em alta nitidez: sem blur, sem backdrop-filter e sem camada escura pesada. */
+/* Imagens da Isis mais claras, sem blur, sem backdrop-filter e sem camada escura pesada. */
 #isis .isis-panel-image {
   min-height: clamp(540px, 54vw, 720px) !important;
   border-radius: 32px !important;
@@ -12,12 +12,13 @@
   background-size: cover !important;
   background-position: center 35% !important;
   background-repeat: no-repeat !important;
-  box-shadow: 0 26px 82px rgba(0,0,0,.34), 0 0 42px rgba(242,201,109,.08) !important;
-  filter: none !important;
+  box-shadow: 0 22px 62px rgba(0,0,0,.22), 0 0 42px rgba(242,201,109,.10) !important;
+  filter: brightness(1.28) contrast(1.04) saturate(1.10) !important;
   image-rendering: auto !important;
 }
 
-#isis .isis-panel-image::before {
+#isis .isis-panel-image::before,
+#isis .isis-panel-image::after {
   content: none !important;
   display: none !important;
   background: none !important;
@@ -25,22 +26,17 @@
   -webkit-backdrop-filter: none !important;
 }
 
-#isis .isis-panel-image::after {
-  content: none !important;
-  display: none !important;
-}
-
 #isis .isis-panel-image p {
   position: relative !important;
   z-index: 3 !important;
   max-width: 430px !important;
   margin: auto auto 0 !important;
-  border: 1px solid rgba(242,201,109,.26) !important;
+  border: 1px solid rgba(242,201,109,.22) !important;
   border-radius: 20px !important;
   padding: 14px 18px !important;
   color: #fff1ce !important;
-  background: rgba(3,3,5,.48) !important;
-  box-shadow: 0 12px 32px rgba(0,0,0,.24) !important;
+  background: rgba(3,3,5,.40) !important;
+  box-shadow: 0 10px 28px rgba(0,0,0,.18) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   text-align: center !important;
@@ -56,14 +52,9 @@
   pointer-events: none !important;
 }
 
-.isis-feature-grid article {
-  min-height: 138px;
-}
+.isis-feature-grid article { min-height: 138px; }
 
-.hero-section {
-  position: relative;
-  overflow: hidden;
-}
+.hero-section { position: relative; overflow: hidden; }
 
 .hero-section::before {
   content: "";
@@ -108,11 +99,7 @@
   overflow: hidden !important;
 }
 
-.isis-portrait-card::before {
-  content: none !important;
-  display: none !important;
-}
-
+.isis-portrait-card::before,
 .isis-portrait-card::after {
   content: none !important;
   display: none !important;
@@ -125,7 +112,7 @@
   background-size: cover !important;
   background-position: center 33% !important;
   background-repeat: no-repeat !important;
-  filter: none !important;
+  filter: brightness(1.28) contrast(1.04) saturate(1.10) !important;
   image-rendering: auto !important;
   transform: translateZ(0);
 }
@@ -144,9 +131,7 @@
 
 .product-card,
 .category-grid article,
-.form-panel {
-  position: relative;
-}
+.form-panel { position: relative; }
 
 .product-card::before,
 .category-grid article::before,
@@ -162,75 +147,25 @@
 
 .product-card > *,
 .category-grid article > *,
-.form-panel > * {
-  position: relative;
-  z-index: 1;
-}
-
-.category-grid article {
-  cursor: default;
-}
-
-.product-card h3 {
-  font-size: 1.12rem;
-}
-
-.product-card .btn {
-  min-height: 46px;
-}
-
-.contact-section {
-  padding-bottom: clamp(82px, 8vw, 120px);
-}
-
-.contact-card p {
-  margin: 0 0 10px;
-}
+.form-panel > * { position: relative; z-index: 1; }
+.category-grid article { cursor: default; }
+.product-card h3 { font-size: 1.12rem; }
+.product-card .btn { min-height: 46px; }
+.contact-section { padding-bottom: clamp(82px, 8vw, 120px); }
+.contact-card p { margin: 0 0 10px; }
 
 @media (max-width: 980px) {
-  .hero-copy h1 {
-    font-size: clamp(2rem, 7.6vw, 3.7rem) !important;
-  }
-
-  #isis .isis-panel-image {
-    min-height: 560px !important;
-    background-size: cover !important;
-    background-position: center 32% !important;
-  }
-
-  .hero-section::after {
-    display: none;
-  }
+  .hero-copy h1 { font-size: clamp(2rem, 7.6vw, 3.7rem) !important; }
+  #isis .isis-panel-image { min-height: 560px !important; background-size: cover !important; background-position: center 32% !important; }
+  .hero-section::after { display: none; }
 }
 
 @media (max-width: 680px) {
-  .hero-copy h1 {
-    font-size: clamp(1.75rem, 9vw, 2.55rem) !important;
-    line-height: 1.08 !important;
-  }
-
-  .hero-text {
-    font-size: .98rem !important;
-  }
-
+  .hero-copy h1 { font-size: clamp(1.75rem, 9vw, 2.55rem) !important; line-height: 1.08 !important; }
+  .hero-text { font-size: .98rem !important; }
   .isis-photo,
-  .isis-photo.has-real-isis {
-    min-height: 430px !important;
-    background-position: center 30% !important;
-  }
-
-  #isis .isis-panel-image {
-    min-height: 520px !important;
-    border-radius: 24px !important;
-  }
-
-  #isis .isis-panel-image p {
-    max-width: 100% !important;
-    font-size: .95rem;
-  }
-
-  .hero-section::before {
-    width: 150px;
-    height: 150px;
-  }
+  .isis-photo.has-real-isis { min-height: 430px !important; background-position: center 30% !important; }
+  #isis .isis-panel-image { min-height: 520px !important; border-radius: 24px !important; }
+  #isis .isis-panel-image p { max-width: 100% !important; font-size: .95rem; }
+  .hero-section::before { width: 150px; height: 150px; }
 }
