@@ -26,9 +26,12 @@ jobs:
           python-version: '3.12'
 
       - name: Instalar dependencias
+        shell: pwsh
         run: |
           python -m pip install --upgrade pip
-          if exist requirements.txt python -m pip install -r requirements.txt
+          if (Test-Path "requirements.txt") {
+            python -m pip install -r requirements.txt
+          }
           python -m pip install pyinstaller fastapi uvicorn customtkinter httpx pillow
 
       - name: Gerar programa principal
