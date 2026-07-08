@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DIST_UPDATES = ROOT / "dist" / "updates"
 INCLUIR_ARQUIVOS = [
     "app_frajola_patch.py",
+    "app_pagamento_misto_patch.py",
     "app_painel_guard_patch.py",
     "app_runtime_patch.py",
     "app_scroll_patch.py",
@@ -37,7 +38,7 @@ EXTENSOES = {".py", ".html", ".css", ".js", ".json"}
 def sha256(caminho: Path) -> str:
     h = hashlib.sha256()
     with open(caminho, "rb") as f:
-        for bloco in iter(lambda: f.read(1024 * 1024), b""):
+        for bloco in iter(lambda: f.read(1024 * 1024), b=""):
             h.update(bloco)
     return h.hexdigest()
 
