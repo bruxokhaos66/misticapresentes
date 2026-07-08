@@ -57,6 +57,7 @@ for origem, destino in [
     ('app_caixa_fechamento_avancado_patch.py', '.'),
     ('app_backup_inicializacao_patch.py', '.'),
     ('app_backup_painel_patch.py', '.'),
+    ('app_manutencao_segura_patch.py', '.'),
     ('app_frajola_patch.py', '.'),
     ('app_painel_guard_patch.py', '.'),
     ('app_sync_status_patch.py', '.'),
