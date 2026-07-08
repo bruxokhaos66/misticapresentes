@@ -1,10 +1,9 @@
-RELEASE_VERSION = "1.0.506"
-RELEASE_TITLE = "Atualizacao teste do sistema online"
-RELEASE_NOTES = "Atualizacao teste criada para validar se o Launcher baixa a nova versao corretamente e se as notas aparecem na aba Manutencao."
+RELEASE_VERSION = "1.0.507"
+RELEASE_TITLE = "Correcao de prioridade do atualizador"
+RELEASE_NOTES = "O atualizador agora procura primeiro o manifesto direto no repositorio e usa o dominio apenas como alternativa."
 RELEASE_CHANGES = [
-    "Teste do fluxo completo de atualizacao online.",
-    "Valida leitura do manifesto publicado.",
-    "Valida download do pacote pela fonte direta do repositorio.",
-    "Valida exibicao das notas de atualizacao na aba Manutencao.",
-    "Nao altera regras de venda, caixa ou estoque nesta versao.",
+    "GitHub passa a ser a primeira fonte do manifesto de atualizacao.",
+    "Dominio da loja fica como fonte alternativa caso necessario.",
+    "Reduz problemas de cache no dominio.",
+    "Melhora a chance do Launcher encontrar a versao mais recente.",
 ]
