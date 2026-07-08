@@ -1,84 +1,31 @@
-/* Seção de contato com a arte enviada, sem camada escura por cima. */
-.contact-section {
-  position: relative !important;
-  min-height: clamp(560px, 50vw, 800px) !important;
-  padding: 0 !important;
-  display: grid !important;
-  align-items: center !important;
-  background: #030407 !important;
-  border-top: 1px solid rgba(242,201,109,.22) !important;
-  border-bottom: 1px solid rgba(242,201,109,.22) !important;
-  overflow: hidden !important;
+/* Seção de contato com a arte enviada visível e sem overlay escuro. */
+.contact-section{
+  position:relative!important;
+  min-height:clamp(560px,50vw,800px)!important;
+  padding:0!important;
+  display:block!important;
+  background:#030407!important;
+  border-top:1px solid rgba(242,201,109,.22)!important;
+  border-bottom:1px solid rgba(242,201,109,.22)!important;
+  overflow:hidden!important;
 }
-
-.contact-section::before {
-  content: "" !important;
-  position: absolute !important;
-  inset: 0 !important;
-  z-index: 0 !important;
-  background-image: url("contact-banner.webp") !important;
-  background-size: contain !important;
-  background-position: center center !important;
-  background-repeat: no-repeat !important;
-  filter: brightness(1.32) contrast(1.04) saturate(1.08) !important;
-  opacity: 1 !important;
-  pointer-events: none !important;
+.contact-section::before{
+  content:""!important;
+  position:absolute!important;
+  inset:0!important;
+  z-index:5!important;
+  display:block!important;
+  background-image:url("./contact-banner.webp")!important;
+  background-size:contain!important;
+  background-position:center center!important;
+  background-repeat:no-repeat!important;
+  opacity:1!important;
+  filter:brightness(1.35) contrast(1.05) saturate(1.10)!important;
+  mix-blend-mode:normal!important;
+  pointer-events:none!important;
 }
-
-.contact-section::after {
-  content: none !important;
-  display: none !important;
-}
-
-.contact-section .split {
-  position: relative !important;
-  z-index: 1 !important;
-  min-height: clamp(560px, 50vw, 800px) !important;
-  display: grid !important;
-  grid-template-columns: 1fr 1fr !important;
-  align-items: center !important;
-}
-
-.contact-section .split > div:first-child,
-.contact-section .contact-card {
-  opacity: 0 !important;
-  visibility: hidden !important;
-  pointer-events: none !important;
-}
-
-.contact-section .eyebrow,
-.contact-section h2,
-.contact-section p {
-  display: none !important;
-}
-
-@media (max-width: 980px) {
-  .contact-section {
-    min-height: 520px !important;
-  }
-
-  .contact-section::before {
-    background-size: contain !important;
-    background-position: center center !important;
-  }
-
-  .contact-section .split {
-    grid-template-columns: 1fr !important;
-    min-height: 520px !important;
-  }
-}
-
-@media (max-width: 680px) {
-  .contact-section {
-    min-height: 420px !important;
-  }
-
-  .contact-section::before {
-    background-size: contain !important;
-    background-position: center center !important;
-  }
-
-  .contact-section .split {
-    min-height: 420px !important;
-  }
-}
+.contact-section::after{content:none!important;display:none!important}
+.contact-section .split{display:none!important;visibility:hidden!important;opacity:0!important}
+.contact-section .split>div:first-child,.contact-section .contact-card,.contact-section .eyebrow,.contact-section h2,.contact-section p{display:none!important;visibility:hidden!important;opacity:0!important}
+@media(max-width:980px){.contact-section{min-height:520px!important}.contact-section::before{background-size:contain!important;background-position:center center!important}}
+@media(max-width:680px){.contact-section{min-height:420px!important}.contact-section::before{background-size:contain!important;background-position:center center!important}}
