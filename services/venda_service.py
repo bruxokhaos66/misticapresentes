@@ -121,6 +121,8 @@ def registrar_venda_service(carrinho, cliente, data_venda, data_iso, calculo, fo
     dia_operacional = etiqueta_dia_operacional(momento_venda)
 
     pagamentos_mistos = normalizar_pagamentos_mistos(pagamentos_mistos)
+    if str(forma_pagamento or "").startswith("Misto") and not pagamentos_mistos:
+        raise ValueError("Pagamento misto incompleto. Informe as formas e valores antes de salvar.")
     if pagamentos_mistos:
         forma_pagamento = "Misto: " + resumo_pagamentos_mistos(pagamentos_mistos)
 
