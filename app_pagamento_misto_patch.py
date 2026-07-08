@@ -1,5 +1,5 @@
 def aplicar_pagamento_misto_runtime(fonte: str) -> str:
-    """Adiciona pagamento misto na tela de vendas sem reescrever o app inteiro."""
+    """Adiciona pagamento misto profissional na tela de vendas sem reescrever o app inteiro."""
 
     antigo = '''        self.v_pag_cb = ctk.CTkOptionMenu(corpo_checkout, values=["Dinheiro", "Pix", "Debito", "Credito 1x", "Credito 2x", "Credito 3x"], command=lambda e: self.render_v_car(), height=38, font=self.font_button, dropdown_font=self.font_input)
         self.v_pag_cb.pack(pady=(0, 8))'''
@@ -8,23 +8,25 @@ def aplicar_pagamento_misto_runtime(fonte: str) -> str:
 
         self.v_misto_frame = ctk.CTkFrame(corpo_checkout, fg_color="#241d2b", corner_radius=10)
         ctk.CTkLabel(self.v_misto_frame, text="Pagamento misto", font=self.font_label, text_color=self.cor_ouro).pack(pady=(6, 2))
-        ctk.CTkLabel(self.v_misto_frame, text="Informe como o cliente vai dividir o valor da venda.", font=("Arial", 11, "bold"), text_color="#d8cbb6").pack(pady=(0, 4))
-        linha_m1 = ctk.CTkFrame(self.v_misto_frame, fg_color="transparent")
-        linha_m1.pack(fill="x", padx=8, pady=2)
-        self.v_misto_forma1 = ctk.CTkOptionMenu(linha_m1, values=["Dinheiro", "Pix", "Debito", "Credito 1x", "Credito 2x", "Credito 3x"], command=lambda e: self.render_v_car(), width=142, height=34, font=self.font_button, dropdown_font=self.font_input)
-        self.v_misto_forma1.pack(side="left", padx=(0, 5))
-        self.v_misto_valor1 = ctk.CTkEntry(linha_m1, placeholder_text="Valor 1", height=34, font=self.font_input)
-        self.v_misto_valor1.pack(side="left", fill="x", expand=True)
-        self.v_misto_valor1.bind("<KeyRelease>", lambda e: self.render_v_car())
-        linha_m2 = ctk.CTkFrame(self.v_misto_frame, fg_color="transparent")
-        linha_m2.pack(fill="x", padx=8, pady=2)
-        self.v_misto_forma2 = ctk.CTkOptionMenu(linha_m2, values=["Dinheiro", "Pix", "Debito", "Credito 1x", "Credito 2x", "Credito 3x"], command=lambda e: self.render_v_car(), width=142, height=34, font=self.font_button, dropdown_font=self.font_input)
-        self.v_misto_forma2.set("Debito")
-        self.v_misto_forma2.pack(side="left", padx=(0, 5))
-        self.v_misto_valor2 = ctk.CTkEntry(linha_m2, placeholder_text="Valor 2 / restante", height=34, font=self.font_input)
-        self.v_misto_valor2.pack(side="left", fill="x", expand=True)
-        self.v_misto_valor2.bind("<KeyRelease>", lambda e: self.render_v_car())
-        ctk.CTkButton(self.v_misto_frame, text="USAR RESTANTE NO VALOR 2", height=32, font=("Arial", 12, "bold"), fg_color="#5f7f4c", command=self.preencher_restante_pagamento_misto).pack(fill="x", padx=8, pady=(4, 8))
+        ctk.CTkLabel(self.v_misto_frame, text="Divida o valor em até 4 formas. Use o botão para completar o restante.", font=("Arial", 11, "bold"), text_color="#d8cbb6", wraplength=290).pack(pady=(0, 4))
+
+        self.v_misto_linhas = []
+        formas_mistas = ["Dinheiro", "Pix", "Debito", "Credito 1x", "Credito 2x", "Credito 3x"]
+        sugestoes = ["Dinheiro", "Pix", "Debito", "Credito 1x"]
+        for indice in range(4):
+            linha = ctk.CTkFrame(self.v_misto_frame, fg_color="transparent")
+            linha.pack(fill="x", padx=8, pady=2)
+            forma = ctk.CTkOptionMenu(linha, values=formas_mistas, command=lambda e: self.render_v_car(), width=132, height=32, font=self.font_button, dropdown_font=self.font_input)
+            forma.set(sugestoes[indice])
+            forma.pack(side="left", padx=(0, 5))
+            valor = ctk.CTkEntry(linha, placeholder_text=f"Valor {indice + 1}", height=32, font=self.font_input)
+            valor.pack(side="left", fill="x", expand=True)
+            valor.bind("<KeyRelease>", lambda e: self.render_v_car())
+            self.v_misto_linhas.append({"forma": forma, "valor": valor})
+
+        ctk.CTkButton(self.v_misto_frame, text="COMPLETAR RESTANTE NO ÚLTIMO CAMPO", height=32, font=("Arial", 12, "bold"), fg_color="#5f7f4c", command=self.preencher_restante_pagamento_misto).pack(fill="x", padx=8, pady=(4, 8))
+        self.v_misto_resumo_lbl = ctk.CTkLabel(self.v_misto_frame, text="", font=("Arial", 11, "bold"), text_color="#efe1c5", wraplength=290)
+        self.v_misto_resumo_lbl.pack(padx=8, pady=(0, 8))
         self.on_pagamento_venda_change()'''
     fonte = fonte.replace(antigo, novo)
 
@@ -53,30 +55,47 @@ def aplicar_pagamento_misto_runtime(fonte: str) -> str:
         if self.v_pag_cb.get() != "Misto":
             return
         base = self.base_venda_sem_taxa()
-        valor1 = conv_float(self.v_misto_valor1.get())
-        restante = max(0.0, base - valor1)
-        self.v_misto_valor2.delete(0, 'end')
-        self.v_misto_valor2.insert(0, f"{restante:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        linhas = getattr(self, "v_misto_linhas", [])
+        if not linhas:
+            return
+        soma = 0.0
+        ultimo = None
+        for linha in linhas:
+            valor_ent = linha.get("valor")
+            valor = conv_float(valor_ent.get())
+            if valor > 0:
+                soma += valor
+            ultimo = valor_ent
+        restante = max(0.0, base - soma)
+        if ultimo is not None:
+            ultimo.delete(0, 'end')
+            ultimo.insert(0, f"{restante:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
         self.render_v_car()
 
     def coletar_pagamentos_mistos(self, mostrar_erro=False):
         if not hasattr(self, "v_pag_cb") or self.v_pag_cb.get() != "Misto":
             return None
         base = self.base_venda_sem_taxa()
-        forma1 = self.v_misto_forma1.get()
-        forma2 = self.v_misto_forma2.get()
-        valor1 = conv_float(self.v_misto_valor1.get())
-        valor2 = conv_float(self.v_misto_valor2.get())
-        if valor1 > 0 and valor2 <= 0:
-            valor2 = max(0.0, base - valor1)
-            self.v_misto_valor2.delete(0, 'end')
-            self.v_misto_valor2.insert(0, f"{valor2:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
         pagamentos = []
-        if valor1 > 0:
-            pagamentos.append({"forma": forma1, "valor": valor1})
-        if valor2 > 0:
-            pagamentos.append({"forma": forma2, "valor": valor2})
+        for linha in getattr(self, "v_misto_linhas", []):
+            forma = linha.get("forma").get()
+            valor = conv_float(linha.get("valor").get())
+            if valor > 0:
+                pagamentos.append({"forma": forma, "valor": valor})
         total_pago = round(sum(p["valor"] for p in pagamentos), 2)
+        falta = round(base - total_pago, 2)
+        try:
+            if hasattr(self, "v_misto_resumo_lbl"):
+                if not pagamentos:
+                    self.v_misto_resumo_lbl.configure(text=f"Total a dividir: {format_moeda(base)}")
+                elif abs(falta) <= 0.01:
+                    self.v_misto_resumo_lbl.configure(text=f"Pagamento fechado: {format_moeda(total_pago)}")
+                elif falta > 0:
+                    self.v_misto_resumo_lbl.configure(text=f"Falta dividir: {format_moeda(falta)}")
+                else:
+                    self.v_misto_resumo_lbl.configure(text=f"Valor acima do total: {format_moeda(abs(falta))}")
+        except Exception:
+            pass
         if not pagamentos:
             if mostrar_erro:
                 messagebox.showwarning("Pagamento misto", "Informe ao menos uma forma e valor do pagamento misto.")
@@ -105,13 +124,18 @@ def aplicar_pagamento_misto_runtime(fonte: str) -> str:
             self.v_pag_cb.set("Dinheiro")'''
     novo_reset = '''        if hasattr(self, "v_pag_cb"):
             self.v_pag_cb.set("Dinheiro")
-        for nome_ent in ["v_misto_valor1", "v_misto_valor2"]:
-            ent = getattr(self, nome_ent, None)
+        for linha in getattr(self, "v_misto_linhas", []):
+            ent = linha.get("valor")
             if ent is not None:
                 try:
                     ent.delete(0, 'end')
                 except Exception:
                     pass
+        if hasattr(self, "v_misto_resumo_lbl"):
+            try:
+                self.v_misto_resumo_lbl.configure(text="")
+            except Exception:
+                pass
         if hasattr(self, "v_misto_frame"):
             try:
                 self.v_misto_frame.pack_forget()
