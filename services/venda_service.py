@@ -41,6 +41,15 @@ def _subtotal_base(carrinho, desconto_percentual=0):
     return subtotal, desconto, base
 
 
+def _base_do_calculo(calculo):
+    try:
+        if "base" in calculo:
+            return round(float(calculo.get("base") or 0), 2)
+        return round(float(calculo.get("s", 0) or 0) - float(calculo.get("d", 0) or 0), 2)
+    except Exception:
+        return 0.0
+
+
 def normalizar_pagamentos_mistos(pagamentos):
     normalizados = []
     for pagamento in pagamentos or []:
@@ -61,6 +70,20 @@ def normalizar_pagamentos_mistos(pagamentos):
         if valor > 0:
             normalizados.append({"forma": forma, "valor": round(valor, 2)})
     return normalizados
+
+
+def validar_pagamentos_mistos_fechados(calculo, pagamentos):
+    pagamentos = normalizar_pagamentos_mistos(pagamentos)
+    base = _base_do_calculo(calculo)
+    total_pago = round(sum(float(p.get("valor", 0) or 0) for p in pagamentos), 2)
+    if not pagamentos:
+        raise ValueError("Pagamento misto incompleto. Informe as formas e valores antes de salvar.")
+    if abs(total_pago - base) > 0.01:
+        falta = round(base - total_pago, 2)
+        if falta > 0:
+            raise ValueError(f"Pagamento misto não fechado. Falta dividir R$ {falta:,.2f}.".replace(",", "X").replace(".", ",").replace("X", "."))
+        raise ValueError(f"Pagamento misto acima do total. Valor excedente R$ {abs(falta):,.2f}.".replace(",", "X").replace(".", ",").replace("X", "."))
+    return pagamentos
 
 
 def resumo_pagamentos_mistos(pagamentos):
@@ -118,9 +141,8 @@ def registrar_venda_service(carrinho, cliente, data_venda, data_iso, calculo, fo
     dia_operacional = etiqueta_dia_operacional(momento_venda)
 
     pagamentos_mistos = normalizar_pagamentos_mistos(pagamentos_mistos)
-    if str(forma_pagamento or "").startswith("Misto") and not pagamentos_mistos:
-        raise ValueError("Pagamento misto incompleto. Informe as formas e valores antes de salvar.")
-    if pagamentos_mistos:
+    if str(forma_pagamento or "").startswith("Misto") or pagamentos_mistos:
+        pagamentos_mistos = validar_pagamentos_mistos_fechados(calculo, pagamentos_mistos)
         forma_pagamento = "Misto: " + resumo_pagamentos_mistos(pagamentos_mistos)
 
     conn = get_connection()
