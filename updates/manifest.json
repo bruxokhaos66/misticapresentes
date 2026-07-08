@@ -1,15 +1,16 @@
 {
-  "version": "1.0.505",
+  "version": "1.0.506",
   "package_file": "",
-  "package_url": "https://raw.githubusercontent.com/bruxokhaos66/misticapresentes/main/updates/mistica-update-1.0.505.zip",
-  "sha256": "e1d8795c2fe88a062f0b163439ca0189245c1d51ce07ce4090ee6d77b139c06b",
-  "title": "Correcao da fonte de atualizacao online",
-  "notes": "O pacote de atualizacao agora usa a fonte direta do repositorio como principal, evitando falhas quando o dominio estiver com cache.",
+  "package_url": "https://raw.githubusercontent.com/bruxokhaos66/misticapresentes/main/updates/mistica-update-1.0.506.zip",
+  "sha256": "99c0ecf9c395b6de80e32942c1fae839f708a276cebab8a480091c3f513ab54f",
+  "title": "Atualizacao teste do sistema online",
+  "notes": "Atualizacao teste criada para validar se o Launcher baixa a nova versao corretamente e se as notas aparecem na aba Manutencao.",
   "changes": [
-    "Manifesto agora aponta o pacote ZIP para a fonte direta do repositorio.",
-    "Reduz dependencia do dominio para baixar atualizacoes.",
-    "Mantem a atualizacao online mais estavel pelo Launcher.",
-    "Melhora a leitura das notas de atualizacao dentro da aba Manutencao."
+    "Teste do fluxo completo de atualizacao online.",
+    "Valida leitura do manifesto publicado.",
+    "Valida download do pacote pela fonte direta do repositorio.",
+    "Valida exibicao das notas de atualizacao na aba Manutencao.",
+    "Nao altera regras de venda, caixa ou estoque nesta versao."
   ],
   "channel": "win-modern-x64",
   "channel_notes": "Canal de atualizacao: win-modern-x64"
