@@ -1,6 +1,6 @@
 @import url("v2-commerce.css");
 
-/* Imagens da Isis mais claras, sem blur, sem backdrop-filter e sem camada escura pesada. */
+/* Imagens da Isis: usando o arquivo enviado na pasta mistica-v2. */
 #isis .isis-panel-image {
   min-height: clamp(540px, 54vw, 720px) !important;
   border-radius: 32px !important;
@@ -8,12 +8,13 @@
   display: grid !important;
   align-content: end !important;
   padding: 24px !important;
-  background-image: url("assets/isis-hero-new.webp") !important;
+  background-image: url("isis-hero.webp.png") !important;
   background-size: cover !important;
   background-position: center 35% !important;
   background-repeat: no-repeat !important;
+  background-color: transparent !important;
   box-shadow: 0 22px 62px rgba(0,0,0,.22), 0 0 42px rgba(242,201,109,.10) !important;
-  filter: brightness(1.28) contrast(1.04) saturate(1.10) !important;
+  filter: brightness(1.18) contrast(1.03) saturate(1.08) !important;
   image-rendering: auto !important;
 }
 
@@ -35,7 +36,7 @@
   border-radius: 20px !important;
   padding: 14px 18px !important;
   color: #fff1ce !important;
-  background: rgba(3,3,5,.40) !important;
+  background: rgba(3,3,5,.38) !important;
   box-shadow: 0 10px 28px rgba(0,0,0,.18) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
@@ -97,6 +98,7 @@
   position: relative;
   transform: none !important;
   overflow: hidden !important;
+  background: transparent !important;
 }
 
 .isis-portrait-card::before,
@@ -108,13 +110,14 @@
 .isis-photo,
 .isis-photo.has-real-isis {
   min-height: clamp(430px, 42vw, 600px) !important;
-  background-image: url("assets/isis-hero-new.webp") !important;
+  background-image: url("isis-hero.webp.png") !important;
   background-size: cover !important;
   background-position: center 33% !important;
   background-repeat: no-repeat !important;
-  filter: brightness(1.28) contrast(1.04) saturate(1.10) !important;
+  background-color: transparent !important;
+  filter: brightness(1.18) contrast(1.03) saturate(1.08) !important;
   image-rendering: auto !important;
-  transform: translateZ(0);
+  transform: none !important;
 }
 
 .isis-photo::before,
