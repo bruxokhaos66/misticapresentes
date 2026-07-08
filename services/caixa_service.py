@@ -3,6 +3,16 @@ from datetime import datetime
 from database import query_db
 
 
+FORMAS_CAIXA_DETALHADAS = [
+    "Dinheiro",
+    "Pix",
+    "Debito",
+    "Credito 1x",
+    "Credito 2x",
+    "Credito 3x",
+]
+
+
 def obter_caixa_id_ativo():
     res = query_db("SELECT id FROM caixa_diario WHERE status='Aberto' ORDER BY id DESC LIMIT 1")
     return res[0][0] if res else None
@@ -42,6 +52,14 @@ def _saldo_por_forma(caixa_id, forma):
     return float(entradas or 0.0) - float(saidas or 0.0)
 
 
+def _fallback_antigo(caixa_id, padrao):
+    res = query_db(
+        "SELECT COALESCE(SUM(valor),0) FROM fluxo_caixa WHERE caixa_id=? AND COALESCE(forma_pagamento,'')='' AND descricao LIKE ?",
+        (caixa_id, padrao),
+    )
+    return float(res[0][0] or 0.0) if res else 0.0
+
+
 def resumo_fechamento_caixa():
     cx = query_db("SELECT id, saldo_inicial FROM caixa_diario WHERE status='Aberto' ORDER BY id DESC LIMIT 1")
     if not cx:
@@ -53,27 +71,62 @@ def resumo_fechamento_caixa():
 
     pix = _saldo_por_forma(cx_id, "Pix")
     debito = _saldo_por_forma(cx_id, "Debito")
-    credito = sum(_saldo_por_forma(cx_id, forma) for forma in ("Credito 1x", "Credito 2x", "Credito 3x"))
+    credito_1x = _saldo_por_forma(cx_id, "Credito 1x")
+    credito_2x = _saldo_por_forma(cx_id, "Credito 2x")
+    credito_3x = _saldo_por_forma(cx_id, "Credito 3x")
 
     # Fallback para lançamentos antigos sem forma_pagamento gravada.
-    pix += query_db("SELECT COALESCE(SUM(valor),0) FROM fluxo_caixa WHERE caixa_id=? AND COALESCE(forma_pagamento,'')='' AND descricao LIKE '%(Pix)%'", (cx_id,))[0][0] or 0.0
-    debito += query_db("SELECT COALESCE(SUM(valor),0) FROM fluxo_caixa WHERE caixa_id=? AND COALESCE(forma_pagamento,'')='' AND (descricao LIKE '%(Debito)%' OR descricao LIKE '%(Débito)%')", (cx_id,))[0][0] or 0.0
-    credito += query_db("SELECT COALESCE(SUM(valor),0) FROM fluxo_caixa WHERE caixa_id=? AND COALESCE(forma_pagamento,'')='' AND (descricao LIKE '%(Credito%' OR descricao LIKE '%(Crédito%')", (cx_id,))[0][0] or 0.0
+    pix += _fallback_antigo(cx_id, "%(Pix)%")
+    debito += _fallback_antigo(cx_id, "%(Debito)%") + _fallback_antigo(cx_id, "%(Débito)%")
+    credito_1x += _fallback_antigo(cx_id, "%(Credito 1x)%") + _fallback_antigo(cx_id, "%(Crédito 1x)%")
+    credito_2x += _fallback_antigo(cx_id, "%(Credito 2x)%") + _fallback_antigo(cx_id, "%(Crédito 2x)%")
+    credito_3x += _fallback_antigo(cx_id, "%(Credito 3x)%") + _fallback_antigo(cx_id, "%(Crédito 3x)%")
 
-    dinheiro = saldo - float(pix or 0.0) - float(debito or 0.0) - float(credito or 0.0)
-    formas = {"Dinheiro": dinheiro, "Pix": float(pix or 0.0), "Debito": float(debito or 0.0), "Credito": float(credito or 0.0)}
-    return {"caixa_id": cx_id, "entradas": float(entradas or 0.0), "saidas": float(saidas or 0.0), "saldo": saldo, "formas": formas}
+    credito_total = float(credito_1x or 0.0) + float(credito_2x or 0.0) + float(credito_3x or 0.0)
+    dinheiro = saldo - float(pix or 0.0) - float(debito or 0.0) - credito_total
+
+    formas_detalhadas = {
+        "Dinheiro": float(dinheiro or 0.0),
+        "Pix": float(pix or 0.0),
+        "Debito": float(debito or 0.0),
+        "Credito 1x": float(credito_1x or 0.0),
+        "Credito 2x": float(credito_2x or 0.0),
+        "Credito 3x": float(credito_3x or 0.0),
+    }
+    formas = dict(formas_detalhadas)
+    formas["Credito"] = credito_total
+
+    return {
+        "caixa_id": cx_id,
+        "entradas": float(entradas or 0.0),
+        "saidas": float(saidas or 0.0),
+        "saldo": saldo,
+        "formas": formas,
+        "formas_detalhadas": formas_detalhadas,
+    }
 
 
 def fechar_caixa_conferido(caixa_id, saldo, formas, informado):
-    diferenca = sum(float(v or 0.0) for v in informado.values()) - sum(float(v or 0.0) for v in formas.values())
+    formas = formas or {}
+    informado = informado or {}
+    credito_sistema = formas.get("Credito", None)
+    if credito_sistema is None:
+        credito_sistema = sum(float(formas.get(f, 0.0) or 0.0) for f in ("Credito 1x", "Credito 2x", "Credito 3x"))
+    credito_informado = informado.get("Credito", None)
+    if credito_informado is None:
+        credito_informado = sum(float(informado.get(f, 0.0) or 0.0) for f in ("Credito 1x", "Credito 2x", "Credito 3x"))
+
+    total_sistema = float(formas.get("Dinheiro", 0.0) or 0.0) + float(formas.get("Pix", 0.0) or 0.0) + float(formas.get("Debito", 0.0) or 0.0) + float(credito_sistema or 0.0)
+    total_informado = float(informado.get("Dinheiro", 0.0) or 0.0) + float(informado.get("Pix", 0.0) or 0.0) + float(informado.get("Debito", 0.0) or 0.0) + float(credito_informado or 0.0)
+    diferenca = total_informado - total_sistema
+
     query_db(
         """
         UPDATE caixa_diario
         SET status='Fechado', data_fechamento=?, saldo_final=?, dinheiro_sistema=?, pix_sistema=?, debito_sistema=?, credito_sistema=?, dinheiro_informado=?, pix_informado=?, debito_informado=?, credito_informado=?, diferenca_caixa=?
         WHERE id=?
         """,
-        (datetime.now().strftime("%d/%m/%Y %H:%M"), saldo, formas.get("Dinheiro", 0.0), formas.get("Pix", 0.0), formas.get("Debito", 0.0), formas.get("Credito", 0.0), informado.get("Dinheiro", 0.0), informado.get("Pix", 0.0), informado.get("Debito", 0.0), informado.get("Credito", 0.0), diferenca, caixa_id),
+        (datetime.now().strftime("%d/%m/%Y %H:%M"), saldo, formas.get("Dinheiro", 0.0), formas.get("Pix", 0.0), formas.get("Debito", 0.0), credito_sistema, informado.get("Dinheiro", 0.0), informado.get("Pix", 0.0), informado.get("Debito", 0.0), credito_informado, diferenca, caixa_id),
         commit=True,
     )
     return diferenca
