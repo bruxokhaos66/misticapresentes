@@ -10,6 +10,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DIST_UPDATES = ROOT / "dist" / "updates"
+UPDATE_BASE_URL = "https://misticaesotericos.com.br/updates"
 INCLUIR_ARQUIVOS = [
     "app_frajola_patch.py",
     "app_pagamento_misto_patch.py",
@@ -68,8 +69,8 @@ def gerar(versao: str) -> Path:
                     adicionar_arquivo(zf, origem, origem.relative_to(ROOT))
     manifesto = {
         "version": versao,
-        "package_file": pacote.name,
-        "package_url": "",
+        "package_file": "",
+        "package_url": f"{UPDATE_BASE_URL}/{pacote.name}",
         "sha256": sha256(pacote),
         "notes": "Atualizacao Mistica Presentes",
     }
