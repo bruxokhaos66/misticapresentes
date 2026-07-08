@@ -20,9 +20,10 @@ LOCAL_MANIFEST_PATH = Path.home() / "Documents" / "Mistica_Presentes_Updates" / 
 STATUS_PATH = APP_DATA_DIR / "atualizador_status.json"
 CURRENT_PATH = APP_DATA_DIR / "current.json"
 BAD_VERSIONS_PATH = APP_DATA_DIR / "bad_versions.json"
-UPDATE_BASE_URL = "https://misticaesotericos.com.br/updates"
+DOMAIN_UPDATE_BASE_URL = "https://misticaesotericos.com.br/updates"
 GITHUB_UPDATE_BASE_URL = "https://raw.githubusercontent.com/bruxokhaos66/misticapresentes/main/updates"
-DEFAULT_MANIFEST_URL = f"{UPDATE_BASE_URL}/manifest.json"
+UPDATE_BASE_URL = GITHUB_UPDATE_BASE_URL
+DEFAULT_MANIFEST_URL = f"{GITHUB_UPDATE_BASE_URL}/manifest.json"
 
 
 def detectar_windows():
@@ -64,8 +65,8 @@ def detectar_windows():
         "machine": machine,
         "canal": canal,
         "manifest": manifest,
-        "manifest_url": f"{UPDATE_BASE_URL}/{manifest}",
-        "manifest_url_fallback": f"{GITHUB_UPDATE_BASE_URL}/{manifest}",
+        "manifest_url": f"{GITHUB_UPDATE_BASE_URL}/{manifest}",
+        "manifest_url_fallback": f"{DOMAIN_UPDATE_BASE_URL}/{manifest}",
     }
 
 
@@ -183,7 +184,7 @@ def carregar_manifest(ambiente=None):
         urls.append(cfg_url)
     else:
         urls.append(ambiente.get("manifest_url") or DEFAULT_MANIFEST_URL)
-        urls.append(ambiente.get("manifest_url_fallback") or f"{GITHUB_UPDATE_BASE_URL}/{ambiente.get('manifest', 'manifest.json')}")
+        urls.append(ambiente.get("manifest_url_fallback") or f"{DOMAIN_UPDATE_BASE_URL}/{ambiente.get('manifest', 'manifest.json')}")
         urls.append(DEFAULT_MANIFEST_URL)
     ultimo_erro = None
     for url in urls:
