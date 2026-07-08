@@ -8,8 +8,26 @@ from services.dia_operacional_service import etiqueta_dia_operacional
 from services.estoque_service import validar_estoque_carrinho
 
 
+FORMAS_PAGAMENTO_PADRAO = ["Dinheiro", "Pix", "Debito", "Credito 1x", "Credito 2x", "Credito 3x"]
 
-def calcular_total_venda(carrinho, desconto_percentual=0, forma_pagamento="Dinheiro"):
+
+def _taxa_por_forma(forma, valor_base):
+    forma = str(forma or "Dinheiro")
+    valor_base = float(valor_base or 0)
+    if valor_base <= 0:
+        return 0.0
+    if forma == "Debito":
+        return 1.5
+    if "Credito 1x" in forma:
+        return valor_base * 0.015
+    if "Credito 2x" in forma:
+        return valor_base * 0.02
+    if "Credito 3x" in forma:
+        return valor_base * 0.025
+    return 0.0
+
+
+def _subtotal_base(carrinho, desconto_percentual=0):
     subtotal = sum(float(item.get("t", 0) or 0) for item in carrinho)
     try:
         desconto_percentual = float(str(desconto_percentual or "0").replace(",", "."))
@@ -18,18 +36,51 @@ def calcular_total_venda(carrinho, desconto_percentual=0, forma_pagamento="Dinhe
     desconto_percentual = max(0.0, min(12.0, desconto_percentual))
     desconto = subtotal * (desconto_percentual / 100)
     base = max(0.0, subtotal - desconto)
+    return subtotal, desconto, base
+
+
+def normalizar_pagamentos_mistos(pagamentos):
+    normalizados = []
+    for pagamento in pagamentos or []:
+        if isinstance(pagamento, dict):
+            forma = str(pagamento.get("forma") or "").strip()
+            valor = pagamento.get("valor", 0)
+        else:
+            try:
+                forma, valor = pagamento
+            except Exception:
+                continue
+        if not forma:
+            continue
+        try:
+            valor = float(valor or 0)
+        except Exception:
+            valor = 0.0
+        if valor > 0:
+            normalizados.append({"forma": forma, "valor": round(valor, 2)})
+    return normalizados
+
+
+def resumo_pagamentos_mistos(pagamentos):
+    partes = []
+    for p in normalizar_pagamentos_mistos(pagamentos):
+        valor = f"R$ {p['valor']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        partes.append(f"{p['forma']} {valor}")
+    return " + ".join(partes)
+
+
+def calcular_total_venda(carrinho, desconto_percentual=0, forma_pagamento="Dinheiro"):
+    subtotal, desconto, base = _subtotal_base(carrinho, desconto_percentual)
     forma = forma_pagamento or "Dinheiro"
-    taxa = 0.0
-    if forma == "Debito" and base > 0:
-        taxa = 1.5  # Taxa fixa definida pela loja.
-    elif "Credito 1x" in forma:
-        taxa = base * 0.015
-    elif "Credito 2x" in forma:
-        taxa = base * 0.02
-    elif "Credito 3x" in forma:
-        taxa = base * 0.025
+    taxa = _taxa_por_forma(forma, base)
     return {"s": subtotal, "d": desconto, "tx": taxa, "tot": base + taxa}
 
+
+def calcular_total_venda_misto(carrinho, desconto_percentual=0, pagamentos=None):
+    subtotal, desconto, base = _subtotal_base(carrinho, desconto_percentual)
+    pagamentos = normalizar_pagamentos_mistos(pagamentos)
+    taxa = sum(_taxa_por_forma(p["forma"], p["valor"]) for p in pagamentos)
+    return {"s": subtotal, "d": desconto, "tx": taxa, "tot": base + taxa, "base": base}
 
 
 def _tentar_sincronizar_venda_sem_bloquear(venda_id):
@@ -59,8 +110,7 @@ def _tentar_sincronizar_venda_sem_bloquear(venda_id):
     return None
 
 
-
-def registrar_venda_service(carrinho, cliente, data_venda, data_iso, calculo, forma_pagamento, vendedor, caixa_id):
+def registrar_venda_service(carrinho, cliente, data_venda, data_iso, calculo, forma_pagamento, vendedor, caixa_id, pagamentos_mistos=None):
     if not caixa_id:
         raise ValueError("Abra o caixa antes de registrar uma venda.")
     validar_estoque_carrinho(carrinho)
@@ -69,6 +119,10 @@ def registrar_venda_service(carrinho, cliente, data_venda, data_iso, calculo, fo
     except Exception:
         momento_venda = datetime.now()
     dia_operacional = etiqueta_dia_operacional(momento_venda)
+
+    pagamentos_mistos = normalizar_pagamentos_mistos(pagamentos_mistos)
+    if pagamentos_mistos:
+        forma_pagamento = "Misto: " + resumo_pagamentos_mistos(pagamentos_mistos)
 
     conn = get_connection()
     cur = conn.cursor()
@@ -118,16 +172,33 @@ def registrar_venda_service(carrinho, cliente, data_venda, data_iso, calculo, fo
                 venda_id,
             )
 
-        vendas_repo.inserir_fluxo_cursor(
-            cur,
-            "Entrada",
-            f"Venda no {venda_id} ({forma_pagamento}) - Dia operacional {dia_operacional}",
-            calculo["tot"],
-            data_venda,
-            data_iso,
-            caixa_id,
-            forma_pagamento,
-        )
+        if pagamentos_mistos:
+            for pagamento in pagamentos_mistos:
+                forma = pagamento["forma"]
+                valor_base = float(pagamento["valor"] or 0)
+                taxa = _taxa_por_forma(forma, valor_base)
+                valor_fluxo = valor_base + taxa
+                vendas_repo.inserir_fluxo_cursor(
+                    cur,
+                    "Entrada",
+                    f"Venda no {venda_id} (Misto - {forma}) - Dia operacional {dia_operacional}",
+                    valor_fluxo,
+                    data_venda,
+                    data_iso,
+                    caixa_id,
+                    forma,
+                )
+        else:
+            vendas_repo.inserir_fluxo_cursor(
+                cur,
+                "Entrada",
+                f"Venda no {venda_id} ({forma_pagamento}) - Dia operacional {dia_operacional}",
+                calculo["tot"],
+                data_venda,
+                data_iso,
+                caixa_id,
+                forma_pagamento,
+            )
         conn.commit()
     except Exception:
         conn.rollback()
@@ -139,15 +210,12 @@ def registrar_venda_service(carrinho, cliente, data_venda, data_iso, calculo, fo
     return venda_id
 
 
-
 def obter_resumo_venda(venda_id):
     return vendas_repo.obter_status_total(venda_id)
 
 
-
 def consultar_venda_salva(venda_id):
     return vendas_repo.buscar_venda(venda_id)
-
 
 
 def cancelar_venda_service(venda_id, usuario, caixa_id=None):
