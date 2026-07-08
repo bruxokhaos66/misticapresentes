@@ -5,7 +5,8 @@ import os
 from PyInstaller.utils.hooks import collect_submodules
 
 block_cipher = None
-ICON_PATH = os.path.abspath(os.path.join('assets', 'mistica_xamanico_moderno.ico'))
+ICON_FILE = os.path.abspath(os.path.join('assets', 'mistica_xamanico_moderno.ico'))
+ICON_PATH = ICON_FILE if os.path.exists(ICON_FILE) else None
 
 hiddenimports = []
 for pacote in [
@@ -29,6 +30,8 @@ for pacote in [
 
 def incluir_pasta(origem, destino):
     itens = []
+    if not os.path.exists(origem):
+        return itens
     ignorar_dirs = {'__pycache__', '.gradle', 'build', 'dist'}
     ignorar_arquivos = {'local.properties'}
     ignorar_ext = {'.pyc', '.pyo'}
@@ -43,18 +46,24 @@ def incluir_pasta(origem, destino):
     return itens
 
 
-datas = [
+datas = []
+for origem, destino in [
     ('mistica_presentes.py', '.'),
     ('auto_updater.py', '.'),
     ('app_version.py', '.'),
     ('app_runtime_patch.py', '.'),
+    ('app_pagamento_misto_patch.py', '.'),
     ('app_frajola_patch.py', '.'),
     ('app_painel_guard_patch.py', '.'),
     ('app_sync_status_patch.py', '.'),
     ('app_scroll_patch.py', '.'),
     ('config.py', '.'),
     ('assets', 'assets'),
-]
+]:
+    if os.path.isdir(origem):
+        datas += incluir_pasta(origem, destino)
+    elif os.path.exists(origem):
+        datas.append((origem, destino))
 
 for origem, destino in [
     ('database', 'database'),
@@ -103,4 +112,3 @@ exe = EXE(
     entitlements_file=None,
     icon=ICON_PATH,
 )
-
