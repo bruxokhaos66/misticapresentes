@@ -102,35 +102,20 @@ def executar_app(app_dir: Path) -> None:
 
     fonte = main_file.read_text(encoding="utf-8-sig")
 
-    try:
-        from app_runtime_patch import aplicar_patches_runtime
-        fonte = aplicar_patches_runtime(fonte)
-    except Exception as exc:
-        print(f"[Aviso] complementos do app: {exc}")
-
-    try:
-        from app_pagamento_misto_patch import aplicar_pagamento_misto_runtime
-        fonte = aplicar_pagamento_misto_runtime(fonte)
-    except Exception as exc:
-        print(f"[Aviso] pagamento misto: {exc}")
-
-    try:
-        from app_sync_status_patch import aplicar_sync_status_runtime
-        fonte = aplicar_sync_status_runtime(fonte)
-    except Exception as exc:
-        print(f"[Aviso] status de sincronizacao: {exc}")
-
-    try:
-        from app_painel_guard_patch import aplicar_painel_guard_runtime
-        fonte = aplicar_painel_guard_runtime(fonte)
-    except Exception as exc:
-        print(f"[Aviso] protecao painel mobile: {exc}")
-
-    try:
-        from app_scroll_patch import aplicar_scrollbars_runtime
-        fonte = aplicar_scrollbars_runtime(fonte)
-    except Exception as exc:
-        print(f"[Aviso] barras de rolagem: {exc}")
+    for modulo, funcao, aviso in [
+        ("app_backup_inicializacao_patch", "aplicar_backup_inicializacao_runtime", "backup inicializacao"),
+        ("app_runtime_patch", "aplicar_patches_runtime", "complementos do app"),
+        ("app_pagamento_misto_patch", "aplicar_pagamento_misto_runtime", "pagamento misto"),
+        ("app_backup_painel_patch", "aplicar_backup_painel_runtime", "painel de backup"),
+        ("app_sync_status_patch", "aplicar_sync_status_runtime", "status de sincronizacao"),
+        ("app_painel_guard_patch", "aplicar_painel_guard_runtime", "protecao painel mobile"),
+        ("app_scroll_patch", "aplicar_scrollbars_runtime", "barras de rolagem"),
+    ]:
+        try:
+            mod = __import__(modulo, fromlist=[funcao])
+            fonte = getattr(mod, funcao)(fonte)
+        except Exception as exc:
+            print(f"[Aviso] {aviso}: {exc}")
 
     globais = {
         "__name__": "__main__",
