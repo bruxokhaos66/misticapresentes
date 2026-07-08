@@ -42,16 +42,29 @@ jobs:
             --add-data "docs;docs" `
             app.py
 
+      - name: Generate online update package
+        shell: pwsh
+        run: |
+          python scripts/gerar_pacote_atualizacao.py 1.0.${{ github.run_number }}
+
       - name: Package executable
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path release
           Copy-Item "dist\MisticaPresentes.exe" "release\MisticaPresentes.exe"
           Compress-Archive -Path "release\MisticaPresentes.exe" -DestinationPath "MisticaPresentes-Windows.zip" -Force
+          Compress-Archive -Path "dist\updates\*" -DestinationPath "MisticaPresentes-Updates.zip" -Force
 
-      - name: Upload artifact
+      - name: Upload exe artifact
         uses: actions/upload-artifact@v4
         with:
           name: MisticaPresentes-Windows-exe
           path: MisticaPresentes-Windows.zip
+          retention-days: 14
+
+      - name: Upload update package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MisticaPresentes-Updates
+          path: MisticaPresentes-Updates.zip
           retention-days: 14
