@@ -1,5 +1,10 @@
 def aplicar_pagamento_misto_runtime(fonte: str) -> str:
     """Adiciona pagamento misto profissional na tela de vendas sem reescrever o app inteiro."""
+    try:
+        from app_sync_pagamento_misto_payload_patch import aplicar_sync_pagamento_misto_payload_runtime
+        fonte = aplicar_sync_pagamento_misto_payload_runtime(fonte)
+    except Exception as exc:
+        print(f"[Patch Pagamento Misto Sync] {exc}")
 
     antigo = '''        self.v_pag_cb = ctk.CTkOptionMenu(corpo_checkout, values=["Dinheiro", "Pix", "Debito", "Credito 1x", "Credito 2x", "Credito 3x"], command=lambda e: self.render_v_car(), height=38, font=self.font_button, dropdown_font=self.font_input)
         self.v_pag_cb.pack(pady=(0, 8))'''
