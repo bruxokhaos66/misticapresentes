@@ -1,4 +1,4 @@
-/* Contato: mesma lógica do cabeçalho, usando a arte como background direto da seção. */
+/* Contato: mesma lógica do cabeçalho, mas usando URL raw absoluta para evitar conflito de path/cache do GitHub Pages. */
 .contact-section{
   position:relative!important;
   display:block!important;
@@ -9,7 +9,7 @@
   border-top:1px solid rgba(242,201,109,.22)!important;
   border-bottom:1px solid rgba(242,201,109,.22)!important;
   background-color:#030407!important;
-  background-image:url("contact-banner-q75.webp?v=20260708-bg-final")!important;
+  background-image:url("https://raw.githubusercontent.com/bruxokhaos66/misticapresentes/mistica-v2-rebuild/mistica-v2/contact-banner-q75.webp")!important;
   background-size:cover!important;
   background-position:center center!important;
   background-repeat:no-repeat!important;
