@@ -22,27 +22,53 @@ BAD_VERSIONS_PATH = APP_DATA_DIR / "bad_versions.json"
 DEFAULT_MANIFEST_URL = "https://misticaesotericos.com.br/updates/manifest.json"
 
 
-def preparar_atualizacao() -> Path | None:
-    """Ativa a ultima versao boa e baixa uma nova quando houver manifesto valido."""
+def preparar_atualizacao(progress_callback=None) -> Path | None:
+    """Ativa a ultima versao boa e baixa uma nova quando houver manifesto valido.
+
+    progress_callback recebe dicionarios com: etapa, mensagem, progresso, erro.
+    O app pode usar isso para exibir uma barra antes do login.
+    """
     APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
     UPDATES_DIR.mkdir(parents=True, exist_ok=True)
+
+    def progresso(etapa, mensagem, progresso_valor=None, **extra):
+        if progress_callback:
+            try:
+                dados = {"etapa": etapa, "mensagem": mensagem}
+                if progresso_valor is not None:
+                    dados["progresso"] = progresso_valor
+                dados.update(extra)
+                progress_callback(dados)
+            except Exception:
+                pass
 
     atual = atualizacao_instalada()
     ativar_caminho(atual)
 
     try:
+        progresso("inicio", "Verificando atualizacoes online...", 0.05)
         manifest = carregar_manifest()
         if not manifest:
+            progresso("sem_manifesto", "Nenhuma atualizacao online encontrada. Abrindo programa...", 1.0)
             return atual
         versao_online = str(manifest.get("version", "")).strip()
-        if not versao_online or versao_online in versoes_bloqueadas():
+        if not versao_online:
+            progresso("sem_versao", "Manifesto sem versao. Abrindo programa...", 1.0)
+            return atual
+        if versao_online in versoes_bloqueadas():
+            progresso("bloqueada", f"Versao {versao_online} foi bloqueada por erro anterior. Abrindo versao atual...", 1.0)
             return atual
         if not versao_maior(versao_online, versao_atual_ativa()):
+            progresso("atual", f"Programa ja esta atualizado ({versao_atual_ativa()}).", 1.0)
             return atual
-        pacote = obter_pacote(manifest)
+        progresso("nova", f"Nova versao encontrada: {versao_online}. Baixando...", 0.15)
+        pacote = obter_pacote(manifest, progress_callback=progress_callback)
         if not pacote:
+            progresso("sem_pacote", "Nao encontrei pacote de atualizacao. Abrindo programa...", 1.0)
             return atual
+        progresso("validando", "Validando pacote baixado...", 0.78)
         validar_sha256(pacote, str(manifest.get("sha256", "")).strip())
+        progresso("instalando", "Instalando atualizacao...", 0.88)
         destino = instalar_pacote(pacote, versao_online)
         salvar_json(CURRENT_PATH, {
             "version": versao_online,
@@ -51,9 +77,11 @@ def preparar_atualizacao() -> Path | None:
         })
         salvar_status({"ok": True, "version": versao_online, "path": str(destino)})
         ativar_caminho(destino)
+        progresso("concluido", f"Atualizacao {versao_online} instalada. Abrindo programa...", 1.0)
         return destino
     except Exception as exc:
         salvar_status({"ok": False, "erro": str(exc)})
+        progresso("erro", f"Nao foi possivel atualizar agora: {exc}. Abrindo versao atual...", 1.0, erro=str(exc))
         return atual
 
 
@@ -104,7 +132,7 @@ def carregar_manifest() -> dict | None:
     return None
 
 
-def obter_pacote(manifest: dict) -> Path | None:
+def obter_pacote(manifest: dict, progress_callback=None) -> Path | None:
     package_file = str(manifest.get("package_file", "")).strip()
     package_url = str(manifest.get("package_url", "")).strip()
     if package_file:
@@ -117,9 +145,35 @@ def obter_pacote(manifest: dict) -> Path | None:
             raise ValueError("Pacote online precisa usar HTTPS.")
         nome = package_url.rsplit("/", 1)[-1] or "update.zip"
         destino = Path(tempfile.gettempdir()) / f"mistica_update_{nome}"
-        urllib.request.urlretrieve(package_url, destino)
+        baixar_arquivo_com_progresso(package_url, destino, progress_callback=progress_callback)
         return destino
     return None
+
+
+def baixar_arquivo_com_progresso(url: str, destino: Path, progress_callback=None) -> Path:
+    with urllib.request.urlopen(url, timeout=20) as resp:
+        total = int(resp.headers.get("Content-Length") or 0)
+        baixado = 0
+        with open(destino, "wb") as f:
+            while True:
+                bloco = resp.read(1024 * 128)
+                if not bloco:
+                    break
+                f.write(bloco)
+                baixado += len(bloco)
+                if progress_callback:
+                    try:
+                        frac = baixado / total if total else 0
+                        progress_callback({
+                            "etapa": "download",
+                            "mensagem": f"Baixando atualizacao... {baixado // 1024} KB",
+                            "progresso": 0.15 + min(frac, 1) * 0.60,
+                            "baixado": baixado,
+                            "total": total,
+                        })
+                    except Exception:
+                        pass
+    return destino
 
 
 def instalar_pacote(pacote: Path, versao: str) -> Path:
