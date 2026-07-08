@@ -20,6 +20,7 @@ INCLUIR_ARQUIVOS = [
     "app_caixa_fechamento_avancado_patch.py",
     "app_backup_inicializacao_patch.py",
     "app_backup_painel_patch.py",
+    "app_manutencao_segura_patch.py",
     "app_painel_guard_patch.py",
     "app_runtime_patch.py",
     "app_scroll_patch.py",
