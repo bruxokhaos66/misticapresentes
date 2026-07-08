@@ -1,0 +1,41 @@
+name: Build Online Update Package
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "**.py"
+      - "scripts/gerar_pacote_atualizacao.py"
+      - ".github/workflows/build-online-update-package.yml"
+
+jobs:
+  build-update-package:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate update package
+        shell: pwsh
+        run: |
+          python scripts/gerar_pacote_atualizacao.py 1.0.${{ github.run_number }}
+
+      - name: Package update files
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "dist\updates\*" -DestinationPath "MisticaPresentes-Updates.zip" -Force
+
+      - name: Upload update package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MisticaPresentes-Updates
+          path: MisticaPresentes-Updates.zip
+          retention-days: 14
