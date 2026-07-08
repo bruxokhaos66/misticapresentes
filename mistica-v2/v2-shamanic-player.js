@@ -3,6 +3,7 @@
   const DB_VERSION = 1;
   const STORE_NAME = 'tracks';
   const UPLOADED_KEY = 'uploaded-main';
+  const PUBLIC_AUDIO_PATH = 'mistica-v2/assets/audio/xamanico-ambiente.mp3';
   const FALLBACK_TRACKS = [
     { title: 'Ambiente xamânico da loja', src: 'assets/audio/xamanico-ambiente.mp3', note: 'Usando trilha da pasta do site. Se não existir, faça upload pelo Admin.' },
     { title: 'Tambor e floresta', src: 'assets/audio/tambor-floresta.mp3', note: 'Faixa opcional da pasta mistica-v2/assets/audio.' },
@@ -11,6 +12,12 @@
 
   const ready = (fn) => document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', fn) : fn();
   const supportsIndexedDb = () => 'indexedDB' in window;
+  const formatBytes = (bytes) => {
+    if (!Number.isFinite(bytes) || bytes <= 0) return '0 KB';
+    const units = ['bytes', 'KB', 'MB', 'GB'];
+    const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+    return `${(bytes / Math.pow(1024, index)).toFixed(index ? 1 : 0)} ${units[index]}`;
+  };
 
   function openDb() {
     return new Promise((resolve, reject) => {
@@ -36,14 +43,31 @@
     });
   }
 
-  async function saveUploadedTrack(file) {
+  function readAudioFile(file, onProgress) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onprogress = (event) => {
+        if (!event.lengthComputable) return onProgress?.(12, 'Lendo arquivo de áudio...');
+        const percent = Math.min(80, Math.round((event.loaded / event.total) * 80));
+        onProgress?.(percent, `Lendo arquivo: ${percent}%`);
+      };
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error || new Error('Falha ao ler arquivo.'));
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  async function saveUploadedTrack(file, onProgress) {
     if (!file || !file.type.startsWith('audio/')) throw new Error('Envie um arquivo de áudio válido.');
+    onProgress?.(5, `Preparando ${file.name} (${formatBytes(file.size)})...`);
+    const buffer = await readAudioFile(file, onProgress);
+    onProgress?.(85, 'Salvando música localmente no navegador...');
     const db = await openDb();
-    const payload = { id: UPLOADED_KEY, name: file.name, type: file.type || 'audio/mpeg', size: file.size, updatedAt: new Date().toISOString(), blob: file };
+    const payload = { id: UPLOADED_KEY, name: file.name, type: file.type || 'audio/mpeg', size: file.size, updatedAt: new Date().toISOString(), blob: new Blob([buffer], { type: file.type || 'audio/mpeg' }) };
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       tx.objectStore(STORE_NAME).put(payload);
-      tx.oncomplete = () => { db.close(); resolve(payload); };
+      tx.oncomplete = () => { db.close(); onProgress?.(100, 'Upload local concluído: 100%'); resolve(payload); };
       tx.onerror = () => { db.close(); reject(tx.error); };
     });
   }
@@ -83,9 +107,20 @@
     const adminSave = document.querySelector('[data-admin-audio-save]');
     const adminRemove = document.querySelector('[data-admin-audio-remove]');
     const adminStatus = document.querySelector('[data-admin-audio-status]');
+    const adminProgress = document.querySelector('[data-admin-audio-progress]');
+    const adminPercent = document.querySelector('[data-admin-audio-percent]');
+    const adminPath = document.querySelector('[data-admin-audio-path]');
 
     const setStatus = (message) => { if (status) status.textContent = message; };
     const setAdminStatus = (message) => { if (adminStatus) adminStatus.textContent = message; };
+    const setUploadProgress = (percent, message) => {
+      const value = Math.max(0, Math.min(100, Number(percent) || 0));
+      if (adminProgress) adminProgress.value = value;
+      if (adminPercent) adminPercent.textContent = `${Math.round(value)}%`;
+      if (message) setAdminStatus(message);
+    };
+
+    if (adminPath) adminPath.textContent = PUBLIC_AUDIO_PATH;
 
     const revokeUploadedUrl = () => {
       if (uploadedUrl) URL.revokeObjectURL(uploadedUrl);
@@ -100,9 +135,11 @@
         if (uploaded?.blob) {
           uploadedUrl = URL.createObjectURL(uploaded.blob);
           tracks.unshift({ title: `Música enviada no Admin: ${uploaded.name}`, src: uploadedUrl, note: `Arquivo local salvo neste navegador em ${new Date(uploaded.updatedAt).toLocaleString('pt-BR')}.` });
-          setAdminStatus(`Música local ativa: ${uploaded.name}. Se a música da rede falhar, esta versão local pode tocar neste navegador.`);
+          setAdminStatus(`Música local ativa: ${uploaded.name} (${formatBytes(uploaded.size)}). Se a música da rede falhar, esta versão local pode tocar neste navegador.`);
+          setUploadProgress(100);
         } else {
-          setAdminStatus('Nenhuma música local enviada. O player tentará usar a pasta assets/audio do site.');
+          setAdminStatus(`Nenhuma música local enviada. Para todos os visitantes, envie o MP3 como ${PUBLIC_AUDIO_PATH}.`);
+          setUploadProgress(0);
         }
       } catch (error) {
         setAdminStatus('Não foi possível acessar o armazenamento local de música neste navegador.');
@@ -137,6 +174,14 @@
       volume.addEventListener('input', () => { audio.volume = Math.max(0, Math.min(1, Number(volume.value) / 100)); });
     }
 
+    if (adminFile) {
+      adminFile.addEventListener('change', () => {
+        const file = adminFile.files?.[0];
+        if (!file) return setUploadProgress(0, 'Nenhum arquivo selecionado.');
+        setUploadProgress(0, `Arquivo selecionado: ${file.name} (${formatBytes(file.size)}). Clique em salvar para enviar.`);
+      });
+    }
+
     if (list) {
       list.addEventListener('click', async (event) => {
         const button = event.target.closest('[data-track-index]');
@@ -167,15 +212,19 @@
     if (adminSave) {
       adminSave.addEventListener('click', async () => {
         const file = adminFile?.files?.[0];
-        if (!file) return setAdminStatus('Selecione um arquivo de música primeiro.');
+        if (!file) return setUploadProgress(0, 'Selecione um arquivo de música primeiro.');
+        adminSave.disabled = true;
+        setUploadProgress(0, 'Iniciando upload local...');
         try {
-          await saveUploadedTrack(file);
+          await saveUploadedTrack(file, setUploadProgress);
           await loadTracks();
           currentIndex = 0;
           setActiveTrack(0);
-          setAdminStatus(`Música enviada e salva localmente: ${file.name}.`);
+          setUploadProgress(100, `Música enviada e salva localmente: ${file.name}.`);
         } catch (error) {
-          setAdminStatus(`Erro ao salvar música: ${error.message || 'verifique o arquivo.'}`);
+          setUploadProgress(0, `Erro ao salvar música: ${error.message || 'verifique o arquivo.'}`);
+        } finally {
+          adminSave.disabled = false;
         }
       });
     }
@@ -187,7 +236,7 @@
           await loadTracks();
           currentIndex = 0;
           setActiveTrack(0);
-          setAdminStatus('Música local removida. O player voltou para a pasta assets/audio.');
+          setUploadProgress(0, 'Música local removida. O player voltou para a pasta assets/audio.');
         } catch {
           setAdminStatus('Não foi possível remover a música local.');
         }
