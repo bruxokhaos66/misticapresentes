@@ -107,6 +107,7 @@ def executar_app(app_dir: Path) -> None:
         ("app_runtime_patch", "aplicar_patches_runtime", "complementos do app"),
         ("app_pagamento_misto_patch", "aplicar_pagamento_misto_runtime", "pagamento misto"),
         ("app_backup_painel_patch", "aplicar_backup_painel_runtime", "painel de backup"),
+        ("app_manutencao_segura_patch", "aplicar_manutencao_segura_runtime", "manutencao segura"),
         ("app_sync_status_patch", "aplicar_sync_status_runtime", "status de sincronizacao"),
         ("app_painel_guard_patch", "aplicar_painel_guard_runtime", "protecao painel mobile"),
         ("app_scroll_patch", "aplicar_scrollbars_runtime", "barras de rolagem"),
