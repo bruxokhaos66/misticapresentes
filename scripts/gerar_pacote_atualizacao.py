@@ -46,7 +46,7 @@ EXTENSOES = {".py", ".html", ".css", ".js", ".json"}
 def sha256(caminho: Path) -> str:
     h = hashlib.sha256()
     with open(caminho, "rb") as f:
-        for bloco in iter(lambda: f.read(1024 * 1024), b=""):
+        for bloco in iter(lambda: f.read(1024 * 1024), b""):
             h.update(bloco)
     return h.hexdigest()
 
