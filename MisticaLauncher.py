@@ -106,7 +106,7 @@ def janela_atualizacao_launcher():
     return resultado["path"]
 
 
-def executar_sistema(app_dir: Path | None):
+def executar_sistema(app_dir):
     if app_dir and app_dir.exists():
         if str(app_dir) not in sys.path:
             sys.path.insert(0, str(app_dir))
