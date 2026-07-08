@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import platform
 import shutil
+import struct
 import sys
 import tempfile
 import urllib.request
@@ -19,22 +21,66 @@ LOCAL_MANIFEST_PATH = Path.home() / "Documents" / "Mistica_Presentes_Updates" / 
 STATUS_PATH = APP_DATA_DIR / "atualizador_status.json"
 CURRENT_PATH = APP_DATA_DIR / "current.json"
 BAD_VERSIONS_PATH = APP_DATA_DIR / "bad_versions.json"
-DEFAULT_MANIFEST_URL = "https://misticaesotericos.com.br/updates/manifest.json"
+UPDATE_BASE_URL = "https://misticaesotericos.com.br/updates"
+DEFAULT_MANIFEST_URL = f"{UPDATE_BASE_URL}/manifest.json"
+
+
+def detectar_windows():
+    bits = struct.calcsize("P") * 8
+    sistema = platform.system() or "Windows"
+    release = platform.release() or ""
+    version = platform.version() or ""
+    machine = platform.machine() or ""
+    try:
+        build = int(version.split(".")[-1]) if version else 0
+    except Exception:
+        build = 0
+
+    nome = f"{sistema} {release}".strip()
+    canal = "win-modern-x64"
+    manifest = "manifest.json"
+
+    if release in {"7", "8", "8.1"}:
+        if bits == 32:
+            canal = "win7-x86"
+            manifest = "manifest-win7-x86.json"
+        else:
+            canal = "win7-x64"
+            manifest = "manifest-win7-x64.json"
+    elif release == "10" and build >= 22000:
+        nome = "Windows 11"
+        canal = "win11-x64" if bits == 64 else "win10-x86"
+        manifest = "manifest.json" if bits == 64 else "manifest-win10-x86.json"
+    elif release == "10":
+        canal = "win10-x64" if bits == 64 else "win10-x86"
+        manifest = "manifest.json" if bits == 64 else "manifest-win10-x86.json"
+    elif bits == 32:
+        canal = "win-legacy-x86"
+        manifest = "manifest-win7-x86.json"
+
+    return {
+        "nome": nome,
+        "release": release,
+        "version": version,
+        "build": build,
+        "bits": bits,
+        "machine": machine,
+        "canal": canal,
+        "manifest": manifest,
+        "manifest_url": f"{UPDATE_BASE_URL}/{manifest}",
+    }
 
 
 def preparar_atualizacao(progress_callback=None) -> Path | None:
-    """Ativa a ultima versao boa e baixa uma nova quando houver manifesto valido.
-
-    progress_callback recebe dicionarios com: etapa, mensagem, progresso, erro.
-    O app pode usar isso para exibir uma barra antes do login.
-    """
+    """Ativa a ultima versao boa e baixa uma nova quando houver manifesto valido."""
     APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
     UPDATES_DIR.mkdir(parents=True, exist_ok=True)
+    ambiente = detectar_windows()
 
     def progresso(etapa, mensagem, progresso_valor=None, **extra):
         if progress_callback:
             try:
-                dados = {"etapa": etapa, "mensagem": mensagem}
+                dados = {"etapa": etapa, "mensagem": mensagem, "ambiente": ambiente}
                 if progresso_valor is not None:
                     dados["progresso"] = progresso_valor
                 dados.update(extra)
@@ -46,8 +92,9 @@ def preparar_atualizacao(progress_callback=None) -> Path | None:
     ativar_caminho(atual)
 
     try:
-        progresso("inicio", "Verificando atualizacoes online...", 0.05)
-        manifest = carregar_manifest()
+        progresso("inicio", f"{ambiente['nome']} {ambiente['bits']} bits detectado. Canal: {ambiente['canal']}.", 0.03)
+        progresso("verificando", "Verificando atualizacoes online...", 0.08)
+        manifest = carregar_manifest(ambiente)
         if not manifest:
             progresso("sem_manifesto", "Nenhuma atualizacao online encontrada. Abrindo programa...", 1.0)
             return atual
@@ -74,13 +121,14 @@ def preparar_atualizacao(progress_callback=None) -> Path | None:
             "version": versao_online,
             "path": str(destino),
             "notes": manifest.get("notes", ""),
+            "canal": ambiente.get("canal"),
         })
-        salvar_status({"ok": True, "version": versao_online, "path": str(destino)})
+        salvar_status({"ok": True, "version": versao_online, "path": str(destino), "canal": ambiente.get("canal")})
         ativar_caminho(destino)
         progresso("concluido", f"Atualizacao {versao_online} instalada. Abrindo programa...", 1.0)
         return destino
     except Exception as exc:
-        salvar_status({"ok": False, "erro": str(exc)})
+        salvar_status({"ok": False, "erro": str(exc), "canal": ambiente.get("canal")})
         progresso("erro", f"Nao foi possivel atualizar agora: {exc}. Abrindo versao atual...", 1.0, erro=str(exc))
         return atual
 
@@ -120,9 +168,10 @@ def versoes_bloqueadas() -> set[str]:
     return set(str(v) for v in dados.get("versions", []))
 
 
-def carregar_manifest() -> dict | None:
+def carregar_manifest(ambiente=None) -> dict | None:
+    ambiente = ambiente or detectar_windows()
     cfg = ler_json(CONFIG_PATH)
-    manifest_url = str(cfg.get("manifest_url", "")).strip() or DEFAULT_MANIFEST_URL
+    manifest_url = str(cfg.get("manifest_url", "")).strip() or ambiente.get("manifest_url") or DEFAULT_MANIFEST_URL
     if manifest_url:
         if not manifest_url.lower().startswith("https://"):
             raise ValueError("URL de atualizacao precisa usar HTTPS.")
@@ -197,7 +246,7 @@ def validar_sha256(caminho: Path, esperado: str) -> None:
         raise ValueError("Manifesto sem sha256 do pacote.")
     h = hashlib.sha256()
     with open(caminho, "rb") as f:
-        for bloco in iter(lambda: f.read(1024 * 1024), b""):
+        for bloco in iter(lambda: f.read(1024 * 1024), b=""):
             h.update(bloco)
     if h.hexdigest().lower() != esperado.lower():
         raise ValueError("Pacote de atualizacao com hash diferente do manifesto.")
