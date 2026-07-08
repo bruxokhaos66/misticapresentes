@@ -6,6 +6,7 @@ from repositories import estoque as estoque_repo
 from repositories import vendas as vendas_repo
 from services.dia_operacional_service import etiqueta_dia_operacional
 from services.estoque_service import validar_estoque_carrinho
+from services.pagamento_misto_service import extrair_pagamentos_mistos
 
 
 FORMAS_PAGAMENTO_PADRAO = ["Dinheiro", "Pix", "Debito", "Credito 1x", "Credito 2x", "Credito 3x"]
@@ -84,11 +85,6 @@ def calcular_total_venda_misto(carrinho, desconto_percentual=0, pagamentos=None)
 
 
 def _tentar_sincronizar_venda_sem_bloquear(venda_id):
-    """Registra pendência e tenta enviar a venda atual em segundo plano.
-
-    A tela de venda nunca deve esperar internet/API. A venda recem-salva deve ser
-    priorizada para aparecer logo no app, mesmo se existirem pendencias antigas.
-    """
     try:
         from services.sync_service import enfileirar_venda_para_sync
         enfileirar_venda_para_sync(venda_id)
@@ -130,18 +126,7 @@ def registrar_venda_service(carrinho, cliente, data_venda, data_iso, calculo, fo
     cur = conn.cursor()
     try:
         venda_id = vendas_repo.inserir_venda_cursor(
-            cur,
-            cliente,
-            data_venda,
-            data_iso,
-            calculo["s"],
-            calculo["d"],
-            calculo["tx"],
-            calculo["tot"],
-            forma_pagamento,
-            vendedor,
-            "Concluído",
-            dia_operacional,
+            cur, cliente, data_venda, data_iso, calculo["s"], calculo["d"], calculo["tx"], calculo["tot"], forma_pagamento, vendedor, "Concluído", dia_operacional
         )
 
         for item in carrinho:
@@ -161,17 +146,7 @@ def registrar_venda_service(carrinho, cliente, data_venda, data_iso, calculo, fo
 
             estoque_posterior = estoque_anterior - quantidade
             estoque_repo.registrar_movimentacao_cursor(
-                cur,
-                item["id"],
-                nome_produto,
-                -quantidade,
-                "Venda",
-                f"Venda no {venda_id}",
-                vendedor,
-                datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-                estoque_anterior,
-                estoque_posterior,
-                venda_id,
+                cur, item["id"], nome_produto, -quantidade, "Venda", f"Venda no {venda_id}", vendedor, datetime.now().strftime("%d/%m/%Y %H:%M:%S"), estoque_anterior, estoque_posterior, venda_id
             )
 
         if pagamentos_mistos:
@@ -179,28 +154,9 @@ def registrar_venda_service(carrinho, cliente, data_venda, data_iso, calculo, fo
                 forma = pagamento["forma"]
                 valor_base = float(pagamento["valor"] or 0)
                 taxa = _taxa_por_forma(forma, valor_base)
-                valor_fluxo = valor_base + taxa
-                vendas_repo.inserir_fluxo_cursor(
-                    cur,
-                    "Entrada",
-                    f"Venda no {venda_id} (Misto - {forma}) - Dia operacional {dia_operacional}",
-                    valor_fluxo,
-                    data_venda,
-                    data_iso,
-                    caixa_id,
-                    forma,
-                )
+                vendas_repo.inserir_fluxo_cursor(cur, "Entrada", f"Venda no {venda_id} (Misto - {forma}) - Dia operacional {dia_operacional}", valor_base + taxa, data_venda, data_iso, caixa_id, forma)
         else:
-            vendas_repo.inserir_fluxo_cursor(
-                cur,
-                "Entrada",
-                f"Venda no {venda_id} ({forma_pagamento}) - Dia operacional {dia_operacional}",
-                calculo["tot"],
-                data_venda,
-                data_iso,
-                caixa_id,
-                forma_pagamento,
-            )
+            vendas_repo.inserir_fluxo_cursor(cur, "Entrada", f"Venda no {venda_id} ({forma_pagamento}) - Dia operacional {dia_operacional}", calculo["tot"], data_venda, data_iso, caixa_id, forma_pagamento)
         conn.commit()
     except Exception:
         conn.rollback()
@@ -245,32 +201,18 @@ def cancelar_venda_service(venda_id, usuario, caixa_id=None):
             if estoque_repo.somar_estoque_cursor(cur, codigo_p, quantidade) != 1:
                 raise ValueError(f"Nao consegui devolver estoque do produto {codigo_p}.")
             estoque_repo.registrar_movimentacao_cursor(
-                cur,
-                codigo_p,
-                nome_p,
-                quantidade,
-                "Cancelamento",
-                f"Cancelamento venda no {venda_id}",
-                usuario,
-                datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-                estoque_anterior,
-                estoque_posterior,
-                venda_id,
+                cur, codigo_p, nome_p, quantidade, "Cancelamento", f"Cancelamento venda no {venda_id}", usuario, datetime.now().strftime("%d/%m/%Y %H:%M:%S"), estoque_anterior, estoque_posterior, venda_id
             )
 
         vendas_repo.marcar_cancelada_cursor(cur, venda_id)
         agora_data = datetime.now().strftime("%d/%m/%Y %H:%M")
         agora_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        vendas_repo.inserir_fluxo_cursor(
-            cur,
-            "Saida",
-            f"Estorno venda no {venda_id} ({forma_estorno})",
-            valor_estorno,
-            agora_data,
-            agora_iso,
-            caixa_id,
-            forma_estorno,
-        )
+        pagamentos_mistos = extrair_pagamentos_mistos(forma_estorno)
+        if pagamentos_mistos:
+            for pagamento in pagamentos_mistos:
+                vendas_repo.inserir_fluxo_cursor(cur, "Saida", f"Estorno venda no {venda_id} (Misto - {pagamento['forma']})", float(pagamento["valor"] or 0), agora_data, agora_iso, caixa_id, pagamento["forma"])
+        else:
+            vendas_repo.inserir_fluxo_cursor(cur, "Saida", f"Estorno venda no {venda_id} ({forma_estorno})", valor_estorno, agora_data, agora_iso, caixa_id, forma_estorno)
         conn.commit()
     except Exception:
         conn.rollback()
@@ -279,4 +221,4 @@ def cancelar_venda_service(venda_id, usuario, caixa_id=None):
         conn.close()
 
     _tentar_sincronizar_venda_sem_bloquear(venda_id)
-    return valor_estorno
+    return True
