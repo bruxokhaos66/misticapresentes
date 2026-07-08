@@ -71,7 +71,7 @@ def detectar_windows():
     }
 
 
-def preparar_atualizacao(progress_callback=None) -> Path | None:
+def preparar_atualizacao(progress_callback=None):
     """Ativa a ultima versao boa e baixa uma nova quando houver manifesto valido."""
     APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
     UPDATES_DIR.mkdir(parents=True, exist_ok=True)
@@ -133,7 +133,7 @@ def preparar_atualizacao(progress_callback=None) -> Path | None:
         return atual
 
 
-def atualizacao_instalada() -> Path | None:
+def atualizacao_instalada():
     info = ler_json(CURRENT_PATH)
     caminho = Path(str(info.get("path", ""))) if info else None
     if caminho and caminho.exists() and str(info.get("version", "")) not in versoes_bloqueadas():
@@ -141,12 +141,12 @@ def atualizacao_instalada() -> Path | None:
     return None
 
 
-def ativar_caminho(caminho: Path | None) -> None:
+def ativar_caminho(caminho):
     if caminho and caminho.exists() and str(caminho) not in sys.path:
         sys.path.insert(0, str(caminho))
 
 
-def desativar_atualizacao_com_erro(erro: str) -> None:
+def desativar_atualizacao_com_erro(erro):
     info = ler_json(CURRENT_PATH)
     versao = str(info.get("version", "")).strip()
     bloqueadas = versoes_bloqueadas()
@@ -158,17 +158,17 @@ def desativar_atualizacao_com_erro(erro: str) -> None:
     salvar_status({"ok": False, "rollback": True, "version": versao, "erro": erro})
 
 
-def versao_atual_ativa() -> str:
+def versao_atual_ativa():
     info = ler_json(CURRENT_PATH)
     return str(info.get("version") or APP_VERSION)
 
 
-def versoes_bloqueadas() -> set[str]:
+def versoes_bloqueadas():
     dados = ler_json(BAD_VERSIONS_PATH)
     return set(str(v) for v in dados.get("versions", []))
 
 
-def carregar_manifest(ambiente=None) -> dict | None:
+def carregar_manifest(ambiente=None):
     ambiente = ambiente or detectar_windows()
     cfg = ler_json(CONFIG_PATH)
     manifest_url = str(cfg.get("manifest_url", "")).strip() or ambiente.get("manifest_url") or DEFAULT_MANIFEST_URL
@@ -181,7 +181,7 @@ def carregar_manifest(ambiente=None) -> dict | None:
     return None
 
 
-def obter_pacote(manifest: dict, progress_callback=None) -> Path | None:
+def obter_pacote(manifest, progress_callback=None):
     package_file = str(manifest.get("package_file", "")).strip()
     package_url = str(manifest.get("package_url", "")).strip()
     if package_file:
@@ -199,7 +199,7 @@ def obter_pacote(manifest: dict, progress_callback=None) -> Path | None:
     return None
 
 
-def baixar_arquivo_com_progresso(url: str, destino: Path, progress_callback=None) -> Path:
+def baixar_arquivo_com_progresso(url, destino, progress_callback=None):
     with urllib.request.urlopen(url, timeout=20) as resp:
         total = int(resp.headers.get("Content-Length") or 0)
         baixado = 0
@@ -225,7 +225,7 @@ def baixar_arquivo_com_progresso(url: str, destino: Path, progress_callback=None
     return destino
 
 
-def instalar_pacote(pacote: Path, versao: str) -> Path:
+def instalar_pacote(pacote, versao):
     destino = UPDATES_DIR / nome_seguro(versao)
     temp_dir = UPDATES_DIR / f".tmp_{nome_seguro(versao)}"
     if temp_dir.exists():
@@ -241,18 +241,18 @@ def instalar_pacote(pacote: Path, versao: str) -> Path:
     return destino
 
 
-def validar_sha256(caminho: Path, esperado: str) -> None:
+def validar_sha256(caminho, esperado):
     if not esperado:
         raise ValueError("Manifesto sem sha256 do pacote.")
     h = hashlib.sha256()
     with open(caminho, "rb") as f:
-        for bloco in iter(lambda: f.read(1024 * 1024), b=""):
+        for bloco in iter(lambda: f.read(1024 * 1024), b""):
             h.update(bloco)
     if h.hexdigest().lower() != esperado.lower():
         raise ValueError("Pacote de atualizacao com hash diferente do manifesto.")
 
 
-def extrair_zip_seguro(zf: zipfile.ZipFile, destino: Path) -> None:
+def extrair_zip_seguro(zf, destino):
     raiz = destino.resolve()
     for item in zf.infolist():
         alvo = (destino / item.filename).resolve()
@@ -261,12 +261,12 @@ def extrair_zip_seguro(zf: zipfile.ZipFile, destino: Path) -> None:
     zf.extractall(destino)
 
 
-def baixar_json(url: str) -> dict:
+def baixar_json(url):
     with urllib.request.urlopen(url, timeout=12) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
 
-def ler_json(caminho: Path) -> dict:
+def ler_json(caminho):
     try:
         with open(caminho, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -274,26 +274,26 @@ def ler_json(caminho: Path) -> dict:
         return {}
 
 
-def salvar_json(caminho: Path, dados: dict) -> None:
+def salvar_json(caminho, dados):
     caminho.parent.mkdir(parents=True, exist_ok=True)
     with open(caminho, "w", encoding="utf-8") as f:
         json.dump(dados, f, ensure_ascii=False, indent=2)
 
 
-def salvar_status(dados: dict) -> None:
+def salvar_status(dados):
     salvar_json(STATUS_PATH, dados)
 
 
-def versao_maior(nova: str, atual: str) -> bool:
+def versao_maior(nova, atual):
     return partes_versao(nova) > partes_versao(atual)
 
 
-def partes_versao(valor: str) -> tuple:
+def partes_versao(valor):
     partes = []
     for pedaco in valor.replace("-", ".").split("."):
         partes.append(int(pedaco) if pedaco.isdigit() else pedaco)
     return tuple(partes)
 
 
-def nome_seguro(valor: str) -> str:
+def nome_seguro(valor):
     return "".join(c if c.isalnum() or c in "._-" else "_" for c in valor)
