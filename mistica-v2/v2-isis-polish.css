@@ -8,7 +8,7 @@
   display: grid !important;
   align-content: end !important;
   padding: 24px !important;
-  background-image: url("assets/isis-hero.webp") !important;
+  background-image: url("assets/isis-hero-new.webp") !important;
   background-size: cover !important;
   background-position: center 35% !important;
   background-repeat: no-repeat !important;
@@ -121,7 +121,7 @@
 .isis-photo,
 .isis-photo.has-real-isis {
   min-height: clamp(430px, 42vw, 600px) !important;
-  background-image: url("assets/isis-hero.webp") !important;
+  background-image: url("assets/isis-hero-new.webp") !important;
   background-size: cover !important;
   background-position: center 33% !important;
   background-repeat: no-repeat !important;
