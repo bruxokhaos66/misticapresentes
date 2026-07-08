@@ -10,6 +10,12 @@ from services.pagamento_misto_service import extrair_pagamentos_mistos
 
 
 FORMAS_PAGAMENTO_PADRAO = ["Dinheiro", "Pix", "Debito", "Credito 1x", "Credito 2x", "Credito 3x"]
+TAXAS_FIXAS_CARTAO = {
+    "Debito": 1.50,
+    "Credito 1x": 1.50,
+    "Credito 2x": 2.00,
+    "Credito 3x": 2.50,
+}
 
 
 def _taxa_por_forma(forma, valor_base):
@@ -17,14 +23,9 @@ def _taxa_por_forma(forma, valor_base):
     valor_base = float(valor_base or 0)
     if valor_base <= 0:
         return 0.0
-    if forma == "Debito":
-        return 1.5
-    if "Credito 1x" in forma:
-        return valor_base * 0.015
-    if "Credito 2x" in forma:
-        return valor_base * 0.02
-    if "Credito 3x" in forma:
-        return valor_base * 0.025
+    for nome_forma, taxa in TAXAS_FIXAS_CARTAO.items():
+        if nome_forma in forma:
+            return float(taxa or 0.0)
     return 0.0
 
 
