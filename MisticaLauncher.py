@@ -12,7 +12,7 @@ if str(BASE_DIR) not in sys.path:
 def janela_atualizacao_launcher():
     try:
         import customtkinter as ctk
-        from auto_updater import preparar_atualizacao
+        from auto_updater import preparar_atualizacao, detectar_windows
     except Exception as exc:
         print(f"[Launcher] Atualizador visual indisponivel: {exc}")
         try:
@@ -21,6 +21,7 @@ def janela_atualizacao_launcher():
         except Exception:
             return None
 
+    ambiente = detectar_windows()
     eventos = queue.Queue()
     resultado = {"path": None, "erro": None, "finalizado": False}
 
@@ -42,7 +43,7 @@ def janela_atualizacao_launcher():
 
     root = ctk.CTk()
     root.title("Mística Presentes - Atualizador")
-    root.geometry("560x300")
+    root.geometry("590x325")
     root.resizable(False, False)
     try:
         root.eval("tk::PlaceWindow . center")
@@ -52,17 +53,21 @@ def janela_atualizacao_launcher():
     frame = ctk.CTkFrame(root, corner_radius=22, fg_color="#17131d")
     frame.pack(fill="both", expand=True, padx=18, pady=18)
 
-    ctk.CTkLabel(frame, text="☾ Mística Presentes", font=("Georgia", 30, "bold"), text_color="#f0c56a").pack(pady=(24, 4))
-    ctk.CTkLabel(frame, text="Atualizador online", font=("Arial", 13, "bold"), text_color="#b8c977").pack(pady=(0, 8))
+    ctk.CTkLabel(frame, text="☾ Mística Presentes", font=("Georgia", 30, "bold"), text_color="#f0c56a").pack(pady=(20, 4))
+    ctk.CTkLabel(frame, text="Atualizador online inteligente", font=("Arial", 13, "bold"), text_color="#b8c977").pack(pady=(0, 6))
 
-    status = ctk.CTkLabel(frame, text="Verificando atualizações antes do login...", font=("Arial", 14, "bold"), text_color="#efe1c5", wraplength=460)
+    ambiente_txt = f"Detectado: {ambiente['nome']} • {ambiente['bits']} bits • Canal: {ambiente['canal']}"
+    ambiente_lbl = ctk.CTkLabel(frame, text=ambiente_txt, font=("Arial", 11, "bold"), text_color="#d8cbb6", wraplength=500)
+    ambiente_lbl.pack(pady=(0, 8))
+
+    status = ctk.CTkLabel(frame, text="Verificando atualizações antes do login...", font=("Arial", 14, "bold"), text_color="#efe1c5", wraplength=500)
     status.pack(pady=(8, 14))
 
-    barra = ctk.CTkProgressBar(frame, width=440, height=18, progress_color="#f0c56a")
+    barra = ctk.CTkProgressBar(frame, width=460, height=18, progress_color="#f0c56a")
     barra.pack(pady=(0, 12))
     barra.set(0.04)
 
-    detalhe = ctk.CTkLabel(frame, text="Se não houver internet, o sistema abre normalmente com a versão atual.", font=("Arial", 11), text_color="#c8bfae", wraplength=460)
+    detalhe = ctk.CTkLabel(frame, text="O launcher escolhe automaticamente a versão correta para este Windows.", font=("Arial", 11), text_color="#c8bfae", wraplength=500)
     detalhe.pack(pady=(0, 8))
 
     threading.Thread(target=worker, daemon=True).start()
@@ -73,6 +78,8 @@ def janela_atualizacao_launcher():
             while True:
                 dados = eventos.get_nowait()
                 status.configure(text=str(dados.get("mensagem") or "Atualizando..."))
+                amb = dados.get("ambiente") or ambiente
+                ambiente_lbl.configure(text=f"Detectado: {amb['nome']} • {amb['bits']} bits • Canal: {amb['canal']}")
                 prog = dados.get("progresso")
                 if prog is not None:
                     try:
