@@ -8,6 +8,7 @@ on:
     paths:
       - "**.py"
       - "scripts/gerar_pacote_atualizacao.py"
+      - "scripts/gerar_manifestos_canais.py"
       - ".github/workflows/build-online-update-package.yml"
 
 jobs:
@@ -27,6 +28,7 @@ jobs:
         shell: pwsh
         run: |
           python scripts/gerar_pacote_atualizacao.py 1.0.${{ github.run_number }}
+          python scripts/gerar_manifestos_canais.py
 
       - name: Package update files
         shell: pwsh
