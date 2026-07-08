@@ -51,6 +51,7 @@ for origem, destino in [
     ('mistica_presentes.py', '.'),
     ('auto_updater.py', '.'),
     ('app_version.py', '.'),
+    ('release_notes.py', '.'),
     ('app_runtime_patch.py', '.'),
     ('app_pagamento_misto_patch.py', '.'),
     ('app_sync_pagamento_misto_payload_patch.py', '.'),
