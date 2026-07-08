@@ -9,6 +9,7 @@ on:
       - "MisticaLauncher.py"
       - "auto_updater.py"
       - "app_version.py"
+      - "release_notes.py"
       - "app_*.py"
       - "mistica_presentes.py"
       - "requirements.txt"
@@ -39,6 +40,7 @@ jobs:
           pyinstaller --noconfirm --clean --onefile --windowed --name "MisticaLauncher" `
             --add-data "auto_updater.py;." `
             --add-data "app_version.py;." `
+            --add-data "release_notes.py;." `
             --add-data "app_runtime_patch.py;." `
             --add-data "app_pagamento_misto_patch.py;." `
             --add-data "app_sync_pagamento_misto_payload_patch.py;." `
