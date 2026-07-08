@@ -1,8 +1,8 @@
 {
-  "version": "1.0.500",
+  "version": "1.0.501",
   "package_file": "",
-  "package_url": "https://misticaesotericos.com.br/updates/mistica-update-1.0.500.zip",
-  "sha256": "a5c7311458cd180d95f9f026b0dea45c0fef003d196334b2016cce97114215d5",
+  "package_url": "https://misticaesotericos.com.br/updates/mistica-update-1.0.501.zip",
+  "sha256": "7bc032932dc020370ca87465812d0988a093f39a0b1cecb4760f79f4966fc01f",
   "notes": "Atualizacao Mistica Presentes - canal win10-x86",
   "channel": "win10-x86"
 }
