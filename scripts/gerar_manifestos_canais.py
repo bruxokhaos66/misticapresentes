@@ -18,10 +18,12 @@ def main() -> None:
     if not base_path.exists():
         raise SystemExit("manifest.json nao encontrado. Gere o pacote primeiro.")
     base = json.loads(base_path.read_text(encoding="utf-8"))
+    notas_base = str(base.get("notes") or "Atualizacao Mistica Presentes")
     for nome, canal in CANAIS.items():
         dados = dict(base)
         dados["channel"] = canal
-        dados["notes"] = f"Atualizacao Mistica Presentes - canal {canal}"
+        dados["notes"] = notas_base
+        dados["channel_notes"] = f"Canal de atualizacao: {canal}"
         (UPDATES / nome).write_text(json.dumps(dados, ensure_ascii=False, indent=2), encoding="utf-8")
     print("Manifestos por canal gerados em", UPDATES)
 
