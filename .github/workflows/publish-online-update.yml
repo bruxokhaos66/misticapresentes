@@ -1,0 +1,58 @@
+name: Publish Online Update
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versao para publicar. Exemplo: 1.0.250"
+        required: true
+        default: "1.0.250"
+
+permissions:
+  contents: write
+
+jobs:
+  publish-update:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate update files
+        shell: pwsh
+        run: |
+          python scripts/gerar_pacote_atualizacao.py ${{ github.event.inputs.version }}
+
+      - name: Copy files to updates folder
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path updates
+          Copy-Item "dist\updates\manifest.json" "updates\manifest.json" -Force
+          Copy-Item "dist\updates\mistica-update-*.zip" "updates\" -Force
+
+      - name: Commit published update
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add updates app_version.py
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "Publish online update ${{ github.event.inputs.version }}"
+            git push
+          }
+
+      - name: Upload published update artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MisticaPresentes-Published-Update
+          path: dist/updates
+          retention-days: 14
