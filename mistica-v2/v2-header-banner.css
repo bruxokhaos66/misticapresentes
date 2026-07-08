@@ -1,7 +1,14 @@
 /* Cabeçalho local usando o banner enviado pelo usuário. */
+body {
+  padding-top: calc(42px + clamp(255px, 26vw, 380px)) !important;
+}
+
 .top-ribbon {
-  position: relative !important;
-  z-index: 60 !important;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  z-index: 80 !important;
   border-bottom: 1px solid rgba(242,201,109,.20) !important;
   background: rgba(4,5,4,.92) !important;
   color: #f6e7c6 !important;
@@ -20,9 +27,11 @@
 .ribbon-grid a { font-weight: 950 !important; }
 
 .site-header {
-  position: sticky !important;
-  top: 0 !important;
-  z-index: 55 !important;
+  position: fixed !important;
+  top: 42px !important;
+  left: 0 !important;
+  right: 0 !important;
+  z-index: 70 !important;
   min-height: clamp(255px, 26vw, 380px) !important;
   border-bottom: 1px solid rgba(242,201,109,.32) !important;
   background-color: #030407 !important;
@@ -56,14 +65,9 @@
   padding: 18px 0 !important;
 }
 
-.brand {
-  display: none !important;
-}
-
+.brand { display: none !important; }
 .brand-mark,
-.brand-copy {
-  display: none !important;
-}
+.brand-copy { display: none !important; }
 
 .nav-links {
   align-self: flex-start !important;
@@ -107,15 +111,17 @@
 .site-header .menu-toggle { z-index: 5 !important; }
 
 @media (max-width: 1180px) {
+  body { padding-top: calc(42px + clamp(230px, 31vw, 340px)) !important; }
   .site-header { min-height: clamp(230px, 31vw, 340px) !important; }
   .nav { min-height: clamp(230px, 31vw, 340px) !important; }
   .nav-links { flex-wrap: wrap !important; justify-content: center !important; border-radius: 26px !important; }
 }
 
 @media (max-width: 680px) {
-  .ribbon-grid { grid-template-columns: 1fr !important; text-align: center !important; gap: 4px !important; }
+  body { padding-top: calc(126px + 240px) !important; }
+  .ribbon-grid { grid-template-columns: 1fr !important; text-align: center !important; gap: 4px !important; min-height: 126px !important; }
   .ribbon-grid a { justify-self: center !important; }
-  .site-header { min-height: 240px !important; background-size: cover !important; background-position: center top !important; }
+  .site-header { top: 126px !important; min-height: 240px !important; background-size: cover !important; background-position: center top !important; }
   .nav { min-height: 240px !important; padding: 12px 0 !important; align-items: flex-end !important; justify-content: center !important; }
   .nav-links { width: 100% !important; }
   .nav-links a:not(.btn), .nav-links .btn { flex: 1 1 auto !important; justify-content: center !important; text-align: center !important; }
