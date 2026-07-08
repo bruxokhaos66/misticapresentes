@@ -29,6 +29,12 @@ def executar_app(app_dir: Path) -> None:
         print(f"[Aviso] complementos do app: {exc}")
 
     try:
+        from app_pagamento_misto_patch import aplicar_pagamento_misto_runtime
+        fonte = aplicar_pagamento_misto_runtime(fonte)
+    except Exception as exc:
+        print(f"[Aviso] pagamento misto: {exc}")
+
+    try:
         from app_sync_status_patch import aplicar_sync_status_runtime
         fonte = aplicar_sync_status_runtime(fonte)
     except Exception as exc:
@@ -69,5 +75,3 @@ if __name__ == "__main__":
             executar_app(BASE_DIR)
         else:
             raise
-
-
