@@ -13,7 +13,7 @@ def aplicar_pagamento_misto_runtime(fonte: str) -> str:
 
         self.v_misto_frame = ctk.CTkFrame(corpo_checkout, fg_color="#241d2b", corner_radius=10)
         ctk.CTkLabel(self.v_misto_frame, text="Pagamento misto", font=self.font_label, text_color=self.cor_ouro).pack(pady=(6, 2))
-        ctk.CTkLabel(self.v_misto_frame, text="Divida o valor em até 4 formas. Use o botão para completar o restante.", font=("Arial", 11, "bold"), text_color="#d8cbb6", wraplength=290).pack(pady=(0, 4))
+        ctk.CTkLabel(self.v_misto_frame, text="Divida o valor em até 4 formas. A venda só salva se o valor fechar.", font=("Arial", 11, "bold"), text_color="#d8cbb6", wraplength=290).pack(pady=(0, 4))
 
         self.v_misto_linhas = []
         formas_mistas = ["Dinheiro", "Pix", "Debito", "Credito 1x", "Credito 2x", "Credito 3x"]
@@ -29,7 +29,7 @@ def aplicar_pagamento_misto_runtime(fonte: str) -> str:
             valor.bind("<KeyRelease>", lambda e: self.render_v_car())
             self.v_misto_linhas.append({"forma": forma, "valor": valor})
 
-        ctk.CTkButton(self.v_misto_frame, text="COMPLETAR RESTANTE NO ÚLTIMO CAMPO", height=32, font=("Arial", 12, "bold"), fg_color="#5f7f4c", command=self.preencher_restante_pagamento_misto).pack(fill="x", padx=8, pady=(4, 8))
+        ctk.CTkButton(self.v_misto_frame, text="COMPLETAR RESTANTE", height=32, font=("Arial", 12, "bold"), fg_color="#5f7f4c", command=self.preencher_restante_pagamento_misto).pack(fill="x", padx=8, pady=(4, 8))
         self.v_misto_resumo_lbl = ctk.CTkLabel(self.v_misto_frame, text="", font=("Arial", 11, "bold"), text_color="#efe1c5", wraplength=290)
         self.v_misto_resumo_lbl.pack(padx=8, pady=(0, 8))
         self.on_pagamento_venda_change()'''
@@ -63,18 +63,23 @@ def aplicar_pagamento_misto_runtime(fonte: str) -> str:
         linhas = getattr(self, "v_misto_linhas", [])
         if not linhas:
             return
-        soma = 0.0
-        ultimo = None
-        for linha in linhas:
+        alvo_indice = len(linhas) - 1
+        for idx, linha in enumerate(linhas):
             valor_ent = linha.get("valor")
-            valor = conv_float(valor_ent.get())
-            if valor > 0:
-                soma += valor
-            ultimo = valor_ent
+            if idx < len(linhas) - 1 and conv_float(valor_ent.get()) <= 0:
+                alvo_indice = idx
+                break
+        soma = 0.0
+        for idx, linha in enumerate(linhas):
+            if idx == alvo_indice:
+                continue
+            valor_ent = linha.get("valor")
+            soma += max(0.0, conv_float(valor_ent.get()))
         restante = max(0.0, base - soma)
-        if ultimo is not None:
-            ultimo.delete(0, 'end')
-            ultimo.insert(0, f"{restante:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        alvo = linhas[alvo_indice].get("valor")
+        if alvo is not None:
+            alvo.delete(0, 'end')
+            alvo.insert(0, f"{restante:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
         self.render_v_car()
 
     def coletar_pagamentos_mistos(self, mostrar_erro=False):
@@ -92,13 +97,13 @@ def aplicar_pagamento_misto_runtime(fonte: str) -> str:
         try:
             if hasattr(self, "v_misto_resumo_lbl"):
                 if not pagamentos:
-                    self.v_misto_resumo_lbl.configure(text=f"Total a dividir: {format_moeda(base)}")
+                    self.v_misto_resumo_lbl.configure(text=f"Total a dividir: {format_moeda(base)}", text_color="#efe1c5")
                 elif abs(falta) <= 0.01:
-                    self.v_misto_resumo_lbl.configure(text=f"Pagamento fechado: {format_moeda(total_pago)}")
+                    self.v_misto_resumo_lbl.configure(text=f"Pagamento fechado: {format_moeda(total_pago)}", text_color="#b8d986")
                 elif falta > 0:
-                    self.v_misto_resumo_lbl.configure(text=f"Falta dividir: {format_moeda(falta)}")
+                    self.v_misto_resumo_lbl.configure(text=f"Falta dividir: {format_moeda(falta)}", text_color="#ffd27f")
                 else:
-                    self.v_misto_resumo_lbl.configure(text=f"Valor acima do total: {format_moeda(abs(falta))}")
+                    self.v_misto_resumo_lbl.configure(text=f"Valor acima do total: {format_moeda(abs(falta))}", text_color="#ff8a8a")
         except Exception:
             pass
         if not pagamentos:
@@ -107,9 +112,18 @@ def aplicar_pagamento_misto_runtime(fonte: str) -> str:
             return []
         if abs(total_pago - round(base, 2)) > 0.01:
             if mostrar_erro:
-                messagebox.showwarning("Pagamento misto", f"Os valores do pagamento misto precisam somar {format_moeda(base)}. Soma atual: {format_moeda(total_pago)}.")
+                if falta > 0:
+                    messagebox.showwarning("Pagamento misto", f"A venda não será finalizada. Ainda falta dividir {format_moeda(falta)}.")
+                else:
+                    messagebox.showwarning("Pagamento misto", f"A venda não será finalizada. O pagamento está acima do total em {format_moeda(abs(falta))}.")
             return []
         return pagamentos
+
+    def validar_pagamento_misto_fechado(self):
+        if not hasattr(self, "v_pag_cb") or self.v_pag_cb.get() != "Misto":
+            return True
+        pagamentos = self.coletar_pagamentos_mistos(True) or []
+        return bool(pagamentos)
 
     def descricao_pagamento_venda(self):
         if not hasattr(self, "v_pag_cb"):
@@ -173,6 +187,20 @@ def aplicar_pagamento_misto_runtime(fonte: str) -> str:
     fonte = fonte.replace(antigo_render, novo_render)
 
     fonte = fonte.replace("PAGAMENTO: {self.v_pag_cb.get()}", "PAGAMENTO: {self.descricao_pagamento_venda()}")
+
+    fonte = fonte.replace('''        self.render_v_car()
+        if validacao["avisos"]:''', '''        self.render_v_car()
+        if hasattr(self, "validar_pagamento_misto_fechado") and not self.validar_pagamento_misto_fechado():
+            return
+        if validacao["avisos"]:''')
+
+    fonte = fonte.replace('''        if not validacao:
+            return
+        data_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")''', '''        if not validacao:
+            return
+        if hasattr(self, "validar_pagamento_misto_fechado") and not self.validar_pagamento_misto_fechado():
+            return
+        data_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")''')
 
     antigo_confirmar = '''                self.v_pag_cb.get(),
                 self.current_user['nome'],
