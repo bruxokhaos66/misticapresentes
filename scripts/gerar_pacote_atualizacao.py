@@ -12,6 +12,8 @@ ROOT = Path(__file__).resolve().parents[1]
 DIST_UPDATES = ROOT / "dist" / "updates"
 UPDATE_BASE_URL = "https://misticaesotericos.com.br/updates"
 INCLUIR_ARQUIVOS = [
+    "app.py",
+    "auto_updater.py",
     "app_frajola_patch.py",
     "app_pagamento_misto_patch.py",
     "app_painel_guard_patch.py",
