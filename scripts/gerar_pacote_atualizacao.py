@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DIST_UPDATES = ROOT / "dist" / "updates"
-UPDATE_BASE_URL = "https://misticaesotericos.com.br/updates"
+UPDATE_BASE_URL = "https://raw.githubusercontent.com/bruxokhaos66/misticapresentes/main/updates"
 INCLUIR_ARQUIVOS = [
     "app.py",
     "auto_updater.py",
