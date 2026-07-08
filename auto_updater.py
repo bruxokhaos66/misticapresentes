@@ -13,7 +13,6 @@ from pathlib import Path
 
 from app_version import APP_VERSION
 
-
 APP_DATA_DIR = Path.home() / "Documents" / "Mistica_Presentes_App"
 UPDATES_DIR = APP_DATA_DIR / "updates"
 CONFIG_PATH = Path.home() / "Documents" / "mistica_atualizador.json"
@@ -36,11 +35,9 @@ def detectar_windows():
         build = int(version.split(".")[-1]) if version else 0
     except Exception:
         build = 0
-
     nome = f"{sistema} {release}".strip()
     canal = "win-modern-x64"
     manifest = "manifest.json"
-
     if release in {"7", "8", "8.1"}:
         if bits == 32:
             canal = "win7-x86"
@@ -58,7 +55,6 @@ def detectar_windows():
     elif bits == 32:
         canal = "win-legacy-x86"
         manifest = "manifest-win7-x86.json"
-
     return {
         "nome": nome,
         "release": release,
@@ -91,7 +87,6 @@ def preparar_atualizacao(progress_callback=None):
 
     atual = atualizacao_instalada()
     ativar_caminho(atual)
-
     try:
         progresso("inicio", f"{ambiente['nome']} {ambiente['bits']} bits detectado. Canal: {ambiente['canal']}.", 0.03)
         progresso("verificando", "Verificando atualizacoes online...", 0.08)
@@ -124,13 +119,17 @@ def preparar_atualizacao(progress_callback=None):
             print(f"[Backup] Nao foi possivel criar backup pre-atualizacao: {exc}")
         progresso("instalando", "Instalando atualizacao...", 0.88)
         destino = instalar_pacote(pacote, versao_online)
-        salvar_json(CURRENT_PATH, {
+        info_atualizacao = {
             "version": versao_online,
             "path": str(destino),
+            "title": manifest.get("title", ""),
             "notes": manifest.get("notes", ""),
+            "changes": manifest.get("changes", []),
+            "channel_notes": manifest.get("channel_notes", ""),
             "canal": ambiente.get("canal"),
-        })
-        salvar_status({"ok": True, "version": versao_online, "path": str(destino), "canal": ambiente.get("canal")})
+        }
+        salvar_json(CURRENT_PATH, info_atualizacao)
+        salvar_status(dict(info_atualizacao, ok=True))
         ativar_caminho(destino)
         progresso("concluido", f"Atualizacao {versao_online} instalada. Abrindo programa...", 1.0)
         return destino
@@ -186,7 +185,6 @@ def carregar_manifest(ambiente=None):
         urls.append(ambiente.get("manifest_url") or DEFAULT_MANIFEST_URL)
         urls.append(ambiente.get("manifest_url_fallback") or f"{GITHUB_UPDATE_BASE_URL}/{ambiente.get('manifest', 'manifest.json')}")
         urls.append(DEFAULT_MANIFEST_URL)
-
     ultimo_erro = None
     for url in urls:
         if not url:
@@ -199,7 +197,6 @@ def carregar_manifest(ambiente=None):
         except Exception as exc:
             ultimo_erro = exc
             continue
-
     if LOCAL_MANIFEST_PATH.exists():
         return ler_json(LOCAL_MANIFEST_PATH)
     if ultimo_erro:
