@@ -30,12 +30,13 @@ jobs:
         shell: pwsh
         run: |
           python scripts/gerar_pacote_atualizacao.py ${{ github.event.inputs.version }}
+          python scripts/gerar_manifestos_canais.py
 
       - name: Copy files to updates folder
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path updates
-          Copy-Item "dist\updates\manifest.json" "updates\manifest.json" -Force
+          Copy-Item "dist\updates\*.json" "updates\" -Force
           Copy-Item "dist\updates\mistica-update-*.zip" "updates\" -Force
 
       - name: Commit published update
