@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import shutil
 import sys
@@ -26,6 +27,7 @@ INCLUIR_ARQUIVOS = [
     "app_scroll_patch.py",
     "app_sync_status_patch.py",
     "app_version.py",
+    "release_notes.py",
     "config.py",
     "mistica_presentes.py",
 ]
@@ -51,6 +53,28 @@ def sha256(caminho: Path) -> str:
     return h.hexdigest()
 
 
+def carregar_release_notes(versao: str):
+    padrao = {
+        "title": "Atualizacao Mistica Presentes",
+        "notes": "Atualizacao Mistica Presentes",
+        "changes": [],
+    }
+    caminho = ROOT / "release_notes.py"
+    if not caminho.exists():
+        return padrao
+    try:
+        spec = importlib.util.spec_from_file_location("release_notes", str(caminho))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return {
+            "title": str(getattr(mod, "RELEASE_TITLE", padrao["title"])),
+            "notes": str(getattr(mod, "RELEASE_NOTES", padrao["notes"])),
+            "changes": list(getattr(mod, "RELEASE_CHANGES", []) or []),
+        }
+    except Exception:
+        return padrao
+
+
 def adicionar_arquivo(zf: zipfile.ZipFile, caminho: Path, destino: Path) -> None:
     if "__pycache__" in caminho.parts or caminho.suffix in {".pyc", ".pyo"}:
         return
@@ -74,12 +98,15 @@ def gerar(versao: str) -> Path:
             for origem in origem_pasta.rglob("*"):
                 if origem.is_file() and origem.suffix.lower() in EXTENSOES:
                     adicionar_arquivo(zf, origem, origem.relative_to(ROOT))
+    notas = carregar_release_notes(versao)
     manifesto = {
         "version": versao,
         "package_file": "",
         "package_url": f"{UPDATE_BASE_URL}/{pacote.name}",
         "sha256": sha256(pacote),
-        "notes": "Atualizacao Mistica Presentes",
+        "title": notas.get("title", "Atualizacao Mistica Presentes"),
+        "notes": notas.get("notes", "Atualizacao Mistica Presentes"),
+        "changes": notas.get("changes", []),
     }
     with open(DIST_UPDATES / "manifest.json", "w", encoding="utf-8") as f:
         json.dump(manifesto, f, ensure_ascii=False, indent=2)
