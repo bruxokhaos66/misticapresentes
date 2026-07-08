@@ -1,18 +1,17 @@
-/* Seção de contato com a arte enviada visível e sem overlay escuro. */
+/* Seção de contato com a arte enviada, sem overlay e com cache bust. */
 .contact-section{
   position:relative!important;
   min-height:clamp(560px,50vw,800px)!important;
   padding:0!important;
   display:block!important;
   background-color:#030407!important;
-  background-image:url('/mistica-v2/contact-banner.webp')!important;
+  background-image:url("contact-banner.webp?v=20260708-contato-final")!important;
   background-size:contain!important;
   background-position:center center!important;
   background-repeat:no-repeat!important;
   border-top:1px solid rgba(242,201,109,.22)!important;
   border-bottom:1px solid rgba(242,201,109,.22)!important;
   overflow:hidden!important;
-  filter:brightness(1.25) contrast(1.04) saturate(1.08)!important;
 }
 .contact-section::before,.contact-section::after{content:none!important;display:none!important;background:none!important;opacity:0!important}
 .contact-section .split{display:none!important;visibility:hidden!important;opacity:0!important}
