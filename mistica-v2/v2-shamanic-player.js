@@ -4,8 +4,9 @@
   const STORE_NAME = 'tracks';
   const UPLOADED_KEY = 'uploaded-main';
   const PUBLIC_AUDIO_PATH = 'mistica-v2/assets/audio/xamanico-ambiente.mp3';
+  const ACTIVE_TITLE = 'Ambiente Xamânico ativado';
   const FALLBACK_TRACK = {
-    title: 'Ambiente xamânico da loja',
+    title: ACTIVE_TITLE,
     src: 'assets/audio/xamanico-ambiente.mp3',
     note: 'Arquivo de áudio não encontrado. Use upload no Admin ou coloque a faixa em mistica-v2/assets/audio.'
   };
@@ -137,7 +138,7 @@
       activeTrack = track;
       audio.src = activeTrack.src;
       audio.load();
-      if (title) title.textContent = activeTrack.title;
+      if (title) title.textContent = ACTIVE_TITLE;
       setStatus('Ambiente pronto. Clique em tocar para iniciar.');
       if (list) list.replaceChildren();
     };
@@ -148,7 +149,7 @@
         const uploaded = await readUploadedTrack();
         if (uploaded?.blob) {
           uploadedUrl = URL.createObjectURL(uploaded.blob);
-          applyTrack({ title: 'Música enviada no Admin', src: uploadedUrl });
+          applyTrack({ title: ACTIVE_TITLE, src: uploadedUrl });
           setAdminStatus(`Música local ativa: ${uploaded.name} (${formatBytes(uploaded.size)}).`);
           setUploadProgress(100);
           return;
@@ -192,7 +193,7 @@
         try {
           await audio.play();
           setPlayingUi(true);
-          setStatus('Ambiente tocando.');
+          setStatus('Ambiente Xamânico ativado.');
         } catch {
           setPlayingUi(false);
           setStatus('Arquivo de áudio não encontrado. Use upload no Admin ou coloque a faixa em mistica-v2/assets/audio.');
