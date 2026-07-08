@@ -16,6 +16,7 @@ INCLUIR_ARQUIVOS = [
     "auto_updater.py",
     "app_frajola_patch.py",
     "app_pagamento_misto_patch.py",
+    "app_sync_pagamento_misto_payload_patch.py",
     "app_painel_guard_patch.py",
     "app_runtime_patch.py",
     "app_scroll_patch.py",
