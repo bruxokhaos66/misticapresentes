@@ -72,7 +72,6 @@ def detectar_windows():
 
 
 def preparar_atualizacao(progress_callback=None):
-    """Ativa a ultima versao boa e baixa uma nova quando houver manifesto valido."""
     APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
     UPDATES_DIR.mkdir(parents=True, exist_ok=True)
     ambiente = detectar_windows()
@@ -115,6 +114,12 @@ def preparar_atualizacao(progress_callback=None):
             return atual
         progresso("validando", "Validando pacote baixado...", 0.78)
         validar_sha256(pacote, str(manifest.get("sha256", "")).strip())
+        progresso("backup", "Criando backup de seguranca antes da atualizacao...", 0.84)
+        try:
+            from services.backup_service import backup_pre_atualizacao
+            backup_pre_atualizacao()
+        except Exception as exc:
+            print(f"[Backup] Nao foi possivel criar backup pre-atualizacao: {exc}")
         progresso("instalando", "Instalando atualizacao...", 0.88)
         destino = instalar_pacote(pacote, versao_online)
         salvar_json(CURRENT_PATH, {
@@ -246,7 +251,7 @@ def validar_sha256(caminho, esperado):
         raise ValueError("Manifesto sem sha256 do pacote.")
     h = hashlib.sha256()
     with open(caminho, "rb") as f:
-        for bloco in iter(lambda: f.read(1024 * 1024), b""):
+        for bloco in iter(lambda: f.read(1024 * 1024), b=""):
             h.update(bloco)
     if h.hexdigest().lower() != esperado.lower():
         raise ValueError("Pacote de atualizacao com hash diferente do manifesto.")
