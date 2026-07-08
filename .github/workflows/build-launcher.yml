@@ -45,6 +45,7 @@ jobs:
             --add-data "app_caixa_fechamento_avancado_patch.py;." `
             --add-data "app_backup_inicializacao_patch.py;." `
             --add-data "app_backup_painel_patch.py;." `
+            --add-data "app_manutencao_segura_patch.py;." `
             --add-data "app_sync_status_patch.py;." `
             --add-data "app_painel_guard_patch.py;." `
             --add-data "app_scroll_patch.py;." `
