@@ -1,10 +1,10 @@
-RELEASE_VERSION = "1.0.515"
-RELEASE_TITLE = "Correcao do carregamento de modulos do Launcher"
-RELEASE_NOTES = "Corrige o Launcher para priorizar os modulos da versao atualizada e nao reutilizar servicos antigos empacotados no executavel."
+RELEASE_VERSION = "1.0.516"
+RELEASE_TITLE = "Compatibilidade completa dos imports do caixa"
+RELEASE_NOTES = "Realiza correcao ampla no servico de caixa para incluir todas as funcoes importadas pelo app principal relacionadas a caixa e contas a pagar."
 RELEASE_CHANGES = [
-    "Launcher limpa modulos antigos antes de abrir a versao atualizada.",
-    "Prioriza services, database, repositories, isis e reports da pasta updates.",
-    "Evita abrir services.caixa_service antigo do Temp/_MEI.",
-    "Corrige erro persistente cannot import name excluir_conta quando a atualizacao ja possui a funcao.",
-    "Mantem as correcoes anteriores de contas a pagar e pagamento misto com taxas.",
+    "Adiciona listar_contas em services.caixa_service.",
+    "Mantem salvar_conta, obter_conta, marcar_conta_paga e excluir_conta no mesmo servico.",
+    "Evita erro cannot import name listar_contas ao abrir o Launcher.",
+    "Mantem compatibilidade com a tela de contas a pagar do app principal.",
+    "Mantem as correcoes anteriores do Launcher e do pagamento misto com taxas.",
 ]
