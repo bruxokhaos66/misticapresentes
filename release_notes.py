@@ -1,10 +1,12 @@
-RELEASE_VERSION = "1.0.518"
-RELEASE_TITLE = "Formatacao monetaria nos campos do caixa"
-RELEASE_NOTES = "Os campos de dinheiro do pagamento misto e do valor recebido agora sao formatados como moeda brasileira ao sair do campo."
+RELEASE_VERSION = "1.0.519"
+RELEASE_TITLE = "Icone xamanico e atalho principal"
+RELEASE_NOTES = "Adiciona geracao automatica de icone xamanico moderno e ajusta o instalador para criar um atalho principal na Area de Trabalho apontando para o Launcher."
 RELEASE_CHANGES = [
-    "Campo do pagamento misto formata 10 como 10,00 ao sair do campo.",
-    "Campo Valor recebido em dinheiro tambem formata como moeda brasileira.",
-    "Botao Completar Restante usa a mesma formatacao monetaria.",
-    "Mantem os calculos do pagamento misto com taxas.",
-    "Melhora a leitura visual dos valores em reais no caixa.",
+    "Cria gerador de icone xamanico moderno em scripts/gerar_icone_mistica.py.",
+    "Build do instalador gera e usa o icone no programa principal.",
+    "Build do Launcher gera e usa o mesmo icone.",
+    "Instalador passa a incluir MisticaLauncher.exe junto do sistema.",
+    "Instalador cria atalho Mistica Presentes.lnk na Area de Trabalho apontando para o Launcher.",
+    "Atalho usa o icone xamanico moderno.",
+    "Pacote de atualizacao online passa a incluir assets e icones.",
 ]
