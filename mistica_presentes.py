@@ -570,6 +570,7 @@ class MisticaApp(ctk.CTk):
             self.tree_v_stock.heading(c, text=h)
             self.tree_v_stock.column(c, width=90)
         self.tree_v_stock.pack(fill="x", padx=15, pady=5)
+        self.adicionar_barra_rolagem_tree(self.tree_v_stock)
         self.tree_v_stock.bind("<Double-1>", lambda e: self.add_ao_carrinho())
 
         f_mid = ctk.CTkFrame(esq, fg_color="transparent")
@@ -585,6 +586,7 @@ class MisticaApp(ctk.CTk):
         self.tree_v_car.heading("q", text="Qtd")
         self.tree_v_car.heading("t", text="Total")
         self.tree_v_car.pack(fill="both", expand=True, padx=15, pady=10)
+        self.adicionar_barra_rolagem_tree(self.tree_v_car)
         self.tree_v_car.bind("<Double-1>", lambda e: self.editar_qtd_carrinho())
 
         dir = ctk.CTkFrame(f, fg_color=self.cor_vinho, width=390, corner_radius=15)
@@ -1887,6 +1889,7 @@ class MisticaApp(ctk.CTk):
         for c, h in zip(("u","a","d","dt"), ("User","Acao","Detalhes","Data/Hora")):
             self.tree_logs.heading(c, text=h)
         self.tree_logs.pack(fill="both", expand=True, pady=(5, 15))
+        self.adicionar_barra_rolagem_tree(self.tree_logs)
         self.refresh_audit()
 
     # --- JANELA DE GERENCIAMENTO DE USUÁRIOS ---
