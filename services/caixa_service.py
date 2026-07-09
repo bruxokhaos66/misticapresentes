@@ -190,6 +190,12 @@ def salvar_conta(descricao, valor, vencimento, categoria):
     query_db("INSERT INTO contas_a_pagar (descricao, valor, data_vencimento, categoria, status) VALUES (?,?,?,?,?)", (descricao, float(valor or 0), vencimento, categoria, "Pendente"), commit=True)
 
 
+def listar_contas(status=None):
+    if status:
+        return query_db("SELECT id, descricao, valor, data_vencimento, categoria, status FROM contas_a_pagar WHERE status=? ORDER BY data_vencimento ASC, id DESC", (status,))
+    return query_db("SELECT id, descricao, valor, data_vencimento, categoria, status FROM contas_a_pagar ORDER BY data_vencimento ASC, id DESC")
+
+
 def obter_conta(conta_id):
     res = query_db("SELECT id, descricao, valor, data_vencimento, categoria, status FROM contas_a_pagar WHERE id=?", (conta_id,))
     return res[0] if res else None
