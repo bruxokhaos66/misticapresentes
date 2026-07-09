@@ -1,16 +1,16 @@
 {
-  "version": "1.0.509",
+  "version": "1.0.510",
   "package_file": "",
-  "package_url": "https://raw.githubusercontent.com/bruxokhaos66/misticapresentes/main/updates/mistica-update-1.0.509.zip",
-  "sha256": "b707a96dad74c641c910077a260a75041ec0911f361a4e4853c82a7543d8eff1",
-  "title": "Teste de atualizacao apos correcao do Launcher",
-  "notes": "Versao criada apenas para testar se o Launcher corrigido consegue baixar, instalar e abrir uma nova atualizacao automaticamente.",
+  "package_url": "https://raw.githubusercontent.com/bruxokhaos66/misticapresentes/main/updates/mistica-update-1.0.510.zip",
+  "sha256": "0c792ec9e24cf4fbfed4e31087b3a7b8c6ed9db5211928fe56273dde37c55de7",
+  "title": "Valor recebido e troco no caixa",
+  "notes": "A venda em dinheiro agora permite informar o valor recebido do cliente e calcula o troco automaticamente.",
   "changes": [
-    "Teste do fluxo de atualizacao depois da correcao dos modulos do Launcher.",
-    "Valida se o Launcher baixa o pacote publicado no repositorio.",
-    "Valida se a versao ativa muda para 1.0.509.",
-    "Valida se as notas aparecem na aba Manutencao.",
-    "Nao altera regras de venda, estoque, caixa ou sincronizacao nesta versao."
+    "Adicionado campo Valor recebido na venda em dinheiro.",
+    "Adicionado calculo automatico de troco.",
+    "Bloqueia finalizar venda em dinheiro quando o valor recebido for menor que o total.",
+    "Descricao do pagamento passa a mostrar recebido e troco.",
+    "Exemplo: compra R$ 80,00, recebido R$ 100,00, troco R$ 20,00."
   ],
   "channel": "win-modern-x64",
   "channel_notes": "Canal de atualizacao: win-modern-x64"
