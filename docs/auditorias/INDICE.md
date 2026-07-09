@@ -7,6 +7,8 @@ Esta pasta concentra relatorios de auditoria, prontidao comercial, performance, 
 - `AUDITORIA_SITE_MISTICA_20260707.md` — auditoria visual e comercial do site em 07/07/2026.
 - `AUDITORIA_HERO_20260707.txt` — auditoria da Hero e conflito de camadas visuais.
 - `AUDITORIA_SITE.md` — auditoria consolidada do site e painel.
+- `RESTAURACAO_SITE_20260707.txt` — restauracao visual e tecnica do site em 07/07/2026.
+- `RELATORIO_LAYOUT_COMERCIAL_PREMIUM.md` — relatorio de layout comercial premium.
 - `RELATORIO_AUDITORIA_FINAL.md` — auditoria final de visual, performance e acessibilidade.
 - `RELATORIO_PRONTIDAO_COMERCIAL.md` — prontidao comercial do site para venda real.
 
