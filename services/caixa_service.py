@@ -45,6 +45,18 @@ def status_caixa_aberto():
     return res[0] if res else None
 
 
+def caixa_abertos_count():
+    """Compatibilidade para módulos antigos da Isis/serviços.
+
+    Retorna quantos caixas estão com status Aberto.
+    """
+    try:
+        res = query_db("SELECT COUNT(*) FROM caixa_diario WHERE status='Aberto'")
+        return int(res[0][0] or 0) if res else 0
+    except Exception:
+        return 0
+
+
 def abrir_caixa(valor_inicial, operador, descricao="Abertura de Caixa"):
     if obter_caixa_id_ativo():
         raise ValueError("Ja existe um caixa aberto. Feche o caixa atual antes de abrir outro.")
