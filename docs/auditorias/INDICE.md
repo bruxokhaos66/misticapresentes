@@ -20,6 +20,7 @@ Esta pasta concentra relatorios de auditoria, prontidao comercial, performance, 
 - `PLANO_CONSOLIDACAO_PATCHES.md` — plano para consolidar patches e reduzir complexidade.
 - `RELATORIO_LIMPEZA_BACKUPS_PYCACHE_20260709.md` — limpeza de pycache e backups rastreados.
 - `RELATORIO_LIMPEZA_PYCACHE_MODULOS_20260709.md` — limpeza completa de pycache dos modulos Python.
+- `RELATORIO_PRE_CONSOLIDACAO_PATCHES_20260709.md` — analise inicial antes de consolidar patches runtime.
 - `RELATORIO_GERAL_ORGANIZACAO_LIMPEZA_20260709.md` — relatorio geral de tudo que foi organizado e limpo.
 
 ## Regra daqui para frente
