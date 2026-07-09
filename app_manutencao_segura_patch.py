@@ -6,7 +6,7 @@ def aplicar_manutencao_segura_runtime(fonte):
         frame.pack(fill="both", expand=True, padx=18, pady=18)
 
         ctk.CTkLabel(frame, text="MANUTENÇÃO E SEGURANÇA", font=("Georgia", 28, "bold"), text_color=self.cor_ouro).pack(pady=(18, 6))
-        ctk.CTkLabel(frame, text="Backups, sincronização, atualizações e ferramentas de proteção do sistema.", font=self.font_label, text_color="#efe1c5").pack(pady=(0, 18))
+        ctk.CTkLabel(frame, text="Backups, sincronização, atualizações, limpeza de testes e ferramentas de proteção do sistema.", font=self.font_label, text_color="#efe1c5").pack(pady=(0, 18))
 
         grid = ctk.CTkFrame(frame, fg_color="transparent")
         grid.pack(fill="x", padx=24, pady=8)
@@ -19,6 +19,8 @@ def aplicar_manutencao_segura_runtime(fonte):
         ctk.CTkButton(grid, text="RODAR SINCRONIZAÇÃO", height=44, font=self.font_button, fg_color="#7f6a4c", command=self.rodar_sincronizacao_manutencao).grid(row=1, column=1, padx=8, pady=8, sticky="ew")
         ctk.CTkButton(grid, text="VERSÃO E NOTAS DA ATUALIZAÇÃO", height=44, font=self.font_button, fg_color="#4c4c4c", command=self.status_atualizador_manutencao).grid(row=1, column=2, padx=8, pady=8, sticky="ew")
 
+        ctk.CTkButton(grid, text="PREPARAR SISTEMA PARA PRODUÇÃO", height=48, font=self.font_button, fg_color="#8a3434", hover_color="#a94040", command=self.preparar_sistema_producao_manutencao).grid(row=2, column=0, columnspan=3, padx=8, pady=(14, 8), sticky="ew")
+
         for col in range(3):
             grid.grid_columnconfigure(col, weight=1)
 
@@ -27,7 +29,68 @@ def aplicar_manutencao_segura_runtime(fonte):
 
         info = ctk.CTkFrame(frame, fg_color="#211b29", corner_radius=14)
         info.pack(fill="x", padx=24, pady=12)
-        ctk.CTkLabel(info, text="Recomendação: após cada atualização, clique em 'Versão e Notas da Atualização' para conferir o que mudou no sistema.", font=("Arial", 13, "bold"), text_color="#efe1c5", wraplength=900).pack(padx=18, pady=16)
+        ctk.CTkLabel(info, text="Produção: use 'Preparar Sistema para Produção' apenas uma vez, antes de começar os cadastros e vendas reais. O sistema cria backup antes de limpar os dados de teste.", font=("Arial", 13, "bold"), text_color="#efe1c5", wraplength=900).pack(padx=18, pady=16)
+
+    def preparar_sistema_producao_manutencao(self):
+        try:
+            aviso = (
+                "Esta ação prepara o sistema para uso real da loja.\n\n"
+                "Ela vai criar um BACKUP automático e apagar dados de teste como vendas, caixa, fluxo, contas, clientes, fornecedores, logs e movimentações.\n\n"
+                "Use somente se você já terminou os testes."
+            )
+            if not messagebox.askyesno("Preparar sistema para produção", aviso):
+                return
+
+            dialog = ctk.CTkInputDialog(text="Para confirmar a limpeza, digite exatamente: CONFIRMAR", title="Confirmação obrigatória")
+            confirmacao = (dialog.get_input() or "").strip().upper()
+            if confirmacao != "CONFIRMAR":
+                messagebox.showinfo("Cancelado", "Limpeza cancelada. Nenhum dado foi apagado.")
+                return
+
+            remover_produtos = messagebox.askyesno(
+                "Produtos de teste",
+                "Deseja APAGAR também os produtos cadastrados para teste?\n\n"
+                "Sim = apagar produtos fictícios e começar do zero.\n"
+                "Não = manter produtos cadastrados e apenas zerar o estoque."
+            )
+            remover_clientes = messagebox.askyesno("Clientes de teste", "Deseja apagar os clientes cadastrados para teste?")
+            remover_fornecedores = messagebox.askyesno("Fornecedores de teste", "Deseja apagar os fornecedores cadastrados para teste?")
+            limpar_memoria_isis = messagebox.askyesno("Memória da Isis", "Deseja limpar também a memória/aprendizados de teste da Isis?\n\nSe estiver em dúvida, clique em Não.")
+
+            operador = "Sistema"
+            try:
+                operador = self.current_user.get('nome') or self.current_user.get('login') or "Sistema"
+            except Exception:
+                pass
+
+            from services.producao_service import preparar_sistema_para_producao
+            res = preparar_sistema_para_producao(
+                operador=operador,
+                remover_produtos=remover_produtos,
+                remover_clientes=remover_clientes,
+                remover_fornecedores=remover_fornecedores,
+                limpar_memoria_isis=limpar_memoria_isis,
+            )
+
+            resumo = (
+                "Sistema preparado para produção com sucesso.\n\n"
+                f"Backup criado:\n{res.get('backup')}\n\n"
+                f"Relatório:\n{res.get('relatorio')}\n\n"
+                f"Registros removidos: {res.get('total_removido')}\n\n"
+                "Feche e abra o sistema novamente antes de cadastrar os dados reais."
+            )
+            try:
+                self.manut_status_lbl.configure(text="Sistema preparado para produção. Reinicie antes de iniciar os cadastros reais.", text_color="#b8d986")
+            except Exception:
+                pass
+            messagebox.showinfo("Preparação concluída", resumo)
+            try:
+                import os
+                os.startfile(res.get('relatorio'))
+            except Exception:
+                pass
+        except Exception as exc:
+            messagebox.showerror("Preparar produção", f"Erro ao preparar sistema para produção: {exc}")
 
     def status_sincronizacao_manutencao(self):
         try:
