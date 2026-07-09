@@ -30,6 +30,7 @@ Acoes manuais ainda necessarias:
 - `.env.example` foi ampliado como modelo seguro e `env.example.txt` duplicado foi removido.
 - Arquivos temporarios `teste.txt` e `tmp_test_write.txt` foram removidos.
 - Arquivos `__pycache__/` e `.pyc` rastreados foram removidos do estado atual da branch.
+- Removidos tambem os `__pycache__/` rastreados em `database/`, `isis/`, `reports/`, `repositories/`, `screens/` e `services/`.
 - A pasta `backups/` rastreada foi removida do estado atual da branch.
 - Criadas pastas de documentacao:
   - `docs/auditorias/`
@@ -46,6 +47,7 @@ Acoes manuais ainda necessarias:
 - `INSTRUCOES_SITE.md` foi revisado ao mover, mantendo orientacao geral sem dados sensiveis antigos.
 - Criado `docs/auditorias/PLANO_CONSOLIDACAO_PATCHES.md` para orientar a consolidacao segura dos patches.
 - Criado `docs/auditorias/RELATORIO_LIMPEZA_BACKUPS_PYCACHE_20260709.md` com o registro da limpeza de backups e pycache.
+- Criado `docs/auditorias/RELATORIO_LIMPEZA_PYCACHE_MODULOS_20260709.md` com o registro da limpeza completa dos pycache de modulos.
 
 ## Limpeza ainda recomendada
 
