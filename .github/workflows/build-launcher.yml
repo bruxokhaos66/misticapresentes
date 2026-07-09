@@ -57,7 +57,9 @@ jobs:
             --hidden-import shutil `
             --hidden-import platform `
             --hidden-import struct `
+            --hidden-import reports `
             --collect-submodules sqlite3 `
+            --collect-submodules reports `
             --add-data "auto_updater.py;." `
             --add-data "app_version.py;." `
             --add-data "release_notes.py;." `
@@ -77,6 +79,7 @@ jobs:
             --add-data "repositories;repositories" `
             --add-data "services;services" `
             --add-data "isis;isis" `
+            --add-data "reports;reports" `
             --add-data "assets;assets" `
             MisticaLauncher.py
 
