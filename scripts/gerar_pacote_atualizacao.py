@@ -33,6 +33,7 @@ INCLUIR_ARQUIVOS = [
 ]
 INCLUIR_PASTAS = [
     "api",
+    "assets",
     "backend",
     "cloud_server",
     "database",
@@ -42,7 +43,7 @@ INCLUIR_PASTAS = [
     "repositories",
     "services",
 ]
-EXTENSOES = {".py", ".html", ".css", ".js", ".json"}
+EXTENSOES = {".py", ".html", ".css", ".js", ".json", ".ico", ".png", ".webp"}
 
 
 def sha256(caminho: Path) -> str:
