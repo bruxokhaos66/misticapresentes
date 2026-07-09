@@ -1,16 +1,15 @@
 {
-  "version": "1.0.512",
+  "version": "1.0.513",
   "package_file": "",
-  "package_url": "https://raw.githubusercontent.com/bruxokhaos66/misticapresentes/main/updates/mistica-update-1.0.512.zip",
-  "sha256": "46d0aa545be4fff82d0f99ed1a43c7a724e44e7ab5763a5ece6692592258f62b",
-  "title": "Validacao final do pagamento misto com taxas",
-  "notes": "O pagamento misto agora exige que o valor digitado represente o total que o cliente realmente paga, incluindo as taxas de Debito e Credito.",
+  "package_url": "https://raw.githubusercontent.com/bruxokhaos66/misticapresentes/main/updates/mistica-update-1.0.513.zip",
+  "sha256": "9e1fe57bae38c3b81d0b14a6f81574f6720ad6a93443badcedbdd9a71bd9f681",
+  "title": "Correcao de compatibilidade do caixa",
+  "notes": "Corrige erro ao abrir o Launcher causado por importacao antiga da funcao caixa_abertos_count no servico de caixa.",
   "changes": [
-    "Pagamento misto valida contra o total final com taxas.",
-    "Se a compra for R$ 8,00 no Debito, o cliente precisa pagar R$ 9,50.",
-    "Se informar apenas R$ 8,00 no Debito, o sistema bloqueia e avisa que falta R$ 1,50.",
-    "Botao Completar Restante agora inclui a taxa quando a forma escolhida for Debito ou Credito.",
-    "Valores digitados no misto representam o valor pago pelo cliente naquela forma."
+    "Adiciona a funcao caixa_abertos_count em services.caixa_service.",
+    "Mantem compatibilidade com modulos antigos da Isis e servicos internos.",
+    "Evita erro cannot import name caixa_abertos_count ao abrir o Launcher.",
+    "Mantem as correcoes anteriores do pagamento misto com taxas."
   ],
   "channel": "win7-x64",
   "channel_notes": "Canal de atualizacao: win7-x64"
