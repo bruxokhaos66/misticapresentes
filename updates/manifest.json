@@ -1,15 +1,16 @@
 {
-  "version": "1.0.508",
+  "version": "1.0.509",
   "package_file": "",
-  "package_url": "https://raw.githubusercontent.com/bruxokhaos66/misticapresentes/main/updates/mistica-update-1.0.508.zip",
-  "sha256": "7a7d4d89d6bba695b50d40a869f0d72bcef13fe63730ca6d3fb08751fc0e8867",
-  "title": "Auditoria e correcao do Launcher",
-  "notes": "Auditoria encontrou que o Launcher ainda aplicava uma lista antiga de patches. Agora ele carrega todos os patches atuais do sistema.",
+  "package_url": "https://raw.githubusercontent.com/bruxokhaos66/misticapresentes/main/updates/mistica-update-1.0.509.zip",
+  "sha256": "b707a96dad74c641c910077a260a75041ec0911f361a4e4853c82a7543d8eff1",
+  "title": "Teste de atualizacao apos correcao do Launcher",
+  "notes": "Versao criada apenas para testar se o Launcher corrigido consegue baixar, instalar e abrir uma nova atualizacao automaticamente.",
   "changes": [
-    "Launcher passa a aplicar todos os patches atuais.",
-    "Inclui patches de backup, manutencao, caixa avancado e sincronizacao mista.",
-    "Reduz risco de atualizacao baixar e abrir sistema incompleto.",
-    "Melhora a consistencia entre abrir pelo app principal e abrir pelo Launcher."
+    "Teste do fluxo de atualizacao depois da correcao dos modulos do Launcher.",
+    "Valida se o Launcher baixa o pacote publicado no repositorio.",
+    "Valida se a versao ativa muda para 1.0.509.",
+    "Valida se as notas aparecem na aba Manutencao.",
+    "Nao altera regras de venda, estoque, caixa ou sincronizacao nesta versao."
   ],
   "channel": "win-modern-x64",
   "channel_notes": "Canal de atualizacao: win-modern-x64"
