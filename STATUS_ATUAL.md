@@ -28,13 +28,18 @@ Ações manuais ainda necessárias:
 - Removido `Mistica Presentes.spec` rastreado.
 - Removido `MisticaPresentes_CORRETO.spec` rastreado.
 - Confirmado que `.env`, `Mistica Presentes.spec` e `MisticaPresentes_CORRETO.spec` não existem mais na branch `mistica-v2-rebuild`.
+- Movidos relatórios iniciais da raiz para `docs/auditorias/`:
+  - `AUDITORIA_SITE_MISTICA_20260707.md`
+  - `RELATORIO_AUDITORIA_FINAL.md`
+  - `RELATORIO_PRONTIDAO_COMERCIAL.md`
+- Criado `docs/auditorias/INDICE.md` para orientar novas auditorias.
 
 ## Limpeza ainda recomendada
 
 - Verificar se há outros arquivos `.spec` rastreados.
 - Verificar se há `__pycache__/`, `backups/`, bancos `.db` ou logs ainda rastreados.
 - Consolidar arquivos `patch` e `fix` dentro dos arquivos principais.
-- Mover relatórios antigos para `docs/auditorias/`.
+- Continuar movendo relatórios antigos da raiz para `docs/auditorias/`.
 - Manter na raiz apenas este `STATUS_ATUAL.md`, README, arquivos de configuração e arquivos realmente necessários.
 
 ## Regra de manutenção
