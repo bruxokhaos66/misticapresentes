@@ -12,15 +12,17 @@ echo.
 
 set "ORIGEM=%~dp0"
 set "DESTINO=%LOCALAPPDATA%\MisticaPresentes"
+set "APPDIR=%DESTINO%\MisticaPresentes"
 set "DESKTOP=%USERPROFILE%\Desktop"
+set "ATALHO=%DESKTOP%\Mistica Presentes.lnk"
 
 if not exist "%DESTINO%" mkdir "%DESTINO%"
 
 if exist "%ORIGEM%MisticaPresentes" (
-  xcopy "%ORIGEM%MisticaPresentes" "%DESTINO%\MisticaPresentes" /E /I /Y
+  xcopy "%ORIGEM%MisticaPresentes" "%APPDIR%" /E /I /Y
 ) else if exist "%ORIGEM%MisticaPresentes.exe" (
-  if not exist "%DESTINO%\MisticaPresentes" mkdir "%DESTINO%\MisticaPresentes"
-  copy /Y "%ORIGEM%MisticaPresentes.exe" "%DESTINO%\MisticaPresentes\MisticaPresentes.exe"
+  if not exist "%APPDIR%" mkdir "%APPDIR%"
+  copy /Y "%ORIGEM%MisticaPresentes.exe" "%APPDIR%\MisticaPresentes.exe"
 ) else (
   echo ERRO: programa nao encontrado junto do instalador.
   pause
@@ -36,23 +38,34 @@ if exist "%ORIGEM%ServidorMisticaApp" (
   echo AVISO: servidor local nao encontrado junto do instalador.
 )
 
-copy /Y "%DESTINO%\MisticaPresentes\MisticaPresentes.exe" "%DESKTOP%\MisticaPresentes.exe"
-
-if exist "%DESTINO%\ServidorMisticaApp\ServidorMisticaApp.exe" (
-  copy /Y "%DESTINO%\ServidorMisticaApp\ServidorMisticaApp.exe" "%DESKTOP%\ServidorMisticaApp.exe"
-)
-
 if exist "%ORIGEM%Atualizar_Mistica_Online.bat" (
   copy /Y "%ORIGEM%Atualizar_Mistica_Online.bat" "%DESTINO%\Atualizar_Mistica_Online.bat"
   copy /Y "%ORIGEM%Atualizar_Mistica_Online.bat" "%DESKTOP%\Atualizar_Mistica_Online.bat"
 )
 
+set "TARGET=%APPDIR%\MisticaLauncher.exe"
+if not exist "%TARGET%" set "TARGET=%APPDIR%\MisticaPresentes.exe"
+set "ICON=%APPDIR%\mistica_xamanico_moderno.ico"
+if not exist "%ICON%" set "ICON=%TARGET%"
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$WshShell = New-Object -ComObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut('%ATALHO%'); $Shortcut.TargetPath = '%TARGET%'; $Shortcut.WorkingDirectory = '%APPDIR%'; $Shortcut.IconLocation = '%ICON%'; $Shortcut.Description = 'Mistica Presentes - abrir pelo Launcher'; $Shortcut.Save()"
+
+if exist "%DESKTOP%\MisticaPresentes.exe" del /f /q "%DESKTOP%\MisticaPresentes.exe"
+if exist "%DESKTOP%\MisticaLauncher.exe" del /f /q "%DESKTOP%\MisticaLauncher.exe"
+
+if exist "%DESTINO%\ServidorMisticaApp\ServidorMisticaApp.exe" (
+  powershell -NoProfile -ExecutionPolicy Bypass -Command "$WshShell = New-Object -ComObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut('%DESKTOP%\Servidor Mística App.lnk'); $Shortcut.TargetPath = '%DESTINO%\ServidorMisticaApp\ServidorMisticaApp.exe'; $Shortcut.WorkingDirectory = '%DESTINO%\ServidorMisticaApp'; $Shortcut.Description = 'Servidor local da Mistica Presentes'; $Shortcut.Save()"
+)
+
 echo.
 echo Instalacao concluida.
-echo Arquivos criados na Area de Trabalho:
-echo - MisticaPresentes.exe
-echo - ServidorMisticaApp.exe
-echo - Atualizar_Mistica_Online.bat
+echo.
+echo Atalho principal criado na Area de Trabalho:
+echo - Mistica Presentes.lnk
+echo.
+echo IMPORTANTE:
+echo Sempre abra o sistema pelo atalho Mistica Presentes.
+echo Ele aponta para o MisticaLauncher.exe, que verifica atualizacoes antes de abrir.
 echo.
 pause
 endlocal
