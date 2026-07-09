@@ -33,7 +33,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          python -c "import sqlite3; print('sqlite3 ok:', sqlite3.sqlite_version)"
+          python -c "import sqlite3, webbrowser, random; print('stdlib ok:', sqlite3.sqlite_version)"
 
       - name: Build launcher executable
         shell: pwsh
@@ -41,6 +41,22 @@ jobs:
           pyinstaller --noconfirm --clean --onefile --windowed --name "MisticaLauncher" `
             --hidden-import sqlite3 `
             --hidden-import _sqlite3 `
+            --hidden-import webbrowser `
+            --hidden-import random `
+            --hidden-import json `
+            --hidden-import pathlib `
+            --hidden-import threading `
+            --hidden-import queue `
+            --hidden-import time `
+            --hidden-import datetime `
+            --hidden-import urllib `
+            --hidden-import urllib.request `
+            --hidden-import zipfile `
+            --hidden-import hashlib `
+            --hidden-import tempfile `
+            --hidden-import shutil `
+            --hidden-import platform `
+            --hidden-import struct `
             --collect-submodules sqlite3 `
             --add-data "auto_updater.py;." `
             --add-data "app_version.py;." `
