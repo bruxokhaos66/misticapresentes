@@ -1,5 +1,5 @@
 def aplicar_pagamento_misto_runtime(fonte: str) -> str:
-    """Adiciona pagamento misto profissional na tela de vendas sem reescrever o app inteiro."""
+    """Adiciona pagamento misto profissional, valor recebido e troco na tela de vendas."""
     try:
         from app_sync_pagamento_misto_payload_patch import aplicar_sync_pagamento_misto_payload_runtime
         fonte = aplicar_sync_pagamento_misto_payload_runtime(fonte)
@@ -10,6 +10,14 @@ def aplicar_pagamento_misto_runtime(fonte: str) -> str:
         self.v_pag_cb.pack(pady=(0, 8))'''
     novo = '''        self.v_pag_cb = ctk.CTkOptionMenu(corpo_checkout, values=["Dinheiro", "Pix", "Debito", "Credito 1x", "Credito 2x", "Credito 3x", "Misto"], command=lambda e: self.on_pagamento_venda_change(), height=38, font=self.font_button, dropdown_font=self.font_input)
         self.v_pag_cb.pack(pady=(0, 8))
+
+        self.v_dinheiro_frame = ctk.CTkFrame(corpo_checkout, fg_color="#241d2b", corner_radius=10)
+        ctk.CTkLabel(self.v_dinheiro_frame, text="Dinheiro recebido", font=self.font_label, text_color=self.cor_ouro).pack(pady=(6, 2))
+        self.v_recebido_ent = ctk.CTkEntry(self.v_dinheiro_frame, placeholder_text="Valor recebido pelo cliente", height=34, font=self.font_input)
+        self.v_recebido_ent.pack(fill="x", padx=8, pady=(2, 4))
+        self.v_recebido_ent.bind("<KeyRelease>", lambda e: self.render_v_car())
+        self.v_troco_lbl = ctk.CTkLabel(self.v_dinheiro_frame, text="Troco: R$ 0,00", font=("Arial", 12, "bold"), text_color="#b8d986", wraplength=290)
+        self.v_troco_lbl.pack(padx=8, pady=(0, 8))
 
         self.v_misto_frame = ctk.CTkFrame(corpo_checkout, fg_color="#241d2b", corner_radius=10)
         ctk.CTkLabel(self.v_misto_frame, text="Pagamento misto", font=self.font_label, text_color=self.cor_ouro).pack(pady=(6, 2))
@@ -48,13 +56,60 @@ def aplicar_pagamento_misto_runtime(fonte: str) -> str:
 
     def on_pagamento_venda_change(self):
         try:
-            if self.v_pag_cb.get() == "Misto":
+            forma = self.v_pag_cb.get()
+            if forma == "Misto":
                 self.v_misto_frame.pack(fill="x", padx=6, pady=(0, 8))
             else:
                 self.v_misto_frame.pack_forget()
+            if forma == "Dinheiro":
+                self.v_dinheiro_frame.pack(fill="x", padx=6, pady=(0, 8))
+            else:
+                self.v_dinheiro_frame.pack_forget()
         except Exception:
             pass
         self.render_v_car()
+
+    def valor_recebido_dinheiro(self):
+        try:
+            return max(0.0, conv_float(self.v_recebido_ent.get()))
+        except Exception:
+            return 0.0
+
+    def troco_dinheiro(self):
+        total = float(getattr(self, "v_calc", {}).get("tot", 0) or 0)
+        recebido = self.valor_recebido_dinheiro()
+        if recebido <= 0:
+            return 0.0
+        return round(recebido - total, 2)
+
+    def atualizar_troco_dinheiro(self):
+        try:
+            if not hasattr(self, "v_troco_lbl"):
+                return
+            if self.v_pag_cb.get() != "Dinheiro":
+                return
+            recebido = self.valor_recebido_dinheiro()
+            total = float(getattr(self, "v_calc", {}).get("tot", 0) or 0)
+            if recebido <= 0:
+                self.v_troco_lbl.configure(text="Troco: R$ 0,00", text_color="#b8d986")
+            elif recebido < total:
+                self.v_troco_lbl.configure(text=f"Falta receber: {format_moeda(total - recebido)}", text_color="#ff8a8a")
+            else:
+                self.v_troco_lbl.configure(text=f"Troco: {format_moeda(recebido - total)}", text_color="#b8d986")
+        except Exception:
+            pass
+
+    def validar_troco_dinheiro(self):
+        if not hasattr(self, "v_pag_cb") or self.v_pag_cb.get() != "Dinheiro":
+            return True
+        recebido = self.valor_recebido_dinheiro()
+        if recebido <= 0:
+            return True
+        total = float(getattr(self, "v_calc", {}).get("tot", 0) or 0)
+        if recebido + 0.01 < total:
+            messagebox.showwarning("Dinheiro recebido", f"A venda não será finalizada. Ainda falta receber {format_moeda(total - recebido)}.")
+            return False
+        return True
 
     def preencher_restante_pagamento_misto(self):
         if self.v_pag_cb.get() != "Misto":
@@ -128,6 +183,12 @@ def aplicar_pagamento_misto_runtime(fonte: str) -> str:
     def descricao_pagamento_venda(self):
         if not hasattr(self, "v_pag_cb"):
             return "Dinheiro"
+        if self.v_pag_cb.get() == "Dinheiro":
+            recebido = self.valor_recebido_dinheiro() if hasattr(self, "valor_recebido_dinheiro") else 0.0
+            troco = self.troco_dinheiro() if hasattr(self, "troco_dinheiro") else 0.0
+            if recebido > 0 and troco >= 0:
+                return f"Dinheiro | Recebido {format_moeda(recebido)} | Troco {format_moeda(troco)}"
+            return "Dinheiro"
         if self.v_pag_cb.get() != "Misto":
             return self.v_pag_cb.get()
         pagamentos = self.coletar_pagamentos_mistos(False) or []
@@ -143,6 +204,16 @@ def aplicar_pagamento_misto_runtime(fonte: str) -> str:
             self.v_pag_cb.set("Dinheiro")'''
     novo_reset = '''        if hasattr(self, "v_pag_cb"):
             self.v_pag_cb.set("Dinheiro")
+        if hasattr(self, "v_recebido_ent"):
+            try:
+                self.v_recebido_ent.delete(0, 'end')
+            except Exception:
+                pass
+        if hasattr(self, "v_troco_lbl"):
+            try:
+                self.v_troco_lbl.configure(text="Troco: R$ 0,00", text_color="#b8d986")
+            except Exception:
+                pass
         for linha in getattr(self, "v_misto_linhas", []):
             ent = linha.get("valor")
             if ent is not None:
@@ -158,6 +229,11 @@ def aplicar_pagamento_misto_runtime(fonte: str) -> str:
         if hasattr(self, "v_misto_frame"):
             try:
                 self.v_misto_frame.pack_forget()
+            except Exception:
+                pass
+        if hasattr(self, "v_dinheiro_frame") and hasattr(self, "v_pag_cb") and self.v_pag_cb.get() == "Dinheiro":
+            try:
+                self.v_dinheiro_frame.pack(fill="x", padx=6, pady=(0, 8))
             except Exception:
                 pass'''
     fonte = fonte.replace(antigo_reset, novo_reset)
@@ -183,7 +259,9 @@ def aplicar_pagamento_misto_runtime(fonte: str) -> str:
             self.v_calc = calcular_total_venda(self.carrinho, self.v_desc_ent.get(), self.v_pag_cb.get())
         for it in self.carrinho:
             self.tree_v_car.insert("", "end", values=(it['n'], it['q'], format_moeda(it['t'])))
-        self.v_total_lbl.configure(text=format_moeda(self.v_calc['tot']))'''
+        self.v_total_lbl.configure(text=format_moeda(self.v_calc['tot']))
+        if hasattr(self, "atualizar_troco_dinheiro"):
+            self.atualizar_troco_dinheiro()'''
     fonte = fonte.replace(antigo_render, novo_render)
 
     fonte = fonte.replace("PAGAMENTO: {self.v_pag_cb.get()}", "PAGAMENTO: {self.descricao_pagamento_venda()}")
@@ -192,6 +270,8 @@ def aplicar_pagamento_misto_runtime(fonte: str) -> str:
         if validacao["avisos"]:''', '''        self.render_v_car()
         if hasattr(self, "validar_pagamento_misto_fechado") and not self.validar_pagamento_misto_fechado():
             return
+        if hasattr(self, "validar_troco_dinheiro") and not self.validar_troco_dinheiro():
+            return
         if validacao["avisos"]:''')
 
     fonte = fonte.replace('''        if not validacao:
@@ -199,6 +279,8 @@ def aplicar_pagamento_misto_runtime(fonte: str) -> str:
         data_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")''', '''        if not validacao:
             return
         if hasattr(self, "validar_pagamento_misto_fechado") and not self.validar_pagamento_misto_fechado():
+            return
+        if hasattr(self, "validar_troco_dinheiro") and not self.validar_troco_dinheiro():
             return
         data_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")''')
 
