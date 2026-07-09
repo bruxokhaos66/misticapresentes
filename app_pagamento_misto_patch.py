@@ -16,6 +16,7 @@ def aplicar_pagamento_misto_runtime(fonte: str) -> str:
         self.v_recebido_ent = ctk.CTkEntry(self.v_dinheiro_frame, placeholder_text="Valor recebido pelo cliente", height=34, font=self.font_input)
         self.v_recebido_ent.pack(fill="x", padx=8, pady=(2, 4))
         self.v_recebido_ent.bind("<KeyRelease>", lambda e: self.render_v_car())
+        self.v_recebido_ent.bind("<FocusOut>", lambda e: self.formatar_entry_moeda(self.v_recebido_ent))
         self.v_troco_lbl = ctk.CTkLabel(self.v_dinheiro_frame, text="Troco: R$ 0,00", font=("Arial", 12, "bold"), text_color="#b8d986", wraplength=290)
         self.v_troco_lbl.pack(padx=8, pady=(0, 8))
 
@@ -35,6 +36,7 @@ def aplicar_pagamento_misto_runtime(fonte: str) -> str:
             valor = ctk.CTkEntry(linha, placeholder_text=f"Valor pago {indice + 1}", height=32, font=self.font_input)
             valor.pack(side="left", fill="x", expand=True)
             valor.bind("<KeyRelease>", lambda e: self.render_v_car())
+            valor.bind("<FocusOut>", lambda e, ent=valor: self.formatar_entry_moeda(ent))
             self.v_misto_linhas.append({"forma": forma, "valor": valor})
 
         ctk.CTkButton(self.v_misto_frame, text="COMPLETAR RESTANTE", height=32, font=("Arial", 12, "bold"), fg_color="#5f7f4c", command=self.preencher_restante_pagamento_misto).pack(fill="x", padx=8, pady=(4, 8))
@@ -53,6 +55,29 @@ def aplicar_pagamento_misto_runtime(fonte: str) -> str:
         desconto_percentual = max(0.0, min(12.0, desconto_percentual))
         desconto = subtotal * (desconto_percentual / 100)
         return max(0.0, subtotal - desconto)
+
+    def texto_moeda_brasil(self, valor):
+        try:
+            valor = float(valor or 0)
+        except Exception:
+            valor = 0.0
+        return f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+    def formatar_entry_moeda(self, entry):
+        try:
+            if entry is None:
+                return
+            bruto = str(entry.get() or "").strip()
+            if not bruto:
+                return
+            valor = conv_float(bruto)
+            if valor <= 0:
+                return
+            entry.delete(0, 'end')
+            entry.insert(0, self.texto_moeda_brasil(valor))
+            self.render_v_car()
+        except Exception:
+            pass
 
     def taxa_forma_misto(self, forma, valor=1):
         forma_txt = str(forma or "")
@@ -175,7 +200,7 @@ def aplicar_pagamento_misto_runtime(fonte: str) -> str:
         alvo = linhas[alvo_indice].get("valor")
         if alvo is not None:
             alvo.delete(0, 'end')
-            alvo.insert(0, f"{restante:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            alvo.insert(0, self.texto_moeda_brasil(restante))
         self.render_v_car()
 
     def coletar_pagamentos_mistos(self, mostrar_erro=False):
