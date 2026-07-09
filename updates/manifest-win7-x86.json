@@ -1,16 +1,16 @@
 {
-  "version": "1.0.511",
+  "version": "1.0.512",
   "package_file": "",
-  "package_url": "https://raw.githubusercontent.com/bruxokhaos66/misticapresentes/main/updates/mistica-update-1.0.511.zip",
-  "sha256": "c6ec5068a8de6fd365c5cf37897dbb00d9f091d8c17db485f8c510cfd28ac3b6",
-  "title": "Correcao de taxas no pagamento misto",
-  "notes": "Corrige a soma das taxas de Debito e Credito no pagamento misto e melhora a leitura dos valores digitados com ponto e virgula.",
+  "package_url": "https://raw.githubusercontent.com/bruxokhaos66/misticapresentes/main/updates/mistica-update-1.0.512.zip",
+  "sha256": "27d4183649a66353616e5489c910a11821f6fc923d406d22b61540127a283277",
+  "title": "Validacao final do pagamento misto com taxas",
+  "notes": "O pagamento misto agora exige que o valor digitado represente o total que o cliente realmente paga, incluindo as taxas de Debito e Credito.",
   "changes": [
-    "Taxa de Debito e Credito agora soma corretamente no total do pagamento misto.",
-    "Fluxo do caixa registra a forma normalizada: Debito, Credito 1x, Credito 2x e Credito 3x.",
-    "Fechamento de caixa soma formas com ou sem acento.",
-    "Melhora a leitura de valores como 80,00, 80.00, 1.000,50 e 1000,50.",
-    "Resumo do pagamento misto passa a destacar taxa e total final."
+    "Pagamento misto valida contra o total final com taxas.",
+    "Se a compra for R$ 8,00 no Debito, o cliente precisa pagar R$ 9,50.",
+    "Se informar apenas R$ 8,00 no Debito, o sistema bloqueia e avisa que falta R$ 1,50.",
+    "Botao Completar Restante agora inclui a taxa quando a forma escolhida for Debito ou Credito.",
+    "Valores digitados no misto representam o valor pago pelo cliente naquela forma."
   ],
   "channel": "win7-x86",
   "channel_notes": "Canal de atualizacao: win7-x86"
