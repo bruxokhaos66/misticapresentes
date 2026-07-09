@@ -14,6 +14,7 @@ DIST_UPDATES = ROOT / "dist" / "updates"
 UPDATE_BASE_URL = "https://raw.githubusercontent.com/bruxokhaos66/misticapresentes/main/updates"
 INCLUIR_ARQUIVOS = [
     "app.py",
+    "MisticaLauncher.py",
     "auto_updater.py",
     "app_frajola_patch.py",
     "app_pagamento_misto_patch.py",
@@ -82,7 +83,15 @@ def adicionar_arquivo(zf: zipfile.ZipFile, caminho: Path, destino: Path) -> None
     zf.write(caminho, destino.as_posix())
 
 
+def validar_arquivo_obrigatorio(nome: str) -> None:
+    caminho = ROOT / nome
+    if not caminho.exists():
+        raise FileNotFoundError(f"Arquivo obrigatorio ausente no pacote de atualizacao: {nome}")
+
+
 def gerar(versao: str) -> Path:
+    for nome in INCLUIR_ARQUIVOS:
+        validar_arquivo_obrigatorio(nome)
     DIST_UPDATES.mkdir(parents=True, exist_ok=True)
     pacote = DIST_UPDATES / f"mistica-update-{versao}.zip"
     if pacote.exists():
@@ -90,8 +99,7 @@ def gerar(versao: str) -> Path:
     with zipfile.ZipFile(pacote, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         for nome in INCLUIR_ARQUIVOS:
             origem = ROOT / nome
-            if origem.exists():
-                adicionar_arquivo(zf, origem, Path(nome))
+            adicionar_arquivo(zf, origem, Path(nome))
         for pasta in INCLUIR_PASTAS:
             origem_pasta = ROOT / pasta
             if not origem_pasta.exists():
