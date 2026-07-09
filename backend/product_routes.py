@@ -17,6 +17,7 @@ router = APIRouter(prefix="/api", tags=["produtos-completos"])
 class ProdutoCompletoIn(BaseModel):
     codigo_p: Optional[str] = None
     nome: str = Field(min_length=1)
+    marca: Optional[str] = None
     preco: float = 0.0
     quantidade: int = 0
     categoria: Optional[str] = None
@@ -40,6 +41,7 @@ def validar_site_api_key(chave_recebida: str | None):
 
 def garantir_colunas_produto(conn):
     comandos = [
+        "ALTER TABLE produtos ADD COLUMN marca TEXT",
         "ALTER TABLE produtos ADD COLUMN descricao TEXT",
         "ALTER TABLE produtos ADD COLUMN imagem_url TEXT",
         "ALTER TABLE produtos ADD COLUMN imagens_json TEXT",
@@ -61,6 +63,7 @@ def produto_row_to_dict(row):
         imagens = json.loads(data.get("imagens_json") or "[]")
     except Exception:
         imagens = []
+    data["marca"] = data.get("marca") or ""
     data["descricao"] = data.get("descricao") or ""
     data["imagem_url"] = data.get("imagem_url") or ""
     data["imagens"] = imagens
@@ -77,20 +80,20 @@ def listar_produtos_completos(busca: str = "", limite: int = Query(100, ge=1, le
         if busca.strip():
             rows = conn.execute(
                 """
-                SELECT id, codigo_p, nome, preco, quantidade, categoria, custo, lucro,
+                SELECT id, codigo_p, nome, marca, preco, quantidade, categoria, custo, lucro,
                        estoque_minimo, descricao, imagem_url, imagens_json, link_externo, selo, atualizado_em
                 FROM produtos
                 WHERE COALESCE(ativo,1)=1
-                  AND (nome LIKE ? OR codigo_p LIKE ? OR categoria LIKE ? OR descricao LIKE ? OR selo LIKE ?)
+                  AND (nome LIKE ? OR codigo_p LIKE ? OR categoria LIKE ? OR marca LIKE ? OR descricao LIKE ? OR selo LIKE ?)
                 ORDER BY nome COLLATE NOCASE
                 LIMIT ?
                 """,
-                (termo, termo, termo, termo, termo, limite),
+                (termo, termo, termo, termo, termo, termo, limite),
             ).fetchall()
         else:
             rows = conn.execute(
                 """
-                SELECT id, codigo_p, nome, preco, quantidade, categoria, custo, lucro,
+                SELECT id, codigo_p, nome, marca, preco, quantidade, categoria, custo, lucro,
                        estoque_minimo, descricao, imagem_url, imagens_json, link_externo, selo, atualizado_em
                 FROM produtos
                 WHERE COALESCE(ativo,1)=1
@@ -112,13 +115,14 @@ def criar_produto_completo(produto: ProdutoCompletoIn, x_mistica_api_key: str | 
         cur = conn.execute(
             """
             INSERT INTO produtos (
-                codigo_p, nome, preco, quantidade, categoria, custo, lucro, estoque_minimo,
+                codigo_p, nome, marca, preco, quantidade, categoria, custo, lucro, estoque_minimo,
                 descricao, imagem_url, imagens_json, link_externo, selo, atualizado_em, ativo
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)
             """,
             (
                 produto.codigo_p,
                 produto.nome,
+                produto.marca,
                 produto.preco,
                 produto.quantidade,
                 produto.categoria,
@@ -151,13 +155,14 @@ def atualizar_produto_completo(produto_id: int, produto: ProdutoCompletoIn, x_mi
         conn.execute(
             """
             UPDATE produtos
-               SET codigo_p=?, nome=?, preco=?, quantidade=?, categoria=?, custo=?, lucro=?, estoque_minimo=?,
+               SET codigo_p=?, nome=?, marca=?, preco=?, quantidade=?, categoria=?, custo=?, lucro=?, estoque_minimo=?,
                    descricao=?, imagem_url=?, imagens_json=?, link_externo=?, selo=?, atualizado_em=?, ativo=1
              WHERE id=?
             """,
             (
                 produto.codigo_p,
                 produto.nome,
+                produto.marca,
                 produto.preco,
                 produto.quantidade,
                 produto.categoria,
