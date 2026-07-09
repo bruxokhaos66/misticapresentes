@@ -15,6 +15,34 @@ ARQUIVOS_CRITICOS = [
     ROOT / "auto_updater.py",
     ROOT / "services" / "caixa_service.py",
     ROOT / "services" / "venda_service.py",
+    ROOT / "scripts" / "gerar_pacote_atualizacao.py",
+    ROOT / "scripts" / "gerar_manifestos_canais.py",
+    ROOT / "scripts" / "gerar_icone_mistica.py",
+]
+
+ARQUIVOS_OBRIGATORIOS = [
+    "mistica_presentes.py",
+    "MisticaLauncher.py",
+    "auto_updater.py",
+    "app_version.py",
+    "release_notes.py",
+    "config.py",
+    "installer/Instalar_Mistica_Presentes.bat",
+    "scripts/gerar_pacote_atualizacao.py",
+    "scripts/gerar_manifestos_canais.py",
+    "scripts/gerar_icone_mistica.py",
+    ".github/workflows/build-instalador-windows.yml",
+    ".github/workflows/build-launcher.yml",
+    ".github/workflows/publish-online-update.yml",
+]
+
+PASTAS_OBRIGATORIAS = [
+    "database",
+    "repositories",
+    "services",
+    "isis",
+    "reports",
+    "assets",
 ]
 
 PREFIXOS_AUDITADOS = (
@@ -55,10 +83,31 @@ FUNCOES_CAIXA_OBRIGATORIAS = [
     "caixa_abertos_count",
 ]
 
+FUNCOES_VENDA_OBRIGATORIAS = [
+    "calcular_total_venda",
+    "calcular_total_venda_misto",
+    "registrar_venda_service",
+    "cancelar_venda_service",
+    "consultar_venda_salva",
+    "obter_resumo_venda",
+    "normalizar_forma_pagamento",
+    "dinheiro_para_float",
+]
+
 
 def falhar(mensagem: str) -> None:
     print(f"[ERRO] {mensagem}")
     raise SystemExit(1)
+
+
+def validar_estrutura() -> None:
+    for item in ARQUIVOS_OBRIGATORIOS:
+        if not (ROOT / item).exists():
+            falhar(f"Arquivo obrigatorio ausente: {item}")
+    for pasta in PASTAS_OBRIGATORIAS:
+        if not (ROOT / pasta).is_dir():
+            falhar(f"Pasta obrigatoria ausente: {pasta}")
+    print("[OK] Estrutura obrigatoria validada.")
 
 
 def validar_sintaxe() -> None:
@@ -79,12 +128,12 @@ def importar_modulo(nome: str):
         falhar(f"Nao consegui importar {nome}: {exc}")
 
 
-def validar_caixa_service() -> None:
-    mod = importar_modulo("services.caixa_service")
-    faltando = [nome for nome in FUNCOES_CAIXA_OBRIGATORIAS if not hasattr(mod, nome)]
+def validar_funcoes_obrigatorias(modulo_nome: str, funcoes: list[str]) -> None:
+    mod = importar_modulo(modulo_nome)
+    faltando = [nome for nome in funcoes if not hasattr(mod, nome)]
     if faltando:
-        falhar("services.caixa_service esta sem: " + ", ".join(faltando))
-    print("[OK] services.caixa_service possui todas as funcoes obrigatorias.")
+        falhar(f"{modulo_nome} esta sem: " + ", ".join(faltando))
+    print(f"[OK] {modulo_nome} possui todas as funcoes obrigatorias.")
 
 
 def validar_imports_arquivo(caminho: Path) -> None:
@@ -113,11 +162,44 @@ def validar_patches_launcher() -> None:
     print("[OK] Patches do Launcher existem e importam corretamente.")
 
 
+def validar_gerador_pacote() -> None:
+    mod = importar_modulo("scripts.gerar_pacote_atualizacao")
+    arquivos = list(getattr(mod, "INCLUIR_ARQUIVOS", []) or [])
+    pastas = list(getattr(mod, "INCLUIR_PASTAS", []) or [])
+    obrigatorios = ["mistica_presentes.py", "MisticaLauncher.py", "auto_updater.py", "app_version.py", "release_notes.py", "config.py"]
+    faltando = [nome for nome in obrigatorios if nome not in arquivos]
+    if faltando:
+        falhar("Gerador de pacote nao inclui arquivos obrigatorios: " + ", ".join(faltando))
+    for pasta in ["assets", "services", "database", "repositories", "reports", "isis"]:
+        if pasta not in pastas:
+            falhar(f"Gerador de pacote nao inclui pasta obrigatoria: {pasta}")
+    print("[OK] Gerador de pacote inclui arquivos e pastas obrigatorias.")
+
+
+def validar_instalador() -> None:
+    bat = (ROOT / "installer" / "Instalar_Mistica_Presentes.bat").read_text(encoding="utf-8-sig", errors="ignore")
+    checks = [
+        "MisticaLauncher.exe",
+        "Mistica Presentes.lnk",
+        "GetFolderPath('Desktop')",
+        "mistica_xamanico_moderno.ico",
+    ]
+    for trecho in checks:
+        if trecho not in bat:
+            falhar(f"Instalador nao contem trecho obrigatorio: {trecho}")
+    print("[OK] Instalador cria atalho principal para o Launcher com icone.")
+
+
 def main() -> None:
+    validar_estrutura()
     validar_sintaxe()
-    validar_caixa_service()
+    validar_funcoes_obrigatorias("services.caixa_service", FUNCOES_CAIXA_OBRIGATORIAS)
+    validar_funcoes_obrigatorias("services.venda_service", FUNCOES_VENDA_OBRIGATORIAS)
     validar_imports_arquivo(ROOT / "mistica_presentes.py")
+    validar_imports_arquivo(ROOT / "MisticaLauncher.py")
     validar_patches_launcher()
+    validar_gerador_pacote()
+    validar_instalador()
     print("AUDITORIA_RUNTIME_IMPORTS_OK")
 
 
