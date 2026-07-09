@@ -1,5 +1,6 @@
 from datetime import datetime
 import threading
+import unicodedata
 
 from database import get_connection
 from repositories import estoque as estoque_repo
@@ -18,21 +19,71 @@ TAXAS_FIXAS_CARTAO = {
 }
 
 
+def _sem_acento(texto):
+    return "".join(c for c in unicodedata.normalize("NFD", str(texto or "")) if unicodedata.category(c) != "Mn")
+
+
+def normalizar_forma_pagamento(forma):
+    bruto = str(forma or "Dinheiro").strip()
+    texto = _sem_acento(bruto).strip()
+    texto_lower = texto.lower()
+    if "debito" in texto_lower:
+        return "Debito"
+    if "credito" in texto_lower and "3" in texto_lower:
+        return "Credito 3x"
+    if "credito" in texto_lower and "2" in texto_lower:
+        return "Credito 2x"
+    if "credito" in texto_lower and "1" in texto_lower:
+        return "Credito 1x"
+    if "pix" in texto_lower:
+        return "Pix"
+    if "dinheiro" in texto_lower:
+        return "Dinheiro"
+    return texto or "Dinheiro"
+
+
+def dinheiro_para_float(valor):
+    if valor is None:
+        return 0.0
+    if isinstance(valor, (int, float)):
+        return float(valor or 0)
+    txt = str(valor).strip().replace("R$", "").replace("r$", "").replace(" ", "")
+    if not txt:
+        return 0.0
+    negativo = txt.startswith("-")
+    txt = txt.replace("-", "")
+    try:
+        if "," in txt and "." in txt:
+            if txt.rfind(",") > txt.rfind("."):
+                txt = txt.replace(".", "").replace(",", ".")
+            else:
+                txt = txt.replace(",", "")
+        elif "," in txt:
+            txt = txt.replace(".", "").replace(",", ".")
+        elif "." in txt:
+            partes = txt.split(".")
+            if len(partes) > 1 and len(partes[-1]) == 3 and all(p.isdigit() for p in partes):
+                txt = "".join(partes)
+        numero = float(txt)
+        return -numero if negativo else numero
+    except Exception:
+        limpo = "".join(c for c in txt if c.isdigit())
+        numero = float(limpo) / 100 if limpo else 0.0
+        return -numero if negativo else numero
+
+
 def _taxa_por_forma(forma, valor_base):
-    forma = str(forma or "Dinheiro")
-    valor_base = float(valor_base or 0)
+    forma = normalizar_forma_pagamento(forma)
+    valor_base = dinheiro_para_float(valor_base)
     if valor_base <= 0:
         return 0.0
-    for nome_forma, taxa in TAXAS_FIXAS_CARTAO.items():
-        if nome_forma in forma:
-            return float(taxa or 0.0)
-    return 0.0
+    return float(TAXAS_FIXAS_CARTAO.get(forma, 0.0) or 0.0)
 
 
 def _subtotal_base(carrinho, desconto_percentual=0):
     subtotal = sum(float(item.get("t", 0) or 0) for item in carrinho)
     try:
-        desconto_percentual = float(str(desconto_percentual or "0").replace(",", "."))
+        desconto_percentual = dinheiro_para_float(desconto_percentual)
     except Exception:
         desconto_percentual = 0.0
     desconto_percentual = max(0.0, min(12.0, desconto_percentual))
@@ -61,12 +112,10 @@ def normalizar_pagamentos_mistos(pagamentos):
                 forma, valor = pagamento
             except Exception:
                 continue
+        forma = normalizar_forma_pagamento(forma)
         if not forma:
             continue
-        try:
-            valor = float(valor or 0)
-        except Exception:
-            valor = 0.0
+        valor = dinheiro_para_float(valor)
         if valor > 0:
             normalizados.append({"forma": forma, "valor": round(valor, 2)})
     return normalizados
@@ -90,13 +139,18 @@ def resumo_pagamentos_mistos(pagamentos):
     partes = []
     for p in normalizar_pagamentos_mistos(pagamentos):
         valor = f"R$ {p['valor']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        partes.append(f"{p['forma']} {valor}")
+        taxa = _taxa_por_forma(p["forma"], p["valor"])
+        if taxa > 0:
+            taxa_txt = f"R$ {taxa:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            partes.append(f"{p['forma']} {valor} (+taxa {taxa_txt})")
+        else:
+            partes.append(f"{p['forma']} {valor}")
     return " + ".join(partes)
 
 
 def calcular_total_venda(carrinho, desconto_percentual=0, forma_pagamento="Dinheiro"):
     subtotal, desconto, base = _subtotal_base(carrinho, desconto_percentual)
-    forma = forma_pagamento or "Dinheiro"
+    forma = normalizar_forma_pagamento(forma_pagamento or "Dinheiro")
     taxa = _taxa_por_forma(forma, base)
     return {"s": subtotal, "d": desconto, "tx": taxa, "tot": base + taxa}
 
@@ -105,7 +159,7 @@ def calcular_total_venda_misto(carrinho, desconto_percentual=0, pagamentos=None)
     subtotal, desconto, base = _subtotal_base(carrinho, desconto_percentual)
     pagamentos = normalizar_pagamentos_mistos(pagamentos)
     taxa = sum(_taxa_por_forma(p["forma"], p["valor"]) for p in pagamentos)
-    return {"s": subtotal, "d": desconto, "tx": taxa, "tot": base + taxa, "base": base}
+    return {"s": subtotal, "d": desconto, "tx": taxa, "tot": base + taxa, "base": base, "pagamentos_base": sum(p["valor"] for p in pagamentos)}
 
 
 def _tentar_sincronizar_venda_sem_bloquear(venda_id):
@@ -144,6 +198,8 @@ def registrar_venda_service(carrinho, cliente, data_venda, data_iso, calculo, fo
     if str(forma_pagamento or "").startswith("Misto") or pagamentos_mistos:
         pagamentos_mistos = validar_pagamentos_mistos_fechados(calculo, pagamentos_mistos)
         forma_pagamento = "Misto: " + resumo_pagamentos_mistos(pagamentos_mistos)
+    else:
+        forma_pagamento = normalizar_forma_pagamento(forma_pagamento)
 
     conn = get_connection()
     cur = conn.cursor()
@@ -174,12 +230,13 @@ def registrar_venda_service(carrinho, cliente, data_venda, data_iso, calculo, fo
 
         if pagamentos_mistos:
             for pagamento in pagamentos_mistos:
-                forma = pagamento["forma"]
-                valor_base = float(pagamento["valor"] or 0)
+                forma = normalizar_forma_pagamento(pagamento["forma"])
+                valor_base = dinheiro_para_float(pagamento["valor"])
                 taxa = _taxa_por_forma(forma, valor_base)
                 vendas_repo.inserir_fluxo_cursor(cur, "Entrada", f"Venda no {venda_id} (Misto - {forma}) - Dia operacional {dia_operacional}", valor_base + taxa, data_venda, data_iso, caixa_id, forma)
         else:
-            vendas_repo.inserir_fluxo_cursor(cur, "Entrada", f"Venda no {venda_id} ({forma_pagamento}) - Dia operacional {dia_operacional}", calculo["tot"], data_venda, data_iso, caixa_id, forma_pagamento)
+            forma_fluxo = normalizar_forma_pagamento(forma_pagamento)
+            vendas_repo.inserir_fluxo_cursor(cur, "Entrada", f"Venda no {venda_id} ({forma_pagamento}) - Dia operacional {dia_operacional}", calculo["tot"], data_venda, data_iso, caixa_id, forma_fluxo)
         conn.commit()
     except Exception:
         conn.rollback()
@@ -233,9 +290,13 @@ def cancelar_venda_service(venda_id, usuario, caixa_id=None):
         pagamentos_mistos = extrair_pagamentos_mistos(forma_estorno)
         if pagamentos_mistos:
             for pagamento in pagamentos_mistos:
-                vendas_repo.inserir_fluxo_cursor(cur, "Saida", f"Estorno venda no {venda_id} (Misto - {pagamento['forma']})", float(pagamento["valor"] or 0), agora_data, agora_iso, caixa_id, pagamento["forma"])
+                forma = normalizar_forma_pagamento(pagamento["forma"])
+                valor = dinheiro_para_float(pagamento["valor"])
+                taxa = _taxa_por_forma(forma, valor)
+                vendas_repo.inserir_fluxo_cursor(cur, "Saida", f"Estorno venda no {venda_id} (Misto - {forma})", valor + taxa, agora_data, agora_iso, caixa_id, forma)
         else:
-            vendas_repo.inserir_fluxo_cursor(cur, "Saida", f"Estorno venda no {venda_id} ({forma_estorno})", valor_estorno, agora_data, agora_iso, caixa_id, forma_estorno)
+            forma_fluxo = normalizar_forma_pagamento(forma_estorno)
+            vendas_repo.inserir_fluxo_cursor(cur, "Saida", f"Estorno venda no {venda_id} ({forma_estorno})", valor_estorno, agora_data, agora_iso, caixa_id, forma_fluxo)
         conn.commit()
     except Exception:
         conn.rollback()
