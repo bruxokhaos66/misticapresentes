@@ -8,6 +8,50 @@ BASE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
+APP_MODULE_PREFIXES = (
+    "services",
+    "database",
+    "repositories",
+    "isis",
+    "reports",
+    "backend",
+    "painel",
+    "config",
+    "app_version",
+    "release_notes",
+    "app_runtime_patch",
+    "app_pagamento_misto_patch",
+    "app_sync_pagamento_misto_payload_patch",
+    "app_caixa_fechamento_avancado_patch",
+    "app_backup_inicializacao_patch",
+    "app_backup_painel_patch",
+    "app_manutencao_segura_patch",
+    "app_sync_status_patch",
+    "app_painel_guard_patch",
+    "app_scroll_patch",
+)
+
+
+def preparar_ambiente_app(app_dir):
+    """Garante que a versão atualizada carregue seus próprios módulos.
+
+    Sem isso, o PyInstaller pode manter módulos antigos do _MEI/Temp em sys.modules,
+    causando erros como importar services.caixa_service antigo em vez do atualizado.
+    """
+    if app_dir and app_dir.exists():
+        app_path = str(app_dir)
+        sys.path = [p for p in sys.path if p != app_path]
+        sys.path.insert(0, app_path)
+    base_path = str(BASE_DIR)
+    if base_path in sys.path:
+        sys.path = [p for p in sys.path if p != base_path] + [base_path]
+
+    for nome in list(sys.modules.keys()):
+        for prefixo in APP_MODULE_PREFIXES:
+            if nome == prefixo or nome.startswith(prefixo + "."):
+                sys.modules.pop(nome, None)
+                break
+
 
 def janela_atualizacao_launcher():
     try:
@@ -108,10 +152,10 @@ def janela_atualizacao_launcher():
 
 def executar_sistema(app_dir):
     if app_dir and app_dir.exists():
-        if str(app_dir) not in sys.path:
-            sys.path.insert(0, str(app_dir))
+        preparar_ambiente_app(app_dir)
         main_file = app_dir / "mistica_presentes.py"
     else:
+        preparar_ambiente_app(None)
         main_file = BASE_DIR / "mistica_presentes.py"
 
     if not main_file.exists():
