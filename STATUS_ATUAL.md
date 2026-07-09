@@ -42,12 +42,13 @@ Acoes manuais ainda necessarias:
 - Movidos roteiros de testes para `docs/testes/`.
 - Criados indices em cada pasta de documentacao.
 - `INSTRUCOES_SITE.md` foi revisado ao mover, mantendo orientacao geral sem dados sensiveis antigos.
+- Criado `docs/auditorias/PLANO_CONSOLIDACAO_PATCHES.md` para orientar a consolidacao segura dos patches.
 
 ## Limpeza ainda recomendada
 
 - Verificar se ha outros arquivos `.spec` rastreados.
 - Verificar se ha `__pycache__/`, `backups/`, bancos `.db` ou logs ainda rastreados.
-- Consolidar arquivos `patch` e `fix` dentro dos arquivos principais.
+- Consolidar arquivos `patch` e `fix` dentro dos arquivos principais com teste local no Windows.
 - Conferir localmente se a raiz ficou apenas com arquivos essenciais.
 
 ## Regra de manutencao
