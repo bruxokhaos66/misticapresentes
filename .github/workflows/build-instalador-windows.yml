@@ -40,8 +40,52 @@ jobs:
           python scripts/gerar_icone_mistica.py
 
       - name: Gerar programa principal
+        shell: pwsh
         run: |
-          python -m PyInstaller --noconfirm MisticaPresentes_CORRETO.spec
+          pyinstaller --noconfirm --clean --onefile --windowed --name "MisticaPresentes_CORRETO" `
+            --icon "assets\mistica_xamanico_moderno.ico" `
+            --hidden-import sqlite3 `
+            --hidden-import _sqlite3 `
+            --hidden-import webbrowser `
+            --hidden-import random `
+            --hidden-import json `
+            --hidden-import pathlib `
+            --hidden-import threading `
+            --hidden-import queue `
+            --hidden-import time `
+            --hidden-import datetime `
+            --hidden-import urllib `
+            --hidden-import urllib.request `
+            --hidden-import zipfile `
+            --hidden-import hashlib `
+            --hidden-import tempfile `
+            --hidden-import shutil `
+            --hidden-import platform `
+            --hidden-import struct `
+            --hidden-import reports `
+            --collect-submodules sqlite3 `
+            --collect-submodules reports `
+            --add-data "auto_updater.py;." `
+            --add-data "app_version.py;." `
+            --add-data "release_notes.py;." `
+            --add-data "app_runtime_patch.py;." `
+            --add-data "app_pagamento_misto_patch.py;." `
+            --add-data "app_sync_pagamento_misto_payload_patch.py;." `
+            --add-data "app_caixa_fechamento_avancado_patch.py;." `
+            --add-data "app_backup_inicializacao_patch.py;." `
+            --add-data "app_backup_painel_patch.py;." `
+            --add-data "app_manutencao_segura_patch.py;." `
+            --add-data "app_sync_status_patch.py;." `
+            --add-data "app_painel_guard_patch.py;." `
+            --add-data "app_scroll_patch.py;." `
+            --add-data "config.py;." `
+            --add-data "database;database" `
+            --add-data "repositories;repositories" `
+            --add-data "services;services" `
+            --add-data "isis;isis" `
+            --add-data "reports;reports" `
+            --add-data "assets;assets" `
+            mistica_presentes.py
 
       - name: Gerar launcher principal
         shell: pwsh
