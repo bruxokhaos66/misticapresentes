@@ -29,6 +29,8 @@ Acoes manuais ainda necessarias:
 - Confirmado que `.env`, `Mistica Presentes.spec` e `MisticaPresentes_CORRETO.spec` nao existem mais na branch `mistica-v2-rebuild`.
 - `.env.example` foi ampliado como modelo seguro e `env.example.txt` duplicado foi removido.
 - Arquivos temporarios `teste.txt` e `tmp_test_write.txt` foram removidos.
+- Arquivos `__pycache__/` e `.pyc` rastreados foram removidos do estado atual da branch.
+- A pasta `backups/` rastreada foi removida do estado atual da branch.
 - Criadas pastas de documentacao:
   - `docs/auditorias/`
   - `docs/admin/`
@@ -43,11 +45,12 @@ Acoes manuais ainda necessarias:
 - Criados indices em cada pasta de documentacao.
 - `INSTRUCOES_SITE.md` foi revisado ao mover, mantendo orientacao geral sem dados sensiveis antigos.
 - Criado `docs/auditorias/PLANO_CONSOLIDACAO_PATCHES.md` para orientar a consolidacao segura dos patches.
+- Criado `docs/auditorias/RELATORIO_LIMPEZA_BACKUPS_PYCACHE_20260709.md` com o registro da limpeza de backups e pycache.
 
 ## Limpeza ainda recomendada
 
 - Verificar se ha outros arquivos `.spec` rastreados.
-- Verificar se ha `__pycache__/`, `backups/`, bancos `.db` ou logs ainda rastreados.
+- Verificar se ha bancos `.db` ou logs ainda rastreados.
 - Consolidar arquivos `patch` e `fix` dentro dos arquivos principais com teste local no Windows.
 - Conferir localmente se a raiz ficou apenas com arquivos essenciais.
 
