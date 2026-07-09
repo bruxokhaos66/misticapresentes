@@ -1,9 +1,9 @@
-RELEASE_VERSION = "1.0.507"
-RELEASE_TITLE = "Correcao de prioridade do atualizador"
-RELEASE_NOTES = "O atualizador agora procura primeiro o manifesto direto no repositorio e usa o dominio apenas como alternativa."
+RELEASE_VERSION = "1.0.508"
+RELEASE_TITLE = "Auditoria e correcao do Launcher"
+RELEASE_NOTES = "Auditoria encontrou que o Launcher ainda aplicava uma lista antiga de patches. Agora ele carrega todos os patches atuais do sistema."
 RELEASE_CHANGES = [
-    "GitHub passa a ser a primeira fonte do manifesto de atualizacao.",
-    "Dominio da loja fica como fonte alternativa caso necessario.",
-    "Reduz problemas de cache no dominio.",
-    "Melhora a chance do Launcher encontrar a versao mais recente.",
+    "Launcher passa a aplicar todos os patches atuais.",
+    "Inclui patches de backup, manutencao, caixa avancado e sincronizacao mista.",
+    "Reduz risco de atualizacao baixar e abrir sistema incompleto.",
+    "Melhora a consistencia entre abrir pelo app principal e abrir pelo Launcher.",
 ]
