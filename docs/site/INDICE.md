@@ -4,6 +4,7 @@ Esta pasta concentra documentos comerciais e tecnicos do site publico, catalogo,
 
 ## Documentos movidos da raiz
 
+- `INSTRUCOES_SITE.md` — instrucoes gerais do site, revisadas sem dados sensiveis.
 - `CATALOGO_MODERNO.md` — catalogo moderno com busca, filtros, ordenacao e selos.
 - `SEO_SITE.md` — SEO, robots, sitemap, manifesto e metadados.
 - `PAGINA_PRODUTO.md` — pagina individual de produto.
