@@ -27,15 +27,19 @@ Acoes manuais ainda necessarias:
 - Removido `Mistica Presentes.spec` rastreado.
 - Removido `MisticaPresentes_CORRETO.spec` rastreado.
 - Confirmado que `.env`, `Mistica Presentes.spec` e `MisticaPresentes_CORRETO.spec` nao existem mais na branch `mistica-v2-rebuild`.
+- `.env.example` foi ampliado como modelo seguro e `env.example.txt` duplicado foi removido.
+- Arquivos temporarios `teste.txt` e `tmp_test_write.txt` foram removidos.
 - Criadas pastas de documentacao:
   - `docs/auditorias/`
   - `docs/admin/`
   - `docs/site/`
   - `docs/isis/`
+  - `docs/testes/`
 - Movidos relatorios e auditorias da raiz para `docs/auditorias/`.
 - Movidos documentos de Admin, backend, pedidos, Pix, produtos, estoque e uploads para `docs/admin/`.
 - Movidos documentos do site publico, catalogo, SEO e paginas de produto para `docs/site/`.
 - Movidos documentos da Isis, kits, pedidos e integracao com API para `docs/isis/`.
+- Movidos roteiros de testes para `docs/testes/`.
 - Criados indices em cada pasta de documentacao.
 - `INSTRUCOES_SITE.md` foi revisado ao mover, mantendo orientacao geral sem dados sensiveis antigos.
 
@@ -44,8 +48,7 @@ Acoes manuais ainda necessarias:
 - Verificar se ha outros arquivos `.spec` rastreados.
 - Verificar se ha `__pycache__/`, `backups/`, bancos `.db` ou logs ainda rastreados.
 - Consolidar arquivos `patch` e `fix` dentro dos arquivos principais.
-- Conferir localmente se ainda ha `.md` ou `.txt` soltos na raiz que devam ir para `docs/`.
-- Manter na raiz apenas este `STATUS_ATUAL.md`, README, arquivos de configuracao e arquivos realmente necessarios.
+- Conferir localmente se a raiz ficou apenas com arquivos essenciais.
 
 ## Regra de manutencao
 
