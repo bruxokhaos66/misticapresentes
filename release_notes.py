@@ -1,10 +1,10 @@
-RELEASE_VERSION = "1.0.517"
-RELEASE_TITLE = "Auditoria automatica de imports e Launcher"
-RELEASE_NOTES = "Adiciona uma auditoria automatica para impedir que atualizacoes ou builds do Launcher sejam publicados quando faltar alguma funcao importada pelo app principal."
+RELEASE_VERSION = "1.0.518"
+RELEASE_TITLE = "Formatacao monetaria nos campos do caixa"
+RELEASE_NOTES = "Os campos de dinheiro do pagamento misto e do valor recebido agora sao formatados como moeda brasileira ao sair do campo."
 RELEASE_CHANGES = [
-    "Cria scripts/auditoria_imports_runtime.py.",
-    "Workflow Publish Online Update passa a validar imports antes de publicar pacote.",
-    "Workflow Build Mistica Launcher passa a validar imports antes de gerar o executavel.",
-    "A auditoria verifica funcoes obrigatorias do services.caixa_service.",
-    "Reduz risco de novas atualizacoes quebrarem por import ausente.",
+    "Campo do pagamento misto formata 10 como 10,00 ao sair do campo.",
+    "Campo Valor recebido em dinheiro tambem formata como moeda brasileira.",
+    "Botao Completar Restante usa a mesma formatacao monetaria.",
+    "Mantem os calculos do pagamento misto com taxas.",
+    "Melhora a leitura visual dos valores em reais no caixa.",
 ]
