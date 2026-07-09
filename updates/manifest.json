@@ -1,15 +1,15 @@
 {
-  "version": "1.0.507",
+  "version": "1.0.508",
   "package_file": "",
-  "package_url": "https://raw.githubusercontent.com/bruxokhaos66/misticapresentes/main/updates/mistica-update-1.0.507.zip",
-  "sha256": "67167d70bb37295f3d006db3fa1bdff9747025436219a237aa373f58c9bcefba",
-  "title": "Correcao de prioridade do atualizador",
-  "notes": "O atualizador agora procura primeiro o manifesto direto no repositorio e usa o dominio apenas como alternativa.",
+  "package_url": "https://raw.githubusercontent.com/bruxokhaos66/misticapresentes/main/updates/mistica-update-1.0.508.zip",
+  "sha256": "7a7d4d89d6bba695b50d40a869f0d72bcef13fe63730ca6d3fb08751fc0e8867",
+  "title": "Auditoria e correcao do Launcher",
+  "notes": "Auditoria encontrou que o Launcher ainda aplicava uma lista antiga de patches. Agora ele carrega todos os patches atuais do sistema.",
   "changes": [
-    "GitHub passa a ser a primeira fonte do manifesto de atualizacao.",
-    "Dominio da loja fica como fonte alternativa caso necessario.",
-    "Reduz problemas de cache no dominio.",
-    "Melhora a chance do Launcher encontrar a versao mais recente."
+    "Launcher passa a aplicar todos os patches atuais.",
+    "Inclui patches de backup, manutencao, caixa avancado e sincronizacao mista.",
+    "Reduz risco de atualizacao baixar e abrir sistema incompleto.",
+    "Melhora a consistencia entre abrir pelo app principal e abrir pelo Launcher."
   ],
   "channel": "win-modern-x64",
   "channel_notes": "Canal de atualizacao: win-modern-x64"
