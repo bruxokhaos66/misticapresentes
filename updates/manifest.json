@@ -1,16 +1,16 @@
 {
-  "version": "1.0.510",
+  "version": "1.0.511",
   "package_file": "",
-  "package_url": "https://raw.githubusercontent.com/bruxokhaos66/misticapresentes/main/updates/mistica-update-1.0.510.zip",
-  "sha256": "0c792ec9e24cf4fbfed4e31087b3a7b8c6ed9db5211928fe56273dde37c55de7",
-  "title": "Valor recebido e troco no caixa",
-  "notes": "A venda em dinheiro agora permite informar o valor recebido do cliente e calcula o troco automaticamente.",
+  "package_url": "https://raw.githubusercontent.com/bruxokhaos66/misticapresentes/main/updates/mistica-update-1.0.511.zip",
+  "sha256": "c6ec5068a8de6fd365c5cf37897dbb00d9f091d8c17db485f8c510cfd28ac3b6",
+  "title": "Correcao de taxas no pagamento misto",
+  "notes": "Corrige a soma das taxas de Debito e Credito no pagamento misto e melhora a leitura dos valores digitados com ponto e virgula.",
   "changes": [
-    "Adicionado campo Valor recebido na venda em dinheiro.",
-    "Adicionado calculo automatico de troco.",
-    "Bloqueia finalizar venda em dinheiro quando o valor recebido for menor que o total.",
-    "Descricao do pagamento passa a mostrar recebido e troco.",
-    "Exemplo: compra R$ 80,00, recebido R$ 100,00, troco R$ 20,00."
+    "Taxa de Debito e Credito agora soma corretamente no total do pagamento misto.",
+    "Fluxo do caixa registra a forma normalizada: Debito, Credito 1x, Credito 2x e Credito 3x.",
+    "Fechamento de caixa soma formas com ou sem acento.",
+    "Melhora a leitura de valores como 80,00, 80.00, 1.000,50 e 1000,50.",
+    "Resumo do pagamento misto passa a destacar taxa e total final."
   ],
   "channel": "win-modern-x64",
   "channel_notes": "Canal de atualizacao: win-modern-x64"
