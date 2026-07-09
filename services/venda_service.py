@@ -102,6 +102,11 @@ def _base_do_calculo(calculo):
 
 
 def normalizar_pagamentos_mistos(pagamentos):
+    """Normaliza valores informados no misto.
+
+    Importante: o campo valor representa o que o cliente pagou naquela forma.
+    Se for cartão, esse valor precisa incluir a taxa fixa.
+    """
     normalizados = []
     for pagamento in pagamentos or []:
         if isinstance(pagamento, dict):
@@ -121,16 +126,25 @@ def normalizar_pagamentos_mistos(pagamentos):
     return normalizados
 
 
+def total_taxas_pagamentos_mistos(pagamentos):
+    total = 0.0
+    for p in normalizar_pagamentos_mistos(pagamentos):
+        total += _taxa_por_forma(p["forma"], p["valor"])
+    return round(total, 2)
+
+
 def validar_pagamentos_mistos_fechados(calculo, pagamentos):
     pagamentos = normalizar_pagamentos_mistos(pagamentos)
     base = _base_do_calculo(calculo)
+    taxas = total_taxas_pagamentos_mistos(pagamentos)
+    total_final = round(base + taxas, 2)
     total_pago = round(sum(float(p.get("valor", 0) or 0) for p in pagamentos), 2)
     if not pagamentos:
         raise ValueError("Pagamento misto incompleto. Informe as formas e valores antes de salvar.")
-    if abs(total_pago - base) > 0.01:
-        falta = round(base - total_pago, 2)
+    if abs(total_pago - total_final) > 0.01:
+        falta = round(total_final - total_pago, 2)
         if falta > 0:
-            raise ValueError(f"Pagamento misto não fechado. Falta dividir R$ {falta:,.2f}.".replace(",", "X").replace(".", ",").replace("X", "."))
+            raise ValueError(f"Pagamento misto não fechado. Falta receber R$ {falta:,.2f} incluindo taxas.".replace(",", "X").replace(".", ",").replace("X", "."))
         raise ValueError(f"Pagamento misto acima do total. Valor excedente R$ {abs(falta):,.2f}.".replace(",", "X").replace(".", ",").replace("X", "."))
     return pagamentos
 
@@ -142,7 +156,7 @@ def resumo_pagamentos_mistos(pagamentos):
         taxa = _taxa_por_forma(p["forma"], p["valor"])
         if taxa > 0:
             taxa_txt = f"R$ {taxa:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-            partes.append(f"{p['forma']} {valor} (+taxa {taxa_txt})")
+            partes.append(f"{p['forma']} {valor} (inclui taxa {taxa_txt})")
         else:
             partes.append(f"{p['forma']} {valor}")
     return " + ".join(partes)
@@ -158,8 +172,9 @@ def calcular_total_venda(carrinho, desconto_percentual=0, forma_pagamento="Dinhe
 def calcular_total_venda_misto(carrinho, desconto_percentual=0, pagamentos=None):
     subtotal, desconto, base = _subtotal_base(carrinho, desconto_percentual)
     pagamentos = normalizar_pagamentos_mistos(pagamentos)
-    taxa = sum(_taxa_por_forma(p["forma"], p["valor"]) for p in pagamentos)
-    return {"s": subtotal, "d": desconto, "tx": taxa, "tot": base + taxa, "base": base, "pagamentos_base": sum(p["valor"] for p in pagamentos)}
+    taxa = total_taxas_pagamentos_mistos(pagamentos)
+    total_pago = round(sum(p["valor"] for p in pagamentos), 2)
+    return {"s": subtotal, "d": desconto, "tx": taxa, "tot": base + taxa, "base": base, "total_pago": total_pago}
 
 
 def _tentar_sincronizar_venda_sem_bloquear(venda_id):
@@ -198,6 +213,9 @@ def registrar_venda_service(carrinho, cliente, data_venda, data_iso, calculo, fo
     if str(forma_pagamento or "").startswith("Misto") or pagamentos_mistos:
         pagamentos_mistos = validar_pagamentos_mistos_fechados(calculo, pagamentos_mistos)
         forma_pagamento = "Misto: " + resumo_pagamentos_mistos(pagamentos_mistos)
+        calculo = dict(calculo)
+        calculo["tx"] = total_taxas_pagamentos_mistos(pagamentos_mistos)
+        calculo["tot"] = _base_do_calculo(calculo) + calculo["tx"]
     else:
         forma_pagamento = normalizar_forma_pagamento(forma_pagamento)
 
@@ -231,9 +249,8 @@ def registrar_venda_service(carrinho, cliente, data_venda, data_iso, calculo, fo
         if pagamentos_mistos:
             for pagamento in pagamentos_mistos:
                 forma = normalizar_forma_pagamento(pagamento["forma"])
-                valor_base = dinheiro_para_float(pagamento["valor"])
-                taxa = _taxa_por_forma(forma, valor_base)
-                vendas_repo.inserir_fluxo_cursor(cur, "Entrada", f"Venda no {venda_id} (Misto - {forma}) - Dia operacional {dia_operacional}", valor_base + taxa, data_venda, data_iso, caixa_id, forma)
+                valor_recebido = dinheiro_para_float(pagamento["valor"])
+                vendas_repo.inserir_fluxo_cursor(cur, "Entrada", f"Venda no {venda_id} (Misto - {forma}) - Dia operacional {dia_operacional}", valor_recebido, data_venda, data_iso, caixa_id, forma)
         else:
             forma_fluxo = normalizar_forma_pagamento(forma_pagamento)
             vendas_repo.inserir_fluxo_cursor(cur, "Entrada", f"Venda no {venda_id} ({forma_pagamento}) - Dia operacional {dia_operacional}", calculo["tot"], data_venda, data_iso, caixa_id, forma_fluxo)
@@ -292,8 +309,7 @@ def cancelar_venda_service(venda_id, usuario, caixa_id=None):
             for pagamento in pagamentos_mistos:
                 forma = normalizar_forma_pagamento(pagamento["forma"])
                 valor = dinheiro_para_float(pagamento["valor"])
-                taxa = _taxa_por_forma(forma, valor)
-                vendas_repo.inserir_fluxo_cursor(cur, "Saida", f"Estorno venda no {venda_id} (Misto - {forma})", valor + taxa, agora_data, agora_iso, caixa_id, forma)
+                vendas_repo.inserir_fluxo_cursor(cur, "Saida", f"Estorno venda no {venda_id} (Misto - {forma})", valor, agora_data, agora_iso, caixa_id, forma)
         else:
             forma_fluxo = normalizar_forma_pagamento(forma_estorno)
             vendas_repo.inserir_fluxo_cursor(cur, "Saida", f"Estorno venda no {venda_id} ({forma_estorno})", valor_estorno, agora_data, agora_iso, caixa_id, forma_fluxo)
