@@ -110,7 +110,6 @@ def executar_app(app_dir: Path) -> None:
         ("app_manutencao_segura_patch", "aplicar_manutencao_segura_runtime", "manutencao segura"),
         ("app_sync_status_patch", "aplicar_sync_status_runtime", "status de sincronizacao"),
         ("app_painel_guard_patch", "aplicar_painel_guard_runtime", "protecao painel mobile"),
-        ("app_scroll_patch", "aplicar_scrollbars_runtime", "barras de rolagem"),
     ]:
         try:
             mod = __import__(modulo, fromlist=[funcao])
