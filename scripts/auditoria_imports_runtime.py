@@ -15,9 +15,11 @@ ARQUIVOS_CRITICOS = [
     ROOT / "auto_updater.py",
     ROOT / "services" / "caixa_service.py",
     ROOT / "services" / "venda_service.py",
+    ROOT / "services" / "producao_service.py",
     ROOT / "scripts" / "gerar_pacote_atualizacao.py",
     ROOT / "scripts" / "gerar_manifestos_canais.py",
     ROOT / "scripts" / "gerar_icone_mistica.py",
+    ROOT / "scripts" / "preparar_sistema_producao.py",
 ]
 
 ARQUIVOS_OBRIGATORIOS = [
@@ -27,10 +29,12 @@ ARQUIVOS_OBRIGATORIOS = [
     "app_version.py",
     "release_notes.py",
     "config.py",
+    "services/producao_service.py",
     "installer/Instalar_Mistica_Presentes.bat",
     "scripts/gerar_pacote_atualizacao.py",
     "scripts/gerar_manifestos_canais.py",
     "scripts/gerar_icone_mistica.py",
+    "scripts/preparar_sistema_producao.py",
     ".github/workflows/build-instalador-windows.yml",
     ".github/workflows/build-launcher.yml",
     ".github/workflows/publish-online-update.yml",
@@ -92,6 +96,10 @@ FUNCOES_VENDA_OBRIGATORIAS = [
     "obter_resumo_venda",
     "normalizar_forma_pagamento",
     "dinheiro_para_float",
+]
+
+FUNCOES_PRODUCAO_OBRIGATORIAS = [
+    "preparar_sistema_para_producao",
 ]
 
 
@@ -190,16 +198,32 @@ def validar_instalador() -> None:
     print("[OK] Instalador cria atalho principal para o Launcher com icone.")
 
 
+def validar_botao_producao() -> None:
+    patch = (ROOT / "app_manutencao_segura_patch.py").read_text(encoding="utf-8-sig", errors="ignore")
+    checks = [
+        "PREPARAR SISTEMA PARA PRODUÇÃO",
+        "preparar_sistema_producao_manutencao",
+        "preparar_sistema_para_producao",
+        "CONFIRMAR",
+    ]
+    for trecho in checks:
+        if trecho not in patch:
+            falhar(f"Patch de manutencao nao contem trecho obrigatorio: {trecho}")
+    print("[OK] Botao seguro de preparacao para producao validado.")
+
+
 def main() -> None:
     validar_estrutura()
     validar_sintaxe()
     validar_funcoes_obrigatorias("services.caixa_service", FUNCOES_CAIXA_OBRIGATORIAS)
     validar_funcoes_obrigatorias("services.venda_service", FUNCOES_VENDA_OBRIGATORIAS)
+    validar_funcoes_obrigatorias("services.producao_service", FUNCOES_PRODUCAO_OBRIGATORIAS)
     validar_imports_arquivo(ROOT / "mistica_presentes.py")
     validar_imports_arquivo(ROOT / "MisticaLauncher.py")
     validar_patches_launcher()
     validar_gerador_pacote()
     validar_instalador()
+    validar_botao_producao()
     print("AUDITORIA_RUNTIME_IMPORTS_OK")
 
 
