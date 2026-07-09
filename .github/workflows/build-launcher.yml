@@ -12,6 +12,11 @@ on:
       - "release_notes.py"
       - "app_*.py"
       - "mistica_presentes.py"
+      - "services/**"
+      - "repositories/**"
+      - "database/**"
+      - "reports/**"
+      - "scripts/auditoria_imports_runtime.py"
       - "requirements.txt"
       - ".github/workflows/build-launcher.yml"
 
@@ -34,6 +39,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           python -c "import sqlite3, webbrowser, random; print('stdlib ok:', sqlite3.sqlite_version)"
+
+      - name: Audit runtime imports
+        shell: pwsh
+        run: |
+          python scripts/auditoria_imports_runtime.py
 
       - name: Build launcher executable
         shell: pwsh
