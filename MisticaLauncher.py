@@ -120,8 +120,13 @@ def executar_sistema(app_dir):
     fonte = main_file.read_text(encoding="utf-8-sig")
 
     for modulo, funcao in [
+        ("app_backup_inicializacao_patch", "aplicar_backup_inicializacao_runtime"),
         ("app_runtime_patch", "aplicar_patches_runtime"),
         ("app_pagamento_misto_patch", "aplicar_pagamento_misto_runtime"),
+        ("app_sync_pagamento_misto_payload_patch", "aplicar_sync_pagamento_misto_payload_runtime"),
+        ("app_caixa_fechamento_avancado_patch", "aplicar_caixa_fechamento_avancado_runtime"),
+        ("app_backup_painel_patch", "aplicar_backup_painel_runtime"),
+        ("app_manutencao_segura_patch", "aplicar_manutencao_segura_runtime"),
         ("app_sync_status_patch", "aplicar_sync_status_runtime"),
         ("app_painel_guard_patch", "aplicar_painel_guard_runtime"),
         ("app_scroll_patch", "aplicar_scrollbars_runtime"),
