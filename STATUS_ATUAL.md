@@ -8,6 +8,7 @@ Atualizado em: 2026-07-09
 - `.env` também foi removido da branch `main`.
 - `.env.example` permanece versionado apenas como modelo, sem chaves reais.
 - `.gitignore` já bloqueia `.env`, bancos locais, chaves, backups, logs, builds, executáveis e arquivos `.spec`.
+- Busca atual por nomes de variáveis sensíveis conhecidas não encontrou valores expostos no conteúdo indexado do repositório.
 
 ## Atenção crítica
 
@@ -21,14 +22,16 @@ Ações manuais ainda necessárias:
 4. Limpar o histórico antigo com `git filter-repo` ou BFG Repo-Cleaner.
 5. Fazer force-push do histórico limpo apenas depois de confirmar backup local seguro.
 
-## Limpeza já iniciada
+## Limpeza já aplicada
 
 - Removido `.env` rastreado.
+- Removido `Mistica Presentes.spec` rastreado.
 - Removido `MisticaPresentes_CORRETO.spec` rastreado.
+- Confirmado que `.env`, `Mistica Presentes.spec` e `MisticaPresentes_CORRETO.spec` não existem mais na branch `mistica-v2-rebuild`.
 
 ## Limpeza ainda recomendada
 
-- Verificar e remover outros arquivos `.spec` rastreados.
+- Verificar se há outros arquivos `.spec` rastreados.
 - Verificar se há `__pycache__/`, `backups/`, bancos `.db` ou logs ainda rastreados.
 - Consolidar arquivos `patch` e `fix` dentro dos arquivos principais.
 - Mover relatórios antigos para `docs/auditorias/`.
