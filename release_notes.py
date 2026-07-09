@@ -1,12 +1,14 @@
-RELEASE_VERSION = "1.0.519"
-RELEASE_TITLE = "Icone xamanico e atalho principal"
-RELEASE_NOTES = "Adiciona geracao automatica de icone xamanico moderno e ajusta o instalador para criar um atalho principal na Area de Trabalho apontando para o Launcher."
+RELEASE_VERSION = "1.0.520"
+RELEASE_TITLE = "Preparar sistema para producao"
+RELEASE_NOTES = "Adiciona uma ferramenta segura na aba Manutencao para limpar dados de teste, criar backup automatico e deixar o sistema pronto para uso real na loja."
 RELEASE_CHANGES = [
-    "Cria gerador de icone xamanico moderno em scripts/gerar_icone_mistica.py.",
-    "Build do instalador gera e usa o icone no programa principal.",
-    "Build do Launcher gera e usa o mesmo icone.",
-    "Instalador passa a incluir MisticaLauncher.exe junto do sistema.",
-    "Instalador cria atalho Mistica Presentes.lnk na Area de Trabalho apontando para o Launcher.",
-    "Atalho usa o icone xamanico moderno.",
-    "Pacote de atualizacao online passa a incluir assets e icones.",
+    "Adiciona services/producao_service.py para limpeza segura de dados de teste.",
+    "Aba Manutencao recebe o botao Preparar Sistema para Producao.",
+    "Antes de limpar, o sistema cria backup automatico do banco.",
+    "A limpeza exige confirmacao digitando CONFIRMAR.",
+    "Permite escolher se apaga produtos ficticios ou apenas zera estoque.",
+    "Permite apagar clientes e fornecedores de teste.",
+    "Limpa vendas, itens de venda, caixa, fluxo, contas, movimentacoes, encomendas e logs.",
+    "Preserva configuracoes, Launcher, atualizador e usuario admin.",
+    "Gera relatorio em Documentos/Mistica_Relatorios_Manutencao.",
 ]
