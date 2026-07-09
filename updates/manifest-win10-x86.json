@@ -1,16 +1,16 @@
 {
-  "version": "1.0.515",
+  "version": "1.0.517",
   "package_file": "",
-  "package_url": "https://raw.githubusercontent.com/bruxokhaos66/misticapresentes/main/updates/mistica-update-1.0.515.zip",
-  "sha256": "974a1a4315358cd0787e53fdb8498c23452afe22d42642da614626a21d13bb0a",
-  "title": "Correcao do carregamento de modulos do Launcher",
-  "notes": "Corrige o Launcher para priorizar os modulos da versao atualizada e nao reutilizar servicos antigos empacotados no executavel.",
+  "package_url": "https://raw.githubusercontent.com/bruxokhaos66/misticapresentes/main/updates/mistica-update-1.0.517.zip",
+  "sha256": "2fbbf065aef829eb6aabd6fd6734303ec82de0602f92e0132ca0937dc6eff8a0",
+  "title": "Auditoria automatica de imports e Launcher",
+  "notes": "Adiciona uma auditoria automatica para impedir que atualizacoes ou builds do Launcher sejam publicados quando faltar alguma funcao importada pelo app principal.",
   "changes": [
-    "Launcher limpa modulos antigos antes de abrir a versao atualizada.",
-    "Prioriza services, database, repositories, isis e reports da pasta updates.",
-    "Evita abrir services.caixa_service antigo do Temp/_MEI.",
-    "Corrige erro persistente cannot import name excluir_conta quando a atualizacao ja possui a funcao.",
-    "Mantem as correcoes anteriores de contas a pagar e pagamento misto com taxas."
+    "Cria scripts/auditoria_imports_runtime.py.",
+    "Workflow Publish Online Update passa a validar imports antes de publicar pacote.",
+    "Workflow Build Mistica Launcher passa a validar imports antes de gerar o executavel.",
+    "A auditoria verifica funcoes obrigatorias do services.caixa_service.",
+    "Reduz risco de novas atualizacoes quebrarem por import ausente."
   ],
   "channel": "win10-x86",
   "channel_notes": "Canal de atualizacao: win10-x86"
