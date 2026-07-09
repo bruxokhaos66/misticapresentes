@@ -1,16 +1,16 @@
 {
-  "version": "1.0.517",
+  "version": "1.0.518",
   "package_file": "",
-  "package_url": "https://raw.githubusercontent.com/bruxokhaos66/misticapresentes/main/updates/mistica-update-1.0.517.zip",
-  "sha256": "2fbbf065aef829eb6aabd6fd6734303ec82de0602f92e0132ca0937dc6eff8a0",
-  "title": "Auditoria automatica de imports e Launcher",
-  "notes": "Adiciona uma auditoria automatica para impedir que atualizacoes ou builds do Launcher sejam publicados quando faltar alguma funcao importada pelo app principal.",
+  "package_url": "https://raw.githubusercontent.com/bruxokhaos66/misticapresentes/main/updates/mistica-update-1.0.518.zip",
+  "sha256": "fc564fd0f43bfb26b44800bb1cf7b83d2e4093db4d353334e4c0c0ac91b697d6",
+  "title": "Formatacao monetaria nos campos do caixa",
+  "notes": "Os campos de dinheiro do pagamento misto e do valor recebido agora sao formatados como moeda brasileira ao sair do campo.",
   "changes": [
-    "Cria scripts/auditoria_imports_runtime.py.",
-    "Workflow Publish Online Update passa a validar imports antes de publicar pacote.",
-    "Workflow Build Mistica Launcher passa a validar imports antes de gerar o executavel.",
-    "A auditoria verifica funcoes obrigatorias do services.caixa_service.",
-    "Reduz risco de novas atualizacoes quebrarem por import ausente."
+    "Campo do pagamento misto formata 10 como 10,00 ao sair do campo.",
+    "Campo Valor recebido em dinheiro tambem formata como moeda brasileira.",
+    "Botao Completar Restante usa a mesma formatacao monetaria.",
+    "Mantem os calculos do pagamento misto com taxas.",
+    "Melhora a leitura visual dos valores em reais no caixa."
   ],
   "channel": "win-modern-x64",
   "channel_notes": "Canal de atualizacao: win-modern-x64"
