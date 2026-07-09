@@ -2,7 +2,7 @@
   "version": "1.0.512",
   "package_file": "",
   "package_url": "https://raw.githubusercontent.com/bruxokhaos66/misticapresentes/main/updates/mistica-update-1.0.512.zip",
-  "sha256": "27d4183649a66353616e5489c910a11821f6fc923d406d22b61540127a283277",
+  "sha256": "46d0aa545be4fff82d0f99ed1a43c7a724e44e7ab5763a5ece6692592258f62b",
   "title": "Validacao final do pagamento misto com taxas",
   "notes": "O pagamento misto agora exige que o valor digitado represente o total que o cliente realmente paga, incluindo as taxas de Debito e Credito.",
   "changes": [
