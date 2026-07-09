@@ -1,4 +1,5 @@
 from datetime import datetime
+import unicodedata
 
 from database import query_db
 
@@ -11,6 +12,27 @@ FORMAS_CAIXA_DETALHADAS = [
     "Credito 2x",
     "Credito 3x",
 ]
+
+
+def _sem_acento(texto):
+    return "".join(c for c in unicodedata.normalize("NFD", str(texto or "")) if unicodedata.category(c) != "Mn")
+
+
+def normalizar_forma_caixa(forma):
+    texto = _sem_acento(forma).strip().lower()
+    if "debito" in texto:
+        return "Debito"
+    if "credito" in texto and "3" in texto:
+        return "Credito 3x"
+    if "credito" in texto and "2" in texto:
+        return "Credito 2x"
+    if "credito" in texto and "1" in texto:
+        return "Credito 1x"
+    if "pix" in texto:
+        return "Pix"
+    if "dinheiro" in texto:
+        return "Dinheiro"
+    return str(forma or "").strip()
 
 
 def obter_caixa_id_ativo():
@@ -47,9 +69,19 @@ def _soma_fluxo(caixa_id, tipo=None, forma_pagamento=None):
 
 
 def _saldo_por_forma(caixa_id, forma):
-    entradas = _soma_fluxo(caixa_id, "Entrada", forma)
-    saidas = _soma_fluxo(caixa_id, "Saida", forma) + _soma_fluxo(caixa_id, "Saída", forma)
-    return float(entradas or 0.0) - float(saidas or 0.0)
+    alvo = normalizar_forma_caixa(forma)
+    res = query_db("SELECT tipo, valor, forma_pagamento, descricao FROM fluxo_caixa WHERE caixa_id=?", (caixa_id,))
+    total = 0.0
+    for tipo, valor, forma_pagamento, descricao in res or []:
+        forma_linha = normalizar_forma_caixa(forma_pagamento or descricao or "")
+        if forma_linha != alvo:
+            continue
+        valor = float(valor or 0.0)
+        if str(tipo or "").lower() in ("saida", "saída"):
+            total -= valor
+        else:
+            total += valor
+    return total
 
 
 def _fallback_antigo(caixa_id, padrao):
@@ -75,7 +107,6 @@ def resumo_fechamento_caixa():
     credito_2x = _saldo_por_forma(cx_id, "Credito 2x")
     credito_3x = _saldo_por_forma(cx_id, "Credito 3x")
 
-    # Fallback para lançamentos antigos sem forma_pagamento gravada.
     pix += _fallback_antigo(cx_id, "%(Pix)%")
     debito += _fallback_antigo(cx_id, "%(Debito)%") + _fallback_antigo(cx_id, "%(Débito)%")
     credito_1x += _fallback_antigo(cx_id, "%(Credito 1x)%") + _fallback_antigo(cx_id, "%(Crédito 1x)%")
@@ -140,6 +171,7 @@ def lancar_fluxo(tipo, descricao, valor, caixa_id, rotulo=None, forma_pagamento=
     if not caixa_id:
         raise ValueError("Abra o caixa antes de fazer lançamentos.")
     rotulo = rotulo or ("Reforco de caixa" if tipo == "Entrada" else "Sangria")
+    forma_pagamento = normalizar_forma_caixa(forma_pagamento) if forma_pagamento else forma_pagamento
     query_db(
         "INSERT INTO fluxo_caixa (tipo, descricao, valor, data_hora, data_iso, caixa_id, forma_pagamento) VALUES (?,?,?,?,?,?,?)",
         (tipo, f"{rotulo}: {descricao}", float(valor or 0), datetime.now().strftime("%d/%m/%Y %H:%M"), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), caixa_id, forma_pagamento),
@@ -158,42 +190,5 @@ def salvar_conta(descricao, valor, vencimento, categoria):
 
 
 def obter_conta(conta_id):
-    res = query_db("SELECT descricao, valor, categoria, status FROM contas_a_pagar WHERE id=?", (conta_id,))
+    res = query_db("SELECT id, descricao, valor, data_vencimento, categoria, status FROM contas_a_pagar WHERE id=?", (conta_id,))
     return res[0] if res else None
-
-
-def marcar_conta_paga(conta_id, caixa_id):
-    if not caixa_id:
-        raise ValueError("Abra o caixa antes de marcar uma conta como paga.")
-    conta = obter_conta(conta_id)
-    if not conta:
-        raise ValueError("Conta nao localizada.")
-    if str(conta[3]).lower() == "pago":
-        raise ValueError("Esta conta ja esta marcada como paga.")
-    query_db("UPDATE contas_a_pagar SET status='Pago' WHERE id=?", (conta_id,), commit=True)
-    query_db(
-        "INSERT INTO fluxo_caixa (tipo, descricao, valor, data_hora, data_iso, caixa_id, forma_pagamento) VALUES (?,?,?,?,?,?,?)",
-        ("Saida", f"[{conta[2]}] {conta[0]}", conta[1], datetime.now().strftime("%d/%m/%Y %H:%M"), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), caixa_id, None),
-        commit=True,
-    )
-    return conta
-
-
-def excluir_conta(conta_id):
-    query_db("UPDATE contas_a_pagar SET status='Excluido', cancelado_em=? WHERE id=?", (datetime.now().strftime("%d/%m/%Y %H:%M:%S"), conta_id), commit=True)
-
-
-def listar_contas():
-    return query_db(
-        """
-        SELECT id, descricao, valor, data_vencimento, categoria, status
-        FROM contas_a_pagar
-        WHERE COALESCE(status,'Pendente') != 'Excluido'
-        ORDER BY status DESC, id DESC
-        """
-    )
-
-
-def caixa_abertos_count():
-    res = query_db("SELECT COUNT(*) FROM caixa_diario WHERE status='Aberto'")
-    return int(res[0][0] or 0) if res else 0
