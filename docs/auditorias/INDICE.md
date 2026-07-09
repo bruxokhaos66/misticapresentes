@@ -1,6 +1,6 @@
 # Auditorias e relatorios
 
-Esta pasta concentra relatorios de auditoria, prontidao comercial, performance, acessibilidade e restauracao do projeto Mistica Presentes.
+Esta pasta concentra relatorios de auditoria, prontidao comercial, performance, acessibilidade, restauracao e planejamento tecnico do projeto Mistica Presentes.
 
 ## Relatorios movidos da raiz
 
@@ -17,6 +17,7 @@ Esta pasta concentra relatorios de auditoria, prontidao comercial, performance, 
 - `RELATORIO_CSV.md` — exportacao CSV no relatorio do Admin.
 - `ADMIN_IMAGENS.md` — upload visual de imagens no Admin.
 - `ESTOQUE_STATUS_ADMIN.md` — status de baixa de estoque no Admin.
+- `PLANO_CONSOLIDACAO_PATCHES.md` — plano para consolidar patches e reduzir complexidade.
 
 ## Regra daqui para frente
 
