@@ -18,6 +18,7 @@ Esta pasta concentra relatorios de auditoria, prontidao comercial, performance, 
 - `ADMIN_IMAGENS.md` — upload visual de imagens no Admin.
 - `ESTOQUE_STATUS_ADMIN.md` — status de baixa de estoque no Admin.
 - `PLANO_CONSOLIDACAO_PATCHES.md` — plano para consolidar patches e reduzir complexidade.
+- `RELATORIO_LIMPEZA_BACKUPS_PYCACHE_20260709.md` — limpeza de pycache e backups rastreados.
 
 ## Regra daqui para frente
 
