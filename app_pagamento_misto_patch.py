@@ -21,7 +21,7 @@ def aplicar_pagamento_misto_runtime(fonte: str) -> str:
 
         self.v_misto_frame = ctk.CTkFrame(corpo_checkout, fg_color="#241d2b", corner_radius=10)
         ctk.CTkLabel(self.v_misto_frame, text="Pagamento misto", font=self.font_label, text_color=self.cor_ouro).pack(pady=(6, 2))
-        ctk.CTkLabel(self.v_misto_frame, text="Divida o valor em até 4 formas. A venda só salva se o valor fechar.", font=("Arial", 11, "bold"), text_color="#d8cbb6", wraplength=290).pack(pady=(0, 4))
+        ctk.CTkLabel(self.v_misto_frame, text="Informe o valor que o cliente vai pagar em cada forma. Cartão deve incluir a taxa.", font=("Arial", 11, "bold"), text_color="#d8cbb6", wraplength=290).pack(pady=(0, 4))
 
         self.v_misto_linhas = []
         formas_mistas = ["Dinheiro", "Pix", "Debito", "Credito 1x", "Credito 2x", "Credito 3x"]
@@ -32,7 +32,7 @@ def aplicar_pagamento_misto_runtime(fonte: str) -> str:
             forma = ctk.CTkOptionMenu(linha, values=formas_mistas, command=lambda e: self.render_v_car(), width=132, height=32, font=self.font_button, dropdown_font=self.font_input)
             forma.set(sugestoes[indice])
             forma.pack(side="left", padx=(0, 5))
-            valor = ctk.CTkEntry(linha, placeholder_text=f"Valor {indice + 1}", height=32, font=self.font_input)
+            valor = ctk.CTkEntry(linha, placeholder_text=f"Valor pago {indice + 1}", height=32, font=self.font_input)
             valor.pack(side="left", fill="x", expand=True)
             valor.bind("<KeyRelease>", lambda e: self.render_v_car())
             self.v_misto_linhas.append({"forma": forma, "valor": valor})
@@ -47,12 +47,45 @@ def aplicar_pagamento_misto_runtime(fonte: str) -> str:
     def base_venda_sem_taxa(self):
         subtotal = sum(float(item.get("t", 0) or 0) for item in self.carrinho)
         try:
-            desconto_percentual = float(str(self.v_desc_ent.get() or "0").replace(",", "."))
+            desconto_percentual = conv_float(self.v_desc_ent.get() or "0")
         except Exception:
             desconto_percentual = 0.0
         desconto_percentual = max(0.0, min(12.0, desconto_percentual))
         desconto = subtotal * (desconto_percentual / 100)
         return max(0.0, subtotal - desconto)
+
+    def taxa_forma_misto(self, forma, valor=1):
+        forma_txt = str(forma or "")
+        valor = float(valor or 0)
+        if valor <= 0:
+            return 0.0
+        if "Debito" in forma_txt or "Débito" in forma_txt:
+            return 1.50
+        if "Credito 1x" in forma_txt or "Crédito 1x" in forma_txt:
+            return 1.50
+        if "Credito 2x" in forma_txt or "Crédito 2x" in forma_txt:
+            return 2.00
+        if "Credito 3x" in forma_txt or "Crédito 3x" in forma_txt:
+            return 2.50
+        return 0.0
+
+    def pagamentos_mistos_brutos(self):
+        pagamentos = []
+        for linha in getattr(self, "v_misto_linhas", []):
+            forma = linha.get("forma").get()
+            valor = conv_float(linha.get("valor").get())
+            if valor > 0:
+                pagamentos.append({"forma": forma, "valor": valor})
+        return pagamentos
+
+    def total_taxas_misto(self, pagamentos=None):
+        pagamentos = pagamentos if pagamentos is not None else self.pagamentos_mistos_brutos()
+        return round(sum(self.taxa_forma_misto(p["forma"], p["valor"]) for p in pagamentos), 2)
+
+    def total_final_misto(self, pagamentos=None):
+        base = self.base_venda_sem_taxa()
+        taxas = self.total_taxas_misto(pagamentos)
+        return round(base + taxas, 2)
 
     def on_pagamento_venda_change(self):
         try:
@@ -114,7 +147,6 @@ def aplicar_pagamento_misto_runtime(fonte: str) -> str:
     def preencher_restante_pagamento_misto(self):
         if self.v_pag_cb.get() != "Misto":
             return
-        base = self.base_venda_sem_taxa()
         linhas = getattr(self, "v_misto_linhas", [])
         if not linhas:
             return
@@ -124,13 +156,22 @@ def aplicar_pagamento_misto_runtime(fonte: str) -> str:
             if idx < len(linhas) - 1 and conv_float(valor_ent.get()) <= 0:
                 alvo_indice = idx
                 break
-        soma = 0.0
+        outros = []
+        soma_outros = 0.0
         for idx, linha in enumerate(linhas):
             if idx == alvo_indice:
                 continue
+            forma = linha.get("forma").get()
             valor_ent = linha.get("valor")
-            soma += max(0.0, conv_float(valor_ent.get()))
-        restante = max(0.0, base - soma)
+            valor = max(0.0, conv_float(valor_ent.get()))
+            if valor > 0:
+                outros.append({"forma": forma, "valor": valor})
+                soma_outros += valor
+        forma_alvo = linhas[alvo_indice].get("forma").get()
+        taxa_alvo = self.taxa_forma_misto(forma_alvo, 1)
+        taxas_outros = self.total_taxas_misto(outros)
+        total_final_estimado = round(self.base_venda_sem_taxa() + taxas_outros + taxa_alvo, 2)
+        restante = max(0.0, total_final_estimado - soma_outros)
         alvo = linhas[alvo_indice].get("valor")
         if alvo is not None:
             alvo.delete(0, 'end')
@@ -141,34 +182,32 @@ def aplicar_pagamento_misto_runtime(fonte: str) -> str:
         if not hasattr(self, "v_pag_cb") or self.v_pag_cb.get() != "Misto":
             return None
         base = self.base_venda_sem_taxa()
-        pagamentos = []
-        for linha in getattr(self, "v_misto_linhas", []):
-            forma = linha.get("forma").get()
-            valor = conv_float(linha.get("valor").get())
-            if valor > 0:
-                pagamentos.append({"forma": forma, "valor": valor})
+        pagamentos = self.pagamentos_mistos_brutos()
         total_pago = round(sum(p["valor"] for p in pagamentos), 2)
-        falta = round(base - total_pago, 2)
+        taxas = self.total_taxas_misto(pagamentos)
+        total_final = round(base + taxas, 2)
+        falta = round(total_final - total_pago, 2)
         try:
             if hasattr(self, "v_misto_resumo_lbl"):
+                resumo_base = f"Compra: {format_moeda(base)} | Taxas: {format_moeda(taxas)} | Total final: {format_moeda(total_final)}"
                 if not pagamentos:
-                    self.v_misto_resumo_lbl.configure(text=f"Total a dividir: {format_moeda(base)}", text_color="#efe1c5")
+                    self.v_misto_resumo_lbl.configure(text=resumo_base, text_color="#efe1c5")
                 elif abs(falta) <= 0.01:
-                    self.v_misto_resumo_lbl.configure(text=f"Pagamento fechado: {format_moeda(total_pago)}", text_color="#b8d986")
+                    self.v_misto_resumo_lbl.configure(text=f"Pagamento fechado: {format_moeda(total_pago)}\n{resumo_base}", text_color="#b8d986")
                 elif falta > 0:
-                    self.v_misto_resumo_lbl.configure(text=f"Falta dividir: {format_moeda(falta)}", text_color="#ffd27f")
+                    self.v_misto_resumo_lbl.configure(text=f"Falta receber: {format_moeda(falta)}\n{resumo_base}", text_color="#ffd27f")
                 else:
-                    self.v_misto_resumo_lbl.configure(text=f"Valor acima do total: {format_moeda(abs(falta))}", text_color="#ff8a8a")
+                    self.v_misto_resumo_lbl.configure(text=f"Valor acima do total: {format_moeda(abs(falta))}\n{resumo_base}", text_color="#ff8a8a")
         except Exception:
             pass
         if not pagamentos:
             if mostrar_erro:
                 messagebox.showwarning("Pagamento misto", "Informe ao menos uma forma e valor do pagamento misto.")
             return []
-        if abs(total_pago - round(base, 2)) > 0.01:
+        if abs(total_pago - total_final) > 0.01:
             if mostrar_erro:
                 if falta > 0:
-                    messagebox.showwarning("Pagamento misto", f"A venda não será finalizada. Ainda falta dividir {format_moeda(falta)}.")
+                    messagebox.showwarning("Pagamento misto", f"A venda não será finalizada. Ainda falta receber {format_moeda(falta)} incluindo as taxas do cartão.")
                 else:
                     messagebox.showwarning("Pagamento misto", f"A venda não será finalizada. O pagamento está acima do total em {format_moeda(abs(falta))}.")
             return []
@@ -251,8 +290,10 @@ def aplicar_pagamento_misto_runtime(fonte: str) -> str:
         if hasattr(self, "v_pag_cb") and self.v_pag_cb.get() == "Misto":
             try:
                 from services.venda_service import calcular_total_venda_misto
-                pagamentos = self.coletar_pagamentos_mistos(False) or []
+                pagamentos = self.pagamentos_mistos_brutos() if hasattr(self, "pagamentos_mistos_brutos") else []
                 self.v_calc = calcular_total_venda_misto(self.carrinho, self.v_desc_ent.get(), pagamentos)
+                if hasattr(self, "coletar_pagamentos_mistos"):
+                    self.coletar_pagamentos_mistos(False)
             except Exception:
                 self.v_calc = calcular_total_venda(self.carrinho, self.v_desc_ent.get(), "Dinheiro")
         else:
