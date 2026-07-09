@@ -46,10 +46,6 @@ def status_caixa_aberto():
 
 
 def caixa_abertos_count():
-    """Compatibilidade para módulos antigos da Isis/serviços.
-
-    Retorna quantos caixas estão com status Aberto.
-    """
     try:
         res = query_db("SELECT COUNT(*) FROM caixa_diario WHERE status='Aberto'")
         return int(res[0][0] or 0) if res else 0
@@ -139,14 +135,7 @@ def resumo_fechamento_caixa():
     formas = dict(formas_detalhadas)
     formas["Credito"] = credito_total
 
-    return {
-        "caixa_id": cx_id,
-        "entradas": float(entradas or 0.0),
-        "saidas": float(saidas or 0.0),
-        "saldo": saldo,
-        "formas": formas,
-        "formas_detalhadas": formas_detalhadas,
-    }
+    return {"caixa_id": cx_id, "entradas": float(entradas or 0.0), "saidas": float(saidas or 0.0), "saldo": saldo, "formas": formas, "formas_detalhadas": formas_detalhadas}
 
 
 def fechar_caixa_conferido(caixa_id, saldo, formas, informado):
@@ -204,3 +193,25 @@ def salvar_conta(descricao, valor, vencimento, categoria):
 def obter_conta(conta_id):
     res = query_db("SELECT id, descricao, valor, data_vencimento, categoria, status FROM contas_a_pagar WHERE id=?", (conta_id,))
     return res[0] if res else None
+
+
+def marcar_conta_paga(conta_id, caixa_id=None, operador="Sistema"):
+    conta = obter_conta(conta_id)
+    if not conta:
+        raise ValueError("Conta nao localizada.")
+    _, descricao, valor, vencimento, categoria, status = conta
+    if str(status or "").lower() == "paga":
+        return True
+    query_db("UPDATE contas_a_pagar SET status='Paga' WHERE id=?", (conta_id,), commit=True)
+    cx_id = caixa_id or obter_caixa_id_ativo()
+    if cx_id:
+        lancar_fluxo("Saida", f"Conta paga: {descricao}", float(valor or 0), cx_id, rotulo="Conta a pagar", forma_pagamento="Dinheiro")
+    return True
+
+
+def excluir_conta(conta_id):
+    conta = obter_conta(conta_id)
+    if not conta:
+        return False
+    query_db("DELETE FROM contas_a_pagar WHERE id=?", (conta_id,), commit=True)
+    return True
