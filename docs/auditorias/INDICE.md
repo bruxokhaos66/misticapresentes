@@ -13,6 +13,10 @@ Esta pasta concentra relatorios de auditoria, prontidao comercial, performance, 
 - `RELATORIO_LAYOUT_COMERCIAL_PREMIUM.md` — relatorio de layout comercial premium.
 - `RELATORIO_AUDITORIA_FINAL.md` — auditoria final de visual, performance e acessibilidade.
 - `RELATORIO_PRONTIDAO_COMERCIAL.md` — prontidao comercial do site para venda real.
+- `RELATORIO_ADMIN.md` — relatorio visual do Admin.
+- `RELATORIO_CSV.md` — exportacao CSV no relatorio do Admin.
+- `ADMIN_IMAGENS.md` — upload visual de imagens no Admin.
+- `ESTOQUE_STATUS_ADMIN.md` — status de baixa de estoque no Admin.
 
 ## Regra daqui para frente
 
