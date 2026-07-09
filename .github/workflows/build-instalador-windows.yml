@@ -34,9 +34,63 @@ jobs:
           }
           python -m pip install pyinstaller fastapi uvicorn customtkinter httpx pillow
 
+      - name: Gerar icone xamanico
+        shell: pwsh
+        run: |
+          python scripts/gerar_icone_mistica.py
+
       - name: Gerar programa principal
         run: |
           python -m PyInstaller --noconfirm MisticaPresentes_CORRETO.spec
+
+      - name: Gerar launcher principal
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --onefile --windowed --name "MisticaLauncher" `
+            --icon "assets\mistica_xamanico_moderno.ico" `
+            --hidden-import sqlite3 `
+            --hidden-import _sqlite3 `
+            --hidden-import webbrowser `
+            --hidden-import random `
+            --hidden-import json `
+            --hidden-import pathlib `
+            --hidden-import threading `
+            --hidden-import queue `
+            --hidden-import time `
+            --hidden-import datetime `
+            --hidden-import urllib `
+            --hidden-import urllib.request `
+            --hidden-import zipfile `
+            --hidden-import hashlib `
+            --hidden-import tempfile `
+            --hidden-import shutil `
+            --hidden-import platform `
+            --hidden-import struct `
+            --hidden-import reports `
+            --collect-submodules sqlite3 `
+            --collect-submodules reports `
+            --add-data "auto_updater.py;." `
+            --add-data "app_version.py;." `
+            --add-data "release_notes.py;." `
+            --add-data "app_runtime_patch.py;." `
+            --add-data "app_pagamento_misto_patch.py;." `
+            --add-data "app_sync_pagamento_misto_payload_patch.py;." `
+            --add-data "app_caixa_fechamento_avancado_patch.py;." `
+            --add-data "app_backup_inicializacao_patch.py;." `
+            --add-data "app_backup_painel_patch.py;." `
+            --add-data "app_manutencao_segura_patch.py;." `
+            --add-data "app_sync_status_patch.py;." `
+            --add-data "app_painel_guard_patch.py;." `
+            --add-data "app_scroll_patch.py;." `
+            --add-data "config.py;." `
+            --add-data "mistica_presentes.py;." `
+            --add-data "database;database" `
+            --add-data "repositories;repositories" `
+            --add-data "services;services" `
+            --add-data "isis;isis" `
+            --add-data "reports;reports" `
+            --add-data "assets;assets" `
+            MisticaLauncher.py
 
       - name: Gerar servidor do aplicativo
         run: |
@@ -50,6 +104,8 @@ jobs:
           New-Item -ItemType Directory -Path $pkg | Out-Null
           New-Item -ItemType Directory -Path "$pkg\MisticaPresentes" | Out-Null
           Copy-Item "dist\MisticaPresentes_CORRETO.exe" "$pkg\MisticaPresentes\MisticaPresentes.exe" -Force
+          Copy-Item "dist\MisticaLauncher.exe" "$pkg\MisticaPresentes\MisticaLauncher.exe" -Force
+          Copy-Item "assets\mistica_xamanico_moderno.ico" "$pkg\MisticaPresentes\mistica_xamanico_moderno.ico" -Force
           Copy-Item "dist\ServidorMisticaApp" "$pkg\ServidorMisticaApp" -Recurse -Force
           Copy-Item "installer\Instalar_Mistica_Presentes.bat" "$pkg\Instalar_Mistica_Presentes.bat" -Force
           Copy-Item "installer\Atualizar_Mistica_Online.bat" "$pkg\Atualizar_Mistica_Online.bat" -Force -ErrorAction SilentlyContinue
