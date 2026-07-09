@@ -1,10 +1,10 @@
-RELEASE_VERSION = "1.0.509"
-RELEASE_TITLE = "Teste de atualizacao apos correcao do Launcher"
-RELEASE_NOTES = "Versao criada apenas para testar se o Launcher corrigido consegue baixar, instalar e abrir uma nova atualizacao automaticamente."
+RELEASE_VERSION = "1.0.510"
+RELEASE_TITLE = "Valor recebido e troco no caixa"
+RELEASE_NOTES = "A venda em dinheiro agora permite informar o valor recebido do cliente e calcula o troco automaticamente."
 RELEASE_CHANGES = [
-    "Teste do fluxo de atualizacao depois da correcao dos modulos do Launcher.",
-    "Valida se o Launcher baixa o pacote publicado no repositorio.",
-    "Valida se a versao ativa muda para 1.0.509.",
-    "Valida se as notas aparecem na aba Manutencao.",
-    "Nao altera regras de venda, estoque, caixa ou sincronizacao nesta versao.",
+    "Adicionado campo Valor recebido na venda em dinheiro.",
+    "Adicionado calculo automatico de troco.",
+    "Bloqueia finalizar venda em dinheiro quando o valor recebido for menor que o total.",
+    "Descricao do pagamento passa a mostrar recebido e troco.",
+    "Exemplo: compra R$ 80,00, recebido R$ 100,00, troco R$ 20,00.",
 ]
