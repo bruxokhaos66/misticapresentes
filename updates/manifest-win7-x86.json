@@ -1,16 +1,16 @@
 {
-  "version": "1.0.514",
+  "version": "1.0.515",
   "package_file": "",
-  "package_url": "https://raw.githubusercontent.com/bruxokhaos66/misticapresentes/main/updates/mistica-update-1.0.514.zip",
-  "sha256": "457c06054e24607b1d73f2f6e1696f22d6bdf0ca8a57dc2b77e419453532e7ab",
-  "title": "Correcao de contas a pagar no caixa",
-  "notes": "Corrige erro ao abrir o Launcher causado por funcoes antigas de contas a pagar que faltavam no servico de caixa.",
+  "package_url": "https://raw.githubusercontent.com/bruxokhaos66/misticapresentes/main/updates/mistica-update-1.0.515.zip",
+  "sha256": "974a1a4315358cd0787e53fdb8498c23452afe22d42642da614626a21d13bb0a",
+  "title": "Correcao do carregamento de modulos do Launcher",
+  "notes": "Corrige o Launcher para priorizar os modulos da versao atualizada e nao reutilizar servicos antigos empacotados no executavel.",
   "changes": [
-    "Adiciona a funcao marcar_conta_paga em services.caixa_service.",
-    "Adiciona a funcao excluir_conta em services.caixa_service.",
-    "Mantem compatibilidade com a tela de contas a pagar do app principal.",
-    "Evita erro cannot import name excluir_conta ao abrir o Launcher.",
-    "Mantem as correcoes anteriores do pagamento misto com taxas."
+    "Launcher limpa modulos antigos antes de abrir a versao atualizada.",
+    "Prioriza services, database, repositories, isis e reports da pasta updates.",
+    "Evita abrir services.caixa_service antigo do Temp/_MEI.",
+    "Corrige erro persistente cannot import name excluir_conta quando a atualizacao ja possui a funcao.",
+    "Mantem as correcoes anteriores de contas a pagar e pagamento misto com taxas."
   ],
   "channel": "win7-x86",
   "channel_notes": "Canal de atualizacao: win7-x86"
