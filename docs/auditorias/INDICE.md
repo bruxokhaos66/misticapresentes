@@ -4,6 +4,8 @@ Esta pasta concentra relatorios de auditoria, prontidao comercial, performance, 
 
 ## Relatorios movidos da raiz
 
+- `AUDITORIA_APROVACAO_MISTICA.md` — auditoria de aprovacao do sistema em 03/07/2026.
+- `AUDITORIA_PROFUNDA_2026_07_03.md` — auditoria profunda do sistema, desktop, API e sincronizacao.
 - `AUDITORIA_SITE_MISTICA_20260707.md` — auditoria visual e comercial do site em 07/07/2026.
 - `AUDITORIA_HERO_20260707.txt` — auditoria da Hero e conflito de camadas visuais.
 - `AUDITORIA_SITE.md` — auditoria consolidada do site e painel.
