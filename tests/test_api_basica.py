@@ -122,6 +122,32 @@ def test_listar_clientes_exige_chave_api():
     assert isinstance(response.json(), list)
 
 
+def test_criar_cliente_exige_chave_api_e_persiste():
+    payload = {"nome": f"Cliente {codigo_unico('teste')}", "telefone": "(49) 99999-0000", "cpf": "12345678901", "endereco": "Rua Teste, 1"}
+
+    response = client.post("/api/clientes", json=payload)
+    assert response.status_code == 403
+
+    response = client.post("/api/clientes", json=payload, headers={"X-Mistica-Api-Key": "chave-errada"})
+    assert response.status_code == 403
+
+    response = client.post("/api/clientes", json=payload, headers=PROTECTED_HEADERS)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "criado"
+    assert data["id"]
+
+    response = client.get("/api/clientes", headers=PROTECTED_HEADERS, params={"busca": payload["nome"]})
+    assert response.status_code == 200
+    encontrados = response.json()
+    assert any(c["nome"] == payload["nome"] and c["cpf"] == payload["cpf"] for c in encontrados)
+
+
+def test_criar_cliente_exige_nome_e_telefone():
+    response = client.post("/api/clientes", json={"nome": "", "telefone": ""}, headers=PROTECTED_HEADERS)
+    assert response.status_code == 422
+
+
 def test_listar_vendas_exige_chave_api():
     response = client.get("/api/vendas")
     assert response.status_code == 403
