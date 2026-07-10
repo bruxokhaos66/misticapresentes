@@ -1,13 +1,26 @@
+# Dependencias de GUI/build do app desktop (Windows) - nao pinadas aqui
+# porque exigem validacao em ambiente Windows real (PyInstaller gera
+# executavel, customtkinter/pyttsx3/SpeechRecognition dependem de bibliotecas
+# nativas do sistema) que nao esta disponivel no ambiente usado para testar
+# esta mudanca. Para pinar com seguranca, valide cada versao com um build
+# real do instalador antes de travar aqui. Referencias ja pinadas para os
+# mesmos pacotes: requirements-windows7.txt, requirements-win7-32.txt.
 customtkinter
 SpeechRecognition
 pyttsx3
 pyinstaller
 ddgs
-Pillow
-fastapi
-uvicorn[standard]
-httpx
-python-multipart
-pytest
-google-api-python-client
-google-auth
+
+# Dependencias do backend/API (FastAPI) e utilitarios compartilhados -
+# pinadas nas versoes validadas nesta auditoria: suite de testes completa
+# (pytest, 22 testes) rodando com sucesso contra estas versoes exatas,
+# incluindo os endpoints de upload de imagem/audio que dependem de Pillow
+# e python-multipart.
+fastapi==0.139.0
+uvicorn[standard]==0.51.0
+httpx==0.28.1
+python-multipart==0.0.32
+pytest==9.1.1
+google-api-python-client==2.198.0
+google-auth==2.55.2
+Pillow==12.3.0
