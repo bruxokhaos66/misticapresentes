@@ -15,7 +15,14 @@ def test_venda_e_cancelamento_ajustam_estoque_corretamente(tmp_path, monkeypatch
     from database import init_db, query_db
     from services.caixa_service import abrir_caixa, obter_caixa_id_ativo
     from services.produto_service import cadastrar_produto_service
+    import services.venda_service as venda_service
     from services.venda_service import calcular_total_venda, cancelar_venda_service, registrar_venda_service
+
+    # Este teste valida só a lógica local (estoque/caixa); a confirmação com o
+    # banco central (ver Fase 7 da consolidação de fonte única de verdade) tem
+    # cobertura própria e exige um servidor de verdade, então é substituída
+    # aqui por um stub que sempre confirma.
+    monkeypatch.setattr(venda_service, "_confirmar_venda_no_banco_central", lambda venda_id: (True, None))
 
     init_db()
 

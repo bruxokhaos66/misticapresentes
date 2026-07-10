@@ -110,7 +110,7 @@ def enfileirar_venda_para_sync(venda_id):
             commit=True,
         )
         return existente[0][0]
-    return query_db(
+    query_db(
         """
         INSERT INTO sync_pendencias
         (tipo, referencia_id, payload, status, tentativas, data_criacao, data_atualizacao)
@@ -119,6 +119,11 @@ def enfileirar_venda_para_sync(venda_id):
         (venda_id, payload_json, agora, agora),
         commit=True,
     )
+    novo = query_db(
+        "SELECT id FROM sync_pendencias WHERE tipo='venda' AND referencia_id=? ORDER BY id DESC LIMIT 1",
+        (venda_id,),
+    )
+    return novo[0][0] if novo else None
 
 
 def _enviar_pendencia(pendencia_id, tipo, payload_json):
@@ -200,6 +205,44 @@ def sincronizar_venda_agora(venda_id):
     """Enfileira e tenta sincronizar a venda recem-salva antes de pendencias antigas."""
     enfileirar_venda_para_sync(venda_id)
     return sincronizar_pendencias(limite=6, referencia_id_prioritaria=venda_id)
+
+
+def sincronizar_venda_obrigatoria(venda_id):
+    """Envia a venda para o servidor central de forma síncrona e devolve o
+    resultado só dessa venda (não de outras pendências antigas que porventura
+    sejam processadas na mesma leva). Usada por registrar_venda_service para
+    decidir se a venda pode ser considerada concluída."""
+    pendencia_id = enfileirar_venda_para_sync(venda_id)
+    agora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        payload = query_db("SELECT payload FROM sync_pendencias WHERE id=?", (pendencia_id,))
+        payload_json = payload[0][0] if payload else None
+        if not payload_json:
+            return False, "Pendência de sincronização não encontrada."
+        retorno = _enviar_pendencia(pendencia_id, "venda", payload_json)
+        query_db(
+            """
+            UPDATE sync_pendencias
+               SET status='Sincronizado', ultimo_erro=NULL, data_atualizacao=?, sincronizado_em=?
+             WHERE id=?
+            """,
+            (agora, agora, pendencia_id),
+            commit=True,
+        )
+        return True, retorno
+    except Exception as exc:
+        erro = str(exc)[:500]
+        query_db(
+            """
+            UPDATE sync_pendencias
+               SET status='Erro', tentativas=COALESCE(tentativas,0)+1,
+                   ultimo_erro=?, data_atualizacao=?
+             WHERE id=?
+            """,
+            (erro, agora, pendencia_id),
+            commit=True,
+        )
+        return False, erro
 
 
 def enfileirar_e_tentar_sincronizar_venda(venda_id):
