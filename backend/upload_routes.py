@@ -12,6 +12,7 @@ from uuid import uuid4
 from fastapi import APIRouter, BackgroundTasks, File, Header, HTTPException, Response, UploadFile
 from pydantic import BaseModel, Field
 
+from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.database import conectar
 from backend.drive_storage import drive_configured, upload_bytes_to_drive
 from config import DB_PATH
@@ -73,14 +74,7 @@ def conectar_rapido(timeout: float = 0.08):
 
 
 def validar_site_api_key(chave_recebida: str | None):
-    chaves_validas = [os.environ.get("MISTICA_SITE_API_KEY", "").strip(), os.environ.get("MISTICA_SYNC_KEY", "").strip()]
-    chaves_validas = [chave for chave in chaves_validas if chave]
-    if not chaves_validas:
-        raise HTTPException(status_code=503, detail="Configure MISTICA_SITE_API_KEY ou MISTICA_SYNC_KEY para permitir upload pela API.")
-    if not chave_recebida:
-        raise HTTPException(status_code=403, detail="Chave da API não enviada pelo site.")
-    if not any(secrets.compare_digest(str(chave_recebida), chave) for chave in chaves_validas):
-        raise HTTPException(status_code=403, detail="Chave da API inválida.")
+    validar_chave_api(chave_recebida, "Configure MISTICA_SITE_API_KEY ou MISTICA_SYNC_KEY para permitir upload pela API.")
 
 
 def limpar_nome(value: str) -> str:

@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from backend.audit import registrar_auditoria
+from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.database import conectar
 from backend.rate_limit import limitar_requisicoes
 from backend.site_stock_routes import VendaSiteIn, registrar_venda_site
@@ -36,11 +37,7 @@ class ProdutoCompletoIn(BaseModel):
 
 
 def validar_site_api_key(chave_recebida: str | None):
-    chave = os.environ.get("MISTICA_SITE_API_KEY", "").strip() or os.environ.get("MISTICA_SYNC_KEY", "").strip()
-    if not chave:
-        raise HTTPException(status_code=503, detail="Configure o segredo de integração somente no ambiente do servidor.")
-    if not chave_recebida or not secrets.compare_digest(str(chave_recebida), chave):
-        raise HTTPException(status_code=403, detail="Chave da API inválida.")
+    validar_chave_api(chave_recebida, "Configure o segredo de integração somente no ambiente do servidor.")
 
 
 def _chave_interna_checkout() -> str:

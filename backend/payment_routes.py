@@ -9,6 +9,7 @@ from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from backend.audit import registrar_auditoria
+from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.database import conectar
 from backend.idempotency import resposta_idempotente_existente, salvar_resposta_idempotente
 from backend.order_status_routes import baixar_estoque_do_pedido
@@ -35,11 +36,7 @@ class PagamentoStatusIn(BaseModel):
 
 
 def validar_site_api_key(chave_recebida: str | None):
-    chave = os.environ.get("MISTICA_SITE_API_KEY", "").strip() or os.environ.get("MISTICA_SYNC_KEY", "").strip()
-    if not chave:
-        raise HTTPException(status_code=503, detail="Configure MISTICA_SITE_API_KEY ou MISTICA_SYNC_KEY para permitir escrita pela API.")
-    if not chave_recebida or not secrets.compare_digest(str(chave_recebida), chave):
-        raise HTTPException(status_code=403, detail="Chave da API inválida.")
+    validar_chave_api(chave_recebida, "Configure MISTICA_SITE_API_KEY ou MISTICA_SYNC_KEY para permitir escrita pela API.")
 
 
 def registrar_log_status(conn, venda_id: int, status: str, usuario: str, observacao: str):
