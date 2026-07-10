@@ -10,6 +10,7 @@ os.environ.setdefault("MISTICA_SYNC_KEY", TEST_API_KEY)
 
 main = importlib.import_module("backend.main")
 client = TestClient(main.app)
+client.__enter__()  # garante que o evento de startup (migrações) rode antes dos testes
 PROTECTED_HEADERS = {"X-Mistica-Api-Key": TEST_API_KEY}
 
 

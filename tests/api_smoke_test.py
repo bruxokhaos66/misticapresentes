@@ -13,6 +13,7 @@ os.environ.setdefault("MISTICA_API_TOKEN", TEST_TOKEN)
 from api.main import app
 
 client = TestClient(app)
+client.__enter__()  # garante que o evento de startup (init_db) rode antes dos testes
 TOKEN_HEADER = {"X-Mistica-Token": TEST_TOKEN}
 
 
