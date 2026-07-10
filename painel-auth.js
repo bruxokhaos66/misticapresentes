@@ -1,8 +1,39 @@
 (() => {
   const config = window.misticaSiteConfig || {};
   const API_BASE = (config.apiBaseUrl || "https://api.misticaesotericos.com.br").replace(/\/$/, "");
+  const ADMIN_HASHES = ["#admin", "#adminbruxo"];
 
   function $(selector) { return document.querySelector(selector); }
+
+  function isAdminRoute() {
+    return ADMIN_HASHES.includes(window.location.hash);
+  }
+
+  function temSessaoAtiva() {
+    try { return sessionStorage.getItem("misticaAdminUnlocked") === "true"; } catch { return false; }
+  }
+
+  function mostrarSecaoAdmin() {
+    const secao = document.getElementById("admin");
+    if (!secao) return;
+    secao.hidden = false;
+    secao.removeAttribute("hidden");
+    secao.style.display = "block";
+    setTimeout(() => secao.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+  }
+
+  function esconderSecaoAdmin() {
+    const secao = document.getElementById("admin");
+    if (!secao) return;
+    secao.hidden = true;
+    secao.style.display = "none";
+  }
+
+  function sincronizarRotaAdmin() {
+    if (!isAdminRoute()) return esconderSecaoAdmin();
+    mostrarSecaoAdmin();
+    if (temSessaoAtiva()) restaurarSessao();
+  }
 
   function garantirCampoLogin() {
     const form = document.getElementById("adminLoginForm");
@@ -34,12 +65,40 @@
     return response.json();
   }
 
+  function sairDoAdmin() {
+    try {
+      sessionStorage.removeItem("misticaPainelSessao");
+      sessionStorage.removeItem("misticaAdminUnlocked");
+    } catch {}
+    const loginPanel = document.getElementById("adminLoginPanel");
+    const adminContent = document.getElementById("adminContent");
+    const status = document.getElementById("adminLoginStatus");
+    if (adminContent) adminContent.hidden = true;
+    if (loginPanel) loginPanel.hidden = false;
+    if (status) {
+      status.hidden = false;
+      status.textContent = "Sessão encerrada com segurança.";
+    }
+  }
+
+  function garantirBotaoSaida(adminContent) {
+    if (adminContent.querySelector("[data-admin-logout]")) return;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn btn-ghost";
+    button.setAttribute("data-admin-logout", "true");
+    button.textContent = "Sair do admin";
+    button.addEventListener("click", sairDoAdmin);
+    adminContent.insertBefore(button, adminContent.firstChild);
+  }
+
   function aplicarPermissoes(sessao) {
     const perfil = sessao?.usuario?.perfil || "vendedor";
     const permissoes = sessao?.permissoes || {};
     const adminContent = document.getElementById("adminContent");
     if (!adminContent) return;
 
+    garantirBotaoSaida(adminContent);
     const titulo = adminContent.querySelector(".container.form-panel h2, h2");
     const aviso = document.createElement("div");
     aviso.className = "saved-box";
@@ -132,6 +191,7 @@
   window.addEventListener("load", () => {
     garantirCampoLogin();
     instalarLoginApi();
-    restaurarSessao();
+    sincronizarRotaAdmin();
   });
+  window.addEventListener("hashchange", sincronizarRotaAdmin);
 })();

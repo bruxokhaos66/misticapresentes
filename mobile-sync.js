@@ -115,18 +115,6 @@
     }, {});
   }
 
-  function aplicarClientes(lista) {
-    if (!Array.isArray(lista) || typeof clients === "undefined") return;
-    clients = lista.map(c => ({
-      id: c.id,
-      name: c.nome || "Cliente",
-      cpf: c.cpf || "",
-      address: c.endereco || "",
-      whatsapp: c.telefone || "",
-      createdAt: new Date().toISOString(),
-    })).slice(0, 50);
-  }
-
   function aplicarVendas(lista) {
     if (!Array.isArray(lista) || typeof sales === "undefined") return;
     sales = lista.map(v => {
@@ -156,16 +144,14 @@
     if (syncRunning) return;
     syncRunning = true;
     try {
-      const [status, produtos, vendas, clientes] = await Promise.all([
+      const [status, produtos, vendas] = await Promise.all([
         api("/api/status"),
         api("/api/produtos?limite=500"),
         api("/api/vendas?limite=50"),
-        api("/api/clientes?limite=50"),
       ]);
 
       aplicarProdutos(produtos);
       aplicarVendas(vendas);
-      aplicarClientes(clientes);
       lastSyncAt = new Date();
 
       try {

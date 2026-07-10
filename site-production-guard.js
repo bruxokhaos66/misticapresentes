@@ -276,28 +276,27 @@
     return true;
   }
 
+  const SENSITIVE_LOCAL_KEYS = [
+    "misticaClients",
+    "misticaSales",
+    "misticaStock",
+    "misticaSuppliers",
+    "misticaAutoBackup",
+    "misticaLastBackupAt",
+  ];
+
+  function removeSensitiveLocalKeys() {
+    SENSITIVE_LOCAL_KEYS.forEach(key => {
+      try { localStorage.removeItem(key); } catch {}
+    });
+  }
+
   function installSafeSaveState() {
     if (window.__misticaSafeSaveStateInstalled || typeof saveState !== "function") return;
     window.__misticaSafeSaveStateInstalled = true;
     saveState = function safeProductionSaveState() {
       try { localStorage.setItem("misticaCart", JSON.stringify(cart || [])); } catch {}
-      try { localStorage.setItem("misticaSales", JSON.stringify(sales || [])); } catch {}
-      try { localStorage.setItem("misticaStock", JSON.stringify(stock || {})); } catch {}
-      try { localStorage.setItem("misticaSuppliers", JSON.stringify(suppliers || [])); } catch {}
-      try { localStorage.removeItem("misticaClients"); } catch {}
-      try {
-        localStorage.setItem("misticaAutoBackup", JSON.stringify({
-          store: storeConfig?.name || "Mística Presentes",
-          createdAt: new Date().toISOString(),
-          products: products || [],
-          clients: [],
-          sales: sales || [],
-          stock: stock || {},
-          suppliers: suppliers || [],
-          note: "Backup local em produção não armazena CPF/endereço de clientes.",
-        }));
-        localStorage.setItem("misticaLastBackupAt", new Date().toISOString());
-      } catch {}
+      removeSensitiveLocalKeys();
     };
   }
 
@@ -348,7 +347,7 @@
   }
 
   function scrubLocalClientData() {
-    try { localStorage.removeItem("misticaClients"); } catch {}
+    removeSensitiveLocalKeys();
     try {
       if (Array.isArray(clients)) clients = [];
       if (typeof renderClients === "function") renderClients();
