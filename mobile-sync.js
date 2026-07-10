@@ -164,13 +164,13 @@
     const payload = {
       origem: "site",
       cliente: "Pedido site/celular",
+      telefone: (typeof storeConfig !== "undefined" && storeConfig.customerPhone) || "",
       forma_pagamento: "Pix site/celular",
       vendedor: "Site/Celular",
       status: "Aguardando pagamento",
       data_venda: new Date(venda.date).toLocaleString("pt-BR"),
       data_iso: venda.date,
       dia_operacional: new Date(venda.date).toISOString().slice(0, 10),
-      baixa_estoque: false,
       itens: itensPayload.map(({ valido, ...item }) => item),
     };
     return api("/api/checkout/pedidos", { method: "POST", body: JSON.stringify(payload) });
@@ -198,8 +198,26 @@
       renderAll();
 
       enviarVendaApi(venda, saleItems)
-        .then(() => {
-          setSyncStatus("Pedido enviado com segurança. O estoque será baixado após confirmar o pagamento.", true);
+        .then(resposta => {
+          if (resposta && resposta.id) {
+            // A partir daqui o número real do pedido no servidor passa a ser a
+            // identidade oficial da venda: usado no Pix, no WhatsApp e no
+            // acompanhamento de status, para nunca divergir do que o admin vê.
+            venda.id = resposta.id;
+            venda.pedidoBackendId = resposta.id;
+            if (resposta.pix_copia_cola) {
+              venda.pixPayload = resposta.pix_copia_cola;
+              if (typeof pixPayloadInput !== "undefined" && pixPayloadInput) {
+                pixPayloadInput.value = resposta.pix_copia_cola;
+              }
+              if (window.QRCode && typeof pixCanvas !== "undefined" && pixCanvas) {
+                window.QRCode.toCanvas(pixCanvas, resposta.pix_copia_cola, { width: 220, margin: 2, errorCorrectionLevel: "M" }).catch(() => {});
+              }
+            }
+          }
+          saveState();
+          renderAll();
+          setSyncStatus(`Pedido #${venda.id} enviado com segurança. O estoque foi reservado até a confirmação do Pix.`, true);
           return sincronizarAgora();
         })
         .catch(error => {

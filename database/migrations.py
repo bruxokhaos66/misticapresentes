@@ -298,7 +298,12 @@ def init_db():
             estoque_baixado_em TEXT,
             estoque_reposto_cancelamento INTEGER DEFAULT 0,
             estoque_reposto_em TEXT,
-            expira_em TEXT
+            expira_em TEXT,
+            telefone TEXT,
+            estoque_reservado INTEGER DEFAULT 0,
+            pix_txid TEXT,
+            pix_copia_cola TEXT,
+            confirmado_automaticamente INTEGER DEFAULT 0
         )
         """,
         commit=True,
@@ -335,7 +340,7 @@ def init_db():
         except Exception:
             pass
 
-    for tabela, colunas in {"categorias": [("ativo", "INTEGER DEFAULT 1"), ("excluido_em", "TEXT")], "clientes": [("ativo", "INTEGER DEFAULT 1"), ("excluido_em", "TEXT")], "usuarios": [("cpf", "TEXT"), ("endereco", "TEXT"), ("telefone", "TEXT"), ("perfil", "TEXT"), ("ativo", "INTEGER DEFAULT 1"), ("excluido_em", "TEXT"), ("senha_salt", "TEXT")], "fornecedores": [("whatsapp", "TEXT"), ("cidade", "TEXT"), ("observacoes", "TEXT"), ("ativo", "INTEGER DEFAULT 1"), ("excluido_em", "TEXT")], "contas_a_pagar": [("categoria", "TEXT DEFAULT 'Outros'"), ("cancelado_em", "TEXT")], "vendas": [("status", "TEXT DEFAULT 'Concluído'"), ("data_iso", "TEXT"), ("dia_operacional", "TEXT")], "vendas_itens": [("custo_unitario", "REAL DEFAULT 0.0"), ("valor_unitario", "REAL DEFAULT 0.0"), ("valor_total", "REAL DEFAULT 0.0")], "fluxo_caixa": [("data_iso", "TEXT"), ("forma_pagamento", "TEXT"), ("caixa_id", "INTEGER")]}.items():
+    for tabela, colunas in {"categorias": [("ativo", "INTEGER DEFAULT 1"), ("excluido_em", "TEXT")], "clientes": [("ativo", "INTEGER DEFAULT 1"), ("excluido_em", "TEXT")], "usuarios": [("cpf", "TEXT"), ("endereco", "TEXT"), ("telefone", "TEXT"), ("perfil", "TEXT"), ("ativo", "INTEGER DEFAULT 1"), ("excluido_em", "TEXT"), ("senha_salt", "TEXT")], "fornecedores": [("whatsapp", "TEXT"), ("cidade", "TEXT"), ("observacoes", "TEXT"), ("ativo", "INTEGER DEFAULT 1"), ("excluido_em", "TEXT")], "contas_a_pagar": [("categoria", "TEXT DEFAULT 'Outros'"), ("cancelado_em", "TEXT")], "vendas": [("status", "TEXT DEFAULT 'Concluído'"), ("data_iso", "TEXT"), ("dia_operacional", "TEXT")], "vendas_itens": [("custo_unitario", "REAL DEFAULT 0.0"), ("valor_unitario", "REAL DEFAULT 0.0"), ("valor_total", "REAL DEFAULT 0.0")], "fluxo_caixa": [("data_iso", "TEXT"), ("forma_pagamento", "TEXT"), ("caixa_id", "INTEGER")], "pedidos": [("telefone", "TEXT"), ("estoque_reservado", "INTEGER DEFAULT 0"), ("pix_txid", "TEXT"), ("pix_copia_cola", "TEXT"), ("confirmado_automaticamente", "INTEGER DEFAULT 0")]}.items():
         for col, typ in colunas:
             try:
                 query_db(f"ALTER TABLE {tabela} ADD COLUMN {col} {typ}", commit=True)
