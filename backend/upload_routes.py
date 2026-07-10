@@ -22,11 +22,24 @@ BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "uploads" / "produtos"
 AUDIO_DIR = BASE_DIR / "uploads" / "musicas"
 AUDIO_LINKS_FILE = AUDIO_DIR / "links-diretos.txt"
+CURSOS_DIR = BASE_DIR / "uploads" / "cursos"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+CURSOS_DIR.mkdir(parents=True, exist_ok=True)
 
 MAX_IMAGE_BYTES = 4 * 1024 * 1024
 MAX_AUDIO_BYTES = 30 * 1024 * 1024
+MAX_CURSO_DOC_BYTES = 20 * 1024 * 1024
+MAX_CURSO_VIDEO_BYTES = 150 * 1024 * 1024
+ALLOWED_CURSO_TYPES = {
+    "application/pdf": ".pdf",
+    "application/vnd.ms-powerpoint": ".ppt",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
+    "video/mp4": ".mp4",
+    "video/webm": ".webm",
+    "video/quicktime": ".mov",
+}
+ALLOWED_CURSO_VIDEO_TYPES = {"video/mp4", "video/webm", "video/quicktime"}
 ALLOWED_CONTENT_TYPES = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
 ALLOWED_AUDIO_TYPES = {
     "audio/mpeg": ".mp3",
@@ -225,6 +238,43 @@ async def upload_imagem_produto(arquivo: UploadFile = File(...), produto_id: str
     destino = UPLOAD_DIR / nome
     destino.write_bytes(data)
     return {"ok": True, "filename": nome, "content_type": content_type, "size_bytes": len(data), "url": f"/uploads/produtos/{nome}"}
+
+
+@router.post("/uploads/cursos")
+async def upload_material_curso(background_tasks: BackgroundTasks, arquivo: UploadFile = File(...), titulo: str = "material", x_mistica_api_key: str | None = Header(default=None)):
+    validar_site_api_key(x_mistica_api_key)
+    content_type = arquivo.content_type or ""
+    ext = ALLOWED_CURSO_TYPES.get(content_type)
+    if not ext:
+        filename_lower = (arquivo.filename or "").lower()
+        for tipo, extensao in ALLOWED_CURSO_TYPES.items():
+            if filename_lower.endswith(extensao):
+                ext = extensao
+                content_type = tipo
+                break
+    if not ext:
+        raise HTTPException(status_code=400, detail="Formato inválido. Use PDF, PPT, PPTX, MP4, WEBM ou MOV.")
+    data = await arquivo.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Arquivo vazio.")
+    limite = MAX_CURSO_VIDEO_BYTES if content_type in ALLOWED_CURSO_VIDEO_TYPES else MAX_CURSO_DOC_BYTES
+    if len(data) > limite:
+        raise HTTPException(status_code=413, detail=f"Arquivo muito grande. Limite: {limite // (1024 * 1024)} MB.")
+    nome = f"{limpar_nome(titulo)}-{uuid4().hex[:10]}{ext}"
+
+    if drive_configured():
+        folder_id = os.environ.get("GOOGLE_DRIVE_FOLDER_CURSOS", "").strip() or None
+        try:
+            drive_file = upload_bytes_to_drive(data=data, filename=nome, mime_type=content_type, folder_id=folder_id)
+            link = drive_file.get("download_url") or drive_file.get("web_content_link") or drive_file.get("web_view_link")
+            if link:
+                return {"ok": True, "filename": nome, "content_type": content_type, "size_bytes": len(data), "url": link, "drive_id": drive_file.get("id"), "armazenamento": "google_drive"}
+        except Exception as exc:
+            log_tempo("drive_upload_curso_falhou", time.perf_counter(), str(exc))
+
+    destino = CURSOS_DIR / nome
+    destino.write_bytes(data)
+    return {"ok": True, "filename": nome, "content_type": content_type, "size_bytes": len(data), "url": f"/uploads/cursos/{nome}", "armazenamento": "arquivo"}
 
 
 @router.post("/uploads/musicas")
