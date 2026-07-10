@@ -88,5 +88,5 @@ def test_login_correto_continua_bloqueado_durante_penalidade(banco_login):
 def test_politica_de_senha_forte():
     assert panel_sessions._senha_forte("SenhaForte#2026") is True
     assert panel_sessions._senha_forte("senha-fraca") is False
-    assert panel_sessions._senha_forte("SEMminuscula#2026") is False
+    assert panel_sessions._senha_forte("SEMMINUSCULA#2026") is False
     assert panel_sessions._senha_forte("SemNumero#Senha") is False
