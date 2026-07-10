@@ -15,11 +15,17 @@ def setup_temp_db(tmp_path, monkeypatch):
     init_db()
     conn = sqlite3.connect(str(db_path))
     cur = conn.cursor()
-    today = datetime.now().strftime("%Y-%m-%d")
-    today_br = datetime.now().strftime("%d/%m/%Y")
+    # Usa o timestamp completo de "agora" (não só a data) para que a venda
+    # caia no período operacional atual mesmo perto da virada das 23h (ver
+    # services/dia_operacional_service.py) — um data_iso truncado à meia-noite
+    # podia cair no dia operacional anterior e deixar o teste instável
+    # dependendo do horário em que rodasse.
+    agora = datetime.now()
+    hoje_iso = agora.strftime("%Y-%m-%d %H:%M:%S")
+    today_br = agora.strftime("%d/%m/%Y")
     cur.execute(
         "INSERT INTO vendas (cliente, data_venda, data_iso, subtotal, desconto, taxa, total_final, forma_pagamento, vendedor, status) VALUES (?,?,?,?,?,?,?,?,?,?)",
-        ("Cliente A", f"{today_br} 10:00", today, 100.0, 0.0, 0.0, 100.0, "Dinheiro", "Vendedor", "Concluído"),
+        ("Cliente A", f"{today_br} 10:00", hoje_iso, 100.0, 0.0, 0.0, 100.0, "Dinheiro", "Vendedor", "Concluído"),
     )
     cur.execute(
         "INSERT INTO vendas (cliente, data_venda, data_iso, subtotal, desconto, taxa, total_final, forma_pagamento, vendedor, status) VALUES (?,?,?,?,?,?,?,?,?,?)",
