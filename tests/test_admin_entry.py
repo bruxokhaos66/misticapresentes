@@ -18,7 +18,16 @@ def test_painel_auth_inicializa_mesmo_apos_load():
     assert 'params.get("admin") === "mistica"' in script
 
 
-def test_site_config_carrega_auth_explicitamente():
+def test_site_config_carrega_bootstrap_autenticado():
     config = (ROOT / "site-config.js").read_text(encoding="utf-8")
-    assert 'loadScript("painelAuthScript"' in config
-    assert "painel-auth.js?v=20260710-admin-entry-fix" in config
+    assert "admin-api-login-bootstrap.js" in config
+    assert "admin-api-final" in config
+    assert 'loadScript("painelAuthScript"' not in config
+
+
+def test_bootstrap_carrega_painel_auth_sem_login_local():
+    bootstrap = (ROOT / "admin-api-login-bootstrap.js").read_text(encoding="utf-8")
+    assert "cloneNode(true)" in bootstrap
+    assert "form.replaceWith(clone)" in bootstrap
+    assert "painel-auth.js" in bootstrap
+    assert "localStorage" not in bootstrap

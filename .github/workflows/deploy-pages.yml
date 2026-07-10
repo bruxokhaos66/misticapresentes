@@ -33,11 +33,21 @@ jobs:
           test -f robots.txt
           test -f CNAME
           test -f mistica-v2/index.html
+          test -f admin.html
+          test -f painel-auth.js
+          test -f admin-api-login-bootstrap.js
+          test -f deploy-version.txt
           ! grep -qi 'noindex' index.html
           ! grep -q 'mistica-v2/' index.html
           grep -q 'www.misticaesotericos.com.br' CNAME
           grep -q 'noindex,follow' mistica-v2/index.html
           grep -q 'url=/' mistica-v2/index.html
+          grep -q '/api/auth/login' painel-auth.js
+          grep -q 'admin-api-login-bootstrap' site-config.js
+          grep -q '20260710-admin-pages-check' deploy-version.txt
+
+      - name: Exibir versão publicada
+        run: cat deploy-version.txt
 
       - name: Configurar GitHub Pages
         uses: actions/configure-pages@v5
