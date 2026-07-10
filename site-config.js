@@ -1,6 +1,6 @@
 window.misticaSiteConfig = {
-  domain: "misticaesotericos.com.br",
-  publicBaseUrl: "https://misticaesotericos.com.br",
+  domain: "www.misticaesotericos.com.br",
+  publicBaseUrl: "https://www.misticaesotericos.com.br",
   apiBaseUrl: "https://api.misticaesotericos.com.br",
   // Nunca coloque a chave real aqui: este arquivo é servido publicamente.
   // A sincronização de escrita desta página legada fica sem chave até
