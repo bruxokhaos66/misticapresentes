@@ -34,18 +34,23 @@ window.misticaSiteConfig = {
     };
   }
 
-  const loadGuard = () => {
-    if (document.getElementById("misticaProductionGuardScript")) return;
+  const loadScript = (id, src) => {
+    if (document.getElementById(id)) return;
     const script = document.createElement("script");
-    script.id = "misticaProductionGuardScript";
-    script.src = "site-production-guard.js?v=20260710-no-browser-secret";
+    script.id = id;
+    script.src = src;
     script.defer = true;
     document.head.appendChild(script);
   };
 
+  const loadProductionScripts = () => {
+    loadScript("misticaProductionGuardScript", "site-production-guard.js?v=20260710-no-browser-secret");
+    loadScript("painelAuthScript", "painel-auth.js?v=20260710-admin-entry-fix");
+  };
+
   if (document.readyState === "loading") {
-    window.addEventListener("DOMContentLoaded", loadGuard, { once: true });
+    window.addEventListener("DOMContentLoaded", loadProductionScripts, { once: true });
   } else {
-    loadGuard();
+    loadProductionScripts();
   }
 })();
