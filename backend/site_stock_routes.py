@@ -11,23 +11,13 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.database import conectar, listar
-from backend.order_status_routes import MINUTOS_EXPIRACAO_PEDIDO_PENDENTE
+from backend.order_status_routes import MINUTOS_EXPIRACAO_PEDIDO_PENDENTE, STATUS_PEDIDO
 from backend.rate_limit import _client_ip, limitar_requisicoes
 from config import DB_PATH
 
 router = APIRouter(prefix="/api", tags=["site-estoque"])
 
 limitar_criacao_venda = limitar_requisicoes("criar_venda_site", limite=20, janela_segundos=60)
-
-STATUS_PEDIDO = {
-    "Aguardando pagamento",
-    "Pagamento confirmado",
-    "Separando pedido",
-    "Pronto para retirada",
-    "Entregue",
-    "Cancelado",
-    "Concluído",
-}
 
 
 class ItemEstoqueSite(BaseModel):

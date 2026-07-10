@@ -12,13 +12,11 @@ from backend.order_status_routes import (
     baixar_estoque_do_pedido,
     buscar_produto_para_baixa,
     cancelar_com_reposicao,
+    normalizar_status,
+    STATUS_BAIXA_ESTOQUE,
 )
 
 router = APIRouter(tags=["pedidos-api-seguro"])
-
-STATUS_ALIASES = {"Pago": "Pagamento confirmado", "Em separação": "Separando pedido"}
-STATUS_PERMITIDOS = {"Aguardando pagamento", "Pagamento confirmado", "Separando pedido", "Pronto para retirada", "Entregue", "Cancelado", "Concluído"}
-STATUS_BAIXA_ESTOQUE = {"Pagamento confirmado", "Separando pedido"}
 
 
 class StatusPayload(BaseModel):
@@ -38,14 +36,6 @@ class ClientePayload(BaseModel):
     cpf: Optional[str] = None
     endereco: Optional[str] = None
     nascimento: Optional[str] = None
-
-
-def normalizar_status(status: str) -> str:
-    status = str(status or "").strip()
-    status = STATUS_ALIASES.get(status, status)
-    if status not in STATUS_PERMITIDOS:
-        raise HTTPException(status_code=400, detail="Status de pedido inválido.")
-    return status
 
 
 def alterar_status(venda_id: int, payload: StatusPayload, chave: str | None):

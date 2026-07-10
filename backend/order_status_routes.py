@@ -24,7 +24,17 @@ STATUS_PEDIDO = {
 
 STATUS_BAIXA_ESTOQUE = {"Pagamento confirmado", "Separando pedido"}
 
+STATUS_ALIASES = {"Pago": "Pagamento confirmado", "Em separação": "Separando pedido"}
+
 MINUTOS_EXPIRACAO_PEDIDO_PENDENTE = int(os.environ.get("MISTICA_MINUTOS_EXPIRACAO_PEDIDO", "30") or "30")
+
+
+def normalizar_status(status: str) -> str:
+    status = str(status or "").strip()
+    status = STATUS_ALIASES.get(status, status)
+    if status not in STATUS_PEDIDO:
+        raise HTTPException(status_code=400, detail="Status de pedido inválido.")
+    return status
 
 
 class PedidoStatusIn(BaseModel):
@@ -301,9 +311,7 @@ def historico_status_pedido(venda_id: int):
 @router.post("/pedidos/{venda_id}/status")
 def atualizar_status_pedido(venda_id: int, payload: PedidoStatusIn, x_mistica_api_key: str | None = Header(default=None)):
     validar_site_api_key(x_mistica_api_key)
-    status = payload.status.strip()
-    if status not in STATUS_PEDIDO:
-        raise HTTPException(status_code=400, detail="Status de pedido inválido")
+    status = normalizar_status(payload.status)
 
     agora = datetime.now().isoformat(timespec="seconds")
     estoque_baixado_agora = False
@@ -311,6 +319,11 @@ def atualizar_status_pedido(venda_id: int, payload: PedidoStatusIn, x_mistica_ap
         venda = conn.execute("SELECT id FROM pedidos WHERE id=?", (venda_id,)).fetchone()
         if not venda:
             raise HTTPException(status_code=404, detail="Pedido não encontrado")
+
+        if status == "Cancelado":
+            retorno = cancelar_com_reposicao(conn, venda_id, payload.usuario or "Admin", payload.observacao, agora)
+            conn.commit()
+            return {**retorno, "data_hora": agora}
 
         if status in STATUS_BAIXA_ESTOQUE:
             estoque_baixado_agora = baixar_estoque_do_pedido(conn, venda_id, payload.usuario or "Admin", agora)

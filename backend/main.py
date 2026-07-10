@@ -363,6 +363,49 @@ def listar_vendas(
     return vendas
 
 
+class EstornoVendaIn(BaseModel):
+    usuario: str = "Admin"
+    observacao: Optional[str] = None
+
+
+@app.post("/api/vendas/{venda_id}/estornar")
+def estornar_venda(venda_id: int, payload: EstornoVendaIn | None = None, x_mistica_api_key: str | None = Header(default=None)):
+    """Cancela uma venda de caixa já registrada no banco, devolvendo o estoque dos
+    itens vendidos. Equivalente ao cancelamento com reposição que os pedidos do
+    site já tinham (ver backend/order_status_routes.py::cancelar_com_reposicao),
+    agora disponível também para vendas."""
+    validar_site_api_key(x_mistica_api_key)
+    payload = payload or EstornoVendaIn()
+    agora = datetime.now().isoformat(timespec="seconds")
+    with conectar() as conn:
+        venda = conn.execute("SELECT id, status FROM vendas WHERE id=?", (venda_id,)).fetchone()
+        if not venda:
+            raise HTTPException(status_code=404, detail="Venda não encontrada")
+        ja_cancelada = str(venda["status"] or "").lower().startswith("cancel")
+        if not ja_cancelada:
+            itens = conn.execute(
+                "SELECT codigo_p, nome_p, quantidade FROM vendas_itens WHERE venda_id=? ORDER BY id ASC",
+                (venda_id,),
+            ).fetchall()
+            for item in itens:
+                quantidade = int(item["quantidade"] or 0)
+                codigo = item["codigo_p"]
+                if quantidade <= 0 or not codigo:
+                    continue
+                conn.execute("UPDATE produtos SET quantidade = quantidade + ? WHERE codigo_p=?", (quantidade, codigo))
+        conn.execute("UPDATE vendas SET status='Cancelado' WHERE id=?", (venda_id,))
+        conn.commit()
+    return {
+        "ok": True,
+        "venda_id": venda_id,
+        "status": "Cancelado",
+        "ja_cancelada": ja_cancelada,
+        "usuario": payload.usuario,
+        "observacao": payload.observacao,
+        "data_hora": agora,
+    }
+
+
 def _intervalo_vendas_hoje_backend(agora=None):
     from datetime import time, timedelta
 
