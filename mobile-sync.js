@@ -221,7 +221,10 @@
       data_venda: new Date(venda.date).toLocaleString("pt-BR"),
       data_iso: venda.date,
       dia_operacional: new Date(venda.date).toISOString().slice(0, 10),
-      baixa_estoque: podeBaixarEstoque,
+      // O pagamento ainda não foi confirmado neste momento (só o Pix foi gerado).
+      // O estoque só é baixado de fato quando o pedido é confirmado no painel
+      // (ver backend/order_status_routes.py e backend/payment_routes.py).
+      baixa_estoque: false,
       itens: itensPayload.map(({ baixa_automatica, ...item }) => item),
     };
     return api("/api/vendas", { method: "POST", body: JSON.stringify(payload) });
@@ -233,7 +236,10 @@
     saveSale = function(payload, saleId) {
       const saleItems = cart.map(item => ({ ...item }));
       const total = getTotal();
-      reduceStockFromCart();
+      // Não reduzir o estoque local aqui: o Pix só foi gerado, o pagamento ainda não
+      // foi confirmado. A baixa real acontece no servidor somente na confirmação do
+      // pagamento; sincronizarAgora() (chamado após o envio) traz o estoque real do
+      // servidor de volta para o cache local.
       const venda = {
         date: new Date().toISOString(),
         id: saleId,
@@ -251,7 +257,7 @@
 
       enviarVendaApi(venda, saleItems)
         .then(() => {
-          setSyncStatus("Venda enviada para o sistema da loja e estoque atualizado.", true);
+          setSyncStatus("Pedido enviado para o sistema da loja. Estoque será baixado ao confirmar o pagamento.", true);
           return sincronizarAgora();
         })
         .catch(error => {

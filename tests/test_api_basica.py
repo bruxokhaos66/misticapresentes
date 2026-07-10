@@ -1,7 +1,15 @@
 import importlib
 import os
+import uuid
 
 from fastapi.testclient import TestClient
+
+
+def codigo_unico(prefixo: str) -> str:
+    # O banco usado nos testes é o mesmo arquivo persistente entre execuções (não há
+    # isolamento por tmp_path aqui), então usamos um sufixo aleatório para não colidir
+    # com codigo_p de execuções anteriores.
+    return f"{prefixo}-{uuid.uuid4().hex[:8]}"
 
 
 TEST_API_KEY = "test-api-key"
@@ -124,6 +132,99 @@ def test_listar_vendas_exige_chave_api():
     response = client.get("/api/vendas", headers=PROTECTED_HEADERS)
     assert response.status_code == 200
     assert isinstance(response.json(), list)
+
+
+def test_criar_venda_exige_chave_api():
+    payload = {"cliente": "Cliente", "itens": [{"nome_p": "Item", "quantidade": 1}]}
+    response = client.post("/api/vendas", json=payload)
+    assert response.status_code == 403
+
+    response = client.post("/api/vendas", json=payload, headers={"X-Mistica-Api-Key": "chave-errada"})
+    assert response.status_code == 403
+
+
+def test_sync_venda_exige_chave_sync():
+    payload = {"cliente": "Cliente", "itens": []}
+    response = client.post("/api/sync/venda", json=payload)
+    assert response.status_code == 403
+
+    response = client.post("/api/sync/venda", json=payload, headers={"X-Mistica-Sync-Key": "chave-errada"})
+    assert response.status_code == 403
+
+
+def test_venda_rejeita_quantidade_negativa():
+    produto = client.post(
+        "/api/produtos",
+        json={"nome": "Produto Quantidade", "codigo_p": codigo_unico("QTD"), "preco": 10.0, "quantidade": 5},
+        headers=PROTECTED_HEADERS,
+    ).json()
+    payload = {
+        "cliente": "Cliente",
+        "itens": [{"produto_id": produto["id"], "quantidade": -3}],
+    }
+    response = client.post("/api/vendas", json=payload, headers=PROTECTED_HEADERS)
+    assert response.status_code == 422
+
+
+def test_venda_recalcula_precos_e_ignora_valores_do_cliente():
+    produto = client.post(
+        "/api/produtos",
+        json={"nome": "Produto Preco", "codigo_p": codigo_unico("PRC"), "preco": 100.0, "quantidade": 10},
+        headers=PROTECTED_HEADERS,
+    ).json()
+    payload = {
+        "cliente": "Cliente",
+        "subtotal": 1,
+        "total_final": 1,
+        "status": "Aguardando pagamento",
+        "baixa_estoque": True,
+        "itens": [{"produto_id": produto["id"], "quantidade": 2, "valor_unitario": 1, "valor_total": 1}],
+    }
+    response = client.post("/api/vendas", json=payload, headers=PROTECTED_HEADERS)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["subtotal"] == 200.0
+    assert data["total_final"] == 200.0
+    # Pagamento ainda não confirmado: estoque não pode ser baixado na criação do pedido.
+    assert data["estoque_baixado"] is False
+
+    produto_apos = client.get(f"/api/produtos/{produto['id']}").json()
+    assert produto_apos["quantidade"] == 10
+
+
+def test_estoque_so_baixa_na_confirmacao_do_pagamento():
+    produto = client.post(
+        "/api/produtos",
+        json={"nome": "Produto Pagamento", "codigo_p": codigo_unico("PAG"), "preco": 50.0, "quantidade": 4},
+        headers=PROTECTED_HEADERS,
+    ).json()
+    venda = client.post(
+        "/api/vendas",
+        json={
+            "cliente": "Cliente",
+            "status": "Aguardando pagamento",
+            "baixa_estoque": True,
+            "itens": [{"produto_id": produto["id"], "quantidade": 2}],
+        },
+        headers=PROTECTED_HEADERS,
+    ).json()
+
+    produto_antes = client.get(f"/api/produtos/{produto['id']}").json()
+    assert produto_antes["quantidade"] == 4
+
+    pagamento = client.post(
+        "/api/pagamentos",
+        json={"venda_id": venda["id"], "valor": 100.0, "status": "Confirmado"},
+        headers=PROTECTED_HEADERS,
+    )
+    assert pagamento.status_code == 200
+
+    produto_depois = client.get(f"/api/produtos/{produto['id']}").json()
+    assert produto_depois["quantidade"] == 2
+
+    pedido = client.get(f"/api/pedidos/{venda['id']}").json()
+    assert pedido["status"] == "Pagamento confirmado"
+    assert bool(pedido["estoque_baixado"]) is True
 
 
 def test_links_audio_ambiente_salva_apenas_audio_direto():
