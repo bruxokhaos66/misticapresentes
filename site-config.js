@@ -2,7 +2,10 @@ window.misticaSiteConfig = {
   domain: "misticaesotericos.com.br",
   publicBaseUrl: "https://misticaesotericos.com.br",
   apiBaseUrl: "https://api.misticaesotericos.com.br",
-  siteApiKey: "c4e9012d72c6bb42f52457c6d6ba916a",
+  // Nunca coloque a chave real aqui: este arquivo é servido publicamente.
+  // A sincronização de escrita desta página legada fica sem chave até
+  // ser configurada de outra forma (fora do código versionado).
+  siteApiKey: "",
   serverMode: "production",
   usePublicDomainAccess: true,
   storageMode: "api_first",
