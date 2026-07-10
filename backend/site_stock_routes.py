@@ -267,11 +267,11 @@ def registrar_venda_site(venda: VendaSiteIn, request: Request, x_mistica_api_key
 
             cur = conn.execute(
                 """
-                INSERT INTO vendas (
+                INSERT INTO pedidos (
                     cliente, data_venda, subtotal, desconto, taxa, total_final,
                     forma_pagamento, vendedor, status, data_iso, dia_operacional,
-                    origem_sync, local_id, expira_em
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    origem, expira_em
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     venda.cliente,
@@ -286,7 +286,6 @@ def registrar_venda_site(venda: VendaSiteIn, request: Request, x_mistica_api_key
                     data_iso,
                     dia_operacional,
                     venda.origem,
-                    None,
                     expira_em,
                 ),
             )
@@ -296,8 +295,8 @@ def registrar_venda_site(venda: VendaSiteIn, request: Request, x_mistica_api_key
                 produto = calculado["produto"]
                 conn.execute(
                     """
-                    INSERT INTO vendas_itens
-                    (venda_id, codigo_p, nome_p, quantidade, custo_unitario, valor_unitario, valor_total)
+                    INSERT INTO pedidos_itens
+                    (pedido_id, codigo_p, nome_p, quantidade, custo_unitario, valor_unitario, valor_total)
                     VALUES (?,?,?,?,?,?,?)
                     """,
                     (
@@ -325,6 +324,10 @@ def registrar_venda_site(venda: VendaSiteIn, request: Request, x_mistica_api_key
                         estoque_posterior=estoque_posterior,
                         venda_id=venda_id,
                     )
+                conn.execute(
+                    "UPDATE pedidos SET estoque_baixado=1, estoque_baixado_em=? WHERE id=?",
+                    (data_iso, venda_id),
+                )
 
             conn.commit()
         except Exception:

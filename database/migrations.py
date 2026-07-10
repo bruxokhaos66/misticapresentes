@@ -5,6 +5,47 @@ from config import DOCS_PATH, hash_password_pbkdf2
 from .connection import query_db
 
 
+def _migrar_pedidos_de_vendas():
+    """Move para `pedidos`/`pedidos_itens` as linhas de `vendas` criadas pelo site
+    (origem_sync='site'), que antes ficavam misturadas com vendas reais do caixa.
+    Idempotente: só migra o que ainda não foi migrado, então pode rodar a cada
+    inicialização sem custo relevante depois da primeira vez."""
+    pendentes = query_db("SELECT id FROM vendas WHERE origem_sync='site' AND id NOT IN (SELECT id FROM pedidos)")
+    if not pendentes:
+        return
+    ids = [row[0] for row in pendentes]
+    placeholders = ",".join("?" for _ in ids)
+    query_db(
+        f"""
+        INSERT INTO pedidos (
+            id, cliente, data_venda, data_iso, dia_operacional, subtotal, desconto, taxa,
+            total_final, forma_pagamento, vendedor, status, origem, observacao_pedido,
+            estoque_baixado, estoque_baixado_em, estoque_reposto_cancelamento, estoque_reposto_em, expira_em
+        )
+        SELECT
+            id, cliente, data_venda, data_iso, dia_operacional, subtotal, desconto, taxa,
+            total_final, forma_pagamento, vendedor, status, COALESCE(origem_sync,'site'), observacao_pedido,
+            COALESCE(estoque_baixado,0), estoque_baixado_em, COALESCE(estoque_reposto_cancelamento,0), estoque_reposto_em, expira_em
+        FROM vendas WHERE id IN ({placeholders})
+        """,
+        ids,
+        commit=True,
+    )
+    query_db(
+        f"""
+        INSERT INTO pedidos_itens (id, pedido_id, codigo_p, nome_p, quantidade, custo_unitario, valor_unitario, valor_total)
+        SELECT id, venda_id, codigo_p, nome_p, quantidade, custo_unitario, valor_unitario, valor_total
+        FROM vendas_itens WHERE venda_id IN ({placeholders})
+        """,
+        ids,
+        commit=True,
+    )
+    query_db(f"DELETE FROM vendas_itens WHERE venda_id IN ({placeholders})", ids, commit=True)
+    query_db(f"DELETE FROM vendas WHERE id IN ({placeholders})", ids, commit=True)
+    # pedido_status_log e pagamentos já referenciam o mesmo id (preservado na
+    # migração acima), então continuam válidos sem nenhuma alteração aqui.
+
+
 def init_db():
     query_db("CREATE TABLE IF NOT EXISTS produtos (id INTEGER PRIMARY KEY, codigo_p TEXT, nome TEXT, preco REAL, quantidade INTEGER, categoria TEXT)", commit=True)
     query_db("CREATE TABLE IF NOT EXISTS categorias (id INTEGER PRIMARY KEY, nome TEXT UNIQUE)", commit=True)
@@ -190,6 +231,62 @@ def init_db():
         """,
         commit=True,
     )
+
+    # Pedidos (site) são uma entidade própria, separada de vendas (caixa/POS).
+    # Os IDs são preservados ao migrar de `vendas` para não quebrar links já
+    # emitidos (WhatsApp, e-mails de confirmação etc.).
+    query_db(
+        """
+        CREATE TABLE IF NOT EXISTS pedidos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cliente TEXT,
+            data_venda TEXT,
+            data_iso TEXT,
+            dia_operacional TEXT,
+            subtotal REAL DEFAULT 0.0,
+            desconto REAL DEFAULT 0.0,
+            taxa REAL DEFAULT 0.0,
+            total_final REAL DEFAULT 0.0,
+            forma_pagamento TEXT,
+            vendedor TEXT,
+            status TEXT DEFAULT 'Aguardando pagamento',
+            origem TEXT DEFAULT 'site',
+            observacao_pedido TEXT,
+            estoque_baixado INTEGER DEFAULT 0,
+            estoque_baixado_em TEXT,
+            estoque_reposto_cancelamento INTEGER DEFAULT 0,
+            estoque_reposto_em TEXT,
+            expira_em TEXT
+        )
+        """,
+        commit=True,
+    )
+    query_db(
+        """
+        CREATE TABLE IF NOT EXISTS pedidos_itens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            pedido_id INTEGER NOT NULL,
+            codigo_p TEXT,
+            nome_p TEXT,
+            quantidade INTEGER,
+            custo_unitario REAL DEFAULT 0.0,
+            valor_unitario REAL DEFAULT 0.0,
+            valor_total REAL DEFAULT 0.0
+        )
+        """,
+        commit=True,
+    )
+    for sql_idx in [
+        "CREATE INDEX IF NOT EXISTS idx_pedidos_status ON pedidos(status)",
+        "CREATE INDEX IF NOT EXISTS idx_pedidos_dia_operacional ON pedidos(dia_operacional)",
+        "CREATE INDEX IF NOT EXISTS idx_pedidos_itens_pedido ON pedidos_itens(pedido_id)",
+    ]:
+        try:
+            query_db(sql_idx, commit=True)
+        except Exception:
+            pass
+    _migrar_pedidos_de_vendas()
+
     for tabela, col, typ in [("vendas", "status", "TEXT DEFAULT 'Concluído'"), ("vendas", "data_iso", "TEXT"), ("vendas", "dia_operacional", "TEXT"), ("fluxo_caixa", "data_iso", "TEXT"), ("fluxo_caixa", "forma_pagamento", "TEXT"), ("fluxo_caixa", "caixa_id", "INTEGER"), ("contas_a_pagar", "categoria", "TEXT DEFAULT 'Outros'")]:
         try:
             query_db(f"ALTER TABLE {tabela} ADD COLUMN {col} {typ}", commit=True)

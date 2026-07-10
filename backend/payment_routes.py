@@ -43,18 +43,6 @@ def validar_site_api_key(chave_recebida: str | None):
 def registrar_log_status(conn, venda_id: int, status: str, usuario: str, observacao: str):
     conn.execute(
         """
-        CREATE TABLE IF NOT EXISTS pedido_status_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            venda_id INTEGER NOT NULL,
-            status TEXT NOT NULL,
-            usuario TEXT DEFAULT 'Admin',
-            observacao TEXT DEFAULT '',
-            data_hora TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    conn.execute(
-        """
         INSERT INTO pedido_status_log (venda_id, status, usuario, observacao, data_hora)
         VALUES (?,?,?,?,?)
         """,
@@ -71,7 +59,7 @@ def registrar_pagamento(payload: PagamentoIn, x_mistica_api_key: str | None = He
 
     agora = datetime.now().isoformat(timespec="seconds")
     with conectar() as conn:
-        venda = conn.execute("SELECT id, total_final FROM vendas WHERE id=?", (payload.venda_id,)).fetchone()
+        venda = conn.execute("SELECT id, total_final FROM pedidos WHERE id=?", (payload.venda_id,)).fetchone()
         if not venda:
             raise HTTPException(status_code=404, detail="Pedido não encontrado")
         cur = conn.execute(
@@ -93,7 +81,7 @@ def registrar_pagamento(payload: PagamentoIn, x_mistica_api_key: str | None = He
         pagamento_id = int(cur.lastrowid)
         if status == "Confirmado":
             baixar_estoque_do_pedido(conn, payload.venda_id, payload.usuario or "Admin", agora, "Baixa automática ao confirmar pagamento")
-            conn.execute("UPDATE vendas SET status='Pagamento confirmado' WHERE id=?", (payload.venda_id,))
+            conn.execute("UPDATE pedidos SET status='Pagamento confirmado' WHERE id=?", (payload.venda_id,))
             registrar_log_status(conn, payload.venda_id, "Pagamento confirmado", payload.usuario, "Pagamento confirmado manualmente")
         conn.commit()
 
@@ -108,7 +96,7 @@ def listar_pagamentos(venda_id: Optional[int] = None, limite: int = Query(100, g
                 """
                 SELECT p.*, v.cliente, v.total_final
                 FROM pagamentos p
-                LEFT JOIN vendas v ON v.id = p.venda_id
+                LEFT JOIN pedidos v ON v.id = p.venda_id
                 WHERE p.venda_id=?
                 ORDER BY p.id DESC
                 LIMIT ?
@@ -120,7 +108,7 @@ def listar_pagamentos(venda_id: Optional[int] = None, limite: int = Query(100, g
                 """
                 SELECT p.*, v.cliente, v.total_final
                 FROM pagamentos p
-                LEFT JOIN vendas v ON v.id = p.venda_id
+                LEFT JOIN pedidos v ON v.id = p.venda_id
                 ORDER BY p.id DESC
                 LIMIT ?
                 """,
@@ -147,7 +135,7 @@ def atualizar_status_pagamento(pagamento_id: int, payload: PagamentoStatusIn, x_
         if status == "Confirmado":
             agora = datetime.now().isoformat(timespec="seconds")
             baixar_estoque_do_pedido(conn, pagamento["venda_id"], payload.usuario or "Admin", agora, "Baixa automática ao confirmar pagamento")
-            conn.execute("UPDATE vendas SET status='Pagamento confirmado' WHERE id=?", (pagamento["venda_id"],))
+            conn.execute("UPDATE pedidos SET status='Pagamento confirmado' WHERE id=?", (pagamento["venda_id"],))
             registrar_log_status(conn, pagamento["venda_id"], "Pagamento confirmado", payload.usuario, payload.observacao or "Pagamento confirmado")
         conn.commit()
     return {"ok": True, "id": pagamento_id, "status": status}

@@ -17,6 +17,8 @@ TABELAS_PRINCIPAIS = [
     "clientes",
     "vendas",
     "vendas_itens",
+    "pedidos",
+    "pedidos_itens",
     "usuarios",
     "fornecedores",
     "movimentacao_estoque",
