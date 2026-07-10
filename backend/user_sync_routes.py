@@ -3,10 +3,16 @@ import secrets
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from backend.database import conectar, listar
+from backend.panel_sessions import (
+    criar_sessao,
+    encerrar_sessao,
+    registrar_tentativa_login,
+    sessao_atual,
+)
 from backend.rate_limit import limitar_requisicoes
 from config import hash_password_pbkdf2
 
@@ -245,7 +251,7 @@ def _salvar_venda_conn(conn, venda: VendaSyncIn):
 
 
 @router.post("/api/auth/login", dependencies=[Depends(limitar_login)])
-def login_painel_mobile(entrada: LoginPainelIn):
+def login_painel_mobile(entrada: LoginPainelIn, request: Request, response: Response):
     login = _normalizar_login(entrada.login)
     _log_auth("LOGIN_API", f"tentativa login={login}")
     with conectar() as conn:
@@ -261,26 +267,55 @@ def login_painel_mobile(entrada: LoginPainelIn):
             usuario = _criar_usuario_padrao_se_permitido(conn, login, entrada.senha)
     if not usuario:
         _log_auth("LOGIN_FALHA", f"usuario nao encontrado login={login}")
+        registrar_tentativa_login(login, request, sucesso=False)
         raise HTTPException(status_code=401, detail="Login ou senha inválidos")
 
     salt_txt = str(usuario["senha_salt"] or "mistica_presentes")
     senha_hash = hash_password_pbkdf2(entrada.senha, salt_txt.encode("utf-8"))
     if not secrets.compare_digest(str(senha_hash), str(usuario["senha_hash"] or "")):
         _log_auth("LOGIN_FALHA", f"senha nao confere login={login}")
+        registrar_tentativa_login(login, request, sucesso=False)
         raise HTTPException(status_code=401, detail="Login ou senha inválidos")
 
     perfil = _normalizar_perfil(usuario["perfil"])
+    usuario_dados = {
+        "id": usuario["id"],
+        "nome": usuario["nome"] or usuario["login"],
+        "login": usuario["login"],
+    }
+    # Sessão real gerada e armazenada no servidor; o token só trafega via cookie HttpOnly/Secure/SameSite,
+    # nunca no corpo da resposta lido pelo JS do navegador.
+    criar_sessao(usuario_dados, perfil, request, response)
+    registrar_tentativa_login(login, request, sucesso=True)
     _log_auth("LOGIN_SUCESSO", f"login={login} perfil={perfil}")
     return {
         "status": "ok",
+        "usuario": usuario_dados | {"perfil": perfil},
+        "permissoes": _permissoes_por_perfil(perfil),
+        "data_hora": datetime.now().isoformat(timespec="seconds"),
+    }
+
+
+@router.post("/api/auth/logout")
+def logout_painel(response: Response, mistica_painel_sessao: str | None = Cookie(default=None)):
+    encerrar_sessao(mistica_painel_sessao, response)
+    return {"status": "ok", "mensagem": "Sessão encerrada com segurança."}
+
+
+@router.get("/api/auth/me")
+def me_painel(sessao: dict = Depends(sessao_atual)):
+    """Revalida a sessão no servidor a cada carregamento do painel (nunca confia em dado local)."""
+    perfil = sessao.get("perfil") or "vendedor"
+    return {
+        "status": "ok",
         "usuario": {
-            "id": usuario["id"],
-            "nome": usuario["nome"] or usuario["login"],
-            "login": usuario["login"],
+            "id": sessao.get("usuario_id"),
+            "nome": sessao.get("nome"),
+            "login": sessao.get("login"),
             "perfil": perfil,
         },
         "permissoes": _permissoes_por_perfil(perfil),
-        "data_hora": datetime.now().isoformat(timespec="seconds"),
+        "expira_em": sessao.get("expira_em"),
     }
 
 
