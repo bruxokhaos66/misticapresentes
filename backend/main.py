@@ -1,3 +1,4 @@
+import asyncio
 import os
 from datetime import datetime
 from pathlib import Path
@@ -12,7 +13,7 @@ from backend.audit import registrar_auditoria
 from backend.backup_routes import router as backup_router
 from backend.course_routes import router as course_router
 from backend.database import conectar, executar, listar, obter
-from backend.order_status_routes import router as order_status_router
+from backend.order_status_routes import expirar_pedidos_pendentes, router as order_status_router
 from backend.payment_routes import router as payment_router
 from backend.product_routes import router as product_router, validar_site_api_key
 from backend.upload_routes import router as upload_router
@@ -78,6 +79,20 @@ class ProdutosLotePayload(BaseModel):
 def startup():
     init_db()
     garantir_admin_api()
+    asyncio.create_task(_expirar_pedidos_periodicamente())
+
+
+async def _expirar_pedidos_periodicamente():
+    """Cancela pedidos pendentes vencidos e devolve a reserva de estoque, mesmo
+    sem ninguém consultar a API no momento (antes isso só acontecia sob demanda
+    em GET /api/pedidos)."""
+    while True:
+        try:
+            with conectar() as conn:
+                expirar_pedidos_pendentes(conn)
+        except Exception as exc:
+            print(f"[API] Aviso: varredura de expiração de pedidos falhou: {exc}")
+        await asyncio.sleep(60)
 
 
 def garantir_admin_api():

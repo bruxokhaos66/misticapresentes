@@ -106,14 +106,17 @@ def criar_pedido_checkout_publico(venda: VendaSiteIn, request: Request):
 
     A chave global permanece no ambiente do servidor e é usada apenas na chamada
     interna da rotina validada de criação de venda. Preços são recalculados no
-    backend e pedidos pendentes não baixam estoque. Sem headers: nenhum segredo
+    backend e o estoque do pedido é reservado (baixado) já na criação, sendo
+    devolvido automaticamente se o pedido expirar ou for cancelado. Sem headers: nenhum segredo
     nem chave de idempotência é aceito do navegador nesta rota pública (ver
     tests/test_no_browser_api_secret.py); quem quiser idempotência deve chamar
     POST /api/vendas autenticado, que aceita Idempotency-Key.
     """
     venda.origem = "site"
     venda.status = "Aguardando pagamento"
-    venda.baixa_estoque = False
+    # registrar_venda_site decide a baixa/reserva de estoque a partir do status do
+    # pedido (reserva imediata enquanto "Aguardando pagamento"); não sobrescrever
+    # aqui para não desativar a reserva de estoque do checkout público.
     venda.vendedor = "Site/Celular"
     venda.forma_pagamento = "Pix site/celular"
     return registrar_venda_site(venda, request, _chave_interna_checkout(), None)

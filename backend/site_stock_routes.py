@@ -15,6 +15,7 @@ from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.database import conectar, listar
 from backend.idempotency import resposta_idempotente_existente, salvar_resposta_idempotente
 from backend.order_status_routes import MINUTOS_EXPIRACAO_PEDIDO_PENDENTE, STATUS_PEDIDO
+from backend.pix import gerar_pix_do_pedido
 from backend.rate_limit import _client_ip, limitar_requisicoes
 from config import DB_PATH
 
@@ -45,6 +46,10 @@ class ReservaEstoqueSite(BaseModel):
 class VendaSiteIn(BaseModel):
     origem: str = "site"
     cliente: str = "Pedido site/celular"
+    # Identificação mínima do cliente: telefone/WhatsApp, usado para localizar o
+    # pedido e enviar o link de acompanhamento/status. Opcional para não travar
+    # quem ainda não digitou o contato.
+    telefone: Optional[str] = None
     # subtotal/desconto/taxa/total_final são aceitos por compatibilidade com clientes
     # antigos, mas o servidor sempre recalcula esses valores a partir do preço do
     # produto no banco antes de gravar a venda (ver recalcular_venda_site).
@@ -152,6 +157,24 @@ def recalcular_venda_site(produtos_validados):
     return itens_calculados, subtotal
 
 
+def baixar_estoque_atomico(conn, *, produto_id: int, nome_produto: str, quantidade: int) -> tuple[int, int]:
+    """Decrementa o estoque de forma atômica (a checagem de saldo e a escrita
+    acontecem no mesmo UPDATE), para não depender de um SELECT anterior que
+    pode estar desatualizado quando duas requisições concorrem pelo mesmo
+    produto (ver tests que reproduzem a corrida com dois checkouts simultâneos
+    disputando a última unidade)."""
+    cur = conn.execute(
+        "UPDATE produtos SET quantidade = quantidade - ? WHERE id=? AND quantidade >= ?",
+        (quantidade, produto_id, quantidade),
+    )
+    if cur.rowcount == 0:
+        atual = conn.execute("SELECT quantidade FROM produtos WHERE id=?", (produto_id,)).fetchone()
+        disponivel = int(atual["quantidade"] or 0) if atual else 0
+        raise HTTPException(status_code=409, detail=f"Estoque insuficiente para {nome_produto}. Disponível: {disponivel}")
+    posterior = conn.execute("SELECT quantidade FROM produtos WHERE id=?", (produto_id,)).fetchone()["quantidade"]
+    return int(posterior) + quantidade, int(posterior)
+
+
 def registrar_movimento(conn, *, produto, quantidade, motivo, usuario, estoque_anterior, estoque_posterior, venda_id):
     conn.execute(
         """
@@ -243,12 +266,15 @@ def registrar_venda_site(
 
     if venda.status not in STATUS_PEDIDO:
         venda.status = "Aguardando pagamento"
-    if venda.baixa_estoque and venda.status == "Aguardando pagamento":
-        # Pagamento ainda não confirmado: nunca baixar estoque neste momento, mesmo que
-        # o cliente peça baixa_estoque=true. A baixa definitiva só acontece quando o
-        # pedido avança para "Pagamento confirmado"/"Separando pedido" (ver
-        # backend/order_status_routes.py::baixar_estoque_do_pedido).
-        venda.baixa_estoque = False
+    pedido_pendente = venda.status == "Aguardando pagamento"
+    if pedido_pendente:
+        # Reserva de estoque: o pedido pendente já baixa o estoque no momento da
+        # criação (para não vender o mesmo último item para dois clientes enquanto
+        # o Pix não é confirmado). Se o pagamento expirar ou o pedido for
+        # cancelado, o estoque reservado é devolvido (ver
+        # order_status_routes.py::expirar_pedidos_pendentes/cancelar_com_reposicao).
+        venda.baixa_estoque = True
+    telefone = "".join(ch for ch in str(venda.telefone or "") if ch.isdigit() or ch in "+ ").strip()[:32]
 
     agora = datetime.now()
     data_iso = venda.data_iso or agora.isoformat(timespec="seconds")
@@ -268,13 +294,14 @@ def registrar_venda_site(
             cur = conn.execute(
                 """
                 INSERT INTO pedidos (
-                    cliente, data_venda, subtotal, desconto, taxa, total_final,
+                    cliente, telefone, data_venda, subtotal, desconto, taxa, total_final,
                     forma_pagamento, vendedor, status, data_iso, dia_operacional,
                     origem, expira_em
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     venda.cliente,
+                    telefone or None,
                     data_venda,
                     subtotal,
                     0.0,
@@ -311,25 +338,47 @@ def registrar_venda_site(
                 )
 
             if venda.baixa_estoque:
-                for item, produto, estoque_anterior in produtos_validados:
-                    estoque_posterior = estoque_anterior - item.quantidade
-                    conn.execute("UPDATE produtos SET quantidade=? WHERE id=?", (estoque_posterior, produto["id"]))
+                motivo = "Reserva de estoque (pedido aguardando pagamento)" if pedido_pendente else ("Venda site" if venda.origem == "site" else "Venda programa")
+                for item, produto, _estoque_anterior_visto in produtos_validados:
+                    estoque_anterior, estoque_posterior = baixar_estoque_atomico(
+                        conn, produto_id=produto["id"], nome_produto=produto["nome"], quantidade=item.quantidade
+                    )
                     registrar_movimento(
                         conn,
                         produto=produto,
                         quantidade=item.quantidade,
-                        motivo="Venda site" if venda.origem == "site" else "Venda programa",
+                        motivo=motivo,
                         usuario=f"{venda.vendedor or 'Site/Celular'} (IP {ip_origem})",
                         estoque_anterior=estoque_anterior,
                         estoque_posterior=estoque_posterior,
                         venda_id=venda_id,
                     )
                 conn.execute(
-                    "UPDATE pedidos SET estoque_baixado=1, estoque_baixado_em=? WHERE id=?",
-                    (data_iso, venda_id),
+                    "UPDATE pedidos SET estoque_baixado=1, estoque_baixado_em=?, estoque_reservado=? WHERE id=?",
+                    (data_iso, 1 if pedido_pendente else 0, venda_id),
                 )
 
-            resposta = {"ok": True, "id": venda_id, "status": "criado", "subtotal": subtotal, "total_final": total_final, "estoque_baixado": venda.baixa_estoque}
+            pix = None
+            if pedido_pendente:
+                pix = gerar_pix_do_pedido(venda_id, total_final)
+                if pix:
+                    conn.execute(
+                        "UPDATE pedidos SET pix_txid=?, pix_copia_cola=? WHERE id=?",
+                        (pix["txid"], pix["copia_cola"], venda_id),
+                    )
+
+            resposta = {
+                "ok": True,
+                "id": venda_id,
+                "status": "criado",
+                "subtotal": subtotal,
+                "total_final": total_final,
+                "estoque_baixado": venda.baixa_estoque,
+                "estoque_reservado": pedido_pendente and venda.baixa_estoque,
+                "expira_em": expira_em,
+                "pix_txid": pix["txid"] if pix else None,
+                "pix_copia_cola": pix["copia_cola"] if pix else None,
+            }
             registrar_auditoria(conn, "pedido", venda_id, "criar", venda.vendedor, depois={"total_final": total_final, "itens": len(itens_calculados), "status": venda.status})
             salvar_resposta_idempotente(conn, "criar_pedido", idempotency_key, resposta)
             conn.commit()
@@ -349,9 +398,8 @@ def reservar_estoque_site(payload: ReservaEstoqueSite, x_mistica_api_key: str | 
     with conectar() as conn:
         baixados = []
         produtos_validados = validar_itens_e_estoque(conn, payload.itens, exigir_estoque=True)
-        for item, produto, estoque_anterior in produtos_validados:
-            estoque_posterior = estoque_anterior - item.quantidade
-            conn.execute("UPDATE produtos SET quantidade=? WHERE id=?", (estoque_posterior, produto["id"]))
+        for item, produto, _estoque_anterior_visto in produtos_validados:
+            baixar_estoque_atomico(conn, produto_id=produto["id"], nome_produto=produto["nome"], quantidade=item.quantidade)
             baixados.append(
                 {
                     "produto_id": produto["id"],

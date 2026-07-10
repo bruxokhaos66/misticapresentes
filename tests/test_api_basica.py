@@ -211,14 +211,15 @@ def test_venda_recalcula_precos_e_ignora_valores_do_cliente():
     data = response.json()
     assert data["subtotal"] == 200.0
     assert data["total_final"] == 200.0
-    # Pagamento ainda não confirmado: estoque não pode ser baixado na criação do pedido.
-    assert data["estoque_baixado"] is False
+    # Reserva de estoque: o pedido pendente já baixa o estoque na criação, para
+    # não vender o mesmo item para dois clientes enquanto o Pix não é pago.
+    assert data["estoque_baixado"] is True
 
     produto_apos = client.get(f"/api/produtos/{produto['id']}").json()
-    assert produto_apos["quantidade"] == 10
+    assert produto_apos["quantidade"] == 8
 
 
-def test_estoque_so_baixa_na_confirmacao_do_pagamento():
+def test_estoque_reservado_na_criacao_e_nao_baixa_de_novo_na_confirmacao():
     produto = client.post(
         "/api/produtos",
         json={"nome": "Produto Pagamento", "codigo_p": codigo_unico("PAG"), "preco": 50.0, "quantidade": 4},
@@ -235,8 +236,9 @@ def test_estoque_so_baixa_na_confirmacao_do_pagamento():
         headers=PROTECTED_HEADERS,
     ).json()
 
+    # A reserva de estoque já baixa a quantidade na criação do pedido pendente.
     produto_antes = client.get(f"/api/produtos/{produto['id']}").json()
-    assert produto_antes["quantidade"] == 4
+    assert produto_antes["quantidade"] == 2
 
     pagamento = client.post(
         "/api/pagamentos",

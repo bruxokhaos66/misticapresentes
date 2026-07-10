@@ -164,13 +164,13 @@
     const payload = {
       origem: "site",
       cliente: "Pedido site/celular",
+      telefone: (typeof storeConfig !== "undefined" && storeConfig.customerPhone) || "",
       forma_pagamento: "Pix site/celular",
       vendedor: "Site/Celular",
       status: "Aguardando pagamento",
       data_venda: new Date(venda.date).toLocaleString("pt-BR"),
       data_iso: venda.date,
       dia_operacional: new Date(venda.date).toISOString().slice(0, 10),
-      baixa_estoque: false,
       itens: itensPayload.map(({ valido, ...item }) => item),
     };
     return api("/api/checkout/pedidos", { method: "POST", body: JSON.stringify(payload) });
@@ -198,8 +198,27 @@
       renderAll();
 
       enviarVendaApi(venda, saleItems)
-        .then(() => {
-          setSyncStatus("Pedido enviado com segurança. O estoque será baixado após confirmar o pagamento.", true);
+        .then(resposta => {
+          if (resposta && resposta.id) {
+            // A partir daqui o número real do pedido no servidor passa a ser a
+            // identidade oficial da venda: usado no Pix, no WhatsApp e no
+            // acompanhamento de status, para nunca divergir do que o admin vê.
+            venda.id = resposta.id;
+            venda.pedidoBackendId = resposta.id;
+            venda.pixTxid = resposta.pix_txid || venda.pixTxid;
+            if (resposta.pix_copia_cola) {
+              venda.pixPayload = resposta.pix_copia_cola;
+              if (typeof pixPayloadInput !== "undefined" && pixPayloadInput) {
+                pixPayloadInput.value = resposta.pix_copia_cola;
+              }
+              if (window.QRCode && typeof pixCanvas !== "undefined" && pixCanvas) {
+                window.QRCode.toCanvas(pixCanvas, resposta.pix_copia_cola, { width: 220, margin: 2, errorCorrectionLevel: "M" }).catch(() => {});
+              }
+            }
+          }
+          saveState();
+          renderAll();
+          setSyncStatus(`Pedido #${venda.id} enviado com segurança. O estoque foi reservado até a confirmação do Pix.`, true);
           return sincronizarAgora();
         })
         .catch(error => {
@@ -234,7 +253,13 @@
       "Entregue": "Seu pedido foi entregue. Gratidão pela preferência!",
       "Cancelado": "Seu pedido foi cancelado. Se precisar, podemos ajudar com um novo atendimento.",
     };
-    return `${prefixo}\n${pedido}\nStatus: ${status}\n${mensagens[status] || "Atualizamos o status do seu pedido."}\n\n${itens}\n\n${total}`;
+    // O link de recibo só funciona com o pix_txid do próprio pedido (ver
+    // backend/order_status_routes.py::recibo_pedido); sem ele o servidor recusa
+    // o acesso, então só incluímos o link quando temos esse código.
+    const recibo = venda.pedidoBackendId && venda.pixTxid
+      ? `\n\nRecibo: ${API_BASE}/api/pedidos/${venda.pedidoBackendId}/recibo?txid=${encodeURIComponent(venda.pixTxid)}`
+      : "";
+    return `${prefixo}\n${pedido}\nStatus: ${status}\n${mensagens[status] || "Atualizamos o status do seu pedido."}\n\n${itens}\n\n${total}${recibo}`;
   }
 
   function buildWhatsappStatusUrl(venda, status) {

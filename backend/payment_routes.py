@@ -99,6 +99,69 @@ def registrar_pagamento(
     return resposta
 
 
+class PixWebhookIn(BaseModel):
+    txid: Optional[str] = None
+    venda_id: Optional[int] = None
+    valor: float = Field(ge=0)
+    status: str = "Confirmado"
+    comprovante: Optional[str] = None
+
+
+def _validar_segredo_webhook_pix(x_mistica_webhook_secret: str | None):
+    segredo = os.environ.get("MISTICA_PIX_WEBHOOK_SECRET", "").strip()
+    if not segredo:
+        raise HTTPException(status_code=503, detail="Confirmação automática de Pix não está configurada.")
+    if not x_mistica_webhook_secret or not secrets.compare_digest(x_mistica_webhook_secret, segredo):
+        raise HTTPException(status_code=403, detail="Segredo de webhook inválido.")
+
+
+@router.post("/pagamentos/webhook")
+def confirmar_pagamento_webhook(
+    payload: PixWebhookIn,
+    x_mistica_webhook_secret: str | None = Header(default=None),
+):
+    """Ponto de entrada para confirmação automatizada de Pix (ex.: webhook do
+    banco/PSP). Protegido por segredo compartilhado próprio (nunca a chave
+    geral da API), configurado em MISTICA_PIX_WEBHOOK_SECRET. Localiza o
+    pedido pelo txid gerado na criação (ver backend/pix.py) ou pelo venda_id."""
+    _validar_segredo_webhook_pix(x_mistica_webhook_secret)
+    status = payload.status.strip()
+    if status not in STATUS_PAGAMENTO:
+        raise HTTPException(status_code=400, detail="Status de pagamento inválido")
+
+    with conectar() as conn:
+        venda = None
+        if payload.txid:
+            venda = conn.execute("SELECT id, total_final FROM pedidos WHERE pix_txid=?", (payload.txid,)).fetchone()
+        if not venda and payload.venda_id:
+            venda = conn.execute("SELECT id, total_final FROM pedidos WHERE id=?", (payload.venda_id,)).fetchone()
+        if not venda:
+            raise HTTPException(status_code=404, detail="Pedido não encontrado para o txid/venda_id informado.")
+        venda_id = int(venda["id"])
+
+    chave_interna = os.environ.get("MISTICA_SITE_API_KEY", "").strip() or os.environ.get("MISTICA_SYNC_KEY", "").strip()
+    resposta = registrar_pagamento(
+        PagamentoIn(
+            venda_id=venda_id,
+            forma="Pix automático",
+            valor=payload.valor,
+            status=status,
+            comprovante=payload.comprovante,
+            observacao="Confirmado automaticamente via webhook Pix",
+            usuario="Webhook Pix",
+        ),
+        x_mistica_api_key=chave_interna,
+        idempotency_key=f"webhook_pix:{payload.txid or venda_id}",
+    )
+
+    if status == "Confirmado":
+        with conectar() as conn:
+            conn.execute("UPDATE pedidos SET confirmado_automaticamente=1 WHERE id=?", (venda_id,))
+            conn.commit()
+
+    return resposta
+
+
 @router.get("/pagamentos")
 def listar_pagamentos(venda_id: Optional[int] = None, limite: int = Query(100, ge=1, le=500)):
     with conectar() as conn:

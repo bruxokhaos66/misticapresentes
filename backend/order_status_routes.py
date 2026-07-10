@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 from backend.audit import registrar_auditoria
@@ -56,9 +57,8 @@ def validar_site_api_key(chave_recebida: str | None):
 
 def expirar_pedidos_pendentes(conn, agora: str | None = None):
     """Cancela automaticamente pedidos 'Aguardando pagamento' cujo prazo (expira_em)
-    já passou e cujo pagamento nunca foi confirmado. Como o estoque só é baixado na
-    confirmação do pagamento, não há nada a repor: só marcamos o pedido como
-    Cancelado para não acumular pedidos fantasmas indefinidamente."""
+    já passou e cujo pagamento nunca foi confirmado, devolvendo ao estoque a
+    reserva feita na criação do pedido (ver site_stock_routes.py)."""
     agora = agora or datetime.now().isoformat(timespec="seconds")
     expirados = conn.execute(
         """
@@ -70,6 +70,7 @@ def expirar_pedidos_pendentes(conn, agora: str | None = None):
         (agora,),
     ).fetchall()
     for venda in expirados:
+        repor_estoque_cancelamento(conn, venda["id"], "Sistema", agora)
         conn.execute("UPDATE pedidos SET status='Cancelado' WHERE id=?", (venda["id"],))
         conn.execute(
             """
@@ -165,16 +166,18 @@ def baixar_estoque_do_pedido(conn, venda_id: int, usuario: str, agora: str, moti
         produto = buscar_produto_para_baixa(conn, item)
         if not produto:
             raise HTTPException(status_code=404, detail=f"Produto não encontrado para baixa: {item['nome_p'] or item['codigo_p']}")
-        estoque_atual = int(produto["quantidade"] or 0)
-        if estoque_atual < quantidade:
-            raise HTTPException(status_code=409, detail=f"Estoque insuficiente para {produto['nome']}. Disponível: {estoque_atual}")
-
-    for item in itens:
-        quantidade = int(item["quantidade"] or 0)
-        if quantidade <= 0:
-            continue
-        produto = buscar_produto_para_baixa(conn, item)
-        conn.execute("UPDATE produtos SET quantidade = quantidade - ? WHERE id=?", (quantidade, produto["id"]))
+        # UPDATE com guarda de saldo no próprio WHERE: a checagem e a escrita
+        # acontecem no mesmo comando, então duas confirmações concorrentes para o
+        # mesmo produto não conseguem, juntas, levar o estoque a negativo (ver
+        # backend/site_stock_routes.py::baixar_estoque_atomico para o mesmo padrão).
+        cur = conn.execute(
+            "UPDATE produtos SET quantidade = quantidade - ? WHERE id=? AND quantidade >= ?",
+            (quantidade, produto["id"], quantidade),
+        )
+        if cur.rowcount == 0:
+            atual = conn.execute("SELECT quantidade FROM produtos WHERE id=?", (produto["id"],)).fetchone()
+            disponivel = int(atual["quantidade"] or 0) if atual else 0
+            raise HTTPException(status_code=409, detail=f"Estoque insuficiente para {produto['nome']}. Disponível: {disponivel}")
 
     conn.execute("UPDATE pedidos SET estoque_baixado=1, estoque_baixado_em=? WHERE id=?", (agora, venda_id))
     conn.execute(
@@ -240,9 +243,10 @@ def listar_pedidos(status: str = "", limite: int = Query(100, ge=1, le=500)):
         if status:
             rows = conn.execute(
                 """
-                SELECT id, cliente, data_venda, subtotal, desconto, taxa, total_final,
+                SELECT id, cliente, telefone, data_venda, subtotal, desconto, taxa, total_final,
                        forma_pagamento, vendedor, status, data_iso, dia_operacional,
-                       origem, observacao_pedido, estoque_baixado, estoque_baixado_em
+                       origem, observacao_pedido, estoque_baixado, estoque_baixado_em,
+                       estoque_reservado, expira_em, pix_txid, pix_copia_cola, confirmado_automaticamente
                 FROM pedidos
                 WHERE COALESCE(status,'')=?
                 ORDER BY id DESC
@@ -253,9 +257,10 @@ def listar_pedidos(status: str = "", limite: int = Query(100, ge=1, le=500)):
         else:
             rows = conn.execute(
                 """
-                SELECT id, cliente, data_venda, subtotal, desconto, taxa, total_final,
+                SELECT id, cliente, telefone, data_venda, subtotal, desconto, taxa, total_final,
                        forma_pagamento, vendedor, status, data_iso, dia_operacional,
-                       origem, observacao_pedido, estoque_baixado, estoque_baixado_em
+                       origem, observacao_pedido, estoque_baixado, estoque_baixado_em,
+                       estoque_reservado, expira_em, pix_txid, pix_copia_cola, confirmado_automaticamente
                 FROM pedidos
                 ORDER BY id DESC
                 LIMIT ?
@@ -271,9 +276,10 @@ def obter_pedido(venda_id: int):
         expirar_pedidos_pendentes(conn)
         venda = conn.execute(
             """
-            SELECT id, cliente, data_venda, subtotal, desconto, taxa, total_final,
+            SELECT id, cliente, telefone, data_venda, subtotal, desconto, taxa, total_final,
                    forma_pagamento, vendedor, status, data_iso, dia_operacional,
-                   origem, observacao_pedido, estoque_baixado, estoque_baixado_em
+                   origem, observacao_pedido, estoque_baixado, estoque_baixado_em,
+                   estoque_reservado, expira_em, pix_txid, pix_copia_cola, confirmado_automaticamente
             FROM pedidos
             WHERE id=?
             """,
@@ -282,6 +288,93 @@ def obter_pedido(venda_id: int):
         if not venda:
             raise HTTPException(status_code=404, detail="Pedido não encontrado")
         return venda_para_pedido(conn, venda)
+
+
+def _escape_html(valor) -> str:
+    return (
+        str(valor if valor is not None else "")
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+
+def _chave_api_valida(chave_recebida: str | None) -> bool:
+    chaves_validas = [
+        chave
+        for chave in (os.environ.get("MISTICA_SITE_API_KEY", "").strip(), os.environ.get("MISTICA_SYNC_KEY", "").strip())
+        if chave
+    ]
+    return bool(chave_recebida) and any(secrets.compare_digest(str(chave_recebida), chave) for chave in chaves_validas)
+
+
+@router.get("/pedidos/{venda_id}/recibo")
+def recibo_pedido(
+    venda_id: int,
+    txid: str | None = None,
+    x_mistica_api_key: str | None = Header(default=None),
+):
+    """Recibo simples e imprimível do pedido, gerado a partir dos dados
+    persistidos (nunca de dados locais do navegador). O id do pedido sozinho
+    não dá acesso: é preciso o pix_txid do próprio pedido (devolvido apenas na
+    criação/no link de acompanhamento do cliente) ou a chave da API do painel
+    administrativo — sem isso, qualquer pessoa poderia varrer ids sequenciais
+    e coletar nome/telefone/itens de outros clientes."""
+    with conectar() as conn:
+        venda = conn.execute(
+            """
+            SELECT id, cliente, telefone, data_venda, subtotal, desconto, taxa, total_final,
+                   forma_pagamento, vendedor, status, origem, observacao_pedido, pix_txid
+            FROM pedidos
+            WHERE id=?
+            """,
+            (venda_id,),
+        ).fetchone()
+        if not venda:
+            raise HTTPException(status_code=404, detail="Pedido não encontrado")
+        if not _chave_api_valida(x_mistica_api_key):
+            if not venda["pix_txid"] or not txid or not secrets.compare_digest(str(txid), str(venda["pix_txid"])):
+                raise HTTPException(status_code=403, detail="Informe o código do pedido (txid) para ver o recibo.")
+        itens = conn.execute(
+            "SELECT nome_p, quantidade, valor_unitario, valor_total FROM pedidos_itens WHERE pedido_id=? ORDER BY id ASC",
+            (venda_id,),
+        ).fetchall()
+        pagamentos = conn.execute(
+            "SELECT forma, valor, status, data_hora FROM pagamentos WHERE venda_id=? ORDER BY id DESC",
+            (venda_id,),
+        ).fetchall()
+
+    linhas_itens = "".join(
+        f"<tr><td>{_escape_html(item['nome_p'])}</td><td>{int(item['quantidade'] or 0)}</td>"
+        f"<td>R$ {float(item['valor_unitario'] or 0):.2f}</td><td>R$ {float(item['valor_total'] or 0):.2f}</td></tr>"
+        for item in itens
+    )
+    linhas_pagamentos = "".join(
+        f"<li>{_escape_html(pagamento['forma'])} — R$ {float(pagamento['valor'] or 0):.2f} — {_escape_html(pagamento['status'])} ({_escape_html(pagamento['data_hora'])})</li>"
+        for pagamento in pagamentos
+    ) or "<li>Nenhum pagamento registrado ainda.</li>"
+
+    html = f"""<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>Recibo do pedido #{venda_id}</title>
+<style>
+body{{font-family:Arial,sans-serif;max-width:480px;margin:24px auto;color:#222}}
+h1{{font-size:18px}} table{{width:100%;border-collapse:collapse;margin:12px 0}}
+td,th{{border-bottom:1px solid #ddd;padding:6px;text-align:left;font-size:13px}}
+.total{{font-weight:bold;font-size:16px;margin-top:8px}}
+</style></head><body>
+<h1>Mística Presentes — Recibo do pedido #{venda_id}</h1>
+<p><strong>Cliente:</strong> {_escape_html(venda['cliente'])}<br>
+<strong>Telefone:</strong> {_escape_html(venda['telefone']) or '—'}<br>
+<strong>Data:</strong> {_escape_html(venda['data_venda'])}<br>
+<strong>Status:</strong> {_escape_html(venda['status'])}<br>
+<strong>Origem:</strong> {_escape_html(venda['origem'])}</p>
+<table><thead><tr><th>Item</th><th>Qtd</th><th>Valor unit.</th><th>Total</th></tr></thead>
+<tbody>{linhas_itens}</tbody></table>
+<p class="total">Total do pedido: R$ {float(venda['total_final'] or 0):.2f}</p>
+<p><strong>Pagamentos:</strong></p><ul>{linhas_pagamentos}</ul>
+<p><button onclick="window.print()">Imprimir</button></p>
+</body></html>"""
+    return HTMLResponse(content=html)
 
 
 @router.get("/pedidos/{venda_id}/status")
