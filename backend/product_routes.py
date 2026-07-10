@@ -6,10 +6,11 @@ import secrets
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from backend.database import conectar
+from backend.panel_sessions import exigir_sessao_ou_chave_api
 from backend.rate_limit import limitar_requisicoes
 from backend.site_stock_routes import VendaSiteIn, registrar_venda_site
 
@@ -136,8 +137,7 @@ def criar_pedido_checkout_publico(venda: VendaSiteIn, request: Request):
 
 
 @router.post("/produtos")
-def criar_produto_completo(produto: ProdutoCompletoIn, x_mistica_api_key: str | None = Header(default=None)):
-    validar_site_api_key(x_mistica_api_key)
+def criar_produto_completo(produto: ProdutoCompletoIn, sessao: dict = Depends(exigir_sessao_ou_chave_api())):
     agora = datetime.now().isoformat(timespec="seconds")
     imagens_json = json.dumps(produto.imagens or [], ensure_ascii=False)
     with conectar() as conn:
@@ -173,8 +173,7 @@ def criar_produto_completo(produto: ProdutoCompletoIn, x_mistica_api_key: str | 
 
 
 @router.put("/produtos/{produto_id}")
-def atualizar_produto_completo(produto_id: int, produto: ProdutoCompletoIn, x_mistica_api_key: str | None = Header(default=None)):
-    validar_site_api_key(x_mistica_api_key)
+def atualizar_produto_completo(produto_id: int, produto: ProdutoCompletoIn, sessao: dict = Depends(exigir_sessao_ou_chave_api())):
     agora = datetime.now().isoformat(timespec="seconds")
     imagens_json = json.dumps(produto.imagens or [], ensure_ascii=False)
     with conectar() as conn:
@@ -213,8 +212,7 @@ def atualizar_produto_completo(produto_id: int, produto: ProdutoCompletoIn, x_mi
 
 
 @router.delete("/produtos/{produto_id}")
-def excluir_produto_completo(produto_id: int, x_mistica_api_key: str | None = Header(default=None)):
-    validar_site_api_key(x_mistica_api_key)
+def excluir_produto_completo(produto_id: int, sessao: dict = Depends(exigir_sessao_ou_chave_api())):
     with conectar() as conn:
         garantir_colunas_produto(conn)
         existente = conn.execute("SELECT id FROM produtos WHERE id=?", (produto_id,)).fetchone()

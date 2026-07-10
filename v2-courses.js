@@ -12,7 +12,6 @@ const seedCourseMaterials = [
 
 (() => {
   const COURSE_API_BASE = "https://misticapresentes-api.onrender.com";
-  const COURSE_API_KEY_STORAGE = "misticaSiteApiKey";
   const COURSE_CACHE_KEY = "misticaCourseMaterialsCache";
 
   let courseMaterials = [];
@@ -25,8 +24,6 @@ const seedCourseMaterials = [
     if (value.startsWith("/")) return `${COURSE_API_BASE}${value}`;
     return value;
   };
-
-  const getCourseApiKey = () => document.getElementById("adminProductApiKey")?.value.trim() || document.getElementById("courseApiKey")?.value.trim() || localStorage.getItem(COURSE_API_KEY_STORAGE) || "";
 
   function allCourseMaterials() {
     return seedCourseMaterials.concat(courseMaterials);
@@ -81,12 +78,12 @@ const seedCourseMaterials = [
     renderCourseAdminList();
   }
 
-  async function uploadCourseFile(apiKey, file, titulo) {
+  async function uploadCourseFile(file, titulo) {
     const fd = new FormData();
     fd.append("arquivo", file);
     const response = await fetch(`${COURSE_API_BASE}/api/uploads/cursos?titulo=${encodeURIComponent(titulo)}`, {
       method: "POST",
-      headers: { "X-Mistica-Api-Key": apiKey },
+      credentials: "include",
       body: fd
     });
     const data = await response.json().catch(() => ({}));
@@ -102,19 +99,18 @@ const seedCourseMaterials = [
     const url = document.getElementById("courseUrl")?.value.trim();
     const descricao = document.getElementById("courseDescription")?.value.trim();
     const file = document.getElementById("courseFile")?.files?.[0];
-    const apiKey = getCourseApiKey();
 
     if (!titulo || !categoria) return setCourseAdminStatus("Preencha título e categoria do material.");
     if (!url && !file) return setCourseAdminStatus("Envie um arquivo ou informe um link para o material.");
-    if (!apiKey) return setCourseAdminStatus("Informe a chave segura da API (mesma usada no cadastro de produtos) para salvar o material.");
 
     setCourseAdminStatus("Salvando material...");
     try {
       let finalUrl = url;
-      if (file) finalUrl = await uploadCourseFile(apiKey, file, titulo);
+      if (file) finalUrl = await uploadCourseFile(file, titulo);
       const response = await fetch(`${COURSE_API_BASE}/api/cursos`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Mistica-Api-Key": apiKey },
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ titulo, categoria, tipo, descricao, url: finalUrl })
       });
       const data = await response.json().catch(() => ({}));
@@ -128,10 +124,8 @@ const seedCourseMaterials = [
   }
 
   async function handleRemoveCourseMaterial(id) {
-    const apiKey = getCourseApiKey();
-    if (!apiKey) return setCourseAdminStatus("Informe a chave segura da API para remover materiais.");
     try {
-      const response = await fetch(`${COURSE_API_BASE}/api/cursos/${id}`, { method: "DELETE", headers: { "X-Mistica-Api-Key": apiKey } });
+      const response = await fetch(`${COURSE_API_BASE}/api/cursos/${id}`, { method: "DELETE", credentials: "include" });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.ok) throw new Error(data.detail || "Falha ao remover material.");
       await loadCourseMaterials();

@@ -1,6 +1,5 @@
 (() => {
   const API_BASE = 'https://misticapresentes-api.onrender.com';
-  const API_KEY_STORAGE = 'misticaSiteApiKey';
   const PRODUCT_CACHE_KEY = 'misticaApiProductsCache';
 
   const ready = (fn) => document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', fn) : fn();
@@ -71,12 +70,7 @@
       <h2>Cadastro comercial de produtos</h2>
       <p class="privacy-note">Cadastre itens por categoria, com nome, marca, descrição, preço, estoque e imagens. Os produtos salvos na API aparecem no catálogo da loja.</p>
 
-      <label>Chave segura da API para salvar produtos
-        <input id="adminProductApiKey" type="password" autocomplete="off" placeholder="MISTICA_SITE_API_KEY ou MISTICA_SYNC_KEY">
-      </label>
       <div class="checkout-actions">
-        <button class="btn btn-ghost" type="button" data-save-product-key>Salvar chave neste navegador</button>
-        <button class="btn btn-ghost" type="button" data-clear-product-key>Remover chave</button>
         <button class="btn" type="button" data-refresh-products>Atualizar lista</button>
       </div>
       <div class="warning-box" data-product-admin-status>Carregando produtos cadastrados...</div>
@@ -150,20 +144,12 @@
 
     const status = panel.querySelector('[data-product-admin-status]');
     const list = panel.querySelector('[data-admin-product-list]');
-    const apiKeyInput = panel.querySelector('#adminProductApiKey');
     const form = panel.querySelector('#adminProductForm');
     const imageFile = panel.querySelector('#adminProductImageFile');
 
     const setStatus = (message, ok = false) => {
       status.textContent = message;
       status.className = ok ? 'warning-box' : 'warning-box warning-danger';
-    };
-
-    const getApiKey = () => apiKeyInput.value.trim() || localStorage.getItem(API_KEY_STORAGE) || '';
-
-    const fillApiKey = () => {
-      const saved = localStorage.getItem(API_KEY_STORAGE) || '';
-      if (saved) apiKeyInput.value = saved;
     };
 
     const clearForm = () => {
@@ -191,7 +177,7 @@
       imagens: panel.querySelector('#adminProductGallery').value.split('\n').map((line) => line.trim()).filter(Boolean),
     });
 
-    const uploadImageIfNeeded = async (apiKey, payload) => {
+    const uploadImageIfNeeded = async (payload) => {
       const file = imageFile.files?.[0];
       if (!file) return payload;
       const fd = new FormData();
@@ -199,7 +185,7 @@
       const produtoId = payload.codigo_p || slug(payload.nome);
       const response = await fetch(`${API_BASE}/api/uploads/produtos?produto_id=${encodeURIComponent(produtoId)}`, {
         method: 'POST',
-        headers: { 'X-Mistica-Api-Key': apiKey },
+        credentials: 'include',
         body: fd,
       });
       const data = await response.json().catch(() => ({}));
@@ -276,14 +262,12 @@
     };
 
     const deleteProduct = async (id) => {
-      const apiKey = getApiKey();
-      if (!apiKey) return setStatus('Informe a chave segura da API para excluir produto.');
       const product = currentProducts.find((item) => String(item.id) === String(id));
       if (!product) return;
       if (!confirm(`Excluir ${product.nome} do catálogo?`)) return;
       const response = await fetch(`${API_BASE}/api/produtos/${id}`, {
         method: 'DELETE',
-        headers: { 'X-Mistica-Api-Key': apiKey },
+        credentials: 'include',
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.ok) throw new Error(data.detail || 'Falha ao excluir produto.');
@@ -293,18 +277,17 @@
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
-      const apiKey = getApiKey();
-      if (!apiKey) return setStatus('Informe a chave segura da API antes de salvar.');
       const basePayload = readFormPayload();
       if (!basePayload.nome) return setStatus('Informe o nome do produto.');
       setStatus('Salvando produto na API...', true);
       try {
-        const payload = await uploadImageIfNeeded(apiKey, basePayload);
+        const payload = await uploadImageIfNeeded(basePayload);
         const url = editingId ? `${API_BASE}/api/produtos/${editingId}` : `${API_BASE}/api/produtos`;
         const method = editingId ? 'PUT' : 'POST';
         const response = await fetch(url, {
           method,
-          headers: { 'Content-Type': 'application/json', 'X-Mistica-Api-Key': apiKey },
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
         const data = await response.json().catch(() => ({}));
@@ -317,17 +300,6 @@
       }
     });
 
-    panel.querySelector('[data-save-product-key]').addEventListener('click', () => {
-      const key = apiKeyInput.value.trim();
-      if (!key) return setStatus('Digite a chave antes de salvar.');
-      localStorage.setItem(API_KEY_STORAGE, key);
-      setStatus('Chave salva somente neste navegador.', true);
-    });
-    panel.querySelector('[data-clear-product-key]').addEventListener('click', () => {
-      localStorage.removeItem(API_KEY_STORAGE);
-      apiKeyInput.value = '';
-      setStatus('Chave removida deste navegador.', true);
-    });
     panel.querySelector('[data-refresh-products]').addEventListener('click', loadProducts);
     panel.querySelector('[data-new-product]').addEventListener('click', clearForm);
     list.addEventListener('click', async (event) => {
@@ -340,7 +312,6 @@
       }
     });
 
-    fillApiKey();
     loadProducts();
   });
 })();
