@@ -9,7 +9,7 @@ from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from backend.database import conectar
-from backend.order_status_routes import baixar_estoque_do_pedido, garantir_tabela_status
+from backend.order_status_routes import baixar_estoque_do_pedido
 
 router = APIRouter(prefix="/api", tags=["pagamentos"])
 
@@ -38,24 +38,6 @@ def validar_site_api_key(chave_recebida: str | None):
         raise HTTPException(status_code=503, detail="Configure MISTICA_SITE_API_KEY ou MISTICA_SYNC_KEY para permitir escrita pela API.")
     if not chave_recebida or not secrets.compare_digest(str(chave_recebida), chave):
         raise HTTPException(status_code=403, detail="Chave da API inválida.")
-
-
-def garantir_tabela_pagamentos(conn):
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS pagamentos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            venda_id INTEGER NOT NULL,
-            forma TEXT DEFAULT 'Pix',
-            valor REAL DEFAULT 0,
-            status TEXT DEFAULT 'Aguardando',
-            comprovante TEXT DEFAULT '',
-            observacao TEXT DEFAULT '',
-            usuario TEXT DEFAULT 'Admin',
-            data_hora TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
 
 
 def registrar_log_status(conn, venda_id: int, status: str, usuario: str, observacao: str):
@@ -89,7 +71,6 @@ def registrar_pagamento(payload: PagamentoIn, x_mistica_api_key: str | None = He
 
     agora = datetime.now().isoformat(timespec="seconds")
     with conectar() as conn:
-        garantir_tabela_pagamentos(conn)
         venda = conn.execute("SELECT id, total_final FROM vendas WHERE id=?", (payload.venda_id,)).fetchone()
         if not venda:
             raise HTTPException(status_code=404, detail="Pedido não encontrado")
@@ -111,7 +92,6 @@ def registrar_pagamento(payload: PagamentoIn, x_mistica_api_key: str | None = He
         )
         pagamento_id = int(cur.lastrowid)
         if status == "Confirmado":
-            garantir_tabela_status(conn)
             baixar_estoque_do_pedido(conn, payload.venda_id, payload.usuario or "Admin", agora, "Baixa automática ao confirmar pagamento")
             conn.execute("UPDATE vendas SET status='Pagamento confirmado' WHERE id=?", (payload.venda_id,))
             registrar_log_status(conn, payload.venda_id, "Pagamento confirmado", payload.usuario, "Pagamento confirmado manualmente")
@@ -123,7 +103,6 @@ def registrar_pagamento(payload: PagamentoIn, x_mistica_api_key: str | None = He
 @router.get("/pagamentos")
 def listar_pagamentos(venda_id: Optional[int] = None, limite: int = Query(100, ge=1, le=500)):
     with conectar() as conn:
-        garantir_tabela_pagamentos(conn)
         if venda_id:
             rows = conn.execute(
                 """
@@ -158,7 +137,6 @@ def atualizar_status_pagamento(pagamento_id: int, payload: PagamentoStatusIn, x_
         raise HTTPException(status_code=400, detail="Status de pagamento inválido")
 
     with conectar() as conn:
-        garantir_tabela_pagamentos(conn)
         pagamento = conn.execute("SELECT id, venda_id FROM pagamentos WHERE id=?", (pagamento_id,)).fetchone()
         if not pagamento:
             raise HTTPException(status_code=404, detail="Pagamento não encontrado")
@@ -167,7 +145,6 @@ def atualizar_status_pagamento(pagamento_id: int, payload: PagamentoStatusIn, x_
             (status, payload.observacao or "", pagamento_id),
         )
         if status == "Confirmado":
-            garantir_tabela_status(conn)
             agora = datetime.now().isoformat(timespec="seconds")
             baixar_estoque_do_pedido(conn, pagamento["venda_id"], payload.usuario or "Admin", agora, "Baixa automática ao confirmar pagamento")
             conn.execute("UPDATE vendas SET status='Pagamento confirmado' WHERE id=?", (pagamento["venda_id"],))

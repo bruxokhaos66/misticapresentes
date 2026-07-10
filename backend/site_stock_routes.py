@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.database import conectar, listar
-from backend.order_status_routes import MINUTOS_EXPIRACAO_PEDIDO_PENDENTE, garantir_tabela_status
+from backend.order_status_routes import MINUTOS_EXPIRACAO_PEDIDO_PENDENTE
 from backend.rate_limit import _client_ip, limitar_requisicoes
 from config import DB_PATH
 
@@ -261,7 +261,6 @@ def registrar_venda_site(venda: VendaSiteIn, request: Request, x_mistica_api_key
 
     with conectar() as conn:
         try:
-            garantir_tabela_status(conn)
             produtos_validados = validar_itens_e_estoque(conn, venda.itens, exigir_estoque=venda.baixa_estoque)
             itens_calculados, subtotal = recalcular_venda_site(produtos_validados)
             total_final = subtotal

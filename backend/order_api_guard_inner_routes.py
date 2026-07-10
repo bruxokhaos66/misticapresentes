@@ -7,7 +7,7 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.database import conectar, executar
-from backend.order_status_routes import garantir_tabela_status, validar_site_api_key, baixar_estoque_do_pedido, buscar_produto_para_baixa
+from backend.order_status_routes import validar_site_api_key, baixar_estoque_do_pedido, buscar_produto_para_baixa
 
 router = APIRouter(tags=["pedidos-api-seguro"])
 
@@ -43,18 +43,6 @@ def normalizar_status(status: str) -> str:
     return status
 
 
-def garantir_colunas_cancelamento(conn):
-    garantir_tabela_status(conn)
-    for sql in [
-        "ALTER TABLE vendas ADD COLUMN estoque_reposto_cancelamento INTEGER DEFAULT 0",
-        "ALTER TABLE vendas ADD COLUMN estoque_reposto_em TEXT",
-    ]:
-        try:
-            conn.execute(sql)
-        except Exception:
-            pass
-
-
 def repor_estoque_cancelamento(conn, venda_id: int, usuario: str, agora: str):
     venda = conn.execute("SELECT id, estoque_baixado, estoque_reposto_cancelamento FROM vendas WHERE id=?", (venda_id,)).fetchone()
     if not venda:
@@ -85,7 +73,6 @@ def repor_estoque_cancelamento(conn, venda_id: int, usuario: str, agora: str):
 
 
 def cancelar_com_reposicao(conn, venda_id: int, usuario: str, observacao: str | None, agora: str):
-    garantir_colunas_cancelamento(conn)
     venda = conn.execute("SELECT id, status FROM vendas WHERE id=?", (venda_id,)).fetchone()
     if not venda:
         raise HTTPException(status_code=404, detail="Pedido não encontrado.")
@@ -104,7 +91,6 @@ def alterar_status(venda_id: int, payload: StatusPayload, chave: str | None):
     status = normalizar_status(payload.status)
     agora = datetime.now().isoformat(timespec="seconds")
     with conectar() as conn:
-        garantir_colunas_cancelamento(conn)
         venda = conn.execute("SELECT id FROM vendas WHERE id=?", (venda_id,)).fetchone()
         if not venda:
             raise HTTPException(status_code=404, detail="Pedido não encontrado.")

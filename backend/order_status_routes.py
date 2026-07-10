@@ -46,32 +46,6 @@ def validar_site_api_key(chave_recebida: str | None):
         raise HTTPException(status_code=403, detail="Chave da API do site inválida.")
 
 
-def garantir_tabela_status(conn):
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS pedido_status_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            venda_id INTEGER NOT NULL,
-            status TEXT NOT NULL,
-            usuario TEXT DEFAULT 'Admin',
-            observacao TEXT DEFAULT '',
-            data_hora TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
-    alteracoes = [
-        "ALTER TABLE vendas ADD COLUMN observacao_pedido TEXT",
-        "ALTER TABLE vendas ADD COLUMN estoque_baixado INTEGER DEFAULT 0",
-        "ALTER TABLE vendas ADD COLUMN estoque_baixado_em TEXT",
-        "ALTER TABLE vendas ADD COLUMN expira_em TEXT",
-    ]
-    for sql in alteracoes:
-        try:
-            conn.execute(sql)
-        except Exception:
-            pass
-
-
 def expirar_pedidos_pendentes(conn, agora: str | None = None):
     """Cancela automaticamente pedidos 'Aguardando pagamento' cujo prazo (expira_em)
     já passou e cujo pagamento nunca foi confirmado. Como o estoque só é baixado na
@@ -208,7 +182,6 @@ def baixar_estoque_do_pedido(conn, venda_id: int, usuario: str, agora: str, moti
 @router.get("/pedidos")
 def listar_pedidos(status: str = "", limite: int = Query(100, ge=1, le=500)):
     with conectar() as conn:
-        garantir_tabela_status(conn)
         expirar_pedidos_pendentes(conn)
         if status:
             rows = conn.execute(
@@ -241,7 +214,6 @@ def listar_pedidos(status: str = "", limite: int = Query(100, ge=1, le=500)):
 @router.get("/pedidos/{venda_id}")
 def obter_pedido(venda_id: int):
     with conectar() as conn:
-        garantir_tabela_status(conn)
         expirar_pedidos_pendentes(conn)
         venda = conn.execute(
             """
@@ -261,7 +233,6 @@ def obter_pedido(venda_id: int):
 @router.get("/pedidos/{venda_id}/status")
 def historico_status_pedido(venda_id: int):
     with conectar() as conn:
-        garantir_tabela_status(conn)
         venda = conn.execute("SELECT id, status, estoque_baixado, estoque_baixado_em FROM vendas WHERE id=?", (venda_id,)).fetchone()
         if not venda:
             raise HTTPException(status_code=404, detail="Pedido não encontrado")
@@ -294,7 +265,6 @@ def atualizar_status_pedido(venda_id: int, payload: PedidoStatusIn, x_mistica_ap
     agora = datetime.now().isoformat(timespec="seconds")
     estoque_baixado_agora = False
     with conectar() as conn:
-        garantir_tabela_status(conn)
         venda = conn.execute("SELECT id FROM vendas WHERE id=?", (venda_id,)).fetchone()
         if not venda:
             raise HTTPException(status_code=404, detail="Pedido não encontrado")
@@ -329,7 +299,6 @@ def baixar_estoque_manual(venda_id: int, x_mistica_api_key: str | None = Header(
     validar_site_api_key(x_mistica_api_key)
     agora = datetime.now().isoformat(timespec="seconds")
     with conectar() as conn:
-        garantir_tabela_status(conn)
         baixado = baixar_estoque_do_pedido(conn, venda_id, "Admin", agora, "Baixa manual pelo painel")
         conn.commit()
     return {"ok": True, "venda_id": venda_id, "estoque_baixado_agora": baixado, "data_hora": agora}
@@ -340,7 +309,6 @@ def atualizar_observacao_pedido(venda_id: int, payload: PedidoObservacaoIn, x_mi
     validar_site_api_key(x_mistica_api_key)
     agora = datetime.now().isoformat(timespec="seconds")
     with conectar() as conn:
-        garantir_tabela_status(conn)
         venda = conn.execute("SELECT id, status FROM vendas WHERE id=?", (venda_id,)).fetchone()
         if not venda:
             raise HTTPException(status_code=404, detail="Pedido não encontrado")
@@ -361,7 +329,6 @@ def cancelar_pedido(venda_id: int, x_mistica_api_key: str | None = Header(defaul
     validar_site_api_key(x_mistica_api_key)
     agora = datetime.now().isoformat(timespec="seconds")
     with conectar() as conn:
-        garantir_tabela_status(conn)
         venda = conn.execute("SELECT id FROM vendas WHERE id=?", (venda_id,)).fetchone()
         if not venda:
             raise HTTPException(status_code=404, detail="Pedido não encontrado")
@@ -381,7 +348,6 @@ def cancelar_pedido(venda_id: int, x_mistica_api_key: str | None = Header(defaul
 def listar_status_pedidos(limite: int = 100):
     limite = max(1, min(limite, 500))
     with conectar() as conn:
-        garantir_tabela_status(conn)
         rows = conn.execute(
             """
             SELECT l.id, l.venda_id, v.cliente, v.total_final, l.status, l.usuario, l.observacao, l.data_hora

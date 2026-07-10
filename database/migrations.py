@@ -122,6 +122,74 @@ def init_db():
             query_db(f"ALTER TABLE produtos ADD COLUMN {col} {typ}", commit=True)
         except Exception:
             pass
+
+    # Colunas do catálogo completo do site (antes duplicadas em backend/product_routes.py).
+    for col, typ in [
+        ("marca", "TEXT"),
+        ("descricao", "TEXT"),
+        ("imagem_url", "TEXT"),
+        ("imagens_json", "TEXT"),
+        ("link_externo", "TEXT"),
+        ("selo", "TEXT"),
+        ("atualizado_em", "TEXT"),
+    ]:
+        try:
+            query_db(f"ALTER TABLE produtos ADD COLUMN {col} {typ}", commit=True)
+        except Exception:
+            pass
+
+    # Colunas de pedidos (site) sobre a tabela vendas (antes duplicadas em
+    # backend/order_status_routes.py, backend/order_api_guard_inner_routes.py,
+    # backend/main.py e backend/user_sync_routes.py).
+    for col, typ in [
+        ("observacao_pedido", "TEXT"),
+        ("estoque_baixado", "INTEGER DEFAULT 0"),
+        ("estoque_baixado_em", "TEXT"),
+        ("expira_em", "TEXT"),
+        ("estoque_reposto_cancelamento", "INTEGER DEFAULT 0"),
+        ("estoque_reposto_em", "TEXT"),
+        ("origem_sync", "TEXT"),
+        ("local_id", "INTEGER"),
+    ]:
+        try:
+            query_db(f"ALTER TABLE vendas ADD COLUMN {col} {typ}", commit=True)
+        except Exception:
+            pass
+    try:
+        query_db("CREATE INDEX IF NOT EXISTS idx_vendas_local_id ON vendas(local_id)", commit=True)
+    except Exception:
+        pass
+
+    query_db(
+        """
+        CREATE TABLE IF NOT EXISTS pedido_status_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            venda_id INTEGER NOT NULL,
+            status TEXT NOT NULL,
+            usuario TEXT DEFAULT 'Admin',
+            observacao TEXT DEFAULT '',
+            data_hora TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        commit=True,
+    )
+
+    query_db(
+        """
+        CREATE TABLE IF NOT EXISTS pagamentos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            venda_id INTEGER NOT NULL,
+            forma TEXT DEFAULT 'Pix',
+            valor REAL DEFAULT 0,
+            status TEXT DEFAULT 'Aguardando',
+            comprovante TEXT DEFAULT '',
+            observacao TEXT DEFAULT '',
+            usuario TEXT DEFAULT 'Admin',
+            data_hora TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        commit=True,
+    )
     for tabela, col, typ in [("vendas", "status", "TEXT DEFAULT 'Concluído'"), ("vendas", "data_iso", "TEXT"), ("vendas", "dia_operacional", "TEXT"), ("fluxo_caixa", "data_iso", "TEXT"), ("fluxo_caixa", "forma_pagamento", "TEXT"), ("fluxo_caixa", "caixa_id", "INTEGER"), ("contas_a_pagar", "categoria", "TEXT DEFAULT 'Outros'")]:
         try:
             query_db(f"ALTER TABLE {tabela} ADD COLUMN {col} {typ}", commit=True)

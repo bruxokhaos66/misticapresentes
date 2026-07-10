@@ -53,23 +53,6 @@ def _chave_interna_checkout() -> str:
     return chave
 
 
-def garantir_colunas_produto(conn):
-    comandos = [
-        "ALTER TABLE produtos ADD COLUMN marca TEXT",
-        "ALTER TABLE produtos ADD COLUMN descricao TEXT",
-        "ALTER TABLE produtos ADD COLUMN imagem_url TEXT",
-        "ALTER TABLE produtos ADD COLUMN imagens_json TEXT",
-        "ALTER TABLE produtos ADD COLUMN link_externo TEXT",
-        "ALTER TABLE produtos ADD COLUMN selo TEXT",
-        "ALTER TABLE produtos ADD COLUMN atualizado_em TEXT",
-    ]
-    for sql in comandos:
-        try:
-            conn.execute(sql)
-        except Exception:
-            pass
-
-
 def produto_row_to_dict(row):
     data = dict(row)
     imagens = []
@@ -90,7 +73,6 @@ def produto_row_to_dict(row):
 def listar_produtos_completos(busca: str = "", limite: int = Query(100, ge=1, le=500)):
     termo = f"%{busca.strip()}%"
     with conectar() as conn:
-        garantir_colunas_produto(conn)
         if busca.strip():
             rows = conn.execute(
                 """
@@ -141,7 +123,6 @@ def criar_produto_completo(produto: ProdutoCompletoIn, x_mistica_api_key: str | 
     agora = datetime.now().isoformat(timespec="seconds")
     imagens_json = json.dumps(produto.imagens or [], ensure_ascii=False)
     with conectar() as conn:
-        garantir_colunas_produto(conn)
         cur = conn.execute(
             """
             INSERT INTO produtos (
@@ -178,7 +159,6 @@ def atualizar_produto_completo(produto_id: int, produto: ProdutoCompletoIn, x_mi
     agora = datetime.now().isoformat(timespec="seconds")
     imagens_json = json.dumps(produto.imagens or [], ensure_ascii=False)
     with conectar() as conn:
-        garantir_colunas_produto(conn)
         existente = conn.execute("SELECT id FROM produtos WHERE id=?", (produto_id,)).fetchone()
         if not existente:
             raise HTTPException(status_code=404, detail="Produto não encontrado")
@@ -216,7 +196,6 @@ def atualizar_produto_completo(produto_id: int, produto: ProdutoCompletoIn, x_mi
 def excluir_produto_completo(produto_id: int, x_mistica_api_key: str | None = Header(default=None)):
     validar_site_api_key(x_mistica_api_key)
     with conectar() as conn:
-        garantir_colunas_produto(conn)
         existente = conn.execute("SELECT id FROM produtos WHERE id=?", (produto_id,)).fetchone()
         if not existente:
             raise HTTPException(status_code=404, detail="Produto não encontrado")

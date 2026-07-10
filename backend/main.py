@@ -76,22 +76,7 @@ class ProdutosLotePayload(BaseModel):
 @app.on_event("startup")
 def startup():
     init_db()
-    garantir_colunas_sync_backend()
     garantir_admin_api()
-
-
-def garantir_colunas_sync_backend():
-    comandos = [
-        "ALTER TABLE vendas ADD COLUMN origem_sync TEXT",
-        "ALTER TABLE vendas ADD COLUMN local_id INTEGER",
-        "CREATE INDEX IF NOT EXISTS idx_vendas_local_id ON vendas(local_id)",
-    ]
-    with conectar() as conn:
-        for sql in comandos:
-            try:
-                conn.execute(sql)
-            except Exception:
-                pass
 
 
 def garantir_admin_api():
