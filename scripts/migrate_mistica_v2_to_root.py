@@ -1,16 +1,10 @@
 #!/usr/bin/env python3
-"""Move o site público de mistica-v2/ para a raiz com validações e rollback simples.
+"""Move o site público de mistica-v2/ para a raiz com validações.
 
 Uso:
     python scripts/migrate_mistica_v2_to_root.py --check
     python scripts/migrate_mistica_v2_to_root.py --apply
-
-O modo --check não altera arquivos. O modo --apply:
-- arquiva o index antigo da raiz;
-- move o conteúdo ativo de mistica-v2/ para a raiz;
-- corrige referências relativas conhecidas;
-- mantém mistica-v2/index.html apenas como redirecionamento 301-equivalente estático;
-- valida referências antigas e arquivos essenciais.
+    python scripts/migrate_mistica_v2_to_root.py --validate-root
 """
 
 from __future__ import annotations
@@ -127,9 +121,19 @@ def validate() -> list[str]:
             errors.append("index.html da raiz ainda contém referência a mistica-v2/")
         if "noindex" in content.lower():
             errors.append("index.html da raiz contém noindex")
+    else:
+        errors.append("index.html da raiz ausente")
+
+    redirect = SOURCE / "index.html"
+    if not redirect.is_file():
+        errors.append("redirecionamento legado mistica-v2/index.html ausente")
+    else:
+        redirect_text = redirect.read_text(encoding="utf-8", errors="replace").lower()
+        if "noindex,follow" not in redirect_text or "url=/" not in redirect_text:
+            errors.append("redirecionamento legado está incompleto")
 
     for path in ROOT.rglob("*"):
-        if not path.is_file() or ".git" in path.parts or path == SOURCE / "index.html":
+        if not path.is_file() or ".git" in path.parts or path == redirect:
             continue
         if path.suffix.lower() not in TEXT_EXTENSIONS:
             continue
@@ -137,7 +141,16 @@ def validate() -> list[str]:
         if "mistica-v2/" in text and "docs/archive" not in path.as_posix():
             errors.append(f"referência antiga em {path.relative_to(ROOT)}")
 
-    return errors
+    return sorted(set(errors))
+
+
+def report_validation() -> None:
+    errors = validate()
+    if errors:
+        for error in errors:
+            print(f"- {error}", file=sys.stderr)
+        raise SystemExit(2)
+    print("Validação pós-migração concluída sem erros.")
 
 
 def apply(files: list[Path]) -> None:
@@ -173,15 +186,8 @@ def apply(files: list[Path]) -> None:
         if path.is_file() and ".git" not in path.parts and rewrite_text(path):
             changed += 1
 
-    errors = validate()
-    if errors:
-        print("A migração foi aplicada, mas falhou na validação:", file=sys.stderr)
-        for error in errors:
-            print(f"- {error}", file=sys.stderr)
-        raise SystemExit(2)
-
+    report_validation()
     print(f"Migração concluída. {len(files)} arquivos processados; {changed} textos reescritos.")
-    print("Revise git diff, rode os testes e publique somente após validar o site localmente.")
 
 
 def main() -> None:
@@ -189,7 +195,12 @@ def main() -> None:
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--check", action="store_true", help="somente inventaria e valida riscos")
     mode.add_argument("--apply", action="store_true", help="aplica a migração")
+    mode.add_argument("--validate-root", action="store_true", help="valida a raiz após a migração")
     args = parser.parse_args()
+
+    if args.validate_root:
+        report_validation()
+        return
 
     files = inventory()
     collisions = check_collisions(files)
