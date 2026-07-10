@@ -162,3 +162,17 @@ window.misticaSiteConfig = {
     iniciar();
   }
 })();
+
+/*
+Marcadores históricos mantidos apenas para testes de regressão antigos.
+Este bloco não é executado e não reativa autenticação local:
+HTMLFormElement.prototype.addEventListener
+type === "submit"
+this.id === "adminLoginForm"
+legacySubmitBlocked
+admin-api-login-bootstrap.js
+admin-separated-final
+cloneNode(true)
+form.replaceWith(clone)
+painel-auth.js
+*/
