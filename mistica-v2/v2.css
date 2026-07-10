@@ -108,6 +108,8 @@ button, input, textarea { font: inherit; }
 .qty-row { display: grid; grid-template-columns: 80px 1fr; gap: 10px; margin: 14px 0 10px; }
 input, textarea { width: 100%; border: 1px solid rgba(242,201,109,.24); border-radius: 16px; padding: 13px 14px; color: var(--cream); background: rgba(0,0,0,.28); outline: none; }
 textarea { min-height: 120px; resize: vertical; }
+:focus-visible { outline: 2px solid #f2c96d; outline-offset: 2px; }
+input:focus-visible, textarea:focus-visible { outline: 2px solid #f2c96d; outline-offset: 1px; }
 label { display: grid; gap: 7px; color: var(--muted); font-weight: 750; }
 .checkout-grid, .isis-layout, .split { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; align-items: stretch; }
 .form-panel, .contact-card { padding: clamp(22px, 3vw, 34px); }
