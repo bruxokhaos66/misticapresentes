@@ -205,6 +205,7 @@
             // acompanhamento de status, para nunca divergir do que o admin vê.
             venda.id = resposta.id;
             venda.pedidoBackendId = resposta.id;
+            venda.pixTxid = resposta.pix_txid || venda.pixTxid;
             if (resposta.pix_copia_cola) {
               venda.pixPayload = resposta.pix_copia_cola;
               if (typeof pixPayloadInput !== "undefined" && pixPayloadInput) {
@@ -252,7 +253,13 @@
       "Entregue": "Seu pedido foi entregue. Gratidão pela preferência!",
       "Cancelado": "Seu pedido foi cancelado. Se precisar, podemos ajudar com um novo atendimento.",
     };
-    return `${prefixo}\n${pedido}\nStatus: ${status}\n${mensagens[status] || "Atualizamos o status do seu pedido."}\n\n${itens}\n\n${total}`;
+    // O link de recibo só funciona com o pix_txid do próprio pedido (ver
+    // backend/order_status_routes.py::recibo_pedido); sem ele o servidor recusa
+    // o acesso, então só incluímos o link quando temos esse código.
+    const recibo = venda.pedidoBackendId && venda.pixTxid
+      ? `\n\nRecibo: ${API_BASE}/api/pedidos/${venda.pedidoBackendId}/recibo?txid=${encodeURIComponent(venda.pixTxid)}`
+      : "";
+    return `${prefixo}\n${pedido}\nStatus: ${status}\n${mensagens[status] || "Atualizamos o status do seu pedido."}\n\n${itens}\n\n${total}${recibo}`;
   }
 
   function buildWhatsappStatusUrl(venda, status) {

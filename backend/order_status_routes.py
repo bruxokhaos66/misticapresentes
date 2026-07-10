@@ -166,16 +166,18 @@ def baixar_estoque_do_pedido(conn, venda_id: int, usuario: str, agora: str, moti
         produto = buscar_produto_para_baixa(conn, item)
         if not produto:
             raise HTTPException(status_code=404, detail=f"Produto não encontrado para baixa: {item['nome_p'] or item['codigo_p']}")
-        estoque_atual = int(produto["quantidade"] or 0)
-        if estoque_atual < quantidade:
-            raise HTTPException(status_code=409, detail=f"Estoque insuficiente para {produto['nome']}. Disponível: {estoque_atual}")
-
-    for item in itens:
-        quantidade = int(item["quantidade"] or 0)
-        if quantidade <= 0:
-            continue
-        produto = buscar_produto_para_baixa(conn, item)
-        conn.execute("UPDATE produtos SET quantidade = quantidade - ? WHERE id=?", (quantidade, produto["id"]))
+        # UPDATE com guarda de saldo no próprio WHERE: a checagem e a escrita
+        # acontecem no mesmo comando, então duas confirmações concorrentes para o
+        # mesmo produto não conseguem, juntas, levar o estoque a negativo (ver
+        # backend/site_stock_routes.py::baixar_estoque_atomico para o mesmo padrão).
+        cur = conn.execute(
+            "UPDATE produtos SET quantidade = quantidade - ? WHERE id=? AND quantidade >= ?",
+            (quantidade, produto["id"], quantidade),
+        )
+        if cur.rowcount == 0:
+            atual = conn.execute("SELECT quantidade FROM produtos WHERE id=?", (produto["id"],)).fetchone()
+            disponivel = int(atual["quantidade"] or 0) if atual else 0
+            raise HTTPException(status_code=409, detail=f"Estoque insuficiente para {produto['nome']}. Disponível: {disponivel}")
 
     conn.execute("UPDATE pedidos SET estoque_baixado=1, estoque_baixado_em=? WHERE id=?", (agora, venda_id))
     conn.execute(
@@ -297,15 +299,32 @@ def _escape_html(valor) -> str:
     )
 
 
+def _chave_api_valida(chave_recebida: str | None) -> bool:
+    chaves_validas = [
+        chave
+        for chave in (os.environ.get("MISTICA_SITE_API_KEY", "").strip(), os.environ.get("MISTICA_SYNC_KEY", "").strip())
+        if chave
+    ]
+    return bool(chave_recebida) and any(secrets.compare_digest(str(chave_recebida), chave) for chave in chaves_validas)
+
+
 @router.get("/pedidos/{venda_id}/recibo")
-def recibo_pedido(venda_id: int):
+def recibo_pedido(
+    venda_id: int,
+    txid: str | None = None,
+    x_mistica_api_key: str | None = Header(default=None),
+):
     """Recibo simples e imprimível do pedido, gerado a partir dos dados
-    persistidos (nunca de dados locais do navegador)."""
+    persistidos (nunca de dados locais do navegador). O id do pedido sozinho
+    não dá acesso: é preciso o pix_txid do próprio pedido (devolvido apenas na
+    criação/no link de acompanhamento do cliente) ou a chave da API do painel
+    administrativo — sem isso, qualquer pessoa poderia varrer ids sequenciais
+    e coletar nome/telefone/itens de outros clientes."""
     with conectar() as conn:
         venda = conn.execute(
             """
             SELECT id, cliente, telefone, data_venda, subtotal, desconto, taxa, total_final,
-                   forma_pagamento, vendedor, status, origem, observacao_pedido
+                   forma_pagamento, vendedor, status, origem, observacao_pedido, pix_txid
             FROM pedidos
             WHERE id=?
             """,
@@ -313,6 +332,9 @@ def recibo_pedido(venda_id: int):
         ).fetchone()
         if not venda:
             raise HTTPException(status_code=404, detail="Pedido não encontrado")
+        if not _chave_api_valida(x_mistica_api_key):
+            if not venda["pix_txid"] or not txid or not secrets.compare_digest(str(txid), str(venda["pix_txid"])):
+                raise HTTPException(status_code=403, detail="Informe o código do pedido (txid) para ver o recibo.")
         itens = conn.execute(
             "SELECT nome_p, quantidade, valor_unitario, valor_total FROM pedidos_itens WHERE pedido_id=? ORDER BY id ASC",
             (venda_id,),

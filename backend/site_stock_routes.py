@@ -157,6 +157,24 @@ def recalcular_venda_site(produtos_validados):
     return itens_calculados, subtotal
 
 
+def baixar_estoque_atomico(conn, *, produto_id: int, nome_produto: str, quantidade: int) -> tuple[int, int]:
+    """Decrementa o estoque de forma atômica (a checagem de saldo e a escrita
+    acontecem no mesmo UPDATE), para não depender de um SELECT anterior que
+    pode estar desatualizado quando duas requisições concorrem pelo mesmo
+    produto (ver tests que reproduzem a corrida com dois checkouts simultâneos
+    disputando a última unidade)."""
+    cur = conn.execute(
+        "UPDATE produtos SET quantidade = quantidade - ? WHERE id=? AND quantidade >= ?",
+        (quantidade, produto_id, quantidade),
+    )
+    if cur.rowcount == 0:
+        atual = conn.execute("SELECT quantidade FROM produtos WHERE id=?", (produto_id,)).fetchone()
+        disponivel = int(atual["quantidade"] or 0) if atual else 0
+        raise HTTPException(status_code=409, detail=f"Estoque insuficiente para {nome_produto}. Disponível: {disponivel}")
+    posterior = conn.execute("SELECT quantidade FROM produtos WHERE id=?", (produto_id,)).fetchone()["quantidade"]
+    return int(posterior) + quantidade, int(posterior)
+
+
 def registrar_movimento(conn, *, produto, quantidade, motivo, usuario, estoque_anterior, estoque_posterior, venda_id):
     conn.execute(
         """
@@ -321,9 +339,10 @@ def registrar_venda_site(
 
             if venda.baixa_estoque:
                 motivo = "Reserva de estoque (pedido aguardando pagamento)" if pedido_pendente else ("Venda site" if venda.origem == "site" else "Venda programa")
-                for item, produto, estoque_anterior in produtos_validados:
-                    estoque_posterior = estoque_anterior - item.quantidade
-                    conn.execute("UPDATE produtos SET quantidade=? WHERE id=?", (estoque_posterior, produto["id"]))
+                for item, produto, _estoque_anterior_visto in produtos_validados:
+                    estoque_anterior, estoque_posterior = baixar_estoque_atomico(
+                        conn, produto_id=produto["id"], nome_produto=produto["nome"], quantidade=item.quantidade
+                    )
                     registrar_movimento(
                         conn,
                         produto=produto,
@@ -379,9 +398,8 @@ def reservar_estoque_site(payload: ReservaEstoqueSite, x_mistica_api_key: str | 
     with conectar() as conn:
         baixados = []
         produtos_validados = validar_itens_e_estoque(conn, payload.itens, exigir_estoque=True)
-        for item, produto, estoque_anterior in produtos_validados:
-            estoque_posterior = estoque_anterior - item.quantidade
-            conn.execute("UPDATE produtos SET quantidade=? WHERE id=?", (estoque_posterior, produto["id"]))
+        for item, produto, _estoque_anterior_visto in produtos_validados:
+            baixar_estoque_atomico(conn, produto_id=produto["id"], nome_produto=produto["nome"], quantidade=item.quantidade)
             baixados.append(
                 {
                     "produto_id": produto["id"],
