@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from backend.backup_routes import router as backup_router
+from backend.course_routes import router as course_router
 from backend.database import conectar, executar, listar, obter
 from backend.order_status_routes import router as order_status_router
 from backend.payment_routes import router as payment_router
@@ -55,6 +56,7 @@ app.include_router(payment_router)
 app.include_router(upload_router)
 app.include_router(system_status_router)
 app.include_router(backup_router)
+app.include_router(course_router)
 
 
 class ProdutoIn(BaseModel):
