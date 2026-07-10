@@ -8,6 +8,7 @@ from typing import Optional
 from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from backend.audit import registrar_auditoria
 from backend.database import conectar
 
 router = APIRouter(prefix="/api", tags=["pedidos-status"])
@@ -186,6 +187,7 @@ def baixar_estoque_do_pedido(conn, venda_id: int, usuario: str, agora: str, moti
         """,
         (venda_id, "Estoque baixado", usuario or "Admin", motivo, agora),
     )
+    registrar_auditoria(conn, "estoque", venda_id, "baixa_pedido", usuario, depois={"motivo": motivo, "itens": len(itens)})
     return True
 
 
@@ -215,6 +217,7 @@ def repor_estoque_cancelamento(conn, venda_id: int, usuario: str, agora: str):
         "INSERT INTO pedido_status_log (venda_id, status, usuario, observacao, data_hora) VALUES (?,?,?,?,?)",
         (venda_id, "Estoque reposto", usuario or "Admin", f"Reposição automática: {total} item(ns)", agora),
     )
+    registrar_auditoria(conn, "estoque", venda_id, "reposicao_cancelamento", usuario, depois={"total_itens": total})
     return total > 0
 
 
@@ -229,6 +232,7 @@ def cancelar_com_reposicao(conn, venda_id: int, usuario: str, observacao: str | 
         "INSERT INTO pedido_status_log (venda_id, status, usuario, observacao, data_hora) VALUES (?,?,?,?,?)",
         (venda_id, "Cancelado", usuario or "Admin", observacao or ("Cancelado" if not ja_cancelado else "Já estava cancelado; estoque não reposto novamente"), agora),
     )
+    registrar_auditoria(conn, "pedido", venda_id, "cancelar", usuario, antes={"status": venda["status"]}, depois={"status": "Cancelado", "estoque_reposto": estoque_reposto})
     return {"ok": True, "venda_id": venda_id, "status": "Cancelado", "estoque_reposto_agora": estoque_reposto, "ja_cancelado": ja_cancelado}
 
 

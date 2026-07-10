@@ -9,6 +9,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from backend.audit import registrar_auditoria
 from backend.database import conectar
 from backend.rate_limit import limitar_requisicoes
 from backend.site_stock_routes import VendaSiteIn, registrar_venda_site
@@ -152,6 +153,7 @@ def criar_produto_completo(produto: ProdutoCompletoIn, x_mistica_api_key: str | 
             ),
         )
         produto_id = int(cur.lastrowid)
+        registrar_auditoria(conn, "produto", produto_id, "criar", depois=produto.model_dump())
         conn.commit()
     return {"ok": True, "id": produto_id, "status": "criado", "atualizado_em": agora}
 
@@ -162,7 +164,7 @@ def atualizar_produto_completo(produto_id: int, produto: ProdutoCompletoIn, x_mi
     agora = datetime.now().isoformat(timespec="seconds")
     imagens_json = json.dumps(produto.imagens or [], ensure_ascii=False)
     with conectar() as conn:
-        existente = conn.execute("SELECT id FROM produtos WHERE id=?", (produto_id,)).fetchone()
+        existente = conn.execute("SELECT * FROM produtos WHERE id=?", (produto_id,)).fetchone()
         if not existente:
             raise HTTPException(status_code=404, detail="Produto não encontrado")
         conn.execute(
@@ -191,6 +193,7 @@ def atualizar_produto_completo(produto_id: int, produto: ProdutoCompletoIn, x_mi
                 produto_id,
             ),
         )
+        registrar_auditoria(conn, "produto", produto_id, "atualizar", antes=dict(existente), depois=produto.model_dump())
         conn.commit()
     return {"ok": True, "id": produto_id, "status": "atualizado", "atualizado_em": agora}
 
@@ -203,5 +206,6 @@ def excluir_produto_completo(produto_id: int, x_mistica_api_key: str | None = He
         if not existente:
             raise HTTPException(status_code=404, detail="Produto não encontrado")
         conn.execute("UPDATE produtos SET ativo=0, atualizado_em=? WHERE id=?", (datetime.now().isoformat(timespec="seconds"), produto_id))
+        registrar_auditoria(conn, "produto", produto_id, "excluir")
         conn.commit()
     return {"ok": True, "id": produto_id, "status": "excluido"}

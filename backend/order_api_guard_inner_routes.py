@@ -6,7 +6,8 @@ from typing import Optional
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
-from backend.database import conectar, executar
+from backend.audit import registrar_auditoria
+from backend.database import conectar
 from backend.order_status_routes import (
     validar_site_api_key,
     baixar_estoque_do_pedido,
@@ -78,13 +79,17 @@ def cancelar(venda_id: int, payload: CancelamentoPayload | None, chave: str | No
 @router.post("/clientes")
 def criar_cliente_seguro(cliente: ClientePayload, x_mistica_api_key: str | None = Header(default=None)):
     validar_site_api_key(x_mistica_api_key)
-    novo_id = executar(
-        """
-        INSERT INTO clientes (nome, telefone, cpf, endereco, nascimento, ativo)
-        VALUES (?,?,?,?,?,1)
-        """,
-        (cliente.nome, cliente.telefone, cliente.cpf, cliente.endereco, cliente.nascimento),
-    )
+    with conectar() as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO clientes (nome, telefone, cpf, endereco, nascimento, ativo)
+            VALUES (?,?,?,?,?,1)
+            """,
+            (cliente.nome, cliente.telefone, cliente.cpf, cliente.endereco, cliente.nascimento),
+        )
+        novo_id = int(cur.lastrowid)
+        registrar_auditoria(conn, "cliente", novo_id, "criar", depois={"nome": cliente.nome})
+        conn.commit()
     return {"id": novo_id, "status": "criado"}
 
 

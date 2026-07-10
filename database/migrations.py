@@ -232,6 +232,33 @@ def init_db():
         commit=True,
     )
 
+    # Auditoria unificada de mutações (quem mudou o quê, quando), complementar
+    # aos históricos específicos já existentes (movimentacao_estoque,
+    # historico_precos, pedido_status_log).
+    query_db(
+        """
+        CREATE TABLE IF NOT EXISTS audit_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entidade TEXT NOT NULL,
+            entidade_id TEXT,
+            acao TEXT NOT NULL,
+            usuario TEXT DEFAULT 'Sistema',
+            dados_antes TEXT,
+            dados_depois TEXT,
+            data_hora TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+        """,
+        commit=True,
+    )
+    for sql_idx in [
+        "CREATE INDEX IF NOT EXISTS idx_audit_log_entidade ON audit_log(entidade, entidade_id)",
+        "CREATE INDEX IF NOT EXISTS idx_audit_log_data ON audit_log(data_hora)",
+    ]:
+        try:
+            query_db(sql_idx, commit=True)
+        except Exception:
+            pass
+
     # Idempotência: evita que o mesmo pedido/pagamento seja duplicado por
     # reenvio de requisição (dupla submissão de formulário, retry de rede etc).
     query_db(

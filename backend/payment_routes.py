@@ -8,6 +8,7 @@ from typing import Optional
 from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from backend.audit import registrar_auditoria
 from backend.database import conectar
 from backend.idempotency import resposta_idempotente_existente, salvar_resposta_idempotente
 from backend.order_status_routes import baixar_estoque_do_pedido
@@ -93,6 +94,7 @@ def registrar_pagamento(
             conn.execute("UPDATE pedidos SET status='Pagamento confirmado' WHERE id=?", (payload.venda_id,))
             registrar_log_status(conn, payload.venda_id, "Pagamento confirmado", payload.usuario, "Pagamento confirmado manualmente")
 
+        registrar_auditoria(conn, "pagamento", pagamento_id, "registrar", payload.usuario, depois={"venda_id": payload.venda_id, "forma": payload.forma, "valor": payload.valor, "status": status})
         resposta = {"ok": True, "id": pagamento_id, "venda_id": payload.venda_id, "status": status, "data_hora": agora}
         salvar_resposta_idempotente(conn, "registrar_pagamento", idempotency_key, resposta)
         conn.commit()
@@ -144,6 +146,7 @@ def atualizar_status_pagamento(pagamento_id: int, payload: PagamentoStatusIn, x_
             "UPDATE pagamentos SET status=?, observacao=? WHERE id=?",
             (status, payload.observacao or "", pagamento_id),
         )
+        registrar_auditoria(conn, "pagamento", pagamento_id, "atualizar_status", payload.usuario, depois={"status": status})
         if status == "Confirmado":
             agora = datetime.now().isoformat(timespec="seconds")
             baixar_estoque_do_pedido(conn, pagamento["venda_id"], payload.usuario or "Admin", agora, "Baixa automática ao confirmar pagamento")

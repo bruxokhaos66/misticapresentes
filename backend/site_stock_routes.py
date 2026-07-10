@@ -10,6 +10,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from backend.audit import registrar_auditoria
 from backend.database import conectar, listar
 from backend.idempotency import resposta_idempotente_existente, salvar_resposta_idempotente
 from backend.order_status_routes import MINUTOS_EXPIRACAO_PEDIDO_PENDENTE, STATUS_PEDIDO
@@ -332,6 +333,7 @@ def registrar_venda_site(
                 )
 
             resposta = {"ok": True, "id": venda_id, "status": "criado", "subtotal": subtotal, "total_final": total_final, "estoque_baixado": venda.baixa_estoque}
+            registrar_auditoria(conn, "pedido", venda_id, "criar", venda.vendedor, depois={"total_final": total_final, "itens": len(itens_calculados), "status": venda.status})
             salvar_resposta_idempotente(conn, "criar_pedido", idempotency_key, resposta)
             conn.commit()
         except Exception:

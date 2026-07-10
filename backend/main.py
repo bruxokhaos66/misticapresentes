@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from backend.audit import registrar_auditoria
 from backend.backup_routes import router as backup_router
 from backend.course_routes import router as course_router
 from backend.database import conectar, executar, listar, obter
@@ -394,6 +395,7 @@ def estornar_venda(venda_id: int, payload: EstornoVendaIn | None = None, x_misti
                     continue
                 conn.execute("UPDATE produtos SET quantidade = quantidade + ? WHERE codigo_p=?", (quantidade, codigo))
         conn.execute("UPDATE vendas SET status='Cancelado' WHERE id=?", (venda_id,))
+        registrar_auditoria(conn, "venda", venda_id, "estornar", payload.usuario, antes={"status": venda["status"]}, depois={"status": "Cancelado", "ja_cancelada": ja_cancelada})
         conn.commit()
     return {
         "ok": True,
