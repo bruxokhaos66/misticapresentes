@@ -9,6 +9,7 @@ from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from backend.database import conectar
+from backend.order_status_routes import baixar_estoque_do_pedido, garantir_tabela_status
 
 router = APIRouter(prefix="/api", tags=["pagamentos"])
 
@@ -110,6 +111,8 @@ def registrar_pagamento(payload: PagamentoIn, x_mistica_api_key: str | None = He
         )
         pagamento_id = int(cur.lastrowid)
         if status == "Confirmado":
+            garantir_tabela_status(conn)
+            baixar_estoque_do_pedido(conn, payload.venda_id, payload.usuario or "Admin", agora, "Baixa automática ao confirmar pagamento")
             conn.execute("UPDATE vendas SET status='Pagamento confirmado' WHERE id=?", (payload.venda_id,))
             registrar_log_status(conn, payload.venda_id, "Pagamento confirmado", payload.usuario, "Pagamento confirmado manualmente")
         conn.commit()
@@ -164,6 +167,9 @@ def atualizar_status_pagamento(pagamento_id: int, payload: PagamentoStatusIn, x_
             (status, payload.observacao or "", pagamento_id),
         )
         if status == "Confirmado":
+            garantir_tabela_status(conn)
+            agora = datetime.now().isoformat(timespec="seconds")
+            baixar_estoque_do_pedido(conn, pagamento["venda_id"], payload.usuario or "Admin", agora, "Baixa automática ao confirmar pagamento")
             conn.execute("UPDATE vendas SET status='Pagamento confirmado' WHERE id=?", (pagamento["venda_id"],))
             registrar_log_status(conn, pagamento["venda_id"], "Pagamento confirmado", payload.usuario, payload.observacao or "Pagamento confirmado")
         conn.commit()

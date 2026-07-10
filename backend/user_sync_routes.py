@@ -3,13 +3,17 @@ import secrets
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.database import conectar, listar
+from backend.rate_limit import limitar_requisicoes
 from config import hash_password_pbkdf2
 
 router = APIRouter()
+
+limitar_login = limitar_requisicoes("login_painel", limite=10, janela_segundos=60)
+limitar_sync_venda = limitar_requisicoes("sync_venda", limite=30, janela_segundos=60)
 
 
 class UsuarioSyncIn(BaseModel):
@@ -33,19 +37,19 @@ class LoginPainelIn(BaseModel):
 class VendaItemSyncIn(BaseModel):
     codigo_p: Optional[str] = None
     nome_p: Optional[str] = None
-    quantidade: int = 0
-    custo_unitario: float = 0.0
-    valor_unitario: float = 0.0
-    valor_total: float = 0.0
+    quantidade: int = Field(gt=0)
+    custo_unitario: float = Field(default=0.0, ge=0)
+    valor_unitario: float = Field(default=0.0, ge=0)
+    valor_total: float = Field(default=0.0, ge=0)
 
 
 class VendaSyncIn(BaseModel):
     local_id: Optional[int] = None
     cliente: Optional[str] = "Cliente não informado"
-    subtotal: float = 0.0
-    desconto: float = 0.0
-    taxa: float = 0.0
-    total_final: float = 0.0
+    subtotal: float = Field(default=0.0, ge=0)
+    desconto: float = Field(default=0.0, ge=0)
+    taxa: float = Field(default=0.0, ge=0)
+    total_final: float = Field(default=0.0, ge=0)
     forma_pagamento: Optional[str] = None
     vendedor: Optional[str] = None
     status: Optional[str] = "Concluído"
@@ -240,7 +244,7 @@ def _salvar_venda_conn(conn, venda: VendaSyncIn):
     return {"id": venda_id, "local_id": venda.local_id, "status": resultado}
 
 
-@router.post("/api/auth/login")
+@router.post("/api/auth/login", dependencies=[Depends(limitar_login)])
 def login_painel_mobile(entrada: LoginPainelIn):
     login = _normalizar_login(entrada.login)
     _log_auth("LOGIN_API", f"tentativa login={login}")
@@ -316,7 +320,7 @@ def sincronizar_usuarios(payload: UsuariosSyncPayload, x_mistica_sync_key: str |
     return {"status": "ok", "usuarios_sincronizados": total, "data_hora": datetime.now().isoformat(timespec="seconds")}
 
 
-@router.post("/api/sync/venda")
+@router.post("/api/sync/venda", dependencies=[Depends(limitar_sync_venda)])
 def sincronizar_venda(venda: VendaSyncIn, x_mistica_sync_key: str | None = Header(default=None)):
     _validar_chave_sync(x_mistica_sync_key)
     with conectar() as conn:

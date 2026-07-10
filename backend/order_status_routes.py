@@ -24,6 +24,8 @@ STATUS_PEDIDO = {
 
 STATUS_BAIXA_ESTOQUE = {"Pagamento confirmado", "Separando pedido"}
 
+MINUTOS_EXPIRACAO_PEDIDO_PENDENTE = int(os.environ.get("MISTICA_MINUTOS_EXPIRACAO_PEDIDO", "30") or "30")
+
 
 class PedidoStatusIn(BaseModel):
     status: str = Field(min_length=1)
@@ -61,12 +63,42 @@ def garantir_tabela_status(conn):
         "ALTER TABLE vendas ADD COLUMN observacao_pedido TEXT",
         "ALTER TABLE vendas ADD COLUMN estoque_baixado INTEGER DEFAULT 0",
         "ALTER TABLE vendas ADD COLUMN estoque_baixado_em TEXT",
+        "ALTER TABLE vendas ADD COLUMN expira_em TEXT",
     ]
     for sql in alteracoes:
         try:
             conn.execute(sql)
         except Exception:
             pass
+
+
+def expirar_pedidos_pendentes(conn, agora: str | None = None):
+    """Cancela automaticamente pedidos 'Aguardando pagamento' cujo prazo (expira_em)
+    já passou e cujo pagamento nunca foi confirmado. Como o estoque só é baixado na
+    confirmação do pagamento, não há nada a repor: só marcamos o pedido como
+    Cancelado para não acumular pedidos fantasmas indefinidamente."""
+    agora = agora or datetime.now().isoformat(timespec="seconds")
+    expirados = conn.execute(
+        """
+        SELECT id FROM vendas
+        WHERE COALESCE(status,'') = 'Aguardando pagamento'
+          AND expira_em IS NOT NULL
+          AND expira_em < ?
+        """,
+        (agora,),
+    ).fetchall()
+    for venda in expirados:
+        conn.execute("UPDATE vendas SET status='Cancelado' WHERE id=?", (venda["id"],))
+        conn.execute(
+            """
+            INSERT INTO pedido_status_log (venda_id, status, usuario, observacao, data_hora)
+            VALUES (?,?,?,?,?)
+            """,
+            (venda["id"], "Cancelado", "Sistema", "Expirado automaticamente: pagamento não confirmado a tempo", agora),
+        )
+    if expirados:
+        conn.commit()
+    return len(expirados)
 
 
 def venda_para_pedido(conn, venda):
@@ -177,6 +209,7 @@ def baixar_estoque_do_pedido(conn, venda_id: int, usuario: str, agora: str, moti
 def listar_pedidos(status: str = "", limite: int = Query(100, ge=1, le=500)):
     with conectar() as conn:
         garantir_tabela_status(conn)
+        expirar_pedidos_pendentes(conn)
         if status:
             rows = conn.execute(
                 """
@@ -209,6 +242,7 @@ def listar_pedidos(status: str = "", limite: int = Query(100, ge=1, le=500)):
 def obter_pedido(venda_id: int):
     with conectar() as conn:
         garantir_tabela_status(conn)
+        expirar_pedidos_pendentes(conn)
         venda = conn.execute(
             """
             SELECT id, cliente, data_venda, subtotal, desconto, taxa, total_final,

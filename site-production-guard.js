@@ -112,7 +112,11 @@
       data_venda: new Date(localSale.date).toLocaleString("pt-BR"),
       data_iso: localSale.date,
       dia_operacional: new Date(localSale.date).toISOString().slice(0, 10),
-      baixa_estoque: true,
+      // O Pix só gera um QR Code; o pagamento ainda não foi confirmado.
+      // O estoque só é baixado de fato quando o pedido avança para
+      // "Pagamento confirmado" (ver backend/order_status_routes.py e
+      // backend/payment_routes.py), nunca no momento da geração do QR Code.
+      baixa_estoque: false,
       itens: buildApiItems(items),
     };
     return api("/api/vendas", { method: "POST", body: JSON.stringify(payload) });
@@ -164,7 +168,7 @@
     };
 
     try {
-      status("Enviando pedido para o sistema antes de baixar estoque...");
+      status("Enviando pedido para o sistema. O estoque só será baixado após a confirmação do pagamento...");
       const saved = await sendSaleToApi(localSale, items);
       const savedId = saved?.id || saved?.venda_id || saleId;
       sales.unshift({ ...localSale, id: String(savedId), apiId: savedId });
@@ -172,7 +176,7 @@
       cart = [];
       saveState();
       if (typeof renderAll === "function") renderAll();
-      status("Pedido enviado para a API. Estoque será atualizado pela sincronização do sistema.", true);
+      status("Pedido criado como \"Aguardando pagamento\". O estoque só será baixado quando o pagamento for confirmado no painel.", true);
       if (window.misticaMobileSync?.syncNow) window.misticaMobileSync.syncNow();
     } catch (error) {
       storePendingOrder(localSale);
