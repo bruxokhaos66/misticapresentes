@@ -186,7 +186,7 @@
   overflow: hidden !important;
   display: block !important;
   padding: 0 !important;
-  background-image: url("isis-lower.webp.png.png") !important;
+  background-image: url("isis-lower.webp") !important;
   background-size: contain !important;
   background-position: center center !important;
   background-repeat: no-repeat !important;
@@ -274,7 +274,7 @@
 .isis-photo,
 .isis-photo.has-real-isis {
   min-height: clamp(430px, 42vw, 600px) !important;
-  background-image: url("isis-hero.webp.png") !important;
+  background-image: url("isis-hero.webp") !important;
   background-size: cover !important;
   background-position: center 33% !important;
   background-repeat: no-repeat !important;
