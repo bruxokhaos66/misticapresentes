@@ -1,0 +1,43 @@
+.escola-hero{position:relative;overflow:hidden;padding:64px 0 40px;background:radial-gradient(circle at 18% 12%,rgba(242,201,109,.14),transparent 45%),radial-gradient(circle at 84% 78%,rgba(189,209,122,.10),transparent 48%),var(--bg,#050509);border-bottom:1px solid rgba(242,201,109,.22)}
+.escola-hero-copy{max-width:720px}
+.escola-hero .eyebrow{color:#f2c96d}
+.escola-hero h1{margin:10px 0 16px;color:#fff2cb;font-family:Cinzel,serif;font-size:clamp(1.9rem,3.4vw,2.7rem);line-height:1.2}
+.escola-hero p.lead{color:var(--muted,#d7c8ad);font-size:1.05rem;line-height:1.6;margin:0 0 22px}
+.escola-back{display:inline-flex;align-items:center;gap:6px;color:#f7e7bd;text-decoration:none;font-weight:800;font-size:.9rem;opacity:.85}
+.escola-back:hover{opacity:1;text-decoration:underline}
+.escola-hero-badges{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}
+.escola-hero-badges span{border:1px solid rgba(242,201,109,.4);border-radius:999px;padding:7px 14px;font-size:.78rem;font-weight:800;color:#f7e7bd;background:rgba(8,8,12,.5)}
+
+.escola-catalog{padding:48px 0 64px}
+.escola-catalog-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:22px;margin-top:28px}
+
+.escola-card{position:relative;display:flex;flex-direction:column;gap:14px;padding:26px;border:1px solid rgba(242,201,109,.3);border-radius:26px;background:linear-gradient(180deg,rgba(255,248,230,.08),rgba(255,248,230,.03)),rgba(6,6,9,.7);box-shadow:0 20px 60px rgba(0,0,0,.32);backdrop-filter:blur(12px);transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}
+.escola-card:hover{transform:translateY(-4px);border-color:rgba(242,201,109,.62);box-shadow:0 26px 76px rgba(0,0,0,.42)}
+.escola-badge{position:absolute;top:18px;right:18px;font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;font-weight:950;padding:6px 12px;border-radius:999px;border:1px solid rgba(242,201,109,.4)}
+.escola-badge.gratuito{color:#0f1a05;background:linear-gradient(135deg,#e7f4b8,#bdd17a)}
+.escola-badge.pago{color:#1b1204;background:linear-gradient(135deg,#fff0b6,#e3b64f)}
+.escola-card-icon{width:56px;height:56px;display:grid;place-items:center;border-radius:16px;font-size:1.6rem;border:1px solid rgba(242,201,109,.4);background:radial-gradient(circle at 40% 30%,rgba(255,244,198,.5),rgba(242,201,109,.14) 60%,rgba(35,21,6,.7))}
+.escola-card h3{margin:0;color:#fff2cb;font-family:Cinzel,serif;font-size:1.24rem;line-height:1.25}
+.escola-card p{margin:0;color:#e7d7b7;font-size:.94rem;line-height:1.55}
+.escola-card-tags{display:flex;flex-wrap:wrap;gap:8px}
+.escola-card-tags span{border:1px solid rgba(189,209,122,.32);border-radius:999px;padding:4px 10px;color:#def19b;background:rgba(189,209,122,.08);font-size:.7rem;font-weight:900;letter-spacing:.06em;text-transform:uppercase}
+.escola-card-price{margin-top:auto;display:flex;align-items:baseline;gap:6px;color:#fff7df}
+.escola-card-price strong{font-size:1.3rem;font-family:Cinzel,serif}
+.escola-card-price small{color:rgba(255,246,225,.72)}
+.escola-card-actions{display:flex;flex-direction:column;gap:8px}
+.escola-card-toggle{margin-top:0}
+
+.escola-detail{margin-top:14px;padding-top:14px;border-top:1px dashed rgba(242,201,109,.3);display:grid;gap:12px}
+.escola-detail[hidden]{display:none}
+.escola-materials{display:grid;gap:10px}
+.escola-material-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid rgba(231,198,128,.2);border-radius:14px;background:rgba(8,8,12,.5);font-size:.85rem;color:#f7e7bd}
+.escola-materials-empty{padding:12px;border:1px dashed rgba(242,201,109,.3);border-radius:14px;color:#e7d7b7;font-size:.85rem}
+
+.escola-purchase{display:grid;gap:12px;padding:16px;border-radius:18px;border:1px solid rgba(242,201,109,.32);background:rgba(8,8,12,.55)}
+.escola-purchase .warning-box{margin:0}
+.escola-qr-wrap{display:flex;flex-wrap:wrap;gap:16px;align-items:center}
+.escola-qr-wrap canvas{border-radius:12px;background:#fff;padding:8px}
+.escola-purchase textarea{width:100%;min-height:64px;resize:vertical;border-radius:12px;border:1px solid rgba(242,201,109,.3);background:rgba(0,0,0,.35);color:#f7e7bd;padding:10px;font-size:.82rem}
+.escola-purchase-status{font-size:.85rem;color:#def19b;margin:0}
+
+@media(max-width:640px){.escola-hero{padding:48px 0 32px}.escola-catalog{padding:36px 0 48px}}

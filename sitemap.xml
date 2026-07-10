@@ -12,4 +12,10 @@
     <changefreq>weekly</changefreq>
     <priority>0.70</priority>
   </url>
+  <url>
+    <loc>https://www.misticaesotericos.com.br/escola.html</loc>
+    <lastmod>2026-07-10</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.80</priority>
+  </url>
 </urlset>
