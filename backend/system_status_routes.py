@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import secrets
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Header, HTTPException
@@ -50,7 +50,7 @@ def status_publico():
         "status": "online",
         "api": "mistica",
         "app": "Mística Presentes",
-        "timestamp": datetime.utcnow().isoformat(timespec="seconds"),
+        "timestamp": datetime.now(UTC).isoformat(timespec="seconds"),
         "data_hora": datetime.now().isoformat(timespec="seconds"),
     }
 
