@@ -1,7 +1,6 @@
 (() => {
   const config = window.misticaSiteConfig || {};
   const API_BASE = (config.apiBaseUrl || "https://api.misticaesotericos.com.br").replace(/\/$/, "");
-  const SITE_API_KEY = String(config.siteApiKey || "").trim();
   const SYNC_INTERVAL_MS = 5000;
   const STATUS_RAPIDOS = [
     "Aguardando pagamento",
@@ -53,15 +52,13 @@
   }
 
   function apiHeaders(extra = {}) {
-    return {
-      "Content-Type": "application/json",
-      ...(SITE_API_KEY ? { "X-Mistica-Api-Key": SITE_API_KEY } : {}),
-      ...extra,
-    };
+    return { "Content-Type": "application/json", ...extra };
   }
 
   async function api(path, options = {}) {
     const response = await fetch(`${API_BASE}${path}`, {
+      credentials: "include",
+      cache: "no-store",
       ...options,
       headers: apiHeaders(options.headers || {}),
     });
@@ -115,43 +112,16 @@
     }, {});
   }
 
-  function aplicarVendas(lista) {
-    if (!Array.isArray(lista) || typeof sales === "undefined") return;
-    sales = lista.map(v => {
-      const total = Number(v.total_final || v.subtotal || 0);
-      return {
-        id: String(v.id),
-        date: v.data_iso || v.data_venda || new Date().toISOString(),
-        total,
-        items: Array.isArray(v.itens) && v.itens.length
-          ? v.itens.map(item => ({
-              id: item.produto_id ? `api-${item.produto_id}` : (item.id || item.codigo_p || ""),
-              qty: Number(item.quantidade || 1),
-              name: item.nome_p || item.nome || "Item",
-              price: Number(item.valor_unitario || 0),
-            }))
-          : [{ qty: 1, name: v.cliente || "Venda sincronizada", price: total }],
-        status: v.status || "Concluído",
-        formaPagamento: v.forma_pagamento || "",
-        vendedor: v.vendedor || "",
-        estoqueReposto: Boolean(v.estoque_reposto || v.estoqueReposto),
-        cancelledAt: v.cancelado_em || v.cancelledAt || "",
-      };
-    }).slice(0, 50);
-  }
-
   async function sincronizarAgora() {
     if (syncRunning) return;
     syncRunning = true;
     try {
-      const [status, produtos, vendas] = await Promise.all([
+      const [status, produtos] = await Promise.all([
         api("/api/status"),
         api("/api/produtos?limite=500"),
-        api("/api/vendas?limite=50"),
       ]);
 
       aplicarProdutos(produtos);
-      aplicarVendas(vendas);
       lastSyncAt = new Date();
 
       try {
@@ -160,8 +130,8 @@
       } catch {}
 
       setSyncStatus(`Online • estoque sincronizado • ${status.produtos || 0} produtos • ${lastSyncAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`, true);
-    } catch (error) {
-      setSyncStatus("Offline • usando dados locais", false);
+    } catch {
+      setSyncStatus("Offline • catálogo temporariamente indisponível", false);
     } finally {
       syncRunning = false;
     }
@@ -171,9 +141,7 @@
     return itens.map(item => {
       const produto = products.find(p => p.id === item.id);
       const temCodigoReal = Boolean(produto?.apiId || produto?.codigo);
-      if (!temCodigoReal) {
-        console.warn("Produto sem código sincronizado; baixa automática ignorada.", item.name);
-      }
+      if (!temCodigoReal) console.warn("Produto sem código sincronizado; envio ignorado.", item.name);
       return {
         produto_id: produto?.apiId || null,
         codigo_p: produto?.codigo || item.id,
@@ -182,38 +150,30 @@
         custo_unitario: 0,
         valor_unitario: Number(item.price || 0),
         valor_total: Number(item.price || 0) * Number(item.qty || 0),
-        baixa_automatica: temCodigoReal,
+        valido: temCodigoReal,
       };
     });
   }
 
   async function enviarVendaApi(venda, itens) {
     const itensPayload = montarItensVenda(itens);
-    const podeBaixarEstoque = itensPayload.every(item => item.baixa_automatica);
-    if (!podeBaixarEstoque) {
-      setSyncStatus("Produto sem código sincronizado; baixa automática ignorada.", false);
+    if (!itensPayload.length || itensPayload.some(item => !item.valido)) {
+      throw new Error("Um ou mais produtos não estão sincronizados com o catálogo.");
     }
 
     const payload = {
       origem: "site",
       cliente: "Pedido site/celular",
-      subtotal: Number(venda.total || 0),
-      desconto: 0,
-      taxa: 0,
-      total_final: Number(venda.total || 0),
       forma_pagamento: "Pix site/celular",
       vendedor: "Site/Celular",
       status: "Aguardando pagamento",
       data_venda: new Date(venda.date).toLocaleString("pt-BR"),
       data_iso: venda.date,
       dia_operacional: new Date(venda.date).toISOString().slice(0, 10),
-      // O pagamento ainda não foi confirmado neste momento (só o Pix foi gerado).
-      // O estoque só é baixado de fato quando o pedido é confirmado no painel
-      // (ver backend/order_status_routes.py e backend/payment_routes.py).
       baixa_estoque: false,
-      itens: itensPayload.map(({ baixa_automatica, ...item }) => item),
+      itens: itensPayload.map(({ valido, ...item }) => item),
     };
-    return api("/api/vendas", { method: "POST", body: JSON.stringify(payload) });
+    return api("/api/checkout/pedidos", { method: "POST", body: JSON.stringify(payload) });
   }
 
   function instalarEnvioVendas() {
@@ -222,10 +182,6 @@
     saveSale = function(payload, saleId) {
       const saleItems = cart.map(item => ({ ...item }));
       const total = getTotal();
-      // Não reduzir o estoque local aqui: o Pix só foi gerado, o pagamento ainda não
-      // foi confirmado. A baixa real acontece no servidor somente na confirmação do
-      // pagamento; sincronizarAgora() (chamado após o envio) traz o estoque real do
-      // servidor de volta para o cache local.
       const venda = {
         date: new Date().toISOString(),
         id: saleId,
@@ -243,16 +199,11 @@
 
       enviarVendaApi(venda, saleItems)
         .then(() => {
-          setSyncStatus("Pedido enviado para o sistema da loja. Estoque será baixado ao confirmar o pagamento.", true);
+          setSyncStatus("Pedido enviado com segurança. O estoque será baixado após confirmar o pagamento.", true);
           return sincronizarAgora();
         })
         .catch(error => {
-          const msg = String(error.message || "");
-          if (msg.toLowerCase().includes("estoque insuficiente")) {
-            setSyncStatus(msg, false);
-          } else {
-            setSyncStatus("Venda salva localmente. API offline. Confira o estoque manualmente.", false);
-          }
+          setSyncStatus(String(error.message || "Não foi possível enviar o pedido."), false);
         });
     };
   }
