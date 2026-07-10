@@ -3,16 +3,15 @@
   const DB_VERSION = 1;
   const STORE_NAME = 'tracks';
   const UPLOADED_KEY = 'uploaded-main';
-  const PUBLIC_AUDIO_PATH = 'mistica-v2/assets/audio/xamanico-ambiente.mp3';
+  const AUDIO_VERSION = 'bd328f3-unificado-1';
+  const PUBLIC_AUDIO_DISPLAY_PATH = 'mistica-v2/assets/audio/xamanico-ambiente.mp3';
   const VOLUME_KEY = 'misticaShamanicPlayerVolume';
   const ACTIVE_TITLE = 'Ambiente Xamânico ativado';
-  const FALLBACK_TRACK = {
-    title: ACTIVE_TITLE,
-    src: 'assets/audio/xamanico-ambiente.mp3',
-    note: 'Arquivo de áudio não encontrado. Use upload no Admin ou coloque a faixa em mistica-v2/assets/audio.'
-  };
 
-  const ready = (fn) => document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', fn) : fn();
+  const ready = (fn) => document.readyState === 'loading'
+    ? document.addEventListener('DOMContentLoaded', fn, { once: true })
+    : fn();
+
   const formatBytes = (bytes) => {
     if (!Number.isFinite(bytes) || bytes <= 0) return '0 KB';
     const units = ['bytes', 'KB', 'MB', 'GB'];
@@ -24,6 +23,7 @@
     const stored = Number(localStorage.getItem(VOLUME_KEY));
     return Number.isFinite(stored) && stored >= 0 && stored <= 1 ? stored : 0.35;
   };
+  const publicSrc = () => new URL(`assets/audio/xamanico-ambiente.mp3?v=${AUDIO_VERSION}`, document.baseURI).href;
 
   function openDb() {
     return new Promise((resolve, reject) => {
@@ -99,17 +99,7 @@
     const root = document.querySelector('[data-shamanic-player]');
     if (!root) return;
 
-    const audio = new Audio();
-    audio.preload = 'metadata';
-    audio.loop = true;
-    audio.volume = savedVolume();
-    audio.playsInline = true;
-
-    let uploadedUrl = '';
-    let activeTrack = { ...FALLBACK_TRACK };
-    let audioUnlocked = false;
-    let userRequestedPlay = false;
-
+    const panel = root.querySelector('.player-panel');
     const title = root.querySelector('[data-player-title]');
     const status = root.querySelector('[data-player-status]');
     const playButton = root.querySelector('[data-player-play]');
@@ -117,6 +107,8 @@
     const volume = root.querySelector('[data-player-volume]');
     const orb = root.querySelector('[data-player-orb]');
     const list = root.querySelector('[data-player-list]');
+    if (!panel || !playButton || !stopButton) return;
+
     const adminFile = document.querySelector('[data-admin-audio-file]');
     const adminSave = document.querySelector('[data-admin-audio-save]');
     const adminRemove = document.querySelector('[data-admin-audio-remove]');
@@ -124,16 +116,41 @@
     const adminProgress = document.querySelector('[data-admin-audio-progress]');
     const adminPercent = document.querySelector('[data-admin-audio-percent]');
     const adminPath = document.querySelector('[data-admin-audio-path]');
+    if (adminPath) adminPath.textContent = PUBLIC_AUDIO_DISPLAY_PATH;
+    if (list) list.replaceChildren();
+
+    // Único elemento <audio> real no DOM: evita duas cargas simultâneas do
+    // arquivo e serve como fallback nativo (controls) quando o play
+    // programático é bloqueado ou falha.
+    const audio = document.createElement('audio');
+    audio.preload = 'metadata';
+    audio.loop = true;
+    audio.controls = true;
+    audio.playsInline = true;
+    audio.setAttribute('playsinline', '');
+    audio.setAttribute('webkit-playsinline', '');
+    audio.volume = savedVolume();
+    audio.className = 'mobile-native-audio-fallback';
+    audio.hidden = true;
+
+    const diagnostics = document.createElement('div');
+    diagnostics.className = 'player-mobile-diagnostics';
+    diagnostics.hidden = true;
+    diagnostics.textContent = 'Use o controle de áudio abaixo para iniciar manualmente.';
 
     const loadingBox = document.createElement('div');
     loadingBox.className = 'player-loading';
     loadingBox.hidden = true;
     loadingBox.innerHTML = '<div class="player-loading-row"><span data-player-loading-label>Preparando áudio...</span><strong data-player-loading-percent>0%</strong></div><progress max="100" value="0" data-player-loading-progress>0%</progress>';
-    root.querySelector('.player-panel')?.insertBefore(loadingBox, volume?.closest('.volume-row') || null);
+    panel.insertBefore(loadingBox, volume?.closest('.volume-row') || null);
+    panel.append(diagnostics, audio);
 
     const loadingLabel = loadingBox.querySelector('[data-player-loading-label]');
     const loadingPercent = loadingBox.querySelector('[data-player-loading-percent]');
     const loadingProgress = loadingBox.querySelector('[data-player-loading-progress]');
+
+    let uploadedUrl = '';
+    let userRequestedPlay = false;
 
     const setStatus = (message) => { if (status) status.textContent = message; };
     const setAdminStatus = (message) => { if (adminStatus) adminStatus.textContent = message; };
@@ -150,18 +167,32 @@
       if (loadingPercent) loadingPercent.textContent = `${Math.round(value)}%`;
       if (loadingLabel && message) loadingLabel.textContent = message;
     };
-
-    if (adminPath) adminPath.textContent = PUBLIC_AUDIO_PATH;
-    if (list) list.replaceChildren();
+    const setPlayingUi = (isPlaying) => {
+      if (playButton) playButton.textContent = isPlaying ? 'Pausar ambiente' : 'Tocar ambiente';
+      if (orb) orb.classList.toggle('is-playing', isPlaying);
+    };
+    const showNativeFallback = (message) => {
+      diagnostics.hidden = false;
+      diagnostics.textContent = message;
+      audio.hidden = false;
+      setStatus(message);
+    };
+    const errorMessage = () => {
+      const code = audio.error?.code;
+      if (code === 1) return 'A reprodução foi interrompida.';
+      if (code === 2) return 'Falha de rede ao carregar a música.';
+      if (code === 3) return 'Não foi possível decodificar este arquivo de áudio.';
+      if (code === 4) return 'Formato de áudio não suportado neste navegador/celular.';
+      return 'Não foi possível iniciar a música automaticamente.';
+    };
 
     const revokeUploadedUrl = () => {
       if (uploadedUrl) URL.revokeObjectURL(uploadedUrl);
       uploadedUrl = '';
     };
 
-    const applyTrack = (track) => {
-      activeTrack = track;
-      audio.src = activeTrack.src;
+    const applyTrack = (src) => {
+      audio.src = src;
       audio.load();
       if (title) title.textContent = ACTIVE_TITLE;
       setStatus('Ambiente pronto. Toque em tocar para iniciar.');
@@ -175,22 +206,17 @@
         const uploaded = await readUploadedTrack();
         if (uploaded?.blob) {
           uploadedUrl = URL.createObjectURL(uploaded.blob);
-          applyTrack({ title: ACTIVE_TITLE, src: uploadedUrl });
-          setAdminStatus(`Música local ativa: ${uploaded.name} (${formatBytes(uploaded.size)}).`);
+          applyTrack(uploadedUrl);
+          setAdminStatus(`Prévia local ativa neste navegador: ${uploaded.name} (${formatBytes(uploaded.size)}). Isso não muda a música para os demais visitantes — para isso, envie o MP3 no GitHub como ${PUBLIC_AUDIO_DISPLAY_PATH}.`);
           setUploadProgress(100);
           return;
         }
-        setAdminStatus(`Nenhuma música local enviada. Para todos os visitantes, envie o MP3 como ${PUBLIC_AUDIO_PATH}.`);
+        setAdminStatus(`Nenhuma prévia local enviada. Tocando o arquivo público: ${PUBLIC_AUDIO_DISPLAY_PATH}.`);
         setUploadProgress(0);
       } catch {
         setAdminStatus('Não foi possível acessar o armazenamento local de música neste navegador.');
       }
-      applyTrack({ ...FALLBACK_TRACK });
-    };
-
-    const setPlayingUi = (isPlaying) => {
-      if (playButton) playButton.textContent = isPlaying ? 'Pausar ambiente' : 'Tocar ambiente';
-      if (orb) orb.classList.toggle('is-playing', isPlaying);
+      applyTrack(publicSrc());
     };
 
     if (volume) {
@@ -209,55 +235,52 @@
       });
     }
 
-    if (playButton) {
-      playButton.addEventListener('click', async () => {
-        audioUnlocked = true;
-        userRequestedPlay = true;
-        if (!audio.src) applyTrack(activeTrack);
-        if (!audio.paused) {
-          audio.pause();
-          userRequestedPlay = false;
-          setPlayingUi(false);
-          setLoading(0, 'Áudio pausado.', false);
-          setStatus('Ambiente pausado.');
-          return;
-        }
-        playButton.disabled = true;
-        audio.preload = 'auto';
-        setLoading(4, 'Carregando ambiente...', true);
-        setStatus('Carregando ambiente xamânico...');
-        try {
-          await audio.play();
-          setPlayingUi(true);
-          setLoading(100, 'Áudio pronto.', false);
-          setStatus('Ambiente Xamânico ativado.');
-        } catch (error) {
-          userRequestedPlay = false;
-          setPlayingUi(false);
-          setLoading(0, 'Não foi possível iniciar.', false);
-          if (error?.name === 'NotAllowedError') {
-            setStatus('O navegador bloqueou o áudio. Toque novamente em “Tocar ambiente”.');
-          } else if (!navigator.onLine) {
-            setStatus('Sem conexão para carregar a música. Verifique a internet e tente novamente.');
-          } else {
-            setStatus('Não foi possível carregar a música. Atualize a página e tente novamente.');
-          }
-        } finally {
-          playButton.disabled = false;
-        }
-      });
-    }
-
-    if (stopButton) {
-      stopButton.addEventListener('click', () => {
-        userRequestedPlay = false;
+    playButton.addEventListener('click', async () => {
+      if (!audio.paused) {
         audio.pause();
-        audio.currentTime = 0;
+        userRequestedPlay = false;
         setPlayingUi(false);
-        setLoading(0, 'Ambiente parado.', false);
-        setStatus(audioUnlocked ? 'Ambiente parado.' : 'Ambiente pronto. Toque em tocar para iniciar.');
-      });
-    }
+        setLoading(0, 'Áudio pausado.', false);
+        setStatus('Ambiente pausado.');
+        return;
+      }
+
+      userRequestedPlay = true;
+      playButton.disabled = true;
+      audio.preload = 'auto';
+      setLoading(4, 'Carregando ambiente...', true);
+      setStatus('Carregando ambiente xamânico...');
+      try {
+        await audio.play();
+        diagnostics.hidden = true;
+        audio.hidden = true;
+        setPlayingUi(true);
+        setLoading(100, 'Áudio pronto.', false);
+        setStatus('Ambiente Xamânico ativado.');
+      } catch (error) {
+        userRequestedPlay = false;
+        setPlayingUi(false);
+        setLoading(0, 'Não foi possível iniciar.', false);
+        if (error?.name === 'NotAllowedError') {
+          showNativeFallback('O navegador bloqueou o início pelo botão. Toque no controle de áudio abaixo.');
+        } else if (!navigator.onLine) {
+          showNativeFallback('Sem conexão para carregar a música. Verifique a internet e tente novamente.');
+        } else {
+          showNativeFallback(`${errorMessage()} Toque no controle de áudio abaixo.`);
+        }
+      } finally {
+        playButton.disabled = false;
+      }
+    });
+
+    stopButton.addEventListener('click', () => {
+      userRequestedPlay = false;
+      audio.pause();
+      try { audio.currentTime = 0; } catch {}
+      setPlayingUi(false);
+      setLoading(0, 'Ambiente parado.', false);
+      setStatus('Ambiente parado.');
+    });
 
     if (adminSave) {
       adminSave.addEventListener('click', async () => {
@@ -268,7 +291,7 @@
         try {
           await saveUploadedTrack(file, setUploadProgress);
           await loadTrack();
-          setUploadProgress(100, `Música enviada e salva localmente: ${file.name}.`);
+          setUploadProgress(100, `Prévia local salva: ${file.name}.`);
         } catch (error) {
           setUploadProgress(0, `Erro ao salvar música: ${error.message || 'verifique o arquivo.'}`);
         } finally {
@@ -282,7 +305,7 @@
         try {
           await deleteUploadedTrack();
           await loadTrack();
-          setUploadProgress(0, 'Música local removida. O player voltou para a pasta assets/audio.');
+          setUploadProgress(0, 'Prévia local removida. O player voltou para o arquivo público.');
         } catch {
           setAdminStatus('Não foi possível remover a música local.');
         }
@@ -299,15 +322,15 @@
       setLoading(percent, `Carregando ambiente... ${percent}%`, true);
     });
     audio.addEventListener('waiting', () => {
-      if (userRequestedPlay) {
-        setLoading(Number(loadingProgress?.value || 12), 'Conexão lenta. Carregando mais áudio...', true);
-        setStatus('Aguarde um instante: carregando a trilha.');
-      }
+      setStatus('Carregando a trilha. Em conexão móvel pode levar alguns segundos.');
+      if (userRequestedPlay) setLoading(Number(loadingProgress?.value || 12), 'Conexão lenta. Carregando mais áudio...', true);
     });
     audio.addEventListener('canplay', () => {
       if (userRequestedPlay) setLoading(100, 'Áudio pronto.', false);
+      else if (audio.paused) setStatus('Ambiente pronto. Toque em tocar para iniciar.');
     });
     audio.addEventListener('playing', () => {
+      diagnostics.hidden = true;
       setPlayingUi(true);
       setLoading(100, 'Áudio pronto.', false);
       setStatus('Ambiente Xamânico ativado.');
@@ -319,7 +342,7 @@
       userRequestedPlay = false;
       setPlayingUi(false);
       setLoading(0, 'Falha no carregamento.', false);
-      setStatus('Áudio indisponível no momento. Atualize a página e tente novamente.');
+      showNativeFallback(`${errorMessage()} Verifique também se o arquivo abre diretamente no celular.`);
     });
     audio.addEventListener('ended', () => setPlayingUi(false));
 
