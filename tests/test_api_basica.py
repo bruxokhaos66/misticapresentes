@@ -10,6 +10,7 @@ os.environ.setdefault("MISTICA_SYNC_KEY", TEST_API_KEY)
 
 main = importlib.import_module("backend.main")
 client = TestClient(main.app)
+client.__enter__()  # garante que o evento de startup (migrações) rode antes dos testes
 PROTECTED_HEADERS = {"X-Mistica-Api-Key": TEST_API_KEY}
 
 
@@ -99,6 +100,30 @@ def test_upload_musica_ambiente_responde_rapido_e_salva_arquivo():
     arquivo = client.get(data["url"])
     assert arquivo.status_code == 200
     assert arquivo.content == b"ID3teste"
+
+
+def test_listar_clientes_exige_chave_api():
+    response = client.get("/api/clientes")
+    assert response.status_code == 403
+
+    response = client.get("/api/clientes", headers={"X-Mistica-Api-Key": "chave-errada"})
+    assert response.status_code == 403
+
+    response = client.get("/api/clientes", headers=PROTECTED_HEADERS)
+    assert response.status_code == 200
+    assert isinstance(response.json(), list)
+
+
+def test_listar_vendas_exige_chave_api():
+    response = client.get("/api/vendas")
+    assert response.status_code == 403
+
+    response = client.get("/api/vendas", headers={"X-Mistica-Api-Key": "chave-errada"})
+    assert response.status_code == 403
+
+    response = client.get("/api/vendas", headers=PROTECTED_HEADERS)
+    assert response.status_code == 200
+    assert isinstance(response.json(), list)
 
 
 def test_links_audio_ambiente_salva_apenas_audio_direto():

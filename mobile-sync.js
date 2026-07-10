@@ -360,6 +360,7 @@
     window.updateSaleStatus = atualizarStatusVendaLocal;
     window.openSaleStatusWhatsapp = abrirWhatsappStatus;
     renderHistory = function renderHistoryWithCancelActions() {
+      if (!salesHistory) return;
       if (!sales.length) {
         salesHistory.innerHTML = `<div class="history-item"><span>Nenhuma venda registrada ainda.</span></div>`;
         return;

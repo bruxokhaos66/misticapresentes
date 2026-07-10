@@ -161,6 +161,7 @@ function renderProductGallery(card, product) {
 }
 
 renderProducts = function renderProductsWithAdminItems() {
+  if (!productGrid) return;
   mountCatalogTools();
   updateCategoryOptions();
   clearNode(productGrid);

@@ -1,0 +1,60 @@
+name: Migrar Mística V2 para raiz
+
+on:
+  push:
+    branches:
+      - codex/move-mistica-v2-to-root
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  migrate-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout completo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: codex/move-mistica-v2-to-root
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependências de teste
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Verificar riscos antes da migração
+        run: python scripts/migrate_mistica_v2_to_root.py --check
+
+      - name: Aplicar migração
+        run: python scripts/migrate_mistica_v2_to_root.py --apply
+
+      - name: Validar sintaxe Python
+        run: python -m compileall -q .
+
+      - name: Executar testes Python
+        run: pytest -q
+
+      - name: Validar referências e arquivos públicos
+        run: |
+          python scripts/migrate_mistica_v2_to_root.py --validate-root
+          git diff --check
+
+      - name: Commitar resultado da migração
+        run: |
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "Nenhuma mudança para commitar."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Migrar site Mística V2 para a raiz"
+          git push origin HEAD:codex/move-mistica-v2-to-root

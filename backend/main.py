@@ -1,4 +1,5 @@
 import os
+import secrets
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -12,7 +13,7 @@ from backend.backup_routes import router as backup_router
 from backend.database import conectar, executar, listar, obter
 from backend.order_status_routes import router as order_status_router
 from backend.payment_routes import router as payment_router
-from backend.product_routes import router as product_router
+from backend.product_routes import router as product_router, validar_site_api_key
 from backend.upload_routes import router as upload_router
 from backend.user_sync_routes import router as user_sync_router
 from backend.site_stock_routes import router as site_stock_router
@@ -248,7 +249,7 @@ def login_painel(entrada: LoginIn):
 
     salt = str(usuario.get("senha_salt") or "").encode("utf-8") if usuario.get("senha_salt") else b"mistica_presentes"
     senha_hash = hash_password_pbkdf2(entrada.senha, salt)
-    if senha_hash != usuario.get("senha_hash"):
+    if not secrets.compare_digest(str(senha_hash), str(usuario.get("senha_hash") or "")):
         raise HTTPException(status_code=401, detail="Login ou senha inválidos")
 
     perfil = _normalizar_perfil(usuario.get("perfil"))
@@ -418,7 +419,12 @@ def obter_produto(produto_id: int):
 
 
 @app.get("/api/clientes")
-def listar_clientes(busca: str = "", limite: int = Query(100, ge=1, le=500)):
+def listar_clientes(
+    busca: str = "",
+    limite: int = Query(100, ge=1, le=500),
+    x_mistica_api_key: str | None = Header(default=None),
+):
+    validar_site_api_key(x_mistica_api_key)
     termo = f"%{busca.strip()}%"
     if busca.strip():
         return listar(
@@ -456,7 +462,11 @@ def criar_cliente(cliente: ClienteIn):
 
 
 @app.get("/api/vendas")
-def listar_vendas(limite: int = Query(100, ge=1, le=500)):
+def listar_vendas(
+    limite: int = Query(100, ge=1, le=500),
+    x_mistica_api_key: str | None = Header(default=None),
+):
+    validar_site_api_key(x_mistica_api_key)
     vendas = listar(
         """
         SELECT id, cliente, data_venda, subtotal, desconto, taxa, total_final,

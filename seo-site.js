@@ -1,11 +1,11 @@
 (() => {
   const cfg = window.misticaSiteConfig || {};
-  const baseUrl = (cfg.publicBaseUrl || "https://misticaesotericos.com.br").replace(/\/$/, "");
+  const baseUrl = (cfg.publicBaseUrl || "https://www.misticaesotericos.com.br").replace(/\/$/, "");
   const defaultTitle = "Mística Presentes | Incensos, Cristais, Velas e Artigos Espiritualistas";
   const defaultDescription = "Loja física e virtual de artigos místicos, incensos, cristais, velas ritualísticas, aromaterapia, banhos de ervas e presentes com significado em Pinhalzinho-SC.";
-  const defaultImage = `${baseUrl}/assets/logo-mistica-final.webp`;
+  const defaultImage = `${baseUrl}/assets/mistica-logo-novo.webp`;
   const storeAddress = {
-    streetAddress: "Av. Brasília, 2400 - Sala 07 - Galeria Ody",
+    streetAddress: "Galeria Ody - Av. Brasília, 2400 - Sala 07 - Centro",
     addressLocality: "Pinhalzinho",
     addressRegion: "SC",
     postalCode: "89870-000",

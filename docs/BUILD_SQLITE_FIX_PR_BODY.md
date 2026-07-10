@@ -1,1 +1,0 @@
-Bundle sqlite3 and _sqlite3 explicitly in the Windows 7 32-bit PyInstaller build, including _sqlite3.pyd and sqlite3.dll from the Python x86 DLLs directory. Adds a build-time SQLite import check and final validation that both SQLite files are present in dist/MisticaPresentes.

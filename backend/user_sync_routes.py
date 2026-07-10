@@ -261,7 +261,7 @@ def login_painel_mobile(entrada: LoginPainelIn):
 
     salt_txt = str(usuario["senha_salt"] or "mistica_presentes")
     senha_hash = hash_password_pbkdf2(entrada.senha, salt_txt.encode("utf-8"))
-    if senha_hash != usuario["senha_hash"]:
+    if not secrets.compare_digest(str(senha_hash), str(usuario["senha_hash"] or "")):
         _log_auth("LOGIN_FALHA", f"senha nao confere login={login}")
         raise HTTPException(status_code=401, detail="Login ou senha inválidos")
 

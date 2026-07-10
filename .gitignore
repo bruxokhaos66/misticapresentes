@@ -20,6 +20,9 @@ ENV/
 *.sqlite
 *.sqlite3
 
+# Uploads locais gerados em runtime/testes
+backend/uploads/
+
 # Backups e logs locais
 backups/
 Mistica_Backups/

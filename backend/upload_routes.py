@@ -22,7 +22,6 @@ BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "uploads" / "produtos"
 AUDIO_DIR = BASE_DIR / "uploads" / "musicas"
 AUDIO_LINKS_FILE = AUDIO_DIR / "links-diretos.txt"
-PUBLIC_SITE_KEY = "c4e9012d72c6bb42f52457c6d6ba916a"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -61,8 +60,10 @@ def conectar_rapido(timeout: float = 0.08):
 
 
 def validar_site_api_key(chave_recebida: str | None):
-    chaves_validas = [os.environ.get("MISTICA_SITE_API_KEY", "").strip(), os.environ.get("MISTICA_SYNC_KEY", "").strip(), PUBLIC_SITE_KEY]
+    chaves_validas = [os.environ.get("MISTICA_SITE_API_KEY", "").strip(), os.environ.get("MISTICA_SYNC_KEY", "").strip()]
     chaves_validas = [chave for chave in chaves_validas if chave]
+    if not chaves_validas:
+        raise HTTPException(status_code=503, detail="Configure MISTICA_SITE_API_KEY ou MISTICA_SYNC_KEY para permitir upload pela API.")
     if not chave_recebida:
         raise HTTPException(status_code=403, detail="Chave da API não enviada pelo site.")
     if not any(secrets.compare_digest(str(chave_recebida), chave) for chave in chaves_validas):
