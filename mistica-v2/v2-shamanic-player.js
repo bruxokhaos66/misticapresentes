@@ -4,6 +4,7 @@
   const STORE_NAME = 'tracks';
   const UPLOADED_KEY = 'uploaded-main';
   const PUBLIC_AUDIO_PATH = 'mistica-v2/assets/audio/xamanico-ambiente.mp3';
+  const VOLUME_KEY = 'misticaShamanicPlayerVolume';
   const ACTIVE_TITLE = 'Ambiente Xamânico ativado';
   const FALLBACK_TRACK = {
     title: ACTIVE_TITLE,
@@ -17,6 +18,11 @@
     const units = ['bytes', 'KB', 'MB', 'GB'];
     const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
     return `${(bytes / Math.pow(1024, index)).toFixed(index ? 1 : 0)} ${units[index]}`;
+  };
+  const clampVolume = (value) => Math.max(0, Math.min(1, Number(value) || 0));
+  const savedVolume = () => {
+    const stored = Number(localStorage.getItem(VOLUME_KEY));
+    return Number.isFinite(stored) && stored >= 0 && stored <= 1 ? stored : 0.35;
   };
 
   function openDb() {
@@ -94,13 +100,15 @@
     if (!root) return;
 
     const audio = new Audio();
-    audio.preload = 'none';
+    audio.preload = 'metadata';
     audio.loop = true;
-    audio.volume = 0.35;
+    audio.volume = savedVolume();
+    audio.playsInline = true;
 
     let uploadedUrl = '';
     let activeTrack = { ...FALLBACK_TRACK };
     let audioUnlocked = false;
+    let userRequestedPlay = false;
 
     const title = root.querySelector('[data-player-title]');
     const status = root.querySelector('[data-player-status]');
@@ -117,6 +125,16 @@
     const adminPercent = document.querySelector('[data-admin-audio-percent]');
     const adminPath = document.querySelector('[data-admin-audio-path]');
 
+    const loadingBox = document.createElement('div');
+    loadingBox.className = 'player-loading';
+    loadingBox.hidden = true;
+    loadingBox.innerHTML = '<div class="player-loading-row"><span data-player-loading-label>Preparando áudio...</span><strong data-player-loading-percent>0%</strong></div><progress max="100" value="0" data-player-loading-progress>0%</progress>';
+    root.querySelector('.player-panel')?.insertBefore(loadingBox, volume?.closest('.volume-row') || null);
+
+    const loadingLabel = loadingBox.querySelector('[data-player-loading-label]');
+    const loadingPercent = loadingBox.querySelector('[data-player-loading-percent]');
+    const loadingProgress = loadingBox.querySelector('[data-player-loading-progress]');
+
     const setStatus = (message) => { if (status) status.textContent = message; };
     const setAdminStatus = (message) => { if (adminStatus) adminStatus.textContent = message; };
     const setUploadProgress = (percent, message) => {
@@ -124,6 +142,13 @@
       if (adminProgress) adminProgress.value = value;
       if (adminPercent) adminPercent.textContent = `${Math.round(value)}%`;
       if (message) setAdminStatus(message);
+    };
+    const setLoading = (percent, message, visible = true) => {
+      const value = Math.max(0, Math.min(100, Number(percent) || 0));
+      loadingBox.hidden = !visible;
+      if (loadingProgress) loadingProgress.value = value;
+      if (loadingPercent) loadingPercent.textContent = `${Math.round(value)}%`;
+      if (loadingLabel && message) loadingLabel.textContent = message;
     };
 
     if (adminPath) adminPath.textContent = PUBLIC_AUDIO_PATH;
@@ -139,7 +164,8 @@
       audio.src = activeTrack.src;
       audio.load();
       if (title) title.textContent = ACTIVE_TITLE;
-      setStatus('Ambiente pronto. Clique em tocar para iniciar.');
+      setStatus('Ambiente pronto. Toque em tocar para iniciar.');
+      setLoading(0, 'Preparando áudio...', false);
       if (list) list.replaceChildren();
     };
 
@@ -169,7 +195,10 @@
 
     if (volume) {
       volume.value = String(Math.round(audio.volume * 100));
-      volume.addEventListener('input', () => { audio.volume = Math.max(0, Math.min(1, Number(volume.value) / 100)); });
+      volume.addEventListener('input', () => {
+        audio.volume = clampVolume(Number(volume.value) / 100);
+        localStorage.setItem(VOLUME_KEY, String(audio.volume));
+      });
     }
 
     if (adminFile) {
@@ -183,30 +212,50 @@
     if (playButton) {
       playButton.addEventListener('click', async () => {
         audioUnlocked = true;
+        userRequestedPlay = true;
         if (!audio.src) applyTrack(activeTrack);
         if (!audio.paused) {
           audio.pause();
+          userRequestedPlay = false;
           setPlayingUi(false);
+          setLoading(0, 'Áudio pausado.', false);
           setStatus('Ambiente pausado.');
           return;
         }
+        playButton.disabled = true;
+        audio.preload = 'auto';
+        setLoading(4, 'Carregando ambiente...', true);
+        setStatus('Carregando ambiente xamânico...');
         try {
           await audio.play();
           setPlayingUi(true);
+          setLoading(100, 'Áudio pronto.', false);
           setStatus('Ambiente Xamânico ativado.');
-        } catch {
+        } catch (error) {
+          userRequestedPlay = false;
           setPlayingUi(false);
-          setStatus('Arquivo de áudio não encontrado. Use upload no Admin ou coloque a faixa em mistica-v2/assets/audio.');
+          setLoading(0, 'Não foi possível iniciar.', false);
+          if (error?.name === 'NotAllowedError') {
+            setStatus('O navegador bloqueou o áudio. Toque novamente em “Tocar ambiente”.');
+          } else if (!navigator.onLine) {
+            setStatus('Sem conexão para carregar a música. Verifique a internet e tente novamente.');
+          } else {
+            setStatus('Não foi possível carregar a música. Atualize a página e tente novamente.');
+          }
+        } finally {
+          playButton.disabled = false;
         }
       });
     }
 
     if (stopButton) {
       stopButton.addEventListener('click', () => {
+        userRequestedPlay = false;
         audio.pause();
         audio.currentTime = 0;
         setPlayingUi(false);
-        setStatus(audioUnlocked ? 'Ambiente parado.' : 'Ambiente pronto. Clique em tocar para iniciar.');
+        setLoading(0, 'Ambiente parado.', false);
+        setStatus(audioUnlocked ? 'Ambiente parado.' : 'Ambiente pronto. Toque em tocar para iniciar.');
       });
     }
 
@@ -240,7 +289,38 @@
       });
     }
 
-    audio.addEventListener('error', () => { setPlayingUi(false); setStatus('Arquivo de áudio não encontrado. Use upload no Admin ou coloque a faixa em mistica-v2/assets/audio.'); });
+    audio.addEventListener('loadstart', () => {
+      if (userRequestedPlay) setLoading(5, 'Iniciando carregamento...', true);
+    });
+    audio.addEventListener('progress', () => {
+      if (!userRequestedPlay || !audio.duration || !audio.buffered.length) return;
+      const end = audio.buffered.end(audio.buffered.length - 1);
+      const percent = Math.min(99, Math.round((end / audio.duration) * 100));
+      setLoading(percent, `Carregando ambiente... ${percent}%`, true);
+    });
+    audio.addEventListener('waiting', () => {
+      if (userRequestedPlay) {
+        setLoading(Number(loadingProgress?.value || 12), 'Conexão lenta. Carregando mais áudio...', true);
+        setStatus('Aguarde um instante: carregando a trilha.');
+      }
+    });
+    audio.addEventListener('canplay', () => {
+      if (userRequestedPlay) setLoading(100, 'Áudio pronto.', false);
+    });
+    audio.addEventListener('playing', () => {
+      setPlayingUi(true);
+      setLoading(100, 'Áudio pronto.', false);
+      setStatus('Ambiente Xamânico ativado.');
+    });
+    audio.addEventListener('pause', () => {
+      if (!audio.ended) setPlayingUi(false);
+    });
+    audio.addEventListener('error', () => {
+      userRequestedPlay = false;
+      setPlayingUi(false);
+      setLoading(0, 'Falha no carregamento.', false);
+      setStatus('Áudio indisponível no momento. Atualize a página e tente novamente.');
+    });
     audio.addEventListener('ended', () => setPlayingUi(false));
 
     await loadTrack();
