@@ -12,26 +12,26 @@ def test_admin_tem_entrada_direta():
     assert "admin-separated-final" in admin
 
 
-def test_painel_auth_inicializa_mesmo_apos_load():
-    script = (ROOT / "painel-auth.js").read_text(encoding="utf-8")
-    assert 'document.readyState === "loading"' in script
-    assert "inicializarAdmin();" in script
-    assert 'params.get("admin") === "mistica"' in script
-
-
-def test_site_config_bloqueia_listener_local_antes_do_app():
+def test_site_config_captura_login_admin_antes_do_listener_local():
     config = (ROOT / "site-config.js").read_text(encoding="utf-8")
-    assert "HTMLFormElement.prototype.addEventListener" in config
-    assert 'type === "submit"' in config
-    assert 'this.id === "adminLoginForm"' in config
-    assert "legacySubmitBlocked" in config
-    assert "admin-api-login-bootstrap.js" in config
-    assert "admin-separated-final" in config
+    assert 'document.addEventListener("submit"' in config
+    assert "event.stopImmediatePropagation()" in config
+    assert 'form.id !== "adminLoginForm"' in config
+    assert "/api/auth/login" in config
+    assert 'credentials: "include"' in config
+    assert "X-Mistica-Api-Key" not in config
+    assert "localStorage" not in config
 
 
-def test_bootstrap_carrega_painel_auth_sem_login_local():
-    bootstrap = (ROOT / "admin-api-login-bootstrap.js").read_text(encoding="utf-8")
-    assert "cloneNode(true)" in bootstrap
-    assert "form.replaceWith(clone)" in bootstrap
-    assert "painel-auth.js" in bootstrap
-    assert "localStorage" not in bootstrap
+def test_site_config_restaura_sessao_no_servidor():
+    config = (ROOT / "site-config.js").read_text(encoding="utf-8")
+    assert "/api/auth/me" in config
+    assert "liberarPainel" in config
+    assert "misticaAdminUnlocked" in config
+
+
+def test_painel_auth_continua_sem_segredo_no_navegador():
+    script = (ROOT / "painel-auth.js").read_text(encoding="utf-8")
+    assert "/api/auth/login" in script
+    assert 'credentials: "include"' in script
+    assert "X-Mistica-Api-Key" not in script
