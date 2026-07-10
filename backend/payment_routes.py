@@ -9,6 +9,7 @@ from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from backend.database import conectar
+from backend.idempotency import resposta_idempotente_existente, salvar_resposta_idempotente
 from backend.order_status_routes import baixar_estoque_do_pedido
 
 router = APIRouter(prefix="/api", tags=["pagamentos"])
@@ -51,7 +52,11 @@ def registrar_log_status(conn, venda_id: int, status: str, usuario: str, observa
 
 
 @router.post("/pagamentos")
-def registrar_pagamento(payload: PagamentoIn, x_mistica_api_key: str | None = Header(default=None)):
+def registrar_pagamento(
+    payload: PagamentoIn,
+    x_mistica_api_key: str | None = Header(default=None),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
     validar_site_api_key(x_mistica_api_key)
     status = payload.status.strip()
     if status not in STATUS_PAGAMENTO:
@@ -59,6 +64,10 @@ def registrar_pagamento(payload: PagamentoIn, x_mistica_api_key: str | None = He
 
     agora = datetime.now().isoformat(timespec="seconds")
     with conectar() as conn:
+        resposta_existente = resposta_idempotente_existente(conn, "registrar_pagamento", idempotency_key)
+        if resposta_existente is not None:
+            return resposta_existente
+
         venda = conn.execute("SELECT id, total_final FROM pedidos WHERE id=?", (payload.venda_id,)).fetchone()
         if not venda:
             raise HTTPException(status_code=404, detail="Pedido não encontrado")
@@ -83,9 +92,12 @@ def registrar_pagamento(payload: PagamentoIn, x_mistica_api_key: str | None = He
             baixar_estoque_do_pedido(conn, payload.venda_id, payload.usuario or "Admin", agora, "Baixa automática ao confirmar pagamento")
             conn.execute("UPDATE pedidos SET status='Pagamento confirmado' WHERE id=?", (payload.venda_id,))
             registrar_log_status(conn, payload.venda_id, "Pagamento confirmado", payload.usuario, "Pagamento confirmado manualmente")
+
+        resposta = {"ok": True, "id": pagamento_id, "venda_id": payload.venda_id, "status": status, "data_hora": agora}
+        salvar_resposta_idempotente(conn, "registrar_pagamento", idempotency_key, resposta)
         conn.commit()
 
-    return {"ok": True, "id": pagamento_id, "venda_id": payload.venda_id, "status": status, "data_hora": agora}
+    return resposta
 
 
 @router.get("/pagamentos")

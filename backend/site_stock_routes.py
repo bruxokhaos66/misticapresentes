@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.database import conectar, listar
+from backend.idempotency import resposta_idempotente_existente, salvar_resposta_idempotente
 from backend.order_status_routes import MINUTOS_EXPIRACAO_PEDIDO_PENDENTE, STATUS_PEDIDO
 from backend.rate_limit import _client_ip, limitar_requisicoes
 from config import DB_PATH
@@ -229,8 +230,19 @@ def limpar_links_playlist(links: list[str]) -> list[str]:
 
 
 @router.post("/vendas", dependencies=[Depends(limitar_criacao_venda)])
-def registrar_venda_site(venda: VendaSiteIn, request: Request, x_mistica_api_key: str | None = Header(default=None)):
+def registrar_venda_site(
+    venda: VendaSiteIn,
+    request: Request,
+    x_mistica_api_key: str | None = Header(default=None),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
     validar_site_api_key(x_mistica_api_key)
+
+    with conectar() as conn_check:
+        resposta_existente = resposta_idempotente_existente(conn_check, "criar_pedido", idempotency_key)
+    if resposta_existente is not None:
+        return resposta_existente
+
     if venda.status not in STATUS_PEDIDO:
         venda.status = "Aguardando pagamento"
     if venda.baixa_estoque and venda.status == "Aguardando pagamento":
@@ -319,12 +331,14 @@ def registrar_venda_site(venda: VendaSiteIn, request: Request, x_mistica_api_key
                     (data_iso, venda_id),
                 )
 
+            resposta = {"ok": True, "id": venda_id, "status": "criado", "subtotal": subtotal, "total_final": total_final, "estoque_baixado": venda.baixa_estoque}
+            salvar_resposta_idempotente(conn, "criar_pedido", idempotency_key, resposta)
             conn.commit()
         except Exception:
             conn.rollback()
             raise
 
-    return {"ok": True, "id": venda_id, "status": "criado", "subtotal": subtotal, "total_final": total_final, "estoque_baixado": venda.baixa_estoque}
+    return resposta
 
 
 @router.post("/estoque/reservar")

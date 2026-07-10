@@ -232,6 +232,21 @@ def init_db():
         commit=True,
     )
 
+    # Idempotência: evita que o mesmo pedido/pagamento seja duplicado por
+    # reenvio de requisição (dupla submissão de formulário, retry de rede etc).
+    query_db(
+        """
+        CREATE TABLE IF NOT EXISTS idempotency_keys (
+            escopo TEXT NOT NULL,
+            chave TEXT NOT NULL,
+            resposta TEXT NOT NULL,
+            criado_em TEXT DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (escopo, chave)
+        )
+        """,
+        commit=True,
+    )
+
     # Pedidos (site) são uma entidade própria, separada de vendas (caixa/POS).
     # Os IDs são preservados ao migrar de `vendas` para não quebrar links já
     # emitidos (WhatsApp, e-mails de confirmação etc.).
