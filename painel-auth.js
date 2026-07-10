@@ -6,7 +6,8 @@
   function $(selector) { return document.querySelector(selector); }
 
   function isAdminRoute() {
-    return ADMIN_HASHES.includes(window.location.hash);
+    const params = new URLSearchParams(window.location.search);
+    return ADMIN_HASHES.includes(window.location.hash) || params.get("admin") === "mistica";
   }
 
   function temSessaoAtiva() {
@@ -115,12 +116,14 @@
     if (!adminContent) return;
 
     garantirBotaoSaida(adminContent);
-    const titulo = adminContent.querySelector(".container.form-panel h2, h2");
-    const aviso = document.createElement("div");
-    aviso.className = "saved-box";
-    aviso.textContent = `Acesso liberado para ${sessao.usuario.nome} • Perfil: ${perfil === "adm" ? "Administrador" : "Vendedor"}`;
-    aviso.style.marginBottom = "14px";
-    adminContent.prepend(aviso);
+    if (!adminContent.querySelector("[data-admin-session-notice]")) {
+      const aviso = document.createElement("div");
+      aviso.className = "saved-box";
+      aviso.setAttribute("data-admin-session-notice", "true");
+      aviso.textContent = `Acesso liberado para ${sessao.usuario.nome} • Perfil: ${perfil === "adm" ? "Administrador" : "Vendedor"}`;
+      aviso.style.marginBottom = "14px";
+      adminContent.prepend(aviso);
+    }
 
     if (!permissoes.clientes) {
       const clientSection = document.getElementById("cliente");
@@ -158,7 +161,8 @@
     const status = document.getElementById("adminLoginStatus");
     const loginPanel = document.getElementById("adminLoginPanel");
     const adminContent = document.getElementById("adminContent");
-    if (!form || !loginInput || !senhaInput || !loginPanel || !adminContent) return;
+    if (!form || !loginInput || !senhaInput || !loginPanel || !adminContent || form.dataset.apiAuthInstalled === "true") return;
+    form.dataset.apiAuthInstalled = "true";
 
     form.addEventListener("submit", async event => {
       event.preventDefault();
@@ -210,10 +214,18 @@
     }
   }
 
-  window.addEventListener("load", () => {
+  function inicializarAdmin() {
     garantirCampoLogin();
     instalarLoginApi();
     sincronizarRotaAdmin();
-  });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", inicializarAdmin, { once: true });
+  } else {
+    inicializarAdmin();
+  }
+
   window.addEventListener("hashchange", sincronizarRotaAdmin);
+  window.addEventListener("popstate", sincronizarRotaAdmin);
 })();
