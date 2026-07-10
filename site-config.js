@@ -2,10 +2,6 @@ window.misticaSiteConfig = {
   domain: "www.misticaesotericos.com.br",
   publicBaseUrl: "https://www.misticaesotericos.com.br",
   apiBaseUrl: "https://api.misticaesotericos.com.br",
-  // Nunca coloque a chave real aqui: este arquivo é servido publicamente.
-  // A sincronização de escrita desta página legada fica sem chave até
-  // ser configurada de outra forma (fora do código versionado).
-  siteApiKey: "",
   serverMode: "production",
   usePublicDomainAccess: true,
   storageMode: "api_first",
@@ -38,18 +34,13 @@ window.misticaSiteConfig = {
     };
   }
 
-  const loadScript = (id, src) => {
-    if (document.getElementById(id)) return;
+  const loadGuard = () => {
+    if (document.getElementById("misticaProductionGuardScript")) return;
     const script = document.createElement("script");
-    script.id = id;
-    script.src = src;
+    script.id = "misticaProductionGuardScript";
+    script.src = "site-production-guard.js?v=20260710-no-browser-secret";
     script.defer = true;
     document.head.appendChild(script);
-  };
-
-  const loadGuard = () => {
-    loadScript("misticaWriteKeyGuardScript", "site-write-key-guard.js?v=20260706-write-key");
-    loadScript("misticaProductionGuardScript", "site-production-guard.js?v=20260706-api-guard");
   };
 
   if (document.readyState === "loading") {
