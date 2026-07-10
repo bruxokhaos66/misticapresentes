@@ -9,7 +9,7 @@ xamanico-ambiente.mp3
 Caminho público esperado pelo player:
 
 ```txt
-mistica-v2/assets/audio/xamanico-ambiente.mp3
+assets/audio/xamanico-ambiente.mp3
 ```
 
 O player também aceita faixas opcionais:

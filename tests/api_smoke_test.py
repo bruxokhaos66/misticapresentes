@@ -4,8 +4,16 @@ Roda dentro da suite pytest (tests/api_smoke_test.py).
 """
 import json
 import os
+import sys
+from pathlib import Path
 
 from fastapi.testclient import TestClient
+
+# Garante que os pacotes da raiz (api/, database/, etc.) sejam importáveis
+# independentemente do modo de importação usado pelo pytest/GitHub Actions.
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 TEST_TOKEN = "test-token-local-smoke"
 os.environ.setdefault("MISTICA_API_TOKEN", TEST_TOKEN)
