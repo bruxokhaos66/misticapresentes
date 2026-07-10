@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import os
 import secrets
 from datetime import datetime, timedelta
 
-from fastapi import Cookie, Depends, HTTPException, Request, Response
+from fastapi import Cookie, Depends, Header, HTTPException, Request, Response
 
 from backend.database import conectar
 from backend.rate_limit import _client_ip
@@ -147,5 +148,31 @@ def exigir_perfil(perfil_minimo: str = "vendedor"):
         if perfil_minimo == "adm" and sessao.get("perfil") != "adm":
             raise HTTPException(status_code=403, detail="Acesso restrito a administradores.")
         return sessao
+
+    return dependencia
+
+
+def exigir_sessao_ou_chave_api(perfil_minimo: str = "vendedor"):
+    """Dependência FastAPI que aceita a sessão de painel (uso pelo navegador) OU a chave
+    estática MISTICA_SITE_API_KEY/MISTICA_SYNC_KEY (uso por integrações servidor-a-servidor).
+    A chave nunca deve ser digitada ou guardada no navegador; ela fica apenas em segredos do
+    servidor (Render/GitHub Secrets) e é usada por scripts de sincronização automatizados.
+    """
+
+    def dependencia(
+        mistica_painel_sessao: str | None = Cookie(default=None),
+        x_mistica_api_key: str | None = Header(default=None),
+    ) -> dict:
+        sessao = validar_sessao(mistica_painel_sessao)
+        if sessao:
+            if perfil_minimo == "adm" and sessao.get("perfil") != "adm":
+                raise HTTPException(status_code=403, detail="Acesso restrito a administradores.")
+            return sessao
+
+        chave = os.environ.get("MISTICA_SITE_API_KEY", "").strip() or os.environ.get("MISTICA_SYNC_KEY", "").strip()
+        if chave and x_mistica_api_key and secrets.compare_digest(str(x_mistica_api_key), chave):
+            return {"perfil": "adm", "login": "integracao-api-key"}
+
+        raise HTTPException(status_code=401, detail="Sessão inválida ou expirada. Faça login novamente.")
 
     return dependencia

@@ -3,11 +3,11 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.database import conectar
-from backend.product_routes import validar_site_api_key
+from backend.panel_sessions import exigir_sessao_ou_chave_api
 
 router = APIRouter(prefix="/api", tags=["cursos"])
 
@@ -50,8 +50,7 @@ def listar_materiais_curso():
 
 
 @router.post("/cursos")
-def criar_material_curso(material: CursoMaterialIn, x_mistica_api_key: str | None = Header(default=None)):
-    validar_site_api_key(x_mistica_api_key)
+def criar_material_curso(material: CursoMaterialIn, sessao: dict = Depends(exigir_sessao_ou_chave_api())):
     tipo = material.tipo if material.tipo in TIPOS_VALIDOS else "pdf"
     agora = datetime.now().isoformat(timespec="seconds")
     with conectar() as conn:
@@ -68,8 +67,7 @@ def criar_material_curso(material: CursoMaterialIn, x_mistica_api_key: str | Non
 
 
 @router.delete("/cursos/{material_id}")
-def excluir_material_curso(material_id: int, x_mistica_api_key: str | None = Header(default=None)):
-    validar_site_api_key(x_mistica_api_key)
+def excluir_material_curso(material_id: int, sessao: dict = Depends(exigir_sessao_ou_chave_api())):
     with conectar() as conn:
         garantir_tabela_cursos(conn)
         existente = conn.execute("SELECT id FROM cursos_materiais WHERE id=?", (material_id,)).fetchone()

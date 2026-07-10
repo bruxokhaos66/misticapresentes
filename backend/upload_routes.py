@@ -9,11 +9,12 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, File, Header, HTTPException, Response, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Header, HTTPException, Response, UploadFile
 from pydantic import BaseModel, Field
 
 from backend.database import conectar
 from backend.drive_storage import drive_configured, upload_bytes_to_drive
+from backend.panel_sessions import exigir_sessao_ou_chave_api
 from config import DB_PATH
 
 router = APIRouter(prefix="/api", tags=["uploads"])
@@ -223,8 +224,7 @@ def listar_musicas_banco_rapido() -> tuple[list[dict], set[str], str | None]:
 
 
 @router.post("/uploads/produtos")
-async def upload_imagem_produto(arquivo: UploadFile = File(...), produto_id: str = "produto", x_mistica_api_key: str | None = Header(default=None)):
-    validar_site_api_key(x_mistica_api_key)
+async def upload_imagem_produto(arquivo: UploadFile = File(...), produto_id: str = "produto", sessao: dict = Depends(exigir_sessao_ou_chave_api())):
     content_type = arquivo.content_type or ""
     if content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(status_code=400, detail="Formato inválido. Use JPG, PNG ou WEBP.")
@@ -241,8 +241,7 @@ async def upload_imagem_produto(arquivo: UploadFile = File(...), produto_id: str
 
 
 @router.post("/uploads/cursos")
-async def upload_material_curso(background_tasks: BackgroundTasks, arquivo: UploadFile = File(...), titulo: str = "material", x_mistica_api_key: str | None = Header(default=None)):
-    validar_site_api_key(x_mistica_api_key)
+async def upload_material_curso(background_tasks: BackgroundTasks, arquivo: UploadFile = File(...), titulo: str = "material", sessao: dict = Depends(exigir_sessao_ou_chave_api())):
     content_type = arquivo.content_type or ""
     ext = ALLOWED_CURSO_TYPES.get(content_type)
     if not ext:
