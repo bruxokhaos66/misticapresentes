@@ -101,6 +101,30 @@ def test_upload_musica_ambiente_responde_rapido_e_salva_arquivo():
     assert arquivo.content == b"ID3teste"
 
 
+def test_listar_clientes_exige_chave_api():
+    response = client.get("/api/clientes")
+    assert response.status_code == 403
+
+    response = client.get("/api/clientes", headers={"X-Mistica-Api-Key": "chave-errada"})
+    assert response.status_code == 403
+
+    response = client.get("/api/clientes", headers=PROTECTED_HEADERS)
+    assert response.status_code == 200
+    assert isinstance(response.json(), list)
+
+
+def test_listar_vendas_exige_chave_api():
+    response = client.get("/api/vendas")
+    assert response.status_code == 403
+
+    response = client.get("/api/vendas", headers={"X-Mistica-Api-Key": "chave-errada"})
+    assert response.status_code == 403
+
+    response = client.get("/api/vendas", headers=PROTECTED_HEADERS)
+    assert response.status_code == 200
+    assert isinstance(response.json(), list)
+
+
 def test_links_audio_ambiente_salva_apenas_audio_direto():
     payload = {
         "links": [
