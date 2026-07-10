@@ -326,6 +326,7 @@
       const sep = path.includes("?") ? "&" : "?";
       const response = await comTimeout(fetch(`${API}${path}${sep}_=${Date.now()}`, {
         cache: "no-store",
+        credentials: "include",
         ...options,
         headers: { "Content-Type": "application/json", ...(options.headers || {}) }
       }), ms, path);
@@ -361,8 +362,9 @@
       $("diaOperacional").textContent = `Dia operacional: ${etiquetaDiaOperacional()}`;
       setStatus("ONLINE", "Atualizando", "Conectado.");
     }
-    function sair() {
+    async function sair() {
       pararAtualizacaoAutomatica();
+      try { await api("/api/auth/logout", { method: "POST" }); } catch {}
       sessionStorage.removeItem("misticaPainelSessao");
       location.reload();
     }
@@ -453,16 +455,20 @@
       timerAtualizacao = null;
       sincronizando = false;
     }
-    window.addEventListener("load", () => {
+    window.addEventListener("load", async () => {
+      // A sessão local é só um atalho de UI; o servidor sempre revalida via cookie HttpOnly.
       try {
-        sessao = JSON.parse(sessionStorage.getItem("misticaPainelSessao") || "null");
-        if (sessao) {
-          abrirPainel();
-          sincronizar("load");
-          iniciarAtualizacaoAutomatica();
-        }
+        sessao = await api("/api/auth/me", { method: "GET" });
       } catch {
         sessao = null;
+      }
+      if (sessao?.usuario) {
+        try { sessionStorage.setItem("misticaPainelSessao", JSON.stringify(sessao)); } catch {}
+        abrirPainel();
+        sincronizar("load");
+        iniciarAtualizacaoAutomatica();
+      } else {
+        sessionStorage.removeItem("misticaPainelSessao");
       }
     });
   </script>

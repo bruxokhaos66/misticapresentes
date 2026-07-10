@@ -21,6 +21,43 @@ def init_db():
     except Exception:
         pass
 
+    query_db(
+        """
+        CREATE TABLE IF NOT EXISTS painel_sessoes (
+            token TEXT PRIMARY KEY,
+            usuario_id INTEGER,
+            login TEXT,
+            nome TEXT,
+            perfil TEXT,
+            ip TEXT,
+            user_agent TEXT,
+            criada_em TEXT,
+            expira_em TEXT,
+            ultimo_acesso TEXT
+        )
+        """,
+        commit=True,
+    )
+    query_db("CREATE INDEX IF NOT EXISTS idx_painel_sessoes_expira ON painel_sessoes(expira_em)", commit=True)
+
+    query_db(
+        """
+        CREATE TABLE IF NOT EXISTS painel_login_tentativas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            login TEXT,
+            ip TEXT,
+            user_agent TEXT,
+            sucesso INTEGER,
+            data_hora TEXT
+        )
+        """,
+        commit=True,
+    )
+    query_db(
+        "CREATE INDEX IF NOT EXISTS idx_painel_tentativas_login ON painel_login_tentativas(login, data_hora)",
+        commit=True,
+    )
+
     for col, typ in [("telephone", "TEXT")]:
         try:
             query_db(f"ALTER TABLE clientes ADD COLUMN {col} {typ}", commit=True)

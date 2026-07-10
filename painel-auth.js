@@ -10,7 +10,19 @@
   }
 
   function temSessaoAtiva() {
+    // Apenas um indício local para decidir se vale a pena perguntar ao servidor;
+    // a autenticação de fato é sempre revalidada em /api/auth/me (cookie HttpOnly).
     try { return sessionStorage.getItem("misticaAdminUnlocked") === "true"; } catch { return false; }
+  }
+
+  async function apiMe() {
+    const response = await fetch(`${API_BASE}/api/auth/me`, {
+      method: "GET",
+      credentials: "include",
+      cache: "no-store",
+    });
+    if (!response.ok) return null;
+    return response.json();
   }
 
   function mostrarSecaoAdmin() {
@@ -58,6 +70,7 @@
   async function apiLogin(login, senha) {
     const response = await fetch(`${API_BASE}/api/auth/login`, {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ login, senha }),
     });
@@ -65,7 +78,10 @@
     return response.json();
   }
 
-  function sairDoAdmin() {
+  async function sairDoAdmin() {
+    try {
+      await fetch(`${API_BASE}/api/auth/logout`, { method: "POST", credentials: "include" });
+    } catch {}
     try {
       sessionStorage.removeItem("misticaPainelSessao");
       sessionStorage.removeItem("misticaAdminUnlocked");
@@ -173,19 +189,25 @@
     }, true);
   }
 
-  function restaurarSessao() {
-    try {
-      const sessao = JSON.parse(sessionStorage.getItem("misticaPainelSessao") || "null");
-      if (!sessao?.usuario) return;
-      const loginPanel = document.getElementById("adminLoginPanel");
-      const adminContent = document.getElementById("adminContent");
-      if (loginPanel && adminContent) {
-        loginPanel.hidden = true;
-        adminContent.hidden = false;
-        aplicarPermissoes(sessao);
-        carregarPainelTempoReal();
-      }
-    } catch {}
+  async function restaurarSessao() {
+    // A sessão local é só um atalho de UI; a fonte da verdade é sempre o servidor.
+    const sessao = await apiMe().catch(() => null);
+    if (!sessao?.usuario) {
+      try {
+        sessionStorage.removeItem("misticaPainelSessao");
+        sessionStorage.removeItem("misticaAdminUnlocked");
+      } catch {}
+      return;
+    }
+    try { sessionStorage.setItem("misticaPainelSessao", JSON.stringify(sessao)); } catch {}
+    const loginPanel = document.getElementById("adminLoginPanel");
+    const adminContent = document.getElementById("adminContent");
+    if (loginPanel && adminContent) {
+      loginPanel.hidden = true;
+      adminContent.hidden = false;
+      aplicarPermissoes(sessao);
+      carregarPainelTempoReal();
+    }
   }
 
   window.addEventListener("load", () => {
