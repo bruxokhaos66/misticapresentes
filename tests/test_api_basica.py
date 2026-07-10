@@ -1,10 +1,16 @@
 import importlib
+import os
 
 from fastapi.testclient import TestClient
 
 
+TEST_API_KEY = "test-api-key"
+os.environ.setdefault("MISTICA_SITE_API_KEY", TEST_API_KEY)
+os.environ.setdefault("MISTICA_SYNC_KEY", TEST_API_KEY)
+
 main = importlib.import_module("backend.main")
 client = TestClient(main.app)
+PROTECTED_HEADERS = {"X-Mistica-Api-Key": TEST_API_KEY}
 
 
 def test_health_online():
@@ -20,13 +26,14 @@ def test_status_online():
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "online"
-    assert "produtos" in data
-    assert "clientes" in data
-    assert "vendas" in data
+    assert data["api"] == "mistica"
+    assert data["app"] == "Mística Presentes"
+    assert "timestamp" in data
+    assert "data_hora" in data
 
 
 def test_diagnostico_sistema_responde():
-    response = client.get("/api/diagnostico/sistema")
+    response = client.get("/api/diagnostico/sistema", headers=PROTECTED_HEADERS)
     assert response.status_code == 200
     data = response.json()
     assert data["app"] == "Mística Presentes"
@@ -36,7 +43,7 @@ def test_diagnostico_sistema_responde():
 
 
 def test_backup_status_responde():
-    response = client.get("/api/backup/status")
+    response = client.get("/api/backup/status", headers=PROTECTED_HEADERS)
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "ok"
@@ -56,7 +63,7 @@ def test_playlist_ambiente_responde():
 
 def test_playlist_ambiente_salva_links_youtube():
     payload = {"links": ["https://www.youtube.com/watch?v=abc123", "https://example.com/ignorar"]}
-    response = client.post("/api/site/playlist-ambiente", json=payload)
+    response = client.post("/api/site/playlist-ambiente", json=payload, headers=PROTECTED_HEADERS)
     assert response.status_code == 200
     data = response.json()
     assert data["ok"] is True
@@ -81,7 +88,7 @@ def test_upload_musica_ambiente_responde_rapido_e_salva_arquivo():
         "/api/uploads/musicas",
         files={"arquivo": ("teste.mp3", b"ID3teste", "audio/mpeg")},
         data={"nome_base": "teste-ambiente"},
-        headers={"X-Mistica-Api-Key": "c4e9012d72c6bb42f52457c6d6ba916a"},
+        headers=PROTECTED_HEADERS,
     )
     assert response.status_code == 200
     data = response.json()
@@ -102,7 +109,7 @@ def test_links_audio_ambiente_salva_apenas_audio_direto():
             "https://example.com/pagina",
         ]
     }
-    response = client.post("/api/uploads/musicas/links", json=payload)
+    response = client.post("/api/uploads/musicas/links", json=payload, headers=PROTECTED_HEADERS)
     assert response.status_code == 200
     data = response.json()
     assert data["ok"] is True
