@@ -45,7 +45,7 @@ window.misticaSiteConfig = {
 
   const loadProductionScripts = () => {
     loadScript("misticaProductionGuardScript", "site-production-guard.js?v=20260710-no-browser-secret");
-    loadScript("painelAuthScript", "painel-auth.js?v=20260710-admin-entry-fix");
+    loadScript("misticaAdminApiBootstrapScript", "admin-api-login-bootstrap.js?v=20260710-admin-api-final");
   };
 
   if (document.readyState === "loading") {
