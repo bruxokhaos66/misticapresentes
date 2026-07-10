@@ -3,7 +3,7 @@
   const DB_VERSION = 1;
   const STORE_NAME = 'tracks';
   const UPLOADED_KEY = 'uploaded-main';
-  const AUDIO_VERSION = 'bd328f3-unificado-1';
+  const AUDIO_VERSION = 'bd328f3-128kbps-1';
   const PUBLIC_AUDIO_DISPLAY_PATH = 'mistica-v2/assets/audio/xamanico-ambiente.mp3';
   const VOLUME_KEY = 'misticaShamanicPlayerVolume';
   const ACTIVE_TITLE = 'Ambiente Xamânico ativado';
