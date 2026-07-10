@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from backend.audit import registrar_auditoria
 from backend.backup_routes import router as backup_router
 from backend.course_routes import router as course_router
 from backend.database import conectar, executar, listar, obter
@@ -76,22 +77,7 @@ class ProdutosLotePayload(BaseModel):
 @app.on_event("startup")
 def startup():
     init_db()
-    garantir_colunas_sync_backend()
     garantir_admin_api()
-
-
-def garantir_colunas_sync_backend():
-    comandos = [
-        "ALTER TABLE vendas ADD COLUMN origem_sync TEXT",
-        "ALTER TABLE vendas ADD COLUMN local_id INTEGER",
-        "CREATE INDEX IF NOT EXISTS idx_vendas_local_id ON vendas(local_id)",
-    ]
-    with conectar() as conn:
-        for sql in comandos:
-            try:
-                conn.execute(sql)
-            except Exception:
-                pass
 
 
 def garantir_admin_api():
@@ -376,6 +362,50 @@ def listar_vendas(
     for venda in vendas:
         venda["itens"] = itens_por_venda.get(int(venda.get("id") or 0), [])
     return vendas
+
+
+class EstornoVendaIn(BaseModel):
+    usuario: str = "Admin"
+    observacao: Optional[str] = None
+
+
+@app.post("/api/vendas/{venda_id}/estornar")
+def estornar_venda(venda_id: int, payload: EstornoVendaIn | None = None, x_mistica_api_key: str | None = Header(default=None)):
+    """Cancela uma venda de caixa já registrada no banco, devolvendo o estoque dos
+    itens vendidos. Equivalente ao cancelamento com reposição que os pedidos do
+    site já tinham (ver backend/order_status_routes.py::cancelar_com_reposicao),
+    agora disponível também para vendas."""
+    validar_site_api_key(x_mistica_api_key)
+    payload = payload or EstornoVendaIn()
+    agora = datetime.now().isoformat(timespec="seconds")
+    with conectar() as conn:
+        venda = conn.execute("SELECT id, status FROM vendas WHERE id=?", (venda_id,)).fetchone()
+        if not venda:
+            raise HTTPException(status_code=404, detail="Venda não encontrada")
+        ja_cancelada = str(venda["status"] or "").lower().startswith("cancel")
+        if not ja_cancelada:
+            itens = conn.execute(
+                "SELECT codigo_p, nome_p, quantidade FROM vendas_itens WHERE venda_id=? ORDER BY id ASC",
+                (venda_id,),
+            ).fetchall()
+            for item in itens:
+                quantidade = int(item["quantidade"] or 0)
+                codigo = item["codigo_p"]
+                if quantidade <= 0 or not codigo:
+                    continue
+                conn.execute("UPDATE produtos SET quantidade = quantidade + ? WHERE codigo_p=?", (quantidade, codigo))
+        conn.execute("UPDATE vendas SET status='Cancelado' WHERE id=?", (venda_id,))
+        registrar_auditoria(conn, "venda", venda_id, "estornar", payload.usuario, antes={"status": venda["status"]}, depois={"status": "Cancelado", "ja_cancelada": ja_cancelada})
+        conn.commit()
+    return {
+        "ok": True,
+        "venda_id": venda_id,
+        "status": "Cancelado",
+        "ja_cancelada": ja_cancelada,
+        "usuario": payload.usuario,
+        "observacao": payload.observacao,
+        "data_hora": agora,
+    }
 
 
 def _intervalo_vendas_hoje_backend(agora=None):

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Header, HTTPException
 
+from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.database import conectar
 from config import API_URL, DB_PATH, OFFICIAL_DOMAIN, SERVER_URL
 
@@ -17,6 +18,8 @@ TABELAS_PRINCIPAIS = [
     "clientes",
     "vendas",
     "vendas_itens",
+    "pedidos",
+    "pedidos_itens",
     "usuarios",
     "fornecedores",
     "movimentacao_estoque",
@@ -25,11 +28,7 @@ TABELAS_PRINCIPAIS = [
 
 
 def validar_site_api_key(chave_recebida: str | None):
-    chave = os.environ.get("MISTICA_SITE_API_KEY", "").strip() or os.environ.get("MISTICA_SYNC_KEY", "").strip()
-    if not chave:
-        raise HTTPException(status_code=503, detail="Configure MISTICA_SITE_API_KEY ou MISTICA_SYNC_KEY para acessar diagnóstico do sistema.")
-    if not chave_recebida or not secrets.compare_digest(str(chave_recebida), chave):
-        raise HTTPException(status_code=403, detail="Chave da API inválida.")
+    validar_chave_api(chave_recebida, "Configure MISTICA_SITE_API_KEY ou MISTICA_SYNC_KEY para acessar diagnóstico do sistema.")
 
 
 def tabela_existe(conn, nome: str) -> bool:

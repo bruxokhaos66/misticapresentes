@@ -10,24 +10,17 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from backend.audit import registrar_auditoria
+from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.database import conectar, listar
-from backend.order_status_routes import MINUTOS_EXPIRACAO_PEDIDO_PENDENTE, garantir_tabela_status
+from backend.idempotency import resposta_idempotente_existente, salvar_resposta_idempotente
+from backend.order_status_routes import MINUTOS_EXPIRACAO_PEDIDO_PENDENTE, STATUS_PEDIDO
 from backend.rate_limit import _client_ip, limitar_requisicoes
 from config import DB_PATH
 
 router = APIRouter(prefix="/api", tags=["site-estoque"])
 
 limitar_criacao_venda = limitar_requisicoes("criar_venda_site", limite=20, janela_segundos=60)
-
-STATUS_PEDIDO = {
-    "Aguardando pagamento",
-    "Pagamento confirmado",
-    "Separando pedido",
-    "Pronto para retirada",
-    "Entregue",
-    "Cancelado",
-    "Concluído",
-}
 
 
 class ItemEstoqueSite(BaseModel):
@@ -94,11 +87,7 @@ def conectar_rapido(timeout: float = 0.35):
 
 
 def validar_site_api_key(chave_recebida: str | None):
-    chave = os.environ.get("MISTICA_SITE_API_KEY", "").strip() or os.environ.get("MISTICA_SYNC_KEY", "").strip()
-    if not chave:
-        raise HTTPException(status_code=503, detail="Configure MISTICA_SITE_API_KEY ou MISTICA_SYNC_KEY para permitir escrita pela API.")
-    if not chave_recebida or not secrets.compare_digest(str(chave_recebida), chave):
-        raise HTTPException(status_code=403, detail="Chave da API do site inválida.")
+    validar_chave_api(chave_recebida, "Configure MISTICA_SITE_API_KEY ou MISTICA_SYNC_KEY para permitir escrita pela API.")
 
 
 def buscar_produto(conn, item: ItemEstoqueSite):
@@ -239,8 +228,19 @@ def limpar_links_playlist(links: list[str]) -> list[str]:
 
 
 @router.post("/vendas", dependencies=[Depends(limitar_criacao_venda)])
-def registrar_venda_site(venda: VendaSiteIn, request: Request, x_mistica_api_key: str | None = Header(default=None)):
+def registrar_venda_site(
+    venda: VendaSiteIn,
+    request: Request,
+    x_mistica_api_key: str | None = Header(default=None),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
     validar_site_api_key(x_mistica_api_key)
+
+    with conectar() as conn_check:
+        resposta_existente = resposta_idempotente_existente(conn_check, "criar_pedido", idempotency_key)
+    if resposta_existente is not None:
+        return resposta_existente
+
     if venda.status not in STATUS_PEDIDO:
         venda.status = "Aguardando pagamento"
     if venda.baixa_estoque and venda.status == "Aguardando pagamento":
@@ -261,18 +261,17 @@ def registrar_venda_site(venda: VendaSiteIn, request: Request, x_mistica_api_key
 
     with conectar() as conn:
         try:
-            garantir_tabela_status(conn)
             produtos_validados = validar_itens_e_estoque(conn, venda.itens, exigir_estoque=venda.baixa_estoque)
             itens_calculados, subtotal = recalcular_venda_site(produtos_validados)
             total_final = subtotal
 
             cur = conn.execute(
                 """
-                INSERT INTO vendas (
+                INSERT INTO pedidos (
                     cliente, data_venda, subtotal, desconto, taxa, total_final,
                     forma_pagamento, vendedor, status, data_iso, dia_operacional,
-                    origem_sync, local_id, expira_em
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    origem, expira_em
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     venda.cliente,
@@ -287,7 +286,6 @@ def registrar_venda_site(venda: VendaSiteIn, request: Request, x_mistica_api_key
                     data_iso,
                     dia_operacional,
                     venda.origem,
-                    None,
                     expira_em,
                 ),
             )
@@ -297,8 +295,8 @@ def registrar_venda_site(venda: VendaSiteIn, request: Request, x_mistica_api_key
                 produto = calculado["produto"]
                 conn.execute(
                     """
-                    INSERT INTO vendas_itens
-                    (venda_id, codigo_p, nome_p, quantidade, custo_unitario, valor_unitario, valor_total)
+                    INSERT INTO pedidos_itens
+                    (pedido_id, codigo_p, nome_p, quantidade, custo_unitario, valor_unitario, valor_total)
                     VALUES (?,?,?,?,?,?,?)
                     """,
                     (
@@ -326,13 +324,20 @@ def registrar_venda_site(venda: VendaSiteIn, request: Request, x_mistica_api_key
                         estoque_posterior=estoque_posterior,
                         venda_id=venda_id,
                     )
+                conn.execute(
+                    "UPDATE pedidos SET estoque_baixado=1, estoque_baixado_em=? WHERE id=?",
+                    (data_iso, venda_id),
+                )
 
+            resposta = {"ok": True, "id": venda_id, "status": "criado", "subtotal": subtotal, "total_final": total_final, "estoque_baixado": venda.baixa_estoque}
+            registrar_auditoria(conn, "pedido", venda_id, "criar", venda.vendedor, depois={"total_final": total_final, "itens": len(itens_calculados), "status": venda.status})
+            salvar_resposta_idempotente(conn, "criar_pedido", idempotency_key, resposta)
             conn.commit()
         except Exception:
             conn.rollback()
             raise
 
-    return {"ok": True, "id": venda_id, "status": "criado", "subtotal": subtotal, "total_final": total_final, "estoque_baixado": venda.baixa_estoque}
+    return resposta
 
 
 @router.post("/estoque/reservar")

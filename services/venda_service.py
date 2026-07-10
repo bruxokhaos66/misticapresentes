@@ -1,5 +1,4 @@
 from datetime import datetime
-import threading
 import unicodedata
 
 from database import get_connection
@@ -177,26 +176,17 @@ def calcular_total_venda_misto(carrinho, desconto_percentual=0, pagamentos=None)
     return {"s": subtotal, "d": desconto, "tx": taxa, "tot": base + taxa, "base": base, "total_pago": total_pago}
 
 
-def _tentar_sincronizar_venda_sem_bloquear(venda_id):
+def _confirmar_venda_no_banco_central(venda_id):
+    """Confirma a venda no banco central (fonte única de verdade) de forma
+    síncrona e bloqueante: a venda só é considerada concluída quando o
+    servidor confirma o recebimento. Sem essa confirmação, a venda é desfeita
+    localmente (ver registrar_venda_service) — não existe mais "venda só
+    local" pendente de sincronização em segundo plano."""
+    from services.sync_service import sincronizar_venda_obrigatoria
     try:
-        from services.sync_service import enfileirar_venda_para_sync
-        enfileirar_venda_para_sync(venda_id)
+        return sincronizar_venda_obrigatoria(venda_id)
     except Exception as exc:
-        print(f"[Sync] Nao consegui enfileirar venda {venda_id}: {exc}")
-        return None
-
-    def executar():
-        try:
-            from services.sync_service import sincronizar_pendencias
-            sincronizar_pendencias(limite=8, referencia_id_prioritaria=venda_id)
-        except Exception as exc:
-            print(f"[Sync] Venda {venda_id} ficou pendente: {exc}")
-
-    try:
-        threading.Thread(target=executar, daemon=True).start()
-    except Exception as exc:
-        print(f"[Sync] Venda {venda_id} ficou pendente: {exc}")
-    return None
+        return False, str(exc)
 
 
 def registrar_venda_service(carrinho, cliente, data_venda, data_iso, calculo, forma_pagamento, vendedor, caixa_id, pagamentos_mistos=None):
@@ -261,7 +251,17 @@ def registrar_venda_service(carrinho, cliente, data_venda, data_iso, calculo, fo
     finally:
         conn.close()
 
-    _tentar_sincronizar_venda_sem_bloquear(venda_id)
+    confirmada, erro = _confirmar_venda_no_banco_central(venda_id)
+    if not confirmada:
+        try:
+            cancelar_venda_service(venda_id, usuario=vendedor, caixa_id=caixa_id)
+        except Exception as exc_desfazer:
+            print(f"[Venda] Falha ao desfazer localmente a venda {venda_id} não confirmada pelo servidor: {exc_desfazer}")
+        raise ConnectionError(
+            "Sem conexão com o servidor central: a venda NÃO foi registrada. "
+            f"Verifique a internet e tente novamente. ({erro})"
+        )
+
     return venda_id
 
 
@@ -320,5 +320,7 @@ def cancelar_venda_service(venda_id, usuario, caixa_id=None):
     finally:
         conn.close()
 
-    _tentar_sincronizar_venda_sem_bloquear(venda_id)
+    confirmada, erro = _confirmar_venda_no_banco_central(venda_id)
+    if not confirmada:
+        print(f"[Venda] Cancelamento da venda {venda_id} aplicado localmente, mas não confirmado no servidor central ainda: {erro}")
     return True

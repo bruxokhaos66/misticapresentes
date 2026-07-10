@@ -8,8 +8,11 @@ from typing import Optional
 from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from backend.audit import registrar_auditoria
+from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.database import conectar
-from backend.order_status_routes import baixar_estoque_do_pedido, garantir_tabela_status
+from backend.idempotency import resposta_idempotente_existente, salvar_resposta_idempotente
+from backend.order_status_routes import baixar_estoque_do_pedido
 
 router = APIRouter(prefix="/api", tags=["pagamentos"])
 
@@ -33,44 +36,10 @@ class PagamentoStatusIn(BaseModel):
 
 
 def validar_site_api_key(chave_recebida: str | None):
-    chave = os.environ.get("MISTICA_SITE_API_KEY", "").strip() or os.environ.get("MISTICA_SYNC_KEY", "").strip()
-    if not chave:
-        raise HTTPException(status_code=503, detail="Configure MISTICA_SITE_API_KEY ou MISTICA_SYNC_KEY para permitir escrita pela API.")
-    if not chave_recebida or not secrets.compare_digest(str(chave_recebida), chave):
-        raise HTTPException(status_code=403, detail="Chave da API inválida.")
-
-
-def garantir_tabela_pagamentos(conn):
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS pagamentos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            venda_id INTEGER NOT NULL,
-            forma TEXT DEFAULT 'Pix',
-            valor REAL DEFAULT 0,
-            status TEXT DEFAULT 'Aguardando',
-            comprovante TEXT DEFAULT '',
-            observacao TEXT DEFAULT '',
-            usuario TEXT DEFAULT 'Admin',
-            data_hora TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
+    validar_chave_api(chave_recebida, "Configure MISTICA_SITE_API_KEY ou MISTICA_SYNC_KEY para permitir escrita pela API.")
 
 
 def registrar_log_status(conn, venda_id: int, status: str, usuario: str, observacao: str):
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS pedido_status_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            venda_id INTEGER NOT NULL,
-            status TEXT NOT NULL,
-            usuario TEXT DEFAULT 'Admin',
-            observacao TEXT DEFAULT '',
-            data_hora TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-        """
-    )
     conn.execute(
         """
         INSERT INTO pedido_status_log (venda_id, status, usuario, observacao, data_hora)
@@ -81,7 +50,11 @@ def registrar_log_status(conn, venda_id: int, status: str, usuario: str, observa
 
 
 @router.post("/pagamentos")
-def registrar_pagamento(payload: PagamentoIn, x_mistica_api_key: str | None = Header(default=None)):
+def registrar_pagamento(
+    payload: PagamentoIn,
+    x_mistica_api_key: str | None = Header(default=None),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
     validar_site_api_key(x_mistica_api_key)
     status = payload.status.strip()
     if status not in STATUS_PAGAMENTO:
@@ -89,8 +62,11 @@ def registrar_pagamento(payload: PagamentoIn, x_mistica_api_key: str | None = He
 
     agora = datetime.now().isoformat(timespec="seconds")
     with conectar() as conn:
-        garantir_tabela_pagamentos(conn)
-        venda = conn.execute("SELECT id, total_final FROM vendas WHERE id=?", (payload.venda_id,)).fetchone()
+        resposta_existente = resposta_idempotente_existente(conn, "registrar_pagamento", idempotency_key)
+        if resposta_existente is not None:
+            return resposta_existente
+
+        venda = conn.execute("SELECT id, total_final FROM pedidos WHERE id=?", (payload.venda_id,)).fetchone()
         if not venda:
             raise HTTPException(status_code=404, detail="Pedido não encontrado")
         cur = conn.execute(
@@ -111,25 +87,27 @@ def registrar_pagamento(payload: PagamentoIn, x_mistica_api_key: str | None = He
         )
         pagamento_id = int(cur.lastrowid)
         if status == "Confirmado":
-            garantir_tabela_status(conn)
             baixar_estoque_do_pedido(conn, payload.venda_id, payload.usuario or "Admin", agora, "Baixa automática ao confirmar pagamento")
-            conn.execute("UPDATE vendas SET status='Pagamento confirmado' WHERE id=?", (payload.venda_id,))
+            conn.execute("UPDATE pedidos SET status='Pagamento confirmado' WHERE id=?", (payload.venda_id,))
             registrar_log_status(conn, payload.venda_id, "Pagamento confirmado", payload.usuario, "Pagamento confirmado manualmente")
+
+        registrar_auditoria(conn, "pagamento", pagamento_id, "registrar", payload.usuario, depois={"venda_id": payload.venda_id, "forma": payload.forma, "valor": payload.valor, "status": status})
+        resposta = {"ok": True, "id": pagamento_id, "venda_id": payload.venda_id, "status": status, "data_hora": agora}
+        salvar_resposta_idempotente(conn, "registrar_pagamento", idempotency_key, resposta)
         conn.commit()
 
-    return {"ok": True, "id": pagamento_id, "venda_id": payload.venda_id, "status": status, "data_hora": agora}
+    return resposta
 
 
 @router.get("/pagamentos")
 def listar_pagamentos(venda_id: Optional[int] = None, limite: int = Query(100, ge=1, le=500)):
     with conectar() as conn:
-        garantir_tabela_pagamentos(conn)
         if venda_id:
             rows = conn.execute(
                 """
                 SELECT p.*, v.cliente, v.total_final
                 FROM pagamentos p
-                LEFT JOIN vendas v ON v.id = p.venda_id
+                LEFT JOIN pedidos v ON v.id = p.venda_id
                 WHERE p.venda_id=?
                 ORDER BY p.id DESC
                 LIMIT ?
@@ -141,7 +119,7 @@ def listar_pagamentos(venda_id: Optional[int] = None, limite: int = Query(100, g
                 """
                 SELECT p.*, v.cliente, v.total_final
                 FROM pagamentos p
-                LEFT JOIN vendas v ON v.id = p.venda_id
+                LEFT JOIN pedidos v ON v.id = p.venda_id
                 ORDER BY p.id DESC
                 LIMIT ?
                 """,
@@ -158,7 +136,6 @@ def atualizar_status_pagamento(pagamento_id: int, payload: PagamentoStatusIn, x_
         raise HTTPException(status_code=400, detail="Status de pagamento inválido")
 
     with conectar() as conn:
-        garantir_tabela_pagamentos(conn)
         pagamento = conn.execute("SELECT id, venda_id FROM pagamentos WHERE id=?", (pagamento_id,)).fetchone()
         if not pagamento:
             raise HTTPException(status_code=404, detail="Pagamento não encontrado")
@@ -166,11 +143,11 @@ def atualizar_status_pagamento(pagamento_id: int, payload: PagamentoStatusIn, x_
             "UPDATE pagamentos SET status=?, observacao=? WHERE id=?",
             (status, payload.observacao or "", pagamento_id),
         )
+        registrar_auditoria(conn, "pagamento", pagamento_id, "atualizar_status", payload.usuario, depois={"status": status})
         if status == "Confirmado":
-            garantir_tabela_status(conn)
             agora = datetime.now().isoformat(timespec="seconds")
             baixar_estoque_do_pedido(conn, pagamento["venda_id"], payload.usuario or "Admin", agora, "Baixa automática ao confirmar pagamento")
-            conn.execute("UPDATE vendas SET status='Pagamento confirmado' WHERE id=?", (pagamento["venda_id"],))
+            conn.execute("UPDATE pedidos SET status='Pagamento confirmado' WHERE id=?", (pagamento["venda_id"],))
             registrar_log_status(conn, pagamento["venda_id"], "Pagamento confirmado", payload.usuario, payload.observacao or "Pagamento confirmado")
         conn.commit()
     return {"ok": True, "id": pagamento_id, "status": status}

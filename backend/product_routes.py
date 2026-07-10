@@ -9,6 +9,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from backend.audit import registrar_auditoria
+from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.database import conectar
 from backend.panel_sessions import exigir_sessao_ou_chave_api
 from backend.rate_limit import limitar_requisicoes
@@ -36,11 +38,7 @@ class ProdutoCompletoIn(BaseModel):
 
 
 def validar_site_api_key(chave_recebida: str | None):
-    chave = os.environ.get("MISTICA_SITE_API_KEY", "").strip() or os.environ.get("MISTICA_SYNC_KEY", "").strip()
-    if not chave:
-        raise HTTPException(status_code=503, detail="Configure o segredo de integração somente no ambiente do servidor.")
-    if not chave_recebida or not secrets.compare_digest(str(chave_recebida), chave):
-        raise HTTPException(status_code=403, detail="Chave da API inválida.")
+    validar_chave_api(chave_recebida, "Configure o segredo de integração somente no ambiente do servidor.")
 
 
 def _chave_interna_checkout() -> str:
@@ -52,23 +50,6 @@ def _chave_interna_checkout() -> str:
     if not chave:
         raise HTTPException(status_code=503, detail="Checkout temporariamente indisponível.")
     return chave
-
-
-def garantir_colunas_produto(conn):
-    comandos = [
-        "ALTER TABLE produtos ADD COLUMN marca TEXT",
-        "ALTER TABLE produtos ADD COLUMN descricao TEXT",
-        "ALTER TABLE produtos ADD COLUMN imagem_url TEXT",
-        "ALTER TABLE produtos ADD COLUMN imagens_json TEXT",
-        "ALTER TABLE produtos ADD COLUMN link_externo TEXT",
-        "ALTER TABLE produtos ADD COLUMN selo TEXT",
-        "ALTER TABLE produtos ADD COLUMN atualizado_em TEXT",
-    ]
-    for sql in comandos:
-        try:
-            conn.execute(sql)
-        except Exception:
-            pass
 
 
 def produto_row_to_dict(row):
@@ -91,7 +72,6 @@ def produto_row_to_dict(row):
 def listar_produtos_completos(busca: str = "", limite: int = Query(100, ge=1, le=500)):
     termo = f"%{busca.strip()}%"
     with conectar() as conn:
-        garantir_colunas_produto(conn)
         if busca.strip():
             rows = conn.execute(
                 """
@@ -126,14 +106,17 @@ def criar_pedido_checkout_publico(venda: VendaSiteIn, request: Request):
 
     A chave global permanece no ambiente do servidor e é usada apenas na chamada
     interna da rotina validada de criação de venda. Preços são recalculados no
-    backend e pedidos pendentes não baixam estoque.
+    backend e pedidos pendentes não baixam estoque. Sem headers: nenhum segredo
+    nem chave de idempotência é aceito do navegador nesta rota pública (ver
+    tests/test_no_browser_api_secret.py); quem quiser idempotência deve chamar
+    POST /api/vendas autenticado, que aceita Idempotency-Key.
     """
     venda.origem = "site"
     venda.status = "Aguardando pagamento"
     venda.baixa_estoque = False
     venda.vendedor = "Site/Celular"
     venda.forma_pagamento = "Pix site/celular"
-    return registrar_venda_site(venda, request, _chave_interna_checkout())
+    return registrar_venda_site(venda, request, _chave_interna_checkout(), None)
 
 
 @router.post("/produtos")
@@ -141,7 +124,6 @@ def criar_produto_completo(produto: ProdutoCompletoIn, sessao: dict = Depends(ex
     agora = datetime.now().isoformat(timespec="seconds")
     imagens_json = json.dumps(produto.imagens or [], ensure_ascii=False)
     with conectar() as conn:
-        garantir_colunas_produto(conn)
         cur = conn.execute(
             """
             INSERT INTO produtos (
@@ -168,6 +150,7 @@ def criar_produto_completo(produto: ProdutoCompletoIn, sessao: dict = Depends(ex
             ),
         )
         produto_id = int(cur.lastrowid)
+        registrar_auditoria(conn, "produto", produto_id, "criar", depois=produto.model_dump())
         conn.commit()
     return {"ok": True, "id": produto_id, "status": "criado", "atualizado_em": agora}
 
@@ -177,8 +160,7 @@ def atualizar_produto_completo(produto_id: int, produto: ProdutoCompletoIn, sess
     agora = datetime.now().isoformat(timespec="seconds")
     imagens_json = json.dumps(produto.imagens or [], ensure_ascii=False)
     with conectar() as conn:
-        garantir_colunas_produto(conn)
-        existente = conn.execute("SELECT id FROM produtos WHERE id=?", (produto_id,)).fetchone()
+        existente = conn.execute("SELECT * FROM produtos WHERE id=?", (produto_id,)).fetchone()
         if not existente:
             raise HTTPException(status_code=404, detail="Produto não encontrado")
         conn.execute(
@@ -207,6 +189,7 @@ def atualizar_produto_completo(produto_id: int, produto: ProdutoCompletoIn, sess
                 produto_id,
             ),
         )
+        registrar_auditoria(conn, "produto", produto_id, "atualizar", antes=dict(existente), depois=produto.model_dump())
         conn.commit()
     return {"ok": True, "id": produto_id, "status": "atualizado", "atualizado_em": agora}
 
@@ -214,10 +197,10 @@ def atualizar_produto_completo(produto_id: int, produto: ProdutoCompletoIn, sess
 @router.delete("/produtos/{produto_id}")
 def excluir_produto_completo(produto_id: int, sessao: dict = Depends(exigir_sessao_ou_chave_api())):
     with conectar() as conn:
-        garantir_colunas_produto(conn)
         existente = conn.execute("SELECT id FROM produtos WHERE id=?", (produto_id,)).fetchone()
         if not existente:
             raise HTTPException(status_code=404, detail="Produto não encontrado")
         conn.execute("UPDATE produtos SET ativo=0, atualizado_em=? WHERE id=?", (datetime.now().isoformat(timespec="seconds"), produto_id))
+        registrar_auditoria(conn, "produto", produto_id, "excluir")
         conn.commit()
     return {"ok": True, "id": produto_id, "status": "excluido"}

@@ -117,18 +117,6 @@ def _validar_chave_sync(x_mistica_sync_key: str | None):
         raise HTTPException(status_code=403, detail="Chave de sincronização inválida")
 
 
-def _garantir_colunas_venda(conn):
-    for sql in [
-        "ALTER TABLE vendas ADD COLUMN origem_sync TEXT",
-        "ALTER TABLE vendas ADD COLUMN local_id INTEGER",
-        "CREATE INDEX IF NOT EXISTS idx_vendas_local_id ON vendas(local_id)",
-    ]:
-        try:
-            conn.execute(sql)
-        except Exception:
-            pass
-
-
 def _usuario_padrao(login):
     if login == "bruxo":
         return {"nome": "Fredi Bach", "perfil": "adm"}
@@ -165,7 +153,6 @@ def _criar_usuario_padrao_se_permitido(conn, login, senha):
 
 
 def _salvar_venda_conn(conn, venda: VendaSyncIn):
-    _garantir_colunas_venda(conn)
     agora = datetime.now()
     data_venda = venda.data_venda or agora.strftime("%d/%m/%Y %H:%M:%S")
     data_iso = venda.data_iso or agora.isoformat(timespec="seconds")
@@ -369,7 +356,6 @@ def sincronizar_vendas_lote(payload: VendasLotePayload, x_mistica_sync_key: str 
     _validar_chave_sync(x_mistica_sync_key)
     retornos = []
     with conectar() as conn:
-        _garantir_colunas_venda(conn)
         for venda in payload.vendas:
             retornos.append(_salvar_venda_conn(conn, venda))
     criados = sum(1 for r in retornos if r.get("status") == "criado")
