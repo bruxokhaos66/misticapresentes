@@ -171,7 +171,8 @@
     const related = relatedProducts(product);
     document.title = `${product.name} | Mística Presentes`;
 
-    const bestSeller = /mais vendid/i.test(String(product.selo || ""));
+    const badgeText = String(product.selo || product.tag || "");
+    const bestSeller = /mais vendid/i.test(badgeText);
     const reviews = reviewsOf(product);
     const average = reviews.length ? reviews.reduce((sum, r) => sum + r.nota, 0) / reviews.length : 0;
 
@@ -186,7 +187,7 @@
     root.innerHTML = `
       <article class="product-page-card">
         <div class="product-page-media">
-          ${bestSeller ? `<span class="product-badge-best">${product.selo}</span>` : ""}
+          ${bestSeller ? `<span class="product-badge-best">${badgeText}</span>` : ""}
           ${mainPhoto}
           ${thumbs}
         </div>
