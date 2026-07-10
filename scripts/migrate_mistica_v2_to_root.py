@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "mistica-v2"
 ARCHIVE = ROOT / "docs" / "archive" / "site-pre-v2-root"
 TEXT_EXTENSIONS = {".html", ".css", ".js", ".json", ".xml", ".md", ".txt", ".webmanifest"}
+SPECIAL_ARCHIVE_FILES = {"README.md": "README-mistica-v2.md"}
 
 ESSENTIAL = {
     "index.html",
@@ -84,11 +85,14 @@ def check_collisions(files: list[Path]) -> list[str]:
     collisions: list[str] = []
     for source_file in files:
         relative = source_file.relative_to(SOURCE)
+        relative_name = relative.as_posix()
+        if relative_name in SPECIAL_ARCHIVE_FILES:
+            continue
         destination = ROOT / relative
-        if destination.exists() and relative.as_posix() != "index.html":
+        if destination.exists() and relative_name != "index.html":
             if destination.is_file() and destination.read_bytes() == source_file.read_bytes():
                 continue
-            collisions.append(relative.as_posix())
+            collisions.append(relative_name)
     return collisions
 
 
@@ -132,6 +136,10 @@ def validate() -> list[str]:
         if "noindex,follow" not in redirect_text or "url=/" not in redirect_text:
             errors.append("redirecionamento legado está incompleto")
 
+    archived_v2_readme = ARCHIVE / SPECIAL_ARCHIVE_FILES["README.md"]
+    if not archived_v2_readme.is_file():
+        errors.append("README histórico da V2 não foi arquivado")
+
     for path in ROOT.rglob("*"):
         if not path.is_file() or ".git" in path.parts or path == redirect:
             continue
@@ -165,6 +173,14 @@ def apply(files: list[Path]) -> None:
 
     for source_file in files:
         relative = source_file.relative_to(SOURCE)
+        relative_name = relative.as_posix()
+
+        if relative_name in SPECIAL_ARCHIVE_FILES:
+            archive_destination = ARCHIVE / SPECIAL_ARCHIVE_FILES[relative_name]
+            archive_destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(source_file), str(archive_destination))
+            continue
+
         destination = ROOT / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         if destination.exists() and destination.is_file() and destination.read_bytes() == source_file.read_bytes():
