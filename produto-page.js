@@ -98,7 +98,7 @@
           <strong class="product-price">${money(product.price)}</strong>
           <span class="stock-badge ${stock <= storeConfig.minStock ? "stock-low" : ""}">${stock > 0 ? `Estoque: ${stock}` : "Sob encomenda"}</span>
           <div class="product-page-actions">
-            <a class="btn" href="${whatsappUrl(product)}" target="_blank" rel="noopener">Comprar pelo WhatsApp</a>
+            <a class="btn" href="${whatsappUrl(product)}" target="_blank" rel="noopener" id="buyProductWhatsapp">Comprar pelo WhatsApp</a>
             <button class="btn btn-ghost" type="button" id="copyProductLink">Copiar link</button>
             <a class="btn btn-ghost" href="index.html#produtos">Voltar à vitrine</a>
           </div>
@@ -106,6 +106,11 @@
         </div>
       </article>
     `;
+
+    window.misticaTrack?.("view_item", { currency: "BRL", value: product.price, items: [{ item_id: product.id, item_name: product.name, price: product.price }] });
+    document.getElementById("buyProductWhatsapp")?.addEventListener("click", () => {
+      window.misticaTrack?.("contact_whatsapp", { method: "produto_pagina", item_id: product.id, item_name: product.name });
+    });
 
     const copy = document.getElementById("copyProductLink");
     copy?.addEventListener("click", async () => {

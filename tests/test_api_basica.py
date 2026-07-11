@@ -212,6 +212,26 @@ def test_painel_dashboard_e_resumo_exigem_sessao_ou_chave_api():
         assert response.status_code == 200, caminho
 
 
+def test_painel_dashboard_traz_indicadores_comerciais():
+    produto = client.post(
+        "/api/produtos",
+        json={"nome": "Produto Indicador", "codigo_p": codigo_unico("IND"), "preco": 40.0, "quantidade": 10},
+        headers=PROTECTED_HEADERS,
+    ).json()
+    client.post(
+        f"/api/produtos/{produto['id']}/avaliacoes",
+        json={"nome_cliente": "Cliente Indicador", "nota": 4, "comentario": "Bom"},
+    )
+
+    response = client.get("/api/painel/dashboard", headers=PROTECTED_HEADERS)
+    assert response.status_code == 200
+    data = response.json()
+    for chave in ("ticket_medio_mes", "produto_mais_vendido_mes", "produto_mais_vendido_qtd", "avaliacoes_total", "avaliacoes_media"):
+        assert chave in data
+    assert data["avaliacoes_total"] >= 1
+    assert data["avaliacoes_media"] > 0
+
+
 def test_listar_pedidos_e_pagamentos_exigem_sessao_ou_chave_api():
     for caminho in ("/api/pedidos", "/api/pedidos/status-log", "/api/pagamentos"):
         response = client.get(caminho)

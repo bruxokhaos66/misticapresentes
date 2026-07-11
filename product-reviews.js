@@ -124,6 +124,7 @@
         });
         if (!response.ok) throw new Error("Falha ao enviar avaliação");
         status.textContent = "Obrigado! Sua avaliação foi publicada.";
+        window.misticaTrack?.("submit_review", { item_id: product.apiId, item_name: product.name, rating: nota });
         form.reset();
         carregarAvaliacoes(section, product.apiId);
       } catch {
