@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from backend.audio_table import migrar_musicas_blob_para_arquivo
 from backend.audit import registrar_auditoria
 from backend.backup_routes import router as backup_router
 from backend.course_routes import router as course_router
@@ -35,6 +36,7 @@ logger = get_logger(__name__)
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    migrar_musicas_blob_para_arquivo()
     garantir_admin_api()
     tarefa_expiracao = asyncio.create_task(_expirar_pedidos_periodicamente())
     try:
