@@ -48,3 +48,15 @@ def test_painel_auth_continua_sem_segredo_no_navegador():
     assert "/api/auth/login" in script
     assert 'credentials: "include"' in script
     assert "X-Mistica-Api-Key" not in script
+
+
+def test_sessao_admin_nao_grava_objeto_completo_no_sessionstorage():
+    # A autorização real é sempre via cookie HttpOnly revalidado em
+    # /api/auth/me; sessionStorage deve guardar só um flag de UI
+    # (misticaAdminUnlocked), nunca o objeto de sessão (nome, perfil,
+    # permissões), que seria superfície extra de furto via XSS sem uso
+    # funcional (nada nunca lê essa chave de volta).
+    config = (ROOT / "site-config.js").read_text(encoding="utf-8")
+    painel_auth = (ROOT / "painel-auth.js").read_text(encoding="utf-8")
+    for script in (config, painel_auth):
+        assert 'setItem("misticaPainelSessao"' not in script

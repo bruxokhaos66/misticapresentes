@@ -179,7 +179,6 @@
 
       try {
         const sessao = await apiLogin(login, senha);
-        sessionStorage.setItem("misticaPainelSessao", JSON.stringify(sessao));
         sessionStorage.setItem("misticaAdminUnlocked", "true");
         loginPanel.hidden = true;
         adminContent.hidden = false;
@@ -204,7 +203,7 @@
       } catch {}
       return;
     }
-    try { sessionStorage.setItem("misticaPainelSessao", JSON.stringify(sessao)); } catch {}
+    try { sessionStorage.setItem("misticaAdminUnlocked", "true"); } catch {}
     const loginPanel = document.getElementById("adminLoginPanel");
     const adminContent = document.getElementById("adminContent");
     if (loginPanel && adminContent) {
