@@ -1,0 +1,104 @@
+name: Auditoria periódica
+
+on:
+  schedule:
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  auditoria:
+    name: Rodar testes, checar dependências e segredos vazados
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias Python
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pip-audit detect-secrets
+
+      - name: Rodar suite de testes completa
+        id: pytest
+        run: |
+          python -m pytest || echo "falhou=true" >> "$GITHUB_OUTPUT"
+
+      - name: Checar dependências Python vulneráveis
+        id: pipaudit
+        run: |
+          pip-audit -r requirements.txt --strict || echo "falhou=true" >> "$GITHUB_OUTPUT"
+
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Checar dependências Node de producao vulneráveis
+        id: npmaudit
+        run: |
+          npm ci
+          npm audit --omit=dev || echo "falhou=true" >> "$GITHUB_OUTPUT"
+
+      - name: Checar segredos novos no código (detect-secrets)
+        id: secrets
+        run: |
+          detect-secrets scan --baseline .secrets.baseline \
+            --exclude-files '\.pytest_cache/' \
+            --exclude-files '^updates/' \
+            --exclude-files '^node_modules/' \
+            --exclude-files 'package-lock\.json$'
+          if ! git diff --exit-code .secrets.baseline; then
+            echo "falhou=true" >> "$GITHUB_OUTPUT"
+            git checkout -- .secrets.baseline
+          fi
+
+      - name: Abrir issue se algo precisar de atenção
+        if: |
+          steps.pytest.outputs.falhou == 'true' ||
+          steps.pipaudit.outputs.falhou == 'true' ||
+          steps.npmaudit.outputs.falhou == 'true' ||
+          steps.secrets.outputs.falhou == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = "🔍 Auditoria periódica encontrou pendências";
+            const itens = [];
+            if ("${{ steps.pytest.outputs.falhou }}" === "true") itens.push("- Testes automatizados (pytest) falharam.");
+            if ("${{ steps.pipaudit.outputs.falhou }}" === "true") itens.push("- pip-audit encontrou dependências Python vulneráveis.");
+            if ("${{ steps.npmaudit.outputs.falhou }}" === "true") itens.push("- npm audit encontrou dependências Node de produção vulneráveis.");
+            if ("${{ steps.secrets.outputs.falhou }}" === "true") itens.push("- detect-secrets encontrou possíveis segredos novos no código (rode `detect-secrets audit .secrets.baseline` localmente para revisar).");
+            const body = `A auditoria periódica de ${new Date().toISOString()} encontrou pendências:\n\n${itens.join("\n")}\n\nVeja o log completo em Actions → Auditoria periódica → (esta execução).`;
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              labels: "auditoria",
+            });
+            const existing = issues.find(issue => issue.title === title);
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ["auditoria"],
+              });
+            }

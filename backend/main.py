@@ -143,6 +143,9 @@ def raiz():
 
 @app.api_route("/api/health", methods=["GET", "HEAD"])
 def health():
+    # Endpoint público e sem autenticação (usado por monitores de uptime como
+    # UptimeRobot): não deve expor caminhos de arquivo, credenciais ou outros
+    # detalhes de infraestrutura interna, só a confirmação de que está online.
     return {
         "status": "online",
         "app": "Mística Presentes",

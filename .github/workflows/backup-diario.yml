@@ -1,0 +1,35 @@
+name: Backup diário do banco
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  backup:
+    name: Baixar backup do banco de produção
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar backup via API
+        env:
+          MISTICA_API_URL: ${{ vars.MISTICA_API_URL || 'https://api.misticaesotericos.com.br' }}
+          MISTICA_SITE_API_KEY: ${{ secrets.MISTICA_SITE_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${MISTICA_SITE_API_KEY}" ]; then
+            echo "MISTICA_SITE_API_KEY não configurado nos secrets do repositório. Veja docs/admin/BACKUP_MONITORAMENTO_DEPLOY.md."
+            exit 1
+          fi
+          timestamp=$(date -u +%Y%m%d_%H%M%S)
+          curl -fsS --retry 3 --retry-delay 10 \
+            -H "X-Mistica-Api-Key: ${MISTICA_SITE_API_KEY}" \
+            -o "mistica_backup_${timestamp}.db" \
+            "${MISTICA_API_URL}/api/backup/download"
+          echo "BACKUP_FILE=mistica_backup_${timestamp}.db" >> "$GITHUB_ENV"
+
+      - name: Publicar backup como artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mistica-backup-diario
+          path: ${{ env.BACKUP_FILE }}
+          retention-days: 30

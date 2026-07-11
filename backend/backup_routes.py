@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Header, HTTPException
+from fastapi.responses import FileResponse
 
 from backend.api_security import validar_site_api_key as validar_chave_api
 from config import BACKUP_DIR, DB_PATH
@@ -71,3 +72,23 @@ def status_backup_manual(x_mistica_api_key: str | None = Header(default=None)):
         "ultimos_backups": backups,
         "data_hora": datetime.now().isoformat(timespec="seconds"),
     }
+
+
+@router.get("/backup/download")
+def baixar_backup_atual(x_mistica_api_key: str | None = Header(default=None)):
+    validar_site_api_key(x_mistica_api_key)
+    origem = Path(DB_PATH)
+    if not origem.exists():
+        raise HTTPException(status_code=404, detail="Arquivo do banco de dados não encontrado")
+
+    destino_dir = Path(BACKUP_DIR)
+    destino_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    copia = destino_dir / f"mistica_backup_download_{timestamp}.db"
+    shutil.copy2(origem, copia)
+
+    return FileResponse(
+        path=copia,
+        media_type="application/octet-stream",
+        filename=f"mistica_backup_{timestamp}.db",
+    )

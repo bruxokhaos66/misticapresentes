@@ -64,14 +64,11 @@
     }
   }
 
-  function buildSection(product) {
+  function buildSection(product, canSubmit) {
     const section = document.createElement("section");
     section.className = "product-reviews";
-    section.innerHTML = `
-      <p class="eyebrow">Avaliações</p>
-      <h2>O que dizem sobre ${escapeHtml(product.name)}</h2>
-      <div class="reviews-summary" data-reviews-summary></div>
-      <ul class="reviews-list" data-reviews-list></ul>
+    const form = canSubmit
+      ? `
       <form class="reviews-form" data-reviews-form>
         <h3>Deixe sua avaliação</h3>
         <label>
@@ -96,6 +93,14 @@
         <button class="btn" type="submit">Enviar avaliação</button>
         <p class="reviews-form-status" data-reviews-form-status role="status"></p>
       </form>
+      `
+      : "";
+    section.innerHTML = `
+      <p class="eyebrow">Avaliações</p>
+      <h2>O que dizem sobre ${escapeHtml(product.name)}</h2>
+      <div class="reviews-summary" data-reviews-summary></div>
+      <ul class="reviews-list" data-reviews-list></ul>
+      ${form}
     `;
     return section;
   }
@@ -136,13 +141,17 @@
   }
 
   function init(product) {
-    if (!product || !product.apiId) return;
+    if (!product) return;
     const root = document.getElementById("produtoPageRoot");
     if (!root || root.querySelector(".product-reviews")) return;
-    const section = buildSection(product);
+    const section = buildSection(product, Boolean(product.apiId));
     root.appendChild(section);
-    installForm(section, product);
-    carregarAvaliacoes(section, product.apiId);
+    if (product.apiId) {
+      installForm(section, product);
+      carregarAvaliacoes(section, product.apiId);
+    } else {
+      section.querySelector("[data-reviews-summary]").innerHTML = `<p class="reviews-empty">Ainda não há avaliações para este produto. Seja a primeira pessoa a avaliar!</p>`;
+    }
   }
 
   window.addEventListener("mistica:product-rendered", event => init(event.detail?.product));

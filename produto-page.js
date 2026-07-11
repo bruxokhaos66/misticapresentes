@@ -65,6 +65,44 @@
     return `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
   }
 
+  function renderTrust() {
+    const rawCity = window.misticaSiteConfig?.city || storeConfig.merchantCity || "";
+    const city = rawCity
+      ? rawCity.toLowerCase().replace(/(^|\s)\p{L}/gu, c => c.toUpperCase())
+      : "";
+    const box = make("section", "product-trust");
+    const badges = [
+      { icon: "🔒", text: "Compra combinada direto com a loja pelo WhatsApp" },
+      { icon: "🚚", text: city ? `Envios a partir de ${city}, para todo o Brasil` : "Envios para todo o Brasil" },
+      { icon: "💬", text: "Atendimento humano, sem robôs de compra" },
+      { icon: "↩️", text: "Troca em até 7 dias caso o produto chegue com defeito" },
+    ];
+    box.innerHTML = badges.map(b => `<div class="trust-badge"><span>${b.icon}</span><small>${b.text}</small></div>`).join("");
+    return box;
+  }
+
+  function renderPolicies() {
+    const box = make("section", "product-policies");
+    box.appendChild(make("p", "eyebrow", "Antes de comprar"));
+    box.appendChild(make("h2", "", "Políticas da loja"));
+    const items = [
+      ["Trocas e devoluções", "Aceitamos troca em até 7 dias corridos após o recebimento, caso o produto apresente defeito ou divergência com o combinado."],
+      ["Frete e entrega", "O frete e o prazo são combinados diretamente pelo WhatsApp conforme a sua cidade, com opções de envio ou retirada."],
+      ["Garantia", "Todos os produtos passam por conferência antes do envio. Qualquer divergência é resolvida diretamente com a Mística Presentes."],
+    ];
+    const grid = make("div", "product-policies-grid");
+    items.forEach(([title, text]) => {
+      const cell = make("div", "product-policy-item");
+      cell.innerHTML = `<strong>${title}</strong><p>${text}</p>`;
+      grid.appendChild(cell);
+    });
+    box.appendChild(grid);
+    const link = make("p", "product-policies-link");
+    link.innerHTML = `<a href="politica-de-trocas.html">Ver política completa de trocas e devoluções</a>`;
+    box.appendChild(link);
+    return box;
+  }
+
   function renderNotFound() {
     const root = document.getElementById("produtoPageRoot");
     root.innerHTML = `
@@ -84,13 +122,24 @@
     const related = relatedProducts(product);
     document.title = `${product.name} | Mística Presentes`;
 
-    const media = images[0]
-      ? `<img class="product-page-photo" src="${images[0]}" alt="${product.name}" loading="eager">`
-      : `<div class="product-image product-page-icon">${product.icon || "✨"}</div>`;
+    const badgeText = String(product.selo || product.tag || "");
+    const bestSeller = /mais vendid/i.test(badgeText);
+
+    const mainPhoto = images[0]
+      ? `<img class="product-page-photo" id="productMainPhoto" src="${images[0]}" alt="${product.name}" loading="eager">`
+      : `<div class="product-image product-page-icon" id="productMainPhoto">${product.icon || "✨"}</div>`;
+
+    const thumbs = images.length > 1
+      ? `<div class="product-page-thumbs">${images.map((src, i) => `<button type="button" class="product-page-thumb${i === 0 ? " is-active" : ""}" data-src="${src}"><img src="${src}" alt="${product.name} - foto ${i + 1}" loading="lazy"></button>`).join("")}</div>`
+      : "";
 
     root.innerHTML = `
       <article class="product-page-card">
-        <div class="product-page-media">${media}</div>
+        <div class="product-page-media">
+          ${bestSeller ? `<span class="product-badge-best">${badgeText}</span>` : ""}
+          ${mainPhoto}
+          ${thumbs}
+        </div>
         <div class="product-page-info">
           <p class="eyebrow">${product.category || "Produto"}</p>
           <h1>${product.name}</h1>
@@ -122,6 +171,17 @@
         window.prompt("Copie o link do produto:", url);
       }
     });
+
+    root.querySelectorAll(".product-page-thumb").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const main = document.getElementById("productMainPhoto");
+        if (main && main.tagName === "IMG") main.src = btn.dataset.src;
+        root.querySelectorAll(".product-page-thumb").forEach(b => b.classList.toggle("is-active", b === btn));
+      });
+    });
+
+    root.appendChild(renderTrust());
+    root.appendChild(renderPolicies());
 
     if (related.length) {
       const rel = make("section", "product-page-related");

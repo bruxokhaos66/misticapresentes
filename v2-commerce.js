@@ -20,23 +20,19 @@
     return Array.from(document.querySelectorAll('[data-product-grid] .product-card'));
   }
 
-  function currentCategories() {
-    if (typeof products === 'undefined' || !Array.isArray(products)) return [];
-    return [...new Set(products.map(product => product.category).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  function realCategories() {
+    if (typeof products === 'undefined') return [];
+    const seen = new Set();
+    products.forEach(product => { if (product.category) seen.add(product.category); });
+    return Array.from(seen).sort((a, b) => a.localeCompare(b, 'pt-BR'));
   }
 
   function createToolbar() {
     const section = document.querySelector('#produtos');
     const grid = document.querySelector('[data-product-grid]');
-    if (!section || !grid) return;
+    if (!section || !grid || section.querySelector('.v2-product-toolbar')) return;
 
-    let toolbar = section.querySelector('.v2-product-toolbar');
-    if (toolbar) {
-      syncCategoryOptions(toolbar);
-      return;
-    }
-
-    toolbar = document.createElement('div');
+    const toolbar = document.createElement('div');
     toolbar.className = 'container v2-product-toolbar';
 
     const searchWrap = document.createElement('label');
@@ -50,14 +46,6 @@
     input.dataset.v2ProductSearch = 'true';
     searchWrap.appendChild(input);
 
-    const categoryWrap = document.createElement('label');
-    categoryWrap.className = 'v2-category-label';
-    categoryWrap.textContent = 'Categoria';
-    const categorySelect = document.createElement('select');
-    categorySelect.setAttribute('aria-label', 'Filtrar por categoria');
-    categorySelect.dataset.v2CategoryFilter = 'true';
-    categoryWrap.appendChild(categorySelect);
-
     const chips = document.createElement('div');
     chips.className = 'v2-filter-chips';
     intents.forEach((intent, index) => {
@@ -70,27 +58,41 @@
       chips.appendChild(button);
     });
 
+    const categoryLabel = document.createElement('p');
+    categoryLabel.className = 'v2-category-label';
+    categoryLabel.textContent = 'Categorias';
+
+    const categoryChips = document.createElement('div');
+    categoryChips.className = 'v2-filter-chips v2-category-chips';
+    categoryChips.dataset.categorySignature = '';
+
+    const bestSellerToggle = document.createElement('button');
+    bestSellerToggle.type = 'button';
+    bestSellerToggle.className = 'v2-chip v2-best-toggle';
+    bestSellerToggle.textContent = '🔥 Mais vendidos';
+
     const count = document.createElement('p');
     count.className = 'v2-product-count';
     count.setAttribute('aria-live', 'polite');
 
-    toolbar.append(searchWrap, categoryWrap, chips, count);
+    toolbar.append(searchWrap, chips, categoryLabel, categoryChips, bestSellerToggle, count);
     grid.before(toolbar);
-    syncCategoryOptions(toolbar);
 
     function applyFilter() {
       const query = normalize(input.value);
       const active = chips.querySelector('.v2-chip.active')?.dataset.filter || '';
       const tokens = normalize(active).split(/\s+/).filter(Boolean);
-      const categoria = categorySelect.value;
+      const activeCategory = categoryChips.querySelector('.v2-chip.active')?.dataset.category || '';
+      const bestOnly = bestSellerToggle.classList.contains('active');
       let visible = 0;
 
       productCards().forEach(card => {
         const text = normalize(card.textContent);
         const matchesQuery = !query || text.includes(query);
         const matchesChip = !tokens.length || tokens.some(token => text.includes(token));
-        const matchesCategory = !categoria || card.querySelector('.eyebrow')?.textContent === categoria;
-        const show = matchesQuery && matchesChip && matchesCategory;
+        const matchesCategory = !activeCategory || card.dataset.category === activeCategory;
+        const matchesBest = !bestOnly || card.dataset.bestSeller === 'true';
+        const show = matchesQuery && matchesChip && matchesCategory && matchesBest;
         card.hidden = !show;
         if (show) visible += 1;
       });
@@ -98,8 +100,38 @@
       count.textContent = visible === 1 ? '1 produto encontrado' : `${visible} produtos encontrados`;
     }
 
+    function rebuildCategoryChips() {
+      const categories = realCategories();
+      const signature = categories.join('|');
+      if (categoryChips.dataset.categorySignature === signature) return;
+      categoryChips.dataset.categorySignature = signature;
+
+      const previousActive = categoryChips.querySelector('.v2-chip.active')?.dataset.category || '';
+      categoryChips.innerHTML = '';
+
+      const allButton = document.createElement('button');
+      allButton.type = 'button';
+      allButton.className = 'v2-chip';
+      allButton.textContent = 'Todas as categorias';
+      allButton.dataset.category = '';
+      categoryChips.appendChild(allButton);
+
+      categories.forEach(category => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'v2-chip';
+        button.textContent = category;
+        button.dataset.category = category;
+        categoryChips.appendChild(button);
+      });
+
+      const stillExists = categories.includes(previousActive);
+      const toActivate = categoryChips.querySelector(`.v2-chip[data-category="${stillExists ? previousActive : ''}"]`);
+      categoryChips.querySelectorAll('.v2-chip').forEach(chip => chip.classList.remove('active'));
+      (toActivate || allButton).classList.add('active');
+    }
+
     input.addEventListener('input', applyFilter);
-    categorySelect.addEventListener('change', applyFilter);
     chips.addEventListener('click', event => {
       const button = event.target.closest('.v2-chip');
       if (!button) return;
@@ -107,25 +139,57 @@
       button.classList.add('active');
       applyFilter();
     });
-
-    toolbar.__misticaApplyFilter = applyFilter;
-
-    const observer = new MutationObserver(() => {
-      syncCategoryOptions(toolbar);
+    categoryChips.addEventListener('click', event => {
+      const button = event.target.closest('.v2-chip');
+      if (!button) return;
+      categoryChips.querySelectorAll('.v2-chip').forEach(chip => chip.classList.remove('active'));
+      button.classList.add('active');
       applyFilter();
     });
-    observer.observe(grid, { childList: true });
+    bestSellerToggle.addEventListener('click', () => {
+      bestSellerToggle.classList.toggle('active');
+      applyFilter();
+    });
 
+    rebuildCategoryChips();
     applyFilter();
+    toolbar.__misticaRebuildCategories = () => { rebuildCategoryChips(); applyFilter(); };
   }
 
-  function syncCategoryOptions(toolbar) {
-    const select = toolbar.querySelector('[data-v2-category-filter]');
-    if (!select) return;
-    const atual = select.value;
-    const categorias = currentCategories();
-    select.innerHTML = `<option value="">Todas as categorias</option>${categorias.map(categoria => `<option value="${categoria}">${categoria}</option>`).join('')}`;
-    if (categorias.includes(atual)) select.value = atual;
+  function renderBestSellerStrip() {
+    const section = document.querySelector('#produtos');
+    if (!section || typeof products === 'undefined' || typeof isBestSeller !== 'function') return;
+
+    const bestSellers = products.filter(isBestSeller);
+    const signature = bestSellers.map(p => p.id).join('|');
+    let strip = section.querySelector('.v2-bestseller-strip');
+
+    if (!bestSellers.length) {
+      strip?.remove();
+      return;
+    }
+
+    if (strip && strip.dataset.signature === signature) return;
+    if (!strip) {
+      strip = document.createElement('div');
+      strip.className = 'container v2-bestseller-strip';
+      const grid = section.querySelector('[data-product-grid]');
+      const toolbar = section.querySelector('.v2-product-toolbar');
+      (toolbar || grid)?.before(strip);
+    }
+    strip.dataset.signature = signature;
+    strip.innerHTML = `
+      <p class="eyebrow">Mais vendidos</p>
+      <div class="v2-bestseller-cards">
+        ${bestSellers.slice(0, 6).map(product => `
+          <a class="v2-bestseller-card" href="produto.html?id=${encodeURIComponent(product.id)}">
+            <span>${product.icon || '✨'}</span>
+            <strong>${product.name}</strong>
+            <small>${currency.format(Number(product.price || 0))}</small>
+          </a>
+        `).join('')}
+      </div>
+    `;
   }
 
   function protectHeroIsisImage() {
@@ -151,7 +215,9 @@
   function apply() {
     protectHeroIsisImage();
     createToolbar();
+    renderBestSellerStrip();
     improveCartAnchor();
+    document.querySelector('.v2-product-toolbar')?.__misticaRebuildCategories?.();
   }
 
   function schedule() {
@@ -159,6 +225,10 @@
     window.setTimeout(apply, 250);
     window.setTimeout(apply, 900);
     window.setTimeout(apply, 1600);
+    window.setInterval(() => {
+      document.querySelector('.v2-product-toolbar')?.__misticaRebuildCategories?.();
+      renderBestSellerStrip();
+    }, 5000);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', schedule, { once: true });
