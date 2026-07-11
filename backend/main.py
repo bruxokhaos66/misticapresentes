@@ -20,7 +20,7 @@ from backend.upload_routes import router as upload_router
 from backend.user_sync_routes import router as user_sync_router
 from backend.site_stock_routes import router as site_stock_router
 from backend.system_status_routes import router as system_status_router
-from config import API_URL, DB_PATH, DEFAULT_API_URL, DEFAULT_SERVER_URL, OFFICIAL_DOMAIN, SERVER_URL, hash_password_pbkdf2
+from config import hash_password_pbkdf2
 from database.migrations import init_db
 
 
@@ -138,16 +138,11 @@ def raiz():
     }
 
 
-@app.get("/api/health")
+@app.api_route("/api/health", methods=["GET", "HEAD"])
 def health():
     return {
         "status": "online",
         "app": "Mística Presentes",
-        "domain": OFFICIAL_DOMAIN,
-        "server_url": SERVER_URL or DEFAULT_SERVER_URL,
-        "api_url": API_URL or DEFAULT_API_URL,
-        "database": DB_PATH,
-        "data_hora": datetime.now().isoformat(timespec="seconds"),
     }
 
 
