@@ -59,7 +59,7 @@
   };
 
   const loadApiProductsPublic = async () => {
-    const response = await fetch(`${API_BASE}/api/produtos?limite=500`);
+    const response = await fetch(`${API_BASE}/api/produtos/admin?limite=500`, { credentials: 'include' });
     if (!response.ok) throw new Error('Não foi possível carregar produtos da API.');
     const data = await response.json();
     syncCatalogWithApi(data);
