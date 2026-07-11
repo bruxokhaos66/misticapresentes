@@ -1,0 +1,14 @@
+{
+  "name": "mistica-presentes-e2e",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Testes end-to-end (Playwright) do site publico da Mistica Presentes.",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:lighthouse": "lhci autorun"
+  },
+  "devDependencies": {
+    "@lhci/cli": "^0.15.1",
+    "@playwright/test": "^1.48.0"
+  }
+}

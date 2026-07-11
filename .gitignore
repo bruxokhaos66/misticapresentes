@@ -46,6 +46,12 @@ Thumbs.db
 *.tmp
 *.bak
 
+# Node / Playwright / Lighthouse
+node_modules/
+playwright-report/
+test-results/
+.lighthouseci/
+
 # Executaveis gerados localmente
 build/
 dist/

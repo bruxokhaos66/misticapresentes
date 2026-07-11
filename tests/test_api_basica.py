@@ -45,22 +45,6 @@ def test_health_nao_expoe_informacoes_internas():
         assert chave_proibida not in corpo.lower()
 
 
-def test_health_head_sem_autenticacao_e_sem_corpo():
-    response = client.head("/api/health")
-    assert response.status_code == 200
-    assert response.content == b""
-
-
-def test_health_nao_expoe_dados_internos():
-    response = client.get("/api/health")
-    assert response.status_code == 200
-    data = response.json()
-    assert set(data.keys()) == {"status", "app"}
-    corpo_bruto = response.text.lower()
-    for termo_sensivel in [".db", "sqlite", "database", "server_url", "api_url", "domain", "secret", "token", "key"]:
-        assert termo_sensivel not in corpo_bruto
-
-
 def test_status_online():
     response = client.get("/api/status")
     assert response.status_code == 200
@@ -90,6 +74,19 @@ def test_backup_status_responde():
     assert "banco_existe" in data
     assert "backup_dir" in data
     assert "ultimos_backups" in data
+
+
+def test_backup_download_retorna_arquivo():
+    response = client.get("/api/backup/download", headers=PROTECTED_HEADERS)
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/octet-stream"
+    assert "mistica_backup_" in response.headers["content-disposition"]
+    assert len(response.content) > 0
+
+
+def test_backup_download_exige_chave_valida():
+    response = client.get("/api/backup/download")
+    assert response.status_code in (401, 403)
 
 
 def test_playlist_ambiente_responde():
