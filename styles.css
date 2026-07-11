@@ -154,6 +154,7 @@ input:focus, textarea:focus, select:focus { border-color: rgba(240,197,106,.72);
 .footer-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; }
 .footer-mark { width: 54px; height: 54px; margin-bottom: 10px; }
 .footer strong { display: block; color: var(--gold-strong); font-family: Cinzel, serif; }
+.footer-grid span { display: block; }
 .floating-whatsapp { position: fixed; right: 18px; bottom: 18px; z-index: 90; display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 12px 18px; border-radius: 999px; background: linear-gradient(135deg, #d8f7b8, #84b35b); color: #071006; text-decoration: none; font-weight: 900; box-shadow: 0 18px 45px rgba(0,0,0,.35); }
 
 @media (max-width: 1100px) {

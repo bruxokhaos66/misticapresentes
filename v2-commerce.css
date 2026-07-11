@@ -3,7 +3,7 @@
 .v2-product-toolbar {
   margin: -18px auto 26px;
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) auto;
+  grid-template-columns: minmax(220px, 1fr) minmax(160px, auto) auto;
   gap: 16px;
   align-items: end;
   padding: 18px;
@@ -16,7 +16,7 @@
 
 .v2-search-label { color: #d7c8ad; font-weight: 850; gap: 8px; }
 .v2-search-label input { min-height: 52px; border-radius: 18px; background: rgba(0,0,0,.34); }
-.v2-filter-chips { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.v2-filter-chips { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; grid-column: 1 / -1; }
 .v2-chip { border: 1px solid rgba(242,201,109,.28); border-radius: 999px; padding: 10px 13px; color: #ffe7a3; background: rgba(255,255,255,.045); font-size: .82rem; font-weight: 900; cursor: pointer; }
 .v2-chip.active, .v2-chip:hover { color: #1b1204; background: linear-gradient(135deg, #fff0b6, #e3b64f 62%, #fff0bd); border-color: rgba(242,201,109,.68); }
 .v2-product-count { grid-column: 1 / -1; margin: 0; color: #bdd17a; font-size: .88rem; font-weight: 850; }
@@ -24,6 +24,14 @@
 .v2-checkout-note { margin: 8px auto 0; max-width: 740px; color: #d7c8ad; font-weight: 700; }
 .isis-message.user { border-color: rgba(189,209,122,.26); background: rgba(189,209,122,.08); }
 .isis-message.bot { border-color: rgba(242,201,109,.22); background: rgba(242,201,109,.07); }
+
+.isis-recommend-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 10px; }
+.isis-recommend-item { border: 1px solid rgba(242,201,109,.22); border-radius: 14px; padding: 10px 12px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; background: rgba(255,255,255,.03); }
+.isis-recommend-item strong { color: #ffe7a3; }
+.isis-recommend-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.isis-followup-label { margin: 12px 0 6px; font-size: .82rem; color: #d7c8ad; }
+.isis-followup-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.isis-followup-chips .v2-chip { padding: 7px 12px; font-size: .78rem; }
 
 .v2-category-label { grid-column: 1 / -1; margin: 4px 0 0; color: #d7c8ad; font-weight: 850; font-size: .82rem; text-transform: uppercase; letter-spacing: .06em; }
 .v2-category-chips { grid-column: 1 / -1; justify-content: flex-start; }

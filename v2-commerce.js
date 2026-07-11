@@ -203,29 +203,6 @@
     target.classList.remove('has-real-isis');
   }
 
-  function appendIsisMessage(role, text) {
-    const chat = document.querySelector('#isisChat');
-    if (!chat) return;
-    const box = document.createElement('div');
-    box.className = `isis-message ${role}`;
-    box.textContent = text;
-    chat.appendChild(box);
-    chat.scrollTop = chat.scrollHeight;
-  }
-
-  function setupIsisQuickActions() {
-    document.querySelectorAll('[data-isis-command]').forEach(button => {
-      if (button.dataset.v2Ready) return;
-      button.dataset.v2Ready = 'true';
-      button.addEventListener('click', () => {
-        const command = button.dataset.isisCommand || button.textContent;
-        appendIsisMessage('user', command);
-        appendIsisMessage('bot', 'A Isis pode ajudar a escolher produtos por intenção. Use o catálogo, filtre os produtos e finalize pelo WhatsApp para atendimento humano.');
-        document.querySelector('#produtos')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
-    });
-  }
-
   function improveCartAnchor() {
     const checkout = document.querySelector('#checkout');
     if (!checkout || checkout.querySelector('.v2-checkout-note')) return;
@@ -239,7 +216,6 @@
     protectHeroIsisImage();
     createToolbar();
     renderBestSellerStrip();
-    setupIsisQuickActions();
     improveCartAnchor();
     document.querySelector('.v2-product-toolbar')?.__misticaRebuildCategories?.();
   }

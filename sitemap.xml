@@ -18,4 +18,22 @@
     <changefreq>weekly</changefreq>
     <priority>0.80</priority>
   </url>
+  <url>
+    <loc>https://www.misticaesotericos.com.br/politica-de-trocas.html</loc>
+    <lastmod>2026-07-11</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.30</priority>
+  </url>
+  <url>
+    <loc>https://www.misticaesotericos.com.br/politica-de-privacidade.html</loc>
+    <lastmod>2026-07-11</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.30</priority>
+  </url>
+  <url>
+    <loc>https://www.misticaesotericos.com.br/termos-de-uso.html</loc>
+    <lastmod>2026-07-11</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.30</priority>
+  </url>
 </urlset>

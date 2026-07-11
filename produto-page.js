@@ -65,58 +65,6 @@
     return `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
   }
 
-  function reviewsOf(product) {
-    const list = Array.isArray(product.avaliacoes) ? product.avaliacoes : [];
-    return list
-      .map(item => ({
-        nome: String(item?.nome || "Cliente Mística").trim(),
-        nota: Math.min(5, Math.max(1, Number(item?.nota) || 0)),
-        comentario: String(item?.comentario || "").trim(),
-      }))
-      .filter(item => item.nota > 0);
-  }
-
-  function starRow(nota) {
-    const full = Math.round(nota);
-    return Array.from({ length: 5 }, (_, i) => `<span class="review-star${i < full ? " is-filled" : ""}">★</span>`).join("");
-  }
-
-  function renderReviews(product) {
-    const reviews = reviewsOf(product);
-    const box = make("section", "product-reviews");
-    box.appendChild(make("p", "eyebrow", "Avaliações"));
-
-    if (!reviews.length) {
-      box.appendChild(make("h2", "", "Ainda sem avaliações"));
-      box.appendChild(make("p", "muted-note", "Seja a primeira pessoa a comprar e avaliar este produto."));
-      return box;
-    }
-
-    const average = reviews.reduce((sum, r) => sum + r.nota, 0) / reviews.length;
-    const head = make("div", "product-reviews-summary");
-    head.innerHTML = `
-      <strong class="product-reviews-average">${average.toFixed(1)}</strong>
-      <div>
-        <div class="review-stars">${starRow(average)}</div>
-        <small>${reviews.length} avaliação${reviews.length === 1 ? "" : "ões"}</small>
-      </div>
-    `;
-    box.appendChild(head);
-
-    const list = make("ul", "product-reviews-list");
-    reviews.slice(0, 6).forEach(review => {
-      const item = make("li", "product-review-item");
-      item.innerHTML = `
-        <div class="review-stars">${starRow(review.nota)}</div>
-        <strong>${review.nome}</strong>
-        ${review.comentario ? `<p>${review.comentario}</p>` : ""}
-      `;
-      list.appendChild(item);
-    });
-    box.appendChild(list);
-    return box;
-  }
-
   function renderTrust() {
     const rawCity = window.misticaSiteConfig?.city || storeConfig.merchantCity || "";
     const city = rawCity
@@ -149,6 +97,9 @@
       grid.appendChild(cell);
     });
     box.appendChild(grid);
+    const link = make("p", "product-policies-link");
+    link.innerHTML = `<a href="politica-de-trocas.html">Ver política completa de trocas e devoluções</a>`;
+    box.appendChild(link);
     return box;
   }
 
@@ -173,8 +124,6 @@
 
     const badgeText = String(product.selo || product.tag || "");
     const bestSeller = /mais vendid/i.test(badgeText);
-    const reviews = reviewsOf(product);
-    const average = reviews.length ? reviews.reduce((sum, r) => sum + r.nota, 0) / reviews.length : 0;
 
     const mainPhoto = images[0]
       ? `<img class="product-page-photo" id="productMainPhoto" src="${images[0]}" alt="${product.name}" loading="eager">`
@@ -194,12 +143,11 @@
         <div class="product-page-info">
           <p class="eyebrow">${product.category || "Produto"}</p>
           <h1>${product.name}</h1>
-          ${reviews.length ? `<div class="review-stars product-page-rating">${starRow(average)} <small>(${reviews.length})</small></div>` : ""}
           <p>${product.description || "Produto especial selecionado pela Mística Presentes."}</p>
           <strong class="product-price">${money(product.price)}</strong>
           <span class="stock-badge ${stock <= storeConfig.minStock ? "stock-low" : ""}">${stock > 0 ? `Estoque: ${stock}` : "Sob encomenda"}</span>
           <div class="product-page-actions">
-            <a class="btn" href="${whatsappUrl(product)}" target="_blank" rel="noopener">Comprar pelo WhatsApp</a>
+            <a class="btn" href="${whatsappUrl(product)}" target="_blank" rel="noopener" id="buyProductWhatsapp">Comprar pelo WhatsApp</a>
             <button class="btn btn-ghost" type="button" id="copyProductLink">Copiar link</button>
             <a class="btn btn-ghost" href="index.html#produtos">Voltar à vitrine</a>
           </div>
@@ -207,6 +155,11 @@
         </div>
       </article>
     `;
+
+    window.misticaTrack?.("view_item", { currency: "BRL", value: product.price, items: [{ item_id: product.id, item_name: product.name, price: product.price }] });
+    document.getElementById("buyProductWhatsapp")?.addEventListener("click", () => {
+      window.misticaTrack?.("contact_whatsapp", { method: "produto_pagina", item_id: product.id, item_name: product.name });
+    });
 
     const copy = document.getElementById("copyProductLink");
     copy?.addEventListener("click", async () => {
@@ -228,7 +181,6 @@
     });
 
     root.appendChild(renderTrust());
-    root.appendChild(renderReviews(product));
     root.appendChild(renderPolicies());
 
     if (related.length) {
@@ -245,6 +197,9 @@
       rel.appendChild(grid);
       root.appendChild(rel);
     }
+
+    window.misticaCurrentProduct = product;
+    window.dispatchEvent(new CustomEvent("mistica:product-rendered", { detail: { product } }));
   }
 
   function init() {

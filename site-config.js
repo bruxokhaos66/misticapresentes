@@ -10,7 +10,11 @@ window.misticaSiteConfig = {
   whatsappDisplay: "(49) 99917-2137",
   headerTitle: "Mística Presentes",
   headerSubtitle: "Xamanismo • Cristais • Aromas",
-  promoText: "Transforme sua energia. Eleve sua essência."
+  promoText: "Transforme sua energia. Eleve sua essência.",
+  // Deixe em branco para manter o analytics público desativado. Preencha
+  // com o ID real (ex.: "G-XXXXXXX" e "000000000000000") para ativar.
+  gaMeasurementId: "",
+  metaPixelId: ""
 };
 
 (() => {

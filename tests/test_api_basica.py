@@ -209,6 +209,26 @@ def test_painel_dashboard_e_resumo_exigem_sessao_ou_chave_api():
         assert response.status_code == 200, caminho
 
 
+def test_painel_dashboard_traz_indicadores_comerciais():
+    produto = client.post(
+        "/api/produtos",
+        json={"nome": "Produto Indicador", "codigo_p": codigo_unico("IND"), "preco": 40.0, "quantidade": 10},
+        headers=PROTECTED_HEADERS,
+    ).json()
+    client.post(
+        f"/api/produtos/{produto['id']}/avaliacoes",
+        json={"nome_cliente": "Cliente Indicador", "nota": 4, "comentario": "Bom"},
+    )
+
+    response = client.get("/api/painel/dashboard", headers=PROTECTED_HEADERS)
+    assert response.status_code == 200
+    data = response.json()
+    for chave in ("ticket_medio_mes", "produto_mais_vendido_mes", "produto_mais_vendido_qtd", "avaliacoes_total", "avaliacoes_media"):
+        assert chave in data
+    assert data["avaliacoes_total"] >= 1
+    assert data["avaliacoes_media"] > 0
+
+
 def test_listar_pedidos_e_pagamentos_exigem_sessao_ou_chave_api():
     for caminho in ("/api/pedidos", "/api/pedidos/status-log", "/api/pagamentos"):
         response = client.get(caminho)
@@ -324,3 +344,49 @@ def test_links_audio_ambiente_salva_apenas_audio_direto():
     response_get = client.get("/api/uploads/musicas/links")
     assert response_get.status_code == 200
     assert response_get.json()["links"] == data["links"]
+
+
+def test_avaliacoes_publico_le_e_cria_para_produto_existente():
+    produto = client.post(
+        "/api/produtos",
+        json={"nome": "Produto Avaliado", "codigo_p": codigo_unico("AVL"), "preco": 20.0, "quantidade": 5},
+        headers=PROTECTED_HEADERS,
+    ).json()
+
+    vazio = client.get(f"/api/produtos/{produto['id']}/avaliacoes")
+    assert vazio.status_code == 200
+    assert vazio.json() == {"avaliacoes": [], "total": 0, "media": 0}
+
+    resposta = client.post(
+        f"/api/produtos/{produto['id']}/avaliacoes",
+        json={"nome_cliente": "Maria", "nota": 5, "comentario": "Produto lindo, chegou rápido!"},
+    )
+    assert resposta.status_code == 200
+    assert resposta.json() == {"ok": True}
+
+    listagem = client.get(f"/api/produtos/{produto['id']}/avaliacoes")
+    assert listagem.status_code == 200
+    data = listagem.json()
+    assert data["total"] == 1
+    assert data["media"] == 5
+    assert data["avaliacoes"][0]["nome_cliente"] == "Maria"
+    assert data["avaliacoes"][0]["comentario"] == "Produto lindo, chegou rápido!"
+
+
+def test_avaliacoes_rejeita_produto_inexistente_e_nota_invalida():
+    resposta = client.post(
+        "/api/produtos/999999999/avaliacoes",
+        json={"nome_cliente": "Ana", "nota": 4, "comentario": "Ótimo"},
+    )
+    assert resposta.status_code == 404
+
+    produto = client.post(
+        "/api/produtos",
+        json={"nome": "Produto Nota Invalida", "codigo_p": codigo_unico("AVL2"), "preco": 15.0, "quantidade": 3},
+        headers=PROTECTED_HEADERS,
+    ).json()
+    resposta_nota = client.post(
+        f"/api/produtos/{produto['id']}/avaliacoes",
+        json={"nome_cliente": "Ana", "nota": 9, "comentario": "Nota fora do intervalo"},
+    )
+    assert resposta_nota.status_code == 422

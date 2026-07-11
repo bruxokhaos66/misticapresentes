@@ -226,6 +226,9 @@
         <article class="metric"><small>VENDAS DO MES</small><strong id="vMes">R$ 0,00</strong></article>
         <article class="metric"><small>META DO MES</small><strong id="meta">R$ 1.500,00</strong></article>
         <article class="metric" id="faltaCard"><small>FALTA PARA META</small><strong id="falta">R$ 1.500,00</strong></article>
+        <article class="metric"><small>TICKET MEDIO DO MES</small><strong id="ticketMedio">R$ 0,00</strong></article>
+        <article class="metric"><small>MAIS VENDIDO DO MES</small><strong id="produtoMaisVendido">-</strong></article>
+        <article class="metric"><small>AVALIACAO DA LOJA</small><strong id="avaliacaoLoja">Sem avaliacoes</strong></article>
       </section>
 
       <section class="content-grid">
@@ -417,6 +420,13 @@
       $("meta").textContent = brl(dados.meta_mes);
       $("falta").textContent = dados.meta_completa ? "Meta completa" : brl(falta);
       $("faltaCard").classList.toggle("ok", Boolean(dados.meta_completa));
+      $("ticketMedio").textContent = brl(dados.ticket_medio_mes || 0);
+      $("produtoMaisVendido").textContent = dados.produto_mais_vendido_mes
+        ? `${esc(dados.produto_mais_vendido_mes)} (${Number(dados.produto_mais_vendido_qtd || 0)} un.)`
+        : "Sem vendas no mes";
+      $("avaliacaoLoja").textContent = dados.avaliacoes_total
+        ? `${Number(dados.avaliacoes_media || 0).toFixed(1)} de 5 (${dados.avaliacoes_total} avaliacoes)`
+        : "Sem avaliacoes";
       $("diaOperacional").textContent = `Dia operacional: ${dados.dia_operacional || etiquetaDiaOperacional()}`;
       $("origemDados").textContent = `API online. Versao ${VERSAO}. Regra igual ao desktop. Vendas do dia: ${vendasDia.length}.`;
       renderVendas(vendasDia.map((venda) => ({ venda, data: dataVenda(venda) })));

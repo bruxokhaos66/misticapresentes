@@ -17,6 +17,7 @@ from backend.order_status_routes import expirar_pedidos_pendentes, router as ord
 from backend.panel_sessions import exigir_sessao_ou_chave_api
 from backend.payment_routes import router as payment_router
 from backend.product_routes import router as product_router, validar_site_api_key
+from backend.review_routes import router as review_router
 from backend.upload_routes import router as upload_router
 from backend.user_sync_routes import router as user_sync_router
 from backend.site_stock_routes import router as site_stock_router
@@ -59,6 +60,7 @@ app.include_router(upload_router)
 app.include_router(system_status_router)
 app.include_router(backup_router)
 app.include_router(course_router)
+app.include_router(review_router)
 
 
 class ProdutoIn(BaseModel):
@@ -501,6 +503,31 @@ def painel_dashboard(meta_mes: float = Query(1500.0, ge=0), sessao: dict = Depen
             """,
             (f"%{mes}%", f"%{mes}%"),
         ).fetchone()["total"] or 0.0
+        qtd_vendas_mes = conn.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM vendas
+            WHERE COALESCE(status,'Concluído') != 'Cancelado'
+              AND (COALESCE(data_venda,'') LIKE ? OR COALESCE(data_iso,'') LIKE ?)
+            """,
+            (f"%{mes}%", f"%{mes}%"),
+        ).fetchone()["total"] or 0
+        produto_mais_vendido = conn.execute(
+            """
+            SELECT vi.nome_p AS nome, SUM(vi.quantidade) AS quantidade
+            FROM vendas_itens vi
+            JOIN vendas v ON v.id = vi.venda_id
+            WHERE COALESCE(v.status,'Concluído') != 'Cancelado'
+              AND (COALESCE(v.data_venda,'') LIKE ? OR COALESCE(v.data_iso,'') LIKE ?)
+            GROUP BY vi.nome_p
+            ORDER BY quantidade DESC
+            LIMIT 1
+            """,
+            (f"%{mes}%", f"%{mes}%"),
+        ).fetchone()
+        avaliacoes_loja = conn.execute(
+            "SELECT COUNT(*) AS total, AVG(nota) AS media FROM avaliacoes_produtos WHERE COALESCE(aprovado,1)=1"
+        ).fetchone()
         vendas_do_dia = [
             dict(row)
             for row in conn.execute(
@@ -528,6 +555,11 @@ def painel_dashboard(meta_mes: float = Query(1500.0, ge=0), sessao: dict = Depen
         "meta_mes": float(meta_mes or 0),
         "falta_meta": falta_meta,
         "meta_completa": falta_meta <= 0,
+        "ticket_medio_mes": round(float(vendas_mes or 0) / qtd_vendas_mes, 2) if qtd_vendas_mes else 0.0,
+        "produto_mais_vendido_mes": produto_mais_vendido["nome"] if produto_mais_vendido else None,
+        "produto_mais_vendido_qtd": produto_mais_vendido["quantidade"] if produto_mais_vendido else 0,
+        "avaliacoes_total": avaliacoes_loja["total"] or 0,
+        "avaliacoes_media": round(avaliacoes_loja["media"], 1) if avaliacoes_loja["media"] else 0.0,
         "dia_operacional": dia_operacional,
         "inicio_vendas_hoje": inicio_hoje,
         "fim_vendas_hoje": fim_hoje,
