@@ -162,7 +162,10 @@ $("[data-print-last-receipt]")?.addEventListener("click", () => printReceipt());
 $("[data-send-last-receipt-whatsapp]")?.addEventListener("click", sendLastReceiptWhatsapp);
 $("[data-download-backup]")?.addEventListener("click", downloadBackup);
 $("[data-restore-backup]")?.addEventListener("click", restoreBackupInfo);
-$("[data-menu-toggle]")?.addEventListener("click", () => $("[data-nav-links]")?.classList.toggle("open"));
+$("[data-menu-toggle]")?.addEventListener("click", () => {
+  $("[data-nav-links]")?.classList.toggle("open");
+  $(".site-header")?.classList.toggle("menu-open");
+});
 if (supplierForm) supplierForm.addEventListener("submit", handleSupplierSubmit);
 if (adminLoginForm) adminLoginForm.addEventListener("submit", event => { event.preventDefault(); unlockAdmin(); });
 if (isisForm) isisForm.addEventListener("submit", handleIsisSubmit);

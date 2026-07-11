@@ -16,6 +16,7 @@ body{padding-top:0!important}
 .nav-links a:not(.btn):hover{color:#ffe7a3!important;background:rgba(242,201,109,.1)!important;transform:translateY(-1px)!important}
 .nav-links .btn,.btn-small{min-height:48px!important;padding-inline:30px!important;font-size:.92rem!important;font-weight:850!important;letter-spacing:.02em!important;border-color:rgba(255,231,163,.76)!important;background:linear-gradient(135deg,#fff3bd 0%,#f1cb69 42%,#c9902f 72%,#fff0b6 100%)!important;color:#1b1104!important;box-shadow:0 16px 44px rgba(0,0,0,.30),0 0 24px rgba(242,201,109,.12)!important}
 .site-header .menu-toggle{z-index:5!important}
+.site-header.menu-open{overflow:visible!important}
 
 /* Tablet: os links ainda cabem em linha na faixa do topo, sem virar menu suspenso. */
 @media(min-width:981px) and (max-width:1180px){
