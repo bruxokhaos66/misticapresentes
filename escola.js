@@ -69,9 +69,9 @@
   async function criarPedidoCurso(slug, cadastro) {
     // O Pix (chave, nome, cidade e preço) é gerado só no servidor a partir do
     // catálogo autoritativo de cursos pagos (ver backend/course_routes.py);
-    // o navegador nunca monta o payload sozinho. O cadastro (nome/e-mail/senha)
-    // cria a conta do aluno, que ganha acesso ao curso quando o pagamento for
-    // confirmado.
+    // o navegador nunca monta o payload sozinho. O cadastro (nome/e-mail)
+    // identifica o comprador; a senha só é criada depois, pelo link enviado
+    // quando o pagamento é confirmado.
     const { ok, body } = await apiJson("/api/checkout/cursos", {
       method: "POST",
       body: JSON.stringify({ slug, ...cadastro }),
@@ -80,6 +80,18 @@
       throw new Error(body.detail || body.message || "Não foi possível gerar o Pix para este curso agora.");
     }
     return body;
+  }
+
+  async function definirSenhaAluno(token, senha) {
+    const { ok, body } = await apiJson("/api/alunos/definir-senha", {
+      method: "POST",
+      body: JSON.stringify({ token, senha }),
+    });
+    if (!ok) throw new Error(body.detail || "Não foi possível criar sua senha. O link pode ter expirado.");
+    alunoAtual = { nome: body.nome, email: body.email, cursos: [] };
+    alunoCarregado = false;
+    await carregarAlunoAtual();
+    return alunoAtual;
   }
 
   async function carregarAlunoAtual() {
@@ -131,7 +143,7 @@
   function loginFormHtml(curso) {
     return `
       <div class="escola-login-box" data-login-box>
-        <p><strong>Já comprou este curso?</strong> Entre com o e-mail e a senha cadastrados na compra para acessar os módulos, vídeos e artigos.</p>
+        <p><strong>Já comprou este curso?</strong> Entre com o e-mail e a senha que você criou no link de acesso enviado pelo WhatsApp após a confirmação do pagamento.</p>
         <form class="escola-login-form" data-login-form>
           <input type="email" placeholder="Seu e-mail" data-login-email required autocomplete="email">
           <input type="password" placeholder="Sua senha" data-login-senha required autocomplete="current-password">
@@ -189,10 +201,9 @@
       <div class="escola-purchase" data-purchase-panel hidden>
         <div class="warning-box"><strong>Antes de pagar:</strong> confira no banco se o valor e o recebedor estão corretos.</div>
         <form class="escola-cadastro-form" data-purchase-cadastro>
-          <p class="escola-cadastro-eyebrow">Cadastro de acesso ao curso</p>
+          <p class="escola-cadastro-eyebrow">Identificação da compra</p>
           <input type="text" placeholder="Seu nome completo" data-cadastro-nome required autocomplete="name">
           <input type="email" placeholder="Seu e-mail (será seu login)" data-cadastro-email required autocomplete="email">
-          <input type="password" placeholder="Crie uma senha (mín. 8 caracteres)" data-cadastro-senha required minlength="8" autocomplete="new-password">
         </form>
         <div class="escola-qr-wrap">
           <canvas width="180" height="180" data-purchase-qr aria-label="QR Code Pix do curso"></canvas>
@@ -207,7 +218,7 @@
           <button class="btn btn-ghost" type="button" data-purchase-copy>Copiar Pix copia e cola</button>
           <button class="btn btn-ghost" type="button" data-purchase-whatsapp>Enviar comprovante pelo WhatsApp</button>
         </div>
-        <p class="escola-purchase-status">Após a confirmação do pagamento, seu login e senha cadastrados acima liberam automaticamente o acesso completo ao curso nesta página.</p>
+        <p class="escola-purchase-status">Após a confirmação do pagamento, você recebe pelo WhatsApp um link para criar sua senha e acessar o curso nesta página.</p>
       </div>`;
   }
 
@@ -280,14 +291,13 @@
       purchasePanel.querySelector("[data-purchase-generate]")?.addEventListener("click", async () => {
         const nome = cadastroForm.querySelector("[data-cadastro-nome]").value.trim();
         const email = cadastroForm.querySelector("[data-cadastro-email]").value.trim();
-        const senha = cadastroForm.querySelector("[data-cadastro-senha]").value;
         if (!cadastroForm.reportValidity()) return;
 
         payloadBox.value = "";
         statusBox.textContent = "Gerando Pix com o servidor...";
         let pedido;
         try {
-          pedido = await criarPedidoCurso(curso.slug, { nome, email, senha });
+          pedido = await criarPedidoCurso(curso.slug, { nome, email });
         } catch (error) {
           statusBox.textContent = error.message || "Não foi possível gerar o Pix agora. Tente novamente ou fale pelo WhatsApp.";
           return;
@@ -296,7 +306,7 @@
         try {
           if (!window.QRCode) throw new Error("Biblioteca de QR Code não carregou.");
           await window.QRCode.toCanvas(qrCanvas, pedido.pix_copia_cola, { width: 180, margin: 2, errorCorrectionLevel: "M" });
-          statusBox.textContent = `QR Code gerado para ${currency.format(curso.preco)}. Pague e envie o comprovante pelo WhatsApp para liberarmos o acesso. Depois, use o e-mail e a senha cadastrados para entrar.`;
+          statusBox.textContent = `QR Code gerado para ${currency.format(curso.preco)}. Pague e envie o comprovante pelo WhatsApp: assim que confirmarmos, você recebe o link para criar sua senha.`;
         } catch {
           statusBox.textContent = "Pix copia e cola gerado. Não foi possível desenhar o QR Code agora.";
         }
@@ -325,6 +335,44 @@
     return `<div class="escola-account" data-escola-account></div>`;
   }
 
+  function criarSenhaBoxHtml() {
+    return `
+      <div class="escola-login-box" data-criar-senha-box>
+        <p><strong>Pagamento confirmado!</strong> Crie sua senha de acesso para entrar na Escola Mística.</p>
+        <form class="escola-login-form" data-criar-senha-form>
+          <input type="password" placeholder="Crie uma senha (mín. 8 caracteres)" data-criar-senha-valor required minlength="8" autocomplete="new-password">
+          <button class="btn" type="submit">Criar senha e entrar</button>
+        </form>
+        <p class="escola-login-status" data-criar-senha-status hidden></p>
+      </div>`;
+  }
+
+  function setupCriarSenhaBox(token) {
+    const grid = document.querySelector("[data-escola-grid]");
+    if (!grid) return;
+    grid.insertAdjacentHTML("beforebegin", criarSenhaBoxHtml());
+    const box = document.querySelector("[data-criar-senha-box]");
+    const form = box.querySelector("[data-criar-senha-form]");
+    const status = box.querySelector("[data-criar-senha-status]");
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+      const senha = form.querySelector("[data-criar-senha-valor]").value;
+      status.hidden = false;
+      status.textContent = "Criando sua senha...";
+      try {
+        await definirSenhaAluno(token, senha);
+        status.textContent = "Senha criada! Você já está logado.";
+        const url = new URL(window.location.href);
+        url.searchParams.delete("acesso");
+        window.history.replaceState({}, "", url);
+        box.remove();
+        await atualizarBarraConta();
+      } catch (error) {
+        status.textContent = error.message || "Não foi possível criar sua senha agora.";
+      }
+    });
+  }
+
   async function atualizarBarraConta() {
     const box = document.querySelector("[data-escola-account]");
     if (!box) return;
@@ -348,6 +396,9 @@
       if (curso) setupCard(article, curso);
     });
     atualizarBarraConta();
+
+    const tokenAcesso = new URL(window.location.href).searchParams.get("acesso");
+    if (tokenAcesso) setupCriarSenhaBox(tokenAcesso);
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", renderCatalog, { once: true });

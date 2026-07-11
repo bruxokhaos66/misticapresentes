@@ -185,7 +185,11 @@ const seedCourseMaterials = [
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.ok) throw new Error(data.detail || "Falha ao confirmar pagamento.");
-      setCourseOrdersStatus("Pagamento confirmado. O aluno já pode entrar com o e-mail e a senha cadastrados.");
+      setCourseOrdersStatus(
+        data.link_acesso
+          ? `Pagamento confirmado. Envie este link pelo WhatsApp para o aluno criar a senha: ${data.link_acesso}`
+          : "Pagamento confirmado. O aluno já tem senha e pode entrar normalmente com o e-mail cadastrado."
+      );
       await loadCourseOrders();
     } catch (error) {
       setCourseOrdersStatus(error.message || "Erro ao confirmar pagamento.");

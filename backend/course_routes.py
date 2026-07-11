@@ -38,7 +38,6 @@ class CursoCheckoutIn(BaseModel):
     slug: str = Field(min_length=1)
     nome: str = Field(min_length=1)
     email: EmailStr
-    senha: str = Field(min_length=8)
 
 
 def garantir_tabela_pedidos_cursos(conn):
@@ -86,12 +85,13 @@ def _montar_pix_curso(pedido_id: int, valor: float) -> dict | None:
 @router.post("/checkout/cursos", dependencies=[Depends(limitar_checkout_curso)])
 def criar_pedido_curso(payload: CursoCheckoutIn):
     """Endpoint público de compra de curso: o navegador envia o slug e os dados
-    de cadastro do aluno (nome, e-mail, senha). Preço e título vêm do catálogo
-    do servidor (CATALOGO_CURSOS_PAGOS) e o Pix é gerado aqui com a chave real
-    do ambiente (ver backend/pix.py) -- nunca no navegador. A conta do aluno é
-    criada/atualizada já nesta etapa; o acesso ao conteúdo só é liberado depois
-    que um administrador confirma o pagamento (ver backend/aluno_auth.py)."""
-    from backend.aluno_auth import criar_ou_atualizar_aluno, garantir_tabelas_alunos
+    de identificação do comprador (nome, e-mail). Preço e título vêm do
+    catálogo do servidor (CATALOGO_CURSOS_PAGOS) e o Pix é gerado aqui com a
+    chave real do ambiente (ver backend/pix.py) -- nunca no navegador. O
+    cadastro do aluno é criado sem senha nesta etapa; a senha só é definida
+    pelo próprio aluno através do link de acesso enviado depois que um
+    administrador confirma o pagamento (ver backend/aluno_auth.py)."""
+    from backend.aluno_auth import garantir_tabelas_alunos, obter_ou_criar_aluno_sem_senha
 
     curso = CATALOGO_CURSOS_PAGOS.get(payload.slug.strip())
     if not curso:
@@ -102,7 +102,7 @@ def criar_pedido_curso(payload: CursoCheckoutIn):
     with conectar() as conn:
         garantir_tabela_pedidos_cursos(conn)
         garantir_tabelas_alunos(conn)
-        aluno_id = criar_ou_atualizar_aluno(conn, nome=payload.nome, email=email, senha=payload.senha)
+        aluno_id = obter_ou_criar_aluno_sem_senha(conn, nome=payload.nome, email=email)
         cur = conn.execute(
             "INSERT INTO pedidos_cursos (slug, titulo, preco, status, criado_em, aluno_id, nome, email) VALUES (?,?,?,?,?,?,?,?)",
             (payload.slug.strip(), curso["titulo"], curso["preco"], "Aguardando pagamento", agora, aluno_id, payload.nome.strip(), email),
