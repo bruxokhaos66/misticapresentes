@@ -11,6 +11,7 @@ from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from backend.aluno_auth import router as aluno_router
 from backend.audit import registrar_auditoria
 from backend.backup_routes import router as backup_router
 from backend.course_routes import router as course_router
@@ -94,6 +95,7 @@ app.include_router(upload_router)
 app.include_router(system_status_router)
 app.include_router(backup_router)
 app.include_router(course_router)
+app.include_router(aluno_router)
 app.include_router(review_router)
 
 
