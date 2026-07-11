@@ -5,13 +5,14 @@ import secrets
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 from backend.audit import registrar_auditoria
 from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.database import conectar
+from backend.panel_sessions import exigir_sessao_ou_chave_api
 
 router = APIRouter(prefix="/api", tags=["pedidos-status"])
 
@@ -237,7 +238,7 @@ def cancelar_com_reposicao(conn, venda_id: int, usuario: str, observacao: str | 
 
 
 @router.get("/pedidos")
-def listar_pedidos(status: str = "", limite: int = Query(100, ge=1, le=500)):
+def listar_pedidos(status: str = "", limite: int = Query(100, ge=1, le=500), sessao: dict = Depends(exigir_sessao_ou_chave_api())):
     with conectar() as conn:
         expirar_pedidos_pendentes(conn)
         if status:
@@ -270,8 +271,25 @@ def listar_pedidos(status: str = "", limite: int = Query(100, ge=1, le=500)):
         return [venda_para_pedido(conn, row) for row in rows]
 
 
+@router.get("/pedidos/status-log")
+def listar_status_pedidos(limite: int = 100, sessao: dict = Depends(exigir_sessao_ou_chave_api())):
+    limite = max(1, min(limite, 500))
+    with conectar() as conn:
+        rows = conn.execute(
+            """
+            SELECT l.id, l.venda_id, v.cliente, v.total_final, l.status, l.usuario, l.observacao, l.data_hora
+            FROM pedido_status_log l
+            LEFT JOIN pedidos v ON v.id = l.venda_id
+            ORDER BY l.id DESC
+            LIMIT ?
+            """,
+            (limite,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
 @router.get("/pedidos/{venda_id}")
-def obter_pedido(venda_id: int):
+def obter_pedido(venda_id: int, sessao: dict = Depends(exigir_sessao_ou_chave_api())):
     with conectar() as conn:
         expirar_pedidos_pendentes(conn)
         venda = conn.execute(
@@ -482,24 +500,6 @@ def cancelar_pedido(venda_id: int, x_mistica_api_key: str | None = Header(defaul
         retorno = cancelar_com_reposicao(conn, venda_id, "Admin", "Pedido cancelado pelo painel", agora)
         conn.commit()
     return {**retorno, "data_hora": agora}
-
-
-@router.get("/pedidos/status-log")
-def listar_status_pedidos(limite: int = 100):
-    limite = max(1, min(limite, 500))
-    with conectar() as conn:
-        rows = conn.execute(
-            """
-            SELECT l.id, l.venda_id, v.cliente, v.total_final, l.status, l.usuario, l.observacao, l.data_hora
-            FROM pedido_status_log l
-            LEFT JOIN pedidos v ON v.id = l.venda_id
-            ORDER BY l.id DESC
-            LIMIT ?
-            """,
-            (limite,),
-        ).fetchall()
-    return [dict(row) for row in rows]
-
 
 try:
     from backend.order_api_guard_inner_routes import router as order_api_guard_inner_router

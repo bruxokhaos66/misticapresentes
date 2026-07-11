@@ -2,7 +2,9 @@
   const config = window.misticaSiteConfig || {};
   const isProduction = config.serverMode === "production" || config.storageMode === "api_first" || config.usePublicDomainAccess === true;
   const API_BASE = String(config.apiBaseUrl || "https://api.misticaesotericos.com.br").replace(/\/$/, "");
-  const SITE_API_KEY = String(config.siteApiKey || "").trim();
+  // O checkout público nunca envia uma chave de API pelo navegador (ver
+  // backend/product_routes.py::criar_pedido_checkout_publico e
+  // tests/test_no_browser_api_secret.py); a chave global fica só no servidor.
   const SYNC_CACHE_MS = 15000;
   const syncCache = new Map();
   let guardInstalled = false;
@@ -32,7 +34,6 @@
   function headers(extra = {}) {
     return {
       "Content-Type": "application/json",
-      ...(SITE_API_KEY ? { "X-Mistica-Api-Key": SITE_API_KEY } : {}),
       ...extra,
     };
   }
@@ -112,14 +113,13 @@
       data_venda: new Date(localSale.date).toLocaleString("pt-BR"),
       data_iso: localSale.date,
       dia_operacional: new Date(localSale.date).toISOString().slice(0, 10),
-      // O Pix só gera um QR Code; o pagamento ainda não foi confirmado.
-      // O estoque só é baixado de fato quando o pedido avança para
-      // "Pagamento confirmado" (ver backend/order_status_routes.py e
-      // backend/payment_routes.py), nunca no momento da geração do QR Code.
-      baixa_estoque: false,
       itens: buildApiItems(items),
     };
-    return api("/api/vendas", { method: "POST", body: JSON.stringify(payload) });
+    // Rota pública sem segredo: o navegador nunca envia a chave de API (ela
+    // fica só no servidor). O backend reserva o estoque na criação do pedido
+    // e devolve automaticamente se o Pix expirar/for cancelado (ver
+    // backend/product_routes.py::criar_pedido_checkout_publico).
+    return api("/api/checkout/pedidos", { method: "POST", body: JSON.stringify(payload) });
   }
 
   async function guardedGeneratePix(event) {
