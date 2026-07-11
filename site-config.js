@@ -171,7 +171,7 @@ window.misticaSiteConfig = {
     loadStyle("misticaAdminProductsStyle", "v2-admin-products.css?v=20260708-admin-products");
     loadStyle("misticaCoursesStyle", "v2-courses.css?v=20260710-cursos");
     loadScript("misticaAdminProductsScript", "v2-admin-products.js?v=20260708-admin-products");
-    loadScript("misticaCoursesScript", "v2-courses.js?v=20260710-cursos");
+    loadScript("misticaCoursesScript", "v2-courses.js?v=20260711-pedidos");
   };
 
   const iniciar = () => {

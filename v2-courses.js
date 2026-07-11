@@ -149,5 +149,55 @@ const seedCourseMaterials = [
     if (button) handleRemoveCourseMaterial(button.dataset.removeCourse);
   });
 
+  function setCourseOrdersStatus(message) {
+    const status = document.getElementById("courseOrdersStatus");
+    if (status) { status.hidden = false; status.textContent = message; }
+  }
+
+  function courseOrderItemHtml(pedido) {
+    const pago = pedido.status === "Pago";
+    const acao = pago
+      ? `<span class="course-card-tag">Pago — acesso liberado</span>`
+      : `<button class="btn btn-ghost course-admin-remove" type="button" data-confirm-course-order="${pedido.id}">Confirmar pagamento</button>`;
+    return `<div class="course-admin-item"><div><strong>${pedido.titulo}</strong><span>${pedido.nome || "(sem nome)"} • ${pedido.email || "(sem e-mail)"} • ${pedido.status}</span></div>${acao}</div>`;
+  }
+
+  async function loadCourseOrders() {
+    const list = document.querySelector("[data-course-orders-list]");
+    if (!list) return;
+    try {
+      const response = await fetch(`${COURSE_API_BASE}/api/checkout/cursos`, { credentials: "include" });
+      const data = await response.json().catch(() => []);
+      if (!response.ok) throw new Error(data.detail || "Falha ao carregar pedidos de cursos.");
+      list.innerHTML = data.length
+        ? data.map(courseOrderItemHtml).join("")
+        : `<div class="history-item"><span>Nenhum pedido de curso ainda.</span></div>`;
+    } catch (error) {
+      setCourseOrdersStatus(error.message || "Erro ao carregar pedidos de cursos.");
+    }
+  }
+
+  async function confirmarPedidoCurso(id) {
+    try {
+      const response = await fetch(`${COURSE_API_BASE}/api/checkout/cursos/${id}/confirmar`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok) throw new Error(data.detail || "Falha ao confirmar pagamento.");
+      setCourseOrdersStatus("Pagamento confirmado. O aluno já pode entrar com o e-mail e a senha cadastrados.");
+      await loadCourseOrders();
+    } catch (error) {
+      setCourseOrdersStatus(error.message || "Erro ao confirmar pagamento.");
+    }
+  }
+
+  document.querySelector("[data-course-orders-refresh]")?.addEventListener("click", loadCourseOrders);
+  document.querySelector("[data-course-orders-list]")?.addEventListener("click", event => {
+    const button = event.target.closest("[data-confirm-course-order]");
+    if (button) confirmarPedidoCurso(button.dataset.confirmCourseOrder);
+  });
+
   loadCourseMaterials();
+  loadCourseOrders();
 })();

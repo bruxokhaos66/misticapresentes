@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, EmailStr, Field
 
 from backend.database import conectar
 from backend.panel_sessions import exigir_sessao_ou_chave_api
@@ -36,6 +36,9 @@ class CursoMaterialIn(BaseModel):
 
 class CursoCheckoutIn(BaseModel):
     slug: str = Field(min_length=1)
+    nome: str = Field(min_length=1)
+    email: EmailStr
+    senha: str = Field(min_length=8)
 
 
 def garantir_tabela_pedidos_cursos(conn):
@@ -49,10 +52,22 @@ def garantir_tabela_pedidos_cursos(conn):
             status TEXT NOT NULL,
             pix_txid TEXT,
             pix_copia_cola TEXT,
-            criado_em TEXT NOT NULL
+            criado_em TEXT NOT NULL,
+            aluno_id INTEGER,
+            nome TEXT,
+            email TEXT
         )
         """
     )
+    for sql in (
+        "ALTER TABLE pedidos_cursos ADD COLUMN aluno_id INTEGER",
+        "ALTER TABLE pedidos_cursos ADD COLUMN nome TEXT",
+        "ALTER TABLE pedidos_cursos ADD COLUMN email TEXT",
+    ):
+        try:
+            conn.execute(sql)
+        except Exception:
+            pass
     conn.execute("CREATE INDEX IF NOT EXISTS idx_pedidos_cursos_criado ON pedidos_cursos(criado_em)")
 
 
@@ -70,20 +85,27 @@ def _montar_pix_curso(pedido_id: int, valor: float) -> dict | None:
 
 @router.post("/checkout/cursos", dependencies=[Depends(limitar_checkout_curso)])
 def criar_pedido_curso(payload: CursoCheckoutIn):
-    """Endpoint público mínimo para compra de curso: o navegador envia só o
-    slug. Preço e nome vêm do catálogo do servidor (CATALOGO_CURSOS_PAGOS) e o
-    Pix é gerado aqui com a chave real do ambiente (ver backend/pix.py) --
-    nunca no navegador."""
+    """Endpoint público de compra de curso: o navegador envia o slug e os dados
+    de cadastro do aluno (nome, e-mail, senha). Preço e título vêm do catálogo
+    do servidor (CATALOGO_CURSOS_PAGOS) e o Pix é gerado aqui com a chave real
+    do ambiente (ver backend/pix.py) -- nunca no navegador. A conta do aluno é
+    criada/atualizada já nesta etapa; o acesso ao conteúdo só é liberado depois
+    que um administrador confirma o pagamento (ver backend/aluno_auth.py)."""
+    from backend.aluno_auth import criar_ou_atualizar_aluno, garantir_tabelas_alunos
+
     curso = CATALOGO_CURSOS_PAGOS.get(payload.slug.strip())
     if not curso:
         raise HTTPException(status_code=404, detail="Curso não encontrado ou não é pago.")
 
     agora = datetime.now().isoformat(timespec="seconds")
+    email = payload.email.strip().lower()
     with conectar() as conn:
         garantir_tabela_pedidos_cursos(conn)
+        garantir_tabelas_alunos(conn)
+        aluno_id = criar_ou_atualizar_aluno(conn, nome=payload.nome, email=email, senha=payload.senha)
         cur = conn.execute(
-            "INSERT INTO pedidos_cursos (slug, titulo, preco, status, criado_em) VALUES (?,?,?,?,?)",
-            (payload.slug.strip(), curso["titulo"], curso["preco"], "Aguardando pagamento", agora),
+            "INSERT INTO pedidos_cursos (slug, titulo, preco, status, criado_em, aluno_id, nome, email) VALUES (?,?,?,?,?,?,?,?)",
+            (payload.slug.strip(), curso["titulo"], curso["preco"], "Aguardando pagamento", agora, aluno_id, payload.nome.strip(), email),
         )
         pedido_id = int(cur.lastrowid)
         pix = _montar_pix_curso(pedido_id, curso["preco"])
@@ -122,13 +144,25 @@ def garantir_tabela_cursos(conn):
 
 
 @router.get("/cursos")
-def listar_materiais_curso():
+def listar_materiais_curso(request: Request):
+    """Lista pública dos materiais dos cursos GRATUITOS apenas. Materiais de
+    cursos pagos ficam de fora daqui para não vazar conteúdo para quem não
+    comprou -- eles são servidos por /api/cursos/{slug}/conteudo (exige login
+    de aluno com acesso liberado) ou, para o painel administrativo gerenciar
+    todos os materiais, por uma sessão de administrador válida."""
     with conectar() as conn:
         garantir_tabela_cursos(conn)
         rows = conn.execute(
             "SELECT id, titulo, categoria, tipo, descricao, url, criado_em FROM cursos_materiais ORDER BY id DESC LIMIT 200"
         ).fetchall()
-    return [dict(row) for row in rows]
+    materiais = [dict(row) for row in rows]
+
+    from backend.panel_sessions import validar_sessao
+
+    sessao = validar_sessao(request.cookies.get("mistica_painel_sessao"))
+    if sessao:
+        return materiais
+    return [item for item in materiais if item["categoria"] not in CATALOGO_CURSOS_PAGOS]
 
 
 @router.post("/cursos")
