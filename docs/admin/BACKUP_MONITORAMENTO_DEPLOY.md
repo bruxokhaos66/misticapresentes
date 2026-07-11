@@ -1,8 +1,8 @@
-# Backup, monitoramento e deploy/rollback
+# Backup, monitoramento, deploy/rollback e auditoria periódica
 
-Este documento cobre a operação contínua da Fase 5 (qualidade contínua) que
-depende de infraestrutura externa ou de decisão manual: monitoramento com
-alerta, backup automático fora do servidor e rollback de deploy.
+Este documento cobre a operação contínua da Fase 5 (qualidade contínua):
+monitoramento com alerta, backup automático fora do servidor, rollback de
+deploy e a auditoria periódica automatizada.
 
 ## Backup automático fora do Render
 
@@ -88,3 +88,36 @@ produção, o rollback é manual:
 
 Se o problema exigir também restaurar dados (não só código), siga a seção de
 restauração de backup acima antes de liberar o acesso normal.
+
+## Auditoria periódica
+
+`.github/workflows/auditoria-periodica.yml` roda toda segunda-feira (e sob
+demanda via `workflow_dispatch`) e verifica quatro coisas:
+
+1. **Suite de testes completa** (`pytest`) — regressão geral.
+2. **Dependências Python vulneráveis** (`pip-audit -r requirements.txt`).
+3. **Dependências Node de produção vulneráveis** (`npm audit --omit=dev` —
+   dependências de desenvolvimento como `@lhci/cli`/Playwright não entram
+   nessa checagem porque não vão para produção).
+4. **Segredos novos no código** (`detect-secrets scan --baseline
+   .secrets.baseline`) — compara contra `.secrets.baseline`, que já marca os
+   falsos positivos conhecidos (chave de teste em `tests/`, checksums em
+   `updates/*.json`). Só falha se aparecer algo **novo** fora do baseline.
+
+Se qualquer verificação falhar, o workflow abre (ou comenta numa já aberta)
+uma issue `🔍 Auditoria periódica encontrou pendências` com o resumo do que
+falhou e o link para o log completo.
+
+### Ao adicionar um segredo de teste novo (falso positivo)
+
+Se um teste novo precisar de uma string que pareça um segredo (chave de API
+de teste, token fake), rode localmente:
+
+```
+pip install detect-secrets
+detect-secrets scan --baseline .secrets.baseline
+detect-secrets audit .secrets.baseline
+```
+
+O `audit` é interativo: marque a nova entrada como "não é um segredo" (`n`) e
+comite o `.secrets.baseline` atualizado junto com o teste.

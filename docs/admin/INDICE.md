@@ -15,7 +15,7 @@ Esta pasta concentra planos e documentos operacionais relacionados ao Admin, ped
 - `BAIXA_MANUAL_ESTOQUE.md` — baixa manual de estoque pelo Admin.
 - `PRODUTOS_API_ADMIN.md` — cadastro completo de produtos pela API e Admin.
 - `UPLOAD_IMAGENS_PRODUTOS.md` — upload real de imagens de produtos.
-- `BACKUP_MONITORAMENTO_DEPLOY.md` — backup automático fora do Render, monitoramento com UptimeRobot e rollback manual de deploy.
+- `BACKUP_MONITORAMENTO_DEPLOY.md` — backup automático fora do Render, monitoramento com UptimeRobot, rollback manual de deploy e auditoria periódica automatizada.
 
 ## Regra daqui para frente
 
