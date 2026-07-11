@@ -5,6 +5,22 @@ from config import DOCS_PATH, hash_password_pbkdf2
 from .connection import query_db
 
 
+def _exec_tolerante(sql, params=None):
+    """Executa uma migração (ALTER TABLE/CREATE INDEX) tolerando apenas o erro
+    esperado de coluna/índice já existente; qualquer outro erro é logado em vez
+    de ser silenciosamente descartado, para não mascarar falhas reais de schema
+    (disco cheio, banco travado, SQL inválido etc.)."""
+    try:
+        if params is not None:
+            query_db(sql, params, commit=True)
+        else:
+            query_db(sql, commit=True)
+    except Exception as exc:
+        msg = str(exc).lower()
+        if "duplicate column" not in msg and "already exists" not in msg:
+            print(f"[migrations] falha inesperada ao aplicar '{sql[:120]}': {exc}")
+
+
 def _migrar_pedidos_de_vendas():
     """Move para `pedidos`/`pedidos_itens` as linhas de `vendas` criadas pelo site
     (origem_sync='site'), que antes ficavam misturadas com vendas reais do caixa.
@@ -51,16 +67,10 @@ def init_db():
     query_db("CREATE TABLE IF NOT EXISTS categorias (id INTEGER PRIMARY KEY, nome TEXT UNIQUE)", commit=True)
     query_db("CREATE TABLE IF NOT EXISTS clientes (id INTEGER PRIMARY KEY, nome TEXT, telefone TEXT, cpf TEXT, endereco TEXT, nascimento TEXT)", commit=True)
     for col, typ in [("telefone", "TEXT"), ("cpf", "TEXT"), ("endereco", "TEXT"), ("nascimento", "TEXT")]:
-        try:
-            query_db(f"ALTER TABLE clientes ADD COLUMN {col} {typ}", commit=True)
-        except Exception:
-            pass
+        _exec_tolerante(f"ALTER TABLE clientes ADD COLUMN {col} {typ}")
     query_db("CREATE TABLE IF NOT EXISTS vendas (id INTEGER PRIMARY KEY, cliente TEXT, data_venda TEXT, subtotal REAL, desconto REAL, taxa REAL, total_final REAL, forma_pagamento TEXT, vendedor TEXT)", commit=True)
     query_db("CREATE TABLE IF NOT EXISTS usuarios (id INTEGER PRIMARY KEY, nome TEXT, cpf TEXT, endereco TEXT, telefone TEXT, login TEXT UNIQUE, senha_hash TEXT, perfil TEXT)", commit=True)
-    try:
-        query_db("ALTER TABLE usuarios ADD COLUMN senha_salt TEXT", commit=True)
-    except Exception:
-        pass
+    _exec_tolerante("ALTER TABLE usuarios ADD COLUMN senha_salt TEXT")
 
     query_db(
         """
@@ -100,22 +110,10 @@ def init_db():
     )
 
     for col, typ in [("telephone", "TEXT")]:
-        try:
-            query_db(f"ALTER TABLE clientes ADD COLUMN {col} {typ}", commit=True)
-        except Exception:
-            pass
-    try:
-        query_db("UPDATE clientes SET telefone=COALESCE(NULLIF(telefone,''), telephone) WHERE telephone IS NOT NULL", commit=True)
-    except Exception:
-        pass
-    try:
-        query_db("ALTER TABLE usuarios ADD COLUMN telephone TEXT", commit=True)
-    except Exception:
-        pass
-    try:
-        query_db("UPDATE usuarios SET telefone=COALESCE(NULLIF(telefone,''), telephone) WHERE telephone IS NOT NULL", commit=True)
-    except Exception:
-        pass
+        _exec_tolerante(f"ALTER TABLE clientes ADD COLUMN {col} {typ}")
+    _exec_tolerante("UPDATE clientes SET telefone=COALESCE(NULLIF(telefone,''), telephone) WHERE telephone IS NOT NULL")
+    _exec_tolerante("ALTER TABLE usuarios ADD COLUMN telephone TEXT")
+    _exec_tolerante("UPDATE usuarios SET telefone=COALESCE(NULLIF(telefone,''), telephone) WHERE telephone IS NOT NULL")
 
     query_db("CREATE TABLE IF NOT EXISTS logs (id INTEGER PRIMARY KEY, usuario TEXT, acao TEXT, detalhes TEXT, data_hora TEXT)", commit=True)
     query_db("CREATE TABLE IF NOT EXISTS vendas_itens (id INTEGER PRIMARY KEY, venda_id INTEGER, codigo_p TEXT, nome_p TEXT, quantidade INTEGER, custo_unitario REAL DEFAULT 0.0, valor_unitario REAL DEFAULT 0.0, valor_total REAL DEFAULT 0.0)", commit=True)
@@ -130,39 +128,24 @@ def init_db():
     query_db("CREATE TABLE IF NOT EXISTS encomendas (id INTEGER PRIMARY KEY, cliente TEXT, produto TEXT, quantidade INTEGER, origem TEXT, custo_estimado REAL, preco_sugerido REAL, margem REAL, status TEXT DEFAULT 'Pendente', observacao TEXT, data_criacao TEXT, data_atualizacao TEXT)", commit=True)
 
     for col, typ in [("categoria", "TEXT"), ("data_atualizacao", "TEXT")]:
-        try:
-            query_db(f"ALTER TABLE isis_memoria ADD COLUMN {col} {typ}", commit=True)
-        except Exception:
-            pass
+        _exec_tolerante(f"ALTER TABLE isis_memoria ADD COLUMN {col} {typ}")
     for idx in [
         "CREATE INDEX IF NOT EXISTS idx_isis_logs_data ON isis_logs(data_hora)",
         "CREATE INDEX IF NOT EXISTS idx_pesquisas_online_data ON pesquisas_online(data_hora)",
         "CREATE INDEX IF NOT EXISTS idx_encomendas_status ON encomendas(status)",
     ]:
-        try:
-            query_db(idx, commit=True)
-        except Exception:
-            pass
+        _exec_tolerante(idx)
 
     query_db("CREATE TABLE IF NOT EXISTS historico_precos (id INTEGER PRIMARY KEY, codigo_p TEXT, produto TEXT, preco_antigo REAL, preco_novo REAL, custo_antigo REAL, custo_novo REAL, usuario TEXT, data_hora TEXT, motivo TEXT)", commit=True)
     query_db("CREATE TABLE IF NOT EXISTS inventario_estoque (id INTEGER PRIMARY KEY, codigo_p TEXT, produto TEXT, quantidade_sistema INTEGER, quantidade_contada INTEGER, diferenca INTEGER, usuario TEXT, data_hora TEXT, observacao TEXT)", commit=True)
 
     for col, typ in [("ativo", "INTEGER DEFAULT 1")]:
-        try:
-            query_db(f"ALTER TABLE produtos ADD COLUMN {col} {typ}", commit=True)
-        except Exception:
-            pass
+        _exec_tolerante(f"ALTER TABLE produtos ADD COLUMN {col} {typ}")
     for col, typ in [("dinheiro_sistema", "REAL DEFAULT 0.0"), ("pix_sistema", "REAL DEFAULT 0.0"), ("debito_sistema", "REAL DEFAULT 0.0"), ("credito_sistema", "REAL DEFAULT 0.0"), ("dinheiro_informado", "REAL DEFAULT 0.0"), ("pix_informado", "REAL DEFAULT 0.0"), ("debito_informado", "REAL DEFAULT 0.0"), ("credito_informado", "REAL DEFAULT 0.0"), ("diferenca_caixa", "REAL DEFAULT 0.0")]:
-        try:
-            query_db(f"ALTER TABLE caixa_diario ADD COLUMN {col} {typ}", commit=True)
-        except Exception:
-            pass
+        _exec_tolerante(f"ALTER TABLE caixa_diario ADD COLUMN {col} {typ}")
 
     for col, typ in [("custo", "REAL DEFAULT 0.0"), ("lucro", "REAL DEFAULT 0.0"), ("estoque_minimo", "INTEGER DEFAULT 0")]:
-        try:
-            query_db(f"ALTER TABLE produtos ADD COLUMN {col} {typ}", commit=True)
-        except Exception:
-            pass
+        _exec_tolerante(f"ALTER TABLE produtos ADD COLUMN {col} {typ}")
 
     # Colunas do catálogo completo do site (antes duplicadas em backend/product_routes.py).
     for col, typ in [
@@ -174,10 +157,7 @@ def init_db():
         ("selo", "TEXT"),
         ("atualizado_em", "TEXT"),
     ]:
-        try:
-            query_db(f"ALTER TABLE produtos ADD COLUMN {col} {typ}", commit=True)
-        except Exception:
-            pass
+        _exec_tolerante(f"ALTER TABLE produtos ADD COLUMN {col} {typ}")
 
     # Colunas de pedidos (site) sobre a tabela vendas (antes duplicadas em
     # backend/order_status_routes.py, backend/order_api_guard_inner_routes.py,
@@ -192,14 +172,8 @@ def init_db():
         ("origem_sync", "TEXT"),
         ("local_id", "INTEGER"),
     ]:
-        try:
-            query_db(f"ALTER TABLE vendas ADD COLUMN {col} {typ}", commit=True)
-        except Exception:
-            pass
-    try:
-        query_db("CREATE INDEX IF NOT EXISTS idx_vendas_local_id ON vendas(local_id)", commit=True)
-    except Exception:
-        pass
+        _exec_tolerante(f"ALTER TABLE vendas ADD COLUMN {col} {typ}")
+    _exec_tolerante("CREATE INDEX IF NOT EXISTS idx_vendas_local_id ON vendas(local_id)")
 
     query_db(
         """
@@ -254,10 +228,7 @@ def init_db():
         "CREATE INDEX IF NOT EXISTS idx_audit_log_entidade ON audit_log(entidade, entidade_id)",
         "CREATE INDEX IF NOT EXISTS idx_audit_log_data ON audit_log(data_hora)",
     ]:
-        try:
-            query_db(sql_idx, commit=True)
-        except Exception:
-            pass
+        _exec_tolerante(sql_idx)
 
     # Idempotência: evita que o mesmo pedido/pagamento seja duplicado por
     # reenvio de requisição (dupla submissão de formulário, retry de rede etc).
@@ -328,39 +299,21 @@ def init_db():
         "CREATE INDEX IF NOT EXISTS idx_pedidos_dia_operacional ON pedidos(dia_operacional)",
         "CREATE INDEX IF NOT EXISTS idx_pedidos_itens_pedido ON pedidos_itens(pedido_id)",
     ]:
-        try:
-            query_db(sql_idx, commit=True)
-        except Exception:
-            pass
+        _exec_tolerante(sql_idx)
     _migrar_pedidos_de_vendas()
 
     for tabela, col, typ in [("vendas", "status", "TEXT DEFAULT 'Concluído'"), ("vendas", "data_iso", "TEXT"), ("vendas", "dia_operacional", "TEXT"), ("fluxo_caixa", "data_iso", "TEXT"), ("fluxo_caixa", "forma_pagamento", "TEXT"), ("fluxo_caixa", "caixa_id", "INTEGER"), ("contas_a_pagar", "categoria", "TEXT DEFAULT 'Outros'")]:
-        try:
-            query_db(f"ALTER TABLE {tabela} ADD COLUMN {col} {typ}", commit=True)
-        except Exception:
-            pass
+        _exec_tolerante(f"ALTER TABLE {tabela} ADD COLUMN {col} {typ}")
 
     for tabela, colunas in {"categorias": [("ativo", "INTEGER DEFAULT 1"), ("excluido_em", "TEXT")], "clientes": [("ativo", "INTEGER DEFAULT 1"), ("excluido_em", "TEXT")], "usuarios": [("cpf", "TEXT"), ("endereco", "TEXT"), ("telefone", "TEXT"), ("perfil", "TEXT"), ("ativo", "INTEGER DEFAULT 1"), ("excluido_em", "TEXT"), ("senha_salt", "TEXT")], "fornecedores": [("whatsapp", "TEXT"), ("cidade", "TEXT"), ("observacoes", "TEXT"), ("ativo", "INTEGER DEFAULT 1"), ("excluido_em", "TEXT")], "contas_a_pagar": [("categoria", "TEXT DEFAULT 'Outros'"), ("cancelado_em", "TEXT")], "vendas": [("status", "TEXT DEFAULT 'Concluído'"), ("data_iso", "TEXT"), ("dia_operacional", "TEXT")], "vendas_itens": [("custo_unitario", "REAL DEFAULT 0.0"), ("valor_unitario", "REAL DEFAULT 0.0"), ("valor_total", "REAL DEFAULT 0.0")], "fluxo_caixa": [("data_iso", "TEXT"), ("forma_pagamento", "TEXT"), ("caixa_id", "INTEGER")], "pedidos": [("telefone", "TEXT"), ("estoque_reservado", "INTEGER DEFAULT 0"), ("pix_txid", "TEXT"), ("pix_copia_cola", "TEXT"), ("confirmado_automaticamente", "INTEGER DEFAULT 0")]}.items():
         for col, typ in colunas:
-            try:
-                query_db(f"ALTER TABLE {tabela} ADD COLUMN {col} {typ}", commit=True)
-            except Exception:
-                pass
+            _exec_tolerante(f"ALTER TABLE {tabela} ADD COLUMN {col} {typ}")
 
-    try:
-        query_db("UPDATE vendas SET status='Concluído' WHERE status IS NULL OR status=''", commit=True)
-    except Exception:
-        pass
-    try:
-        query_db("UPDATE vendas SET dia_operacional=substr(data_venda,1,10) WHERE COALESCE(dia_operacional,'')='' AND length(COALESCE(data_venda,'')) >= 10", commit=True)
-    except Exception:
-        pass
+    _exec_tolerante("UPDATE vendas SET status='Concluído' WHERE status IS NULL OR status=''")
+    _exec_tolerante("UPDATE vendas SET dia_operacional=substr(data_venda,1,10) WHERE COALESCE(dia_operacional,'')='' AND length(COALESCE(data_venda,'')) >= 10")
 
     for sql_idx in ["CREATE INDEX IF NOT EXISTS idx_produtos_codigo ON produtos(codigo_p)", "CREATE UNIQUE INDEX IF NOT EXISTS ux_produtos_codigo_unico ON produtos(codigo_p) WHERE codigo_p IS NOT NULL AND codigo_p != ''", "CREATE INDEX IF NOT EXISTS idx_mov_estoque_codigo ON movimentacao_estoque(codigo_p)", "CREATE INDEX IF NOT EXISTS idx_produtos_nome ON produtos(nome)", "CREATE INDEX IF NOT EXISTS idx_clientes_nome ON clientes(nome)", "CREATE INDEX IF NOT EXISTS idx_vendas_data ON vendas(data_venda)", "CREATE INDEX IF NOT EXISTS idx_vendas_data_iso ON vendas(data_iso)", "CREATE INDEX IF NOT EXISTS idx_vendas_dia_operacional ON vendas(dia_operacional)", "CREATE INDEX IF NOT EXISTS idx_vendas_status ON vendas(status)", "CREATE INDEX IF NOT EXISTS idx_vendas_itens_venda ON vendas_itens(venda_id)", "CREATE INDEX IF NOT EXISTS idx_fluxo_caixa_id ON fluxo_caixa(caixa_id)", "CREATE INDEX IF NOT EXISTS idx_fluxo_caixa_forma ON fluxo_caixa(forma_pagamento)", "CREATE INDEX IF NOT EXISTS idx_isis_memoria_tipo ON isis_memoria(tipo)", "CREATE INDEX IF NOT EXISTS idx_isis_memoria_chave ON isis_memoria(chave)"]:
-        try:
-            query_db(sql_idx, commit=True)
-        except Exception:
-            pass
+        _exec_tolerante(sql_idx)
 
     admin_res = query_db("SELECT senha_hash FROM usuarios WHERE login='admin'")
     if not admin_res:
@@ -375,5 +328,6 @@ def init_db():
     for c in ["Velas", "Incensos", "Cristais", "Óleos"]:
         try:
             query_db("INSERT INTO categorias (nome) VALUES (?)", (c,), commit=True)
-        except Exception:
-            pass
+        except Exception as exc:
+            if "unique" not in str(exc).lower():
+                print(f"[migrations] falha ao inserir categoria padrão '{c}': {exc}")

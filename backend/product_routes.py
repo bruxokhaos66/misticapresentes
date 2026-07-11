@@ -127,6 +127,16 @@ def criar_produto_completo(produto: ProdutoCompletoIn, sessao: dict = Depends(ex
     agora = datetime.now().isoformat(timespec="seconds")
     imagens_json = json.dumps(produto.imagens or [], ensure_ascii=False)
     with conectar() as conn:
+        if produto.codigo_p:
+            duplicado = conn.execute(
+                "SELECT id FROM produtos WHERE codigo_p=? AND COALESCE(ativo,1)=1",
+                (produto.codigo_p,),
+            ).fetchone()
+            if duplicado:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Já existe um produto ativo com o código '{produto.codigo_p}'",
+                )
         cur = conn.execute(
             """
             INSERT INTO produtos (

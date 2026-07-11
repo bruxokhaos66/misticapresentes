@@ -13,6 +13,10 @@ from backend.audit import registrar_auditoria
 from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.database import conectar
 from backend.panel_sessions import exigir_sessao_ou_chave_api
+from backend.rate_limit import limitar_requisicoes
+
+limitar_status_pedido = limitar_requisicoes("status_pedido", limite=20, janela_segundos=60)
+limitar_cancelar_pedido = limitar_requisicoes("cancelar_pedido", limite=20, janela_segundos=60)
 
 router = APIRouter(prefix="/api", tags=["pedidos-status"])
 
@@ -420,7 +424,7 @@ def historico_status_pedido(venda_id: int):
     }
 
 
-@router.post("/pedidos/{venda_id}/status")
+@router.post("/pedidos/{venda_id}/status", dependencies=[Depends(limitar_status_pedido)])
 def atualizar_status_pedido(venda_id: int, payload: PedidoStatusIn, x_mistica_api_key: str | None = Header(default=None)):
     validar_site_api_key(x_mistica_api_key)
     status = normalizar_status(payload.status)
@@ -492,7 +496,7 @@ def atualizar_observacao_pedido(venda_id: int, payload: PedidoObservacaoIn, x_mi
     return {"ok": True, "venda_id": venda_id, "observacao": payload.observacao, "data_hora": agora}
 
 
-@router.delete("/pedidos/{venda_id}")
+@router.delete("/pedidos/{venda_id}", dependencies=[Depends(limitar_cancelar_pedido)])
 def cancelar_pedido(venda_id: int, x_mistica_api_key: str | None = Header(default=None)):
     validar_site_api_key(x_mistica_api_key)
     agora = datetime.now().isoformat(timespec="seconds")

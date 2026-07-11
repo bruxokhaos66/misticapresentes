@@ -23,7 +23,9 @@ const products = [
 ];
 
 let cart = loadStorage("misticaCart", []);
-let clients = loadStorage("misticaClients", []);
+// Dados pessoais de clientes (nome, CPF, endereço, WhatsApp) nunca são
+// persistidos no navegador: ficam só em memória durante a sessão da página.
+let clients = [];
 let sales = loadStorage("misticaSales", []);
 let stock = loadStorage("misticaStock", createInitialStock());
 let suppliers = loadStorage("misticaSuppliers", []);
@@ -59,8 +61,8 @@ const backupStatus = $("#backupStatus");
 
 function loadStorage(key, fallback) { try { const value = localStorage.getItem(key); return value ? JSON.parse(value) : fallback; } catch { localStorage.removeItem(key); return fallback; } }
 function createInitialStock() { return products.reduce((map, product) => { map[product.id] = product.stock; return map; }, {}); }
-function saveState() { localStorage.setItem("misticaCart", JSON.stringify(cart)); localStorage.setItem("misticaClients", JSON.stringify(clients)); localStorage.setItem("misticaSales", JSON.stringify(sales)); localStorage.setItem("misticaStock", JSON.stringify(stock)); localStorage.setItem("misticaSuppliers", JSON.stringify(suppliers)); localStorage.setItem("misticaAutoBackup", JSON.stringify(createBackupPayload())); localStorage.setItem("misticaLastBackupAt", new Date().toISOString()); }
-function createBackupPayload() { return { store: storeConfig.name, createdAt: new Date().toISOString(), products, clients, sales, stock, suppliers }; }
+function saveState() { localStorage.setItem("misticaCart", JSON.stringify(cart)); localStorage.removeItem("misticaClients"); localStorage.setItem("misticaSales", JSON.stringify(sales)); localStorage.setItem("misticaStock", JSON.stringify(stock)); localStorage.setItem("misticaSuppliers", JSON.stringify(suppliers)); localStorage.setItem("misticaAutoBackup", JSON.stringify(createBackupPayload())); localStorage.setItem("misticaLastBackupAt", new Date().toISOString()); }
+function createBackupPayload() { return { store: storeConfig.name, createdAt: new Date().toISOString(), products, sales, stock, suppliers }; }
 function text(value) { return String(value ?? ""); }
 function onlyDigits(value) { return text(value).replace(/\D/g, ""); }
 function getStock(productId) { return Number(stock[productId] ?? 0); }

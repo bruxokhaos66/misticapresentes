@@ -5,6 +5,9 @@
   const ready = (fn) => document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', fn) : fn();
   const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
+  const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[ch]));
   const toNumber = (value) => Number(String(value || '0').replace(',', '.')) || 0;
   const toInt = (value) => Math.max(0, Number.parseInt(String(value || '0'), 10) || 0);
   const normalizeUrl = (url) => {
@@ -35,7 +38,7 @@
     apiProduct: item,
   });
 
-  const syncCatalogWithApi = (apiItems) => {
+  const applyCatalogToUi = (apiItems) => {
     if (!Array.isArray(apiItems) || typeof products === 'undefined') return;
     const fixed = products.filter((item) => !String(item.id || '').startsWith('api-'));
     const mapped = apiItems.map(mapApiProduct);
@@ -43,9 +46,16 @@
     mapped.forEach((item) => {
       if (typeof stock !== 'undefined') stock[item.id] = item.stock;
     });
-    try { localStorage.setItem(PRODUCT_CACHE_KEY, JSON.stringify(apiItems)); } catch {}
     if (typeof saveState === 'function') saveState();
     if (typeof renderAll === 'function') renderAll();
+  };
+
+  const syncCatalogWithApi = (apiItems) => {
+    applyCatalogToUi(apiItems);
+    try {
+      localStorage.setItem(PRODUCT_CACHE_KEY, JSON.stringify(apiItems));
+      localStorage.setItem(`${PRODUCT_CACHE_KEY}At`, String(Date.now()));
+    } catch {}
   };
 
   const loadApiProductsPublic = async () => {
@@ -205,12 +215,12 @@
         const img = normalizeUrl(product.imagem_url || product.imagens?.[0] || '');
         return `
           <article class="admin-product-item">
-            ${img ? `<img src="${img}" alt="${product.nome}" loading="lazy">` : '<div class="admin-product-thumb">✨</div>'}
+            ${img ? `<img src="${esc(img)}" alt="${esc(product.nome)}" loading="lazy">` : '<div class="admin-product-thumb">✨</div>'}
             <div>
-              <strong>${product.nome}</strong>
-              <span>${product.marca || 'Sem marca'} • ${product.categoria || 'Sem categoria'}</span>
+              <strong>${esc(product.nome)}</strong>
+              <span>${esc(product.marca || 'Sem marca')} • ${esc(product.categoria || 'Sem categoria')}</span>
               <span>${money.format(Number(product.preco || 0))} • Estoque: ${Number(product.quantidade || 0)}</span>
-              <small>${product.descricao || 'Sem descrição.'}</small>
+              <small>${esc(product.descricao || 'Sem descrição.')}</small>
             </div>
             <div class="admin-product-actions">
               <button class="btn btn-ghost" type="button" data-edit-product="${product.id}">Editar</button>
@@ -230,9 +240,12 @@
         const cached = JSON.parse(localStorage.getItem(PRODUCT_CACHE_KEY) || '[]');
         if (cached.length) {
           currentProducts = cached;
-          syncCatalogWithApi(cached);
+          applyCatalogToUi(cached);
           renderList();
-          setStatus('API indisponível agora. Exibindo cache local de produtos.');
+          const cachedAt = Number(localStorage.getItem(`${PRODUCT_CACHE_KEY}At`) || 0);
+          const idadeMin = cachedAt ? Math.round((Date.now() - cachedAt) / 60000) : null;
+          const idadeTxto = idadeMin === null ? 'de data desconhecida' : idadeMin < 1 ? 'de menos de 1 minuto' : `de ${idadeMin} min atrás`;
+          setStatus(`API indisponível agora. Exibindo cache local (${idadeTxto}) — pode estar desatualizado.`);
         } else {
           setStatus(error.message || 'Falha ao carregar produtos.');
         }
@@ -277,8 +290,11 @@
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
+      const saveButton = panel.querySelector('[data-save-product]');
+      if (saveButton.disabled) return;
       const basePayload = readFormPayload();
       if (!basePayload.nome) return setStatus('Informe o nome do produto.');
+      saveButton.disabled = true;
       setStatus('Salvando produto na API...', true);
       try {
         const payload = await uploadImageIfNeeded(basePayload);
@@ -297,6 +313,8 @@
         setStatus('Produto salvo e catálogo atualizado.', true);
       } catch (error) {
         setStatus(error.message || 'Erro ao salvar produto.');
+      } finally {
+        saveButton.disabled = false;
       }
     });
 

@@ -5,6 +5,7 @@ import secrets
 import sqlite3
 import time
 from datetime import datetime, timedelta
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
@@ -22,6 +23,7 @@ from config import DB_PATH
 router = APIRouter(prefix="/api", tags=["site-estoque"])
 
 limitar_criacao_venda = limitar_requisicoes("criar_venda_site", limite=20, janela_segundos=60)
+limitar_reserva_estoque = limitar_requisicoes("reservar_estoque_site", limite=20, janela_segundos=60)
 
 
 class ItemEstoqueSite(BaseModel):
@@ -134,27 +136,34 @@ def validar_itens_e_estoque(conn, itens: list[ItemEstoqueSite], *, exigir_estoqu
     return produtos_validados
 
 
+def _centavos(valor) -> Decimal:
+    """Converte para Decimal arredondado em centavos (ROUND_HALF_UP), evitando o
+    erro de representação binária do float ao somar valores monetários."""
+    return Decimal(str(valor or 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
 def recalcular_venda_site(produtos_validados):
     """Ignora subtotal/desconto/taxa/total_final/valor_unitario enviados pelo cliente
-    e recalcula tudo a partir do preco salvo no produto (retrato de preço da venda)."""
+    e recalcula tudo a partir do preco salvo no produto (retrato de preço da venda).
+    Usa Decimal internamente para que a soma dos itens não acumule erro de
+    ponto flutuante antes de virar float para gravar nas colunas REAL."""
     itens_calculados = []
-    subtotal = 0.0
+    subtotal = Decimal("0.00")
     for item, produto, _estoque_atual in produtos_validados:
-        preco = float(produto["preco"] or 0)
-        custo = float(produto["custo"] or 0)
-        valor_total_item = round(preco * item.quantidade, 2)
+        preco = _centavos(produto["preco"])
+        custo = _centavos(produto["custo"])
+        valor_total_item = _centavos(preco * item.quantidade)
         subtotal += valor_total_item
         itens_calculados.append(
             {
                 "produto": produto,
                 "quantidade": item.quantidade,
-                "custo_unitario": custo,
-                "valor_unitario": preco,
-                "valor_total": valor_total_item,
+                "custo_unitario": float(custo),
+                "valor_unitario": float(preco),
+                "valor_total": float(valor_total_item),
             }
         )
-    subtotal = round(subtotal, 2)
-    return itens_calculados, subtotal
+    return itens_calculados, float(_centavos(subtotal))
 
 
 def baixar_estoque_atomico(conn, *, produto_id: int, nome_produto: str, quantidade: int) -> tuple[int, int]:
@@ -389,7 +398,7 @@ def registrar_venda_site(
     return resposta
 
 
-@router.post("/estoque/reservar")
+@router.post("/estoque/reservar", dependencies=[Depends(limitar_reserva_estoque)])
 def reservar_estoque_site(payload: ReservaEstoqueSite, x_mistica_api_key: str | None = Header(default=None)):
     validar_site_api_key(x_mistica_api_key)
     if not payload.itens:

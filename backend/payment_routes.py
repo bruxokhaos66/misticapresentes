@@ -14,10 +14,15 @@ from backend.database import conectar
 from backend.idempotency import resposta_idempotente_existente, salvar_resposta_idempotente
 from backend.order_status_routes import baixar_estoque_do_pedido
 from backend.panel_sessions import exigir_sessao_ou_chave_api
+from backend.rate_limit import limitar_requisicoes
 
 router = APIRouter(prefix="/api", tags=["pagamentos"])
 
 STATUS_PAGAMENTO = {"Aguardando", "Confirmado", "Recusado", "Cancelado", "Estornado"}
+
+limitar_registrar_pagamento = limitar_requisicoes("registrar_pagamento", limite=20, janela_segundos=60)
+limitar_webhook_pagamento = limitar_requisicoes("webhook_pagamento", limite=30, janela_segundos=60)
+limitar_status_pagamento = limitar_requisicoes("status_pagamento", limite=20, janela_segundos=60)
 
 
 class PagamentoIn(BaseModel):
@@ -50,7 +55,7 @@ def registrar_log_status(conn, venda_id: int, status: str, usuario: str, observa
     )
 
 
-@router.post("/pagamentos")
+@router.post("/pagamentos", dependencies=[Depends(limitar_registrar_pagamento)])
 def registrar_pagamento(
     payload: PagamentoIn,
     x_mistica_api_key: str | None = Header(default=None),
@@ -116,7 +121,7 @@ def _validar_segredo_webhook_pix(x_mistica_webhook_secret: str | None):
         raise HTTPException(status_code=403, detail="Segredo de webhook inválido.")
 
 
-@router.post("/pagamentos/webhook")
+@router.post("/pagamentos/webhook", dependencies=[Depends(limitar_webhook_pagamento)])
 def confirmar_pagamento_webhook(
     payload: PixWebhookIn,
     x_mistica_webhook_secret: str | None = Header(default=None),
@@ -192,7 +197,7 @@ def listar_pagamentos(venda_id: Optional[int] = None, limite: int = Query(100, g
     return [dict(row) for row in rows]
 
 
-@router.put("/pagamentos/{pagamento_id}/status")
+@router.put("/pagamentos/{pagamento_id}/status", dependencies=[Depends(limitar_status_pagamento)])
 def atualizar_status_pagamento(pagamento_id: int, payload: PagamentoStatusIn, x_mistica_api_key: str | None = Header(default=None)):
     validar_site_api_key(x_mistica_api_key)
     status = payload.status.strip()
