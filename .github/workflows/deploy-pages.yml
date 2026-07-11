@@ -49,13 +49,24 @@ jobs:
       - name: Exibir versão publicada
         run: cat deploy-version.txt
 
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Instalar dependências de build
+        run: npm install --no-save esbuild
+
+      - name: Minificar CSS e JS do site
+        run: node scripts/minify-assets.mjs
+
       - name: Configurar GitHub Pages
         uses: actions/configure-pages@v5
 
       - name: Preparar artefato estático
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: dist-site
 
   publicar:
     environment:
