@@ -17,6 +17,7 @@ from backend.database import conectar, executar, listar, obter
 from backend.order_status_routes import expirar_pedidos_pendentes, router as order_status_router
 from backend.panel_sessions import exigir_sessao_ou_chave_api
 from backend.payment_routes import router as payment_router
+from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.product_routes import router as product_router, validar_site_api_key
 from backend.review_routes import router as review_router
 from backend.upload_routes import router as upload_router
@@ -133,12 +134,6 @@ def garantir_admin_api():
         )
 
 
-def _validar_chave_sync(x_mistica_sync_key: str | None):
-    chave = os.environ.get("MISTICA_SYNC_KEY", "").strip()
-    if chave and x_mistica_sync_key != chave:
-        raise HTTPException(status_code=403, detail="Chave de sincronização inválida")
-
-
 @app.get("/")
 def raiz():
     return {
@@ -191,35 +186,9 @@ def painel_resumo(sessao: dict = Depends(exigir_sessao_ou_chave_api())):
     }
 
 
-@app.get("/api/produtos")
-def listar_produtos(busca: str = "", limite: int = Query(100, ge=1, le=500)):
-    termo = f"%{busca.strip()}%"
-    if busca.strip():
-        return listar(
-            """
-            SELECT id, codigo_p, nome, preco, quantidade, categoria, custo, lucro, estoque_minimo
-            FROM produtos
-            WHERE COALESCE(ativo,1)=1 AND (nome LIKE ? OR codigo_p LIKE ? OR categoria LIKE ?)
-            ORDER BY nome COLLATE NOCASE
-            LIMIT ?
-            """,
-            (termo, termo, termo, limite),
-        )
-    return listar(
-        """
-        SELECT id, codigo_p, nome, preco, quantidade, categoria, custo, lucro, estoque_minimo
-        FROM produtos
-        WHERE COALESCE(ativo,1)=1
-        ORDER BY nome COLLATE NOCASE
-        LIMIT ?
-        """,
-        (limite,),
-    )
-
-
 @app.post("/api/sync/produtos-lote")
 def sincronizar_produtos_lote(payload: ProdutosLotePayload, x_mistica_sync_key: str | None = Header(default=None)):
-    _validar_chave_sync(x_mistica_sync_key)
+    validar_chave_api(x_mistica_sync_key, "Configure MISTICA_SITE_API_KEY ou MISTICA_SYNC_KEY para permitir sincronização.")
     criados = 0
     atualizados = 0
     ignorados = 0
@@ -292,9 +261,10 @@ def sincronizar_produtos_lote(payload: ProdutosLotePayload, x_mistica_sync_key: 
 
 @app.get("/api/produtos/{produto_id}")
 def obter_produto(produto_id: int):
+    """Rota pública: não inclui custo, lucro nem estoque mínimo (dados internos)."""
     produto = obter(
         """
-        SELECT id, codigo_p, nome, preco, quantidade, categoria, custo, lucro, estoque_minimo
+        SELECT id, codigo_p, nome, preco, quantidade, categoria
         FROM produtos
         WHERE id=? AND COALESCE(ativo,1)=1
         """,
