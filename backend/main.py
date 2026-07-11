@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -14,6 +14,7 @@ from backend.backup_routes import router as backup_router
 from backend.course_routes import router as course_router
 from backend.database import conectar, executar, listar, obter
 from backend.order_status_routes import expirar_pedidos_pendentes, router as order_status_router
+from backend.panel_sessions import exigir_sessao_ou_chave_api
 from backend.payment_routes import router as payment_router
 from backend.product_routes import router as product_router, validar_site_api_key
 from backend.upload_routes import router as upload_router
@@ -63,12 +64,12 @@ app.include_router(course_router)
 class ProdutoIn(BaseModel):
     codigo_p: Optional[str] = None
     nome: str = Field(min_length=1)
-    preco: float = 0.0
-    quantidade: int = 0
+    preco: float = Field(default=0.0, ge=0)
+    quantidade: int = Field(default=0, ge=0)
     categoria: Optional[str] = None
-    custo: float = 0.0
+    custo: float = Field(default=0.0, ge=0)
     lucro: float = 0.0
-    estoque_minimo: int = 0
+    estoque_minimo: int = Field(default=0, ge=0)
 
 
 class ProdutosLotePayload(BaseModel):
@@ -161,7 +162,7 @@ def status():
 
 
 @app.get("/api/painel/resumo")
-def painel_resumo():
+def painel_resumo(sessao: dict = Depends(exigir_sessao_ou_chave_api())):
     total_produtos = obter("SELECT COUNT(*) AS total FROM produtos WHERE COALESCE(ativo,1)=1") or {"total": 0}
     total_clientes = obter("SELECT COUNT(*) AS total FROM clientes WHERE COALESCE(ativo,1)=1") or {"total": 0}
     total_vendas = obter("SELECT COUNT(*) AS total FROM vendas WHERE COALESCE(status,'Concluído') NOT IN ('Cancelado','Cancelada')") or {"total": 0}
@@ -472,7 +473,7 @@ def _anexar_itens_vendas(vendas: list[dict]) -> list[dict]:
 
 
 @app.get("/api/painel/dashboard")
-def painel_dashboard(meta_mes: float = Query(1500.0, ge=0)):
+def painel_dashboard(meta_mes: float = Query(1500.0, ge=0), sessao: dict = Depends(exigir_sessao_ou_chave_api())):
     inicio_hoje, fim_hoje, dia_operacional = _intervalo_vendas_hoje_backend()
     mes = datetime.now().strftime("/%m/%Y")
     with conectar() as conn:

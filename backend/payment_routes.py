@@ -5,7 +5,7 @@ import secrets
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from backend.audit import registrar_auditoria
@@ -13,6 +13,7 @@ from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.database import conectar
 from backend.idempotency import resposta_idempotente_existente, salvar_resposta_idempotente
 from backend.order_status_routes import baixar_estoque_do_pedido
+from backend.panel_sessions import exigir_sessao_ou_chave_api
 
 router = APIRouter(prefix="/api", tags=["pagamentos"])
 
@@ -163,7 +164,7 @@ def confirmar_pagamento_webhook(
 
 
 @router.get("/pagamentos")
-def listar_pagamentos(venda_id: Optional[int] = None, limite: int = Query(100, ge=1, le=500)):
+def listar_pagamentos(venda_id: Optional[int] = None, limite: int = Query(100, ge=1, le=500), sessao: dict = Depends(exigir_sessao_ou_chave_api())):
     with conectar() as conn:
         if venda_id:
             rows = conn.execute(

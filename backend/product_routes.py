@@ -24,12 +24,12 @@ class ProdutoCompletoIn(BaseModel):
     codigo_p: Optional[str] = None
     nome: str = Field(min_length=1)
     marca: Optional[str] = None
-    preco: float = 0.0
-    quantidade: int = 0
+    preco: float = Field(default=0.0, ge=0)
+    quantidade: int = Field(default=0, ge=0)
     categoria: Optional[str] = None
-    custo: float = 0.0
+    custo: float = Field(default=0.0, ge=0)
     lucro: float = 0.0
-    estoque_minimo: int = 0
+    estoque_minimo: int = Field(default=0, ge=0)
     descricao: Optional[str] = None
     imagem_url: Optional[str] = None
     imagens: list[str] = Field(default_factory=list)

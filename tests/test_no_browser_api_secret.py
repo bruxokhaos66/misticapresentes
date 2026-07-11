@@ -8,6 +8,7 @@ PUBLIC_FRONTEND_FILES = [
     ROOT / "index.html",
     ROOT / "painel-auth.js",
     ROOT / "painel-operacional.html",
+    ROOT / "site-production-guard.js",
 ]
 
 FORBIDDEN_BROWSER_SECRET_MARKERS = (
@@ -38,3 +39,12 @@ def test_checkout_publico_existe_sem_header_de_segredo():
 
 def test_guard_legado_de_chave_foi_removido():
     assert not (ROOT / "site-write-key-guard.js").exists()
+
+
+def test_botao_gerar_pix_usa_checkout_publico_sem_chave():
+    """Regressão: o botão real de checkout (site-production-guard.js) precisa
+    chamar a rota pública /api/checkout/pedidos, nunca /api/vendas (que exige
+    uma chave que o navegador nunca deve ter) -- ver sendSaleToApi()."""
+    source = (ROOT / "site-production-guard.js").read_text(encoding="utf-8")
+    assert '"/api/checkout/pedidos"' in source
+    assert '"/api/vendas"' not in source

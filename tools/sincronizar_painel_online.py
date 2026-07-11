@@ -28,6 +28,11 @@ def _headers_sync():
     return {"x-mistica-sync-key": chave} if chave else {}
 
 
+def _headers_api():
+    chave = os.environ.get("MISTICA_SITE_API_KEY", "").strip() or os.environ.get("MISTICA_SYNC_KEY", "").strip()
+    return {"x-mistica-api-key": chave} if chave else {}
+
+
 def _parse_data(txt):
     bruto = str(txt or "").strip()
     for fmt in ("%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
@@ -223,7 +228,7 @@ def main():
         except Exception as exc:
             status = {"erro": str(exc)}
         try:
-            resumo = client.get(f"{_api()}/api/painel/resumo").json()
+            resumo = client.get(f"{_api()}/api/painel/resumo", headers=_headers_api()).json()
         except Exception as exc:
             resumo = {"erro": str(exc)}
     print("Status API:", json.dumps(status, ensure_ascii=False), flush=True)

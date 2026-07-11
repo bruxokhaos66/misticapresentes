@@ -200,6 +200,27 @@ def test_criar_venda_exige_chave_api():
     assert response.status_code == 403
 
 
+def test_painel_dashboard_e_resumo_exigem_sessao_ou_chave_api():
+    for caminho in ("/api/painel/resumo", "/api/painel/dashboard"):
+        response = client.get(caminho)
+        assert response.status_code == 401, caminho
+
+        response = client.get(caminho, headers={"X-Mistica-Api-Key": "chave-errada"})
+        assert response.status_code == 401, caminho
+
+        response = client.get(caminho, headers=PROTECTED_HEADERS)
+        assert response.status_code == 200, caminho
+
+
+def test_listar_pedidos_e_pagamentos_exigem_sessao_ou_chave_api():
+    for caminho in ("/api/pedidos", "/api/pedidos/status-log", "/api/pagamentos"):
+        response = client.get(caminho)
+        assert response.status_code == 401, caminho
+
+        response = client.get(caminho, headers=PROTECTED_HEADERS)
+        assert response.status_code == 200, caminho
+
+
 def test_sync_venda_exige_chave_sync():
     payload = {"cliente": "Cliente", "itens": []}
     response = client.post("/api/sync/venda", json=payload)
@@ -281,7 +302,7 @@ def test_estoque_reservado_na_criacao_e_nao_baixa_de_novo_na_confirmacao():
     produto_depois = client.get(f"/api/produtos/{produto['id']}").json()
     assert produto_depois["quantidade"] == 2
 
-    pedido = client.get(f"/api/pedidos/{venda['id']}").json()
+    pedido = client.get(f"/api/pedidos/{venda['id']}", headers=PROTECTED_HEADERS).json()
     assert pedido["status"] == "Pagamento confirmado"
     assert bool(pedido["estoque_baixado"]) is True
 
