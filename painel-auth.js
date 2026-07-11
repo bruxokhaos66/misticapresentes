@@ -7,7 +7,8 @@
 
   function isAdminRoute() {
     const params = new URLSearchParams(window.location.search);
-    return ADMIN_HASHES.includes(window.location.hash) || params.get("admin") === "mistica";
+    const onAdminPage = /(^|\/)admin\.html$/.test(window.location.pathname);
+    return onAdminPage || ADMIN_HASHES.includes(window.location.hash) || params.get("admin") === "mistica";
   }
 
   function temSessaoAtiva() {

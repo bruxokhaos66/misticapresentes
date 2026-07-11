@@ -24,7 +24,8 @@ window.misticaSiteConfig = {
   if (!productionMode) return;
 
   const params = new URLSearchParams(window.location.search);
-  const adminRoute = window.location.hash === "#admin" || window.location.hash === "#adminbruxo" || params.get("admin") === "mistica";
+  const onAdminPage = /(^|\/)admin\.html$/.test(window.location.pathname);
+  const adminRoute = onAdminPage || window.location.hash === "#admin" || window.location.hash === "#adminbruxo" || params.get("admin") === "mistica";
 
   function mostrarAdmin() {
     const section = document.getElementById("admin");
@@ -174,6 +175,13 @@ window.misticaSiteConfig = {
   const iniciar = () => {
     loadScript("misticaProductionGuardScript", "site-production-guard.js?v=20260710-no-browser-secret");
     if (!adminRoute) return;
+    if (!onAdminPage) {
+      // O painel administrativo não faz parte do bundle público: rotas
+      // antigas para #admin/?admin=mistica são encaminhadas para a página
+      // separada, que carrega o HTML/CSS/JS do admin sob demanda.
+      window.location.replace("admin.html");
+      return;
+    }
     carregarPainelAdmin();
     mostrarAdmin();
     garantirCampoUsuario();
