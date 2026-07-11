@@ -155,12 +155,13 @@
     });
   }
 
-  async function enviarVendaApi(venda, itens) {
-    const itensPayload = montarItensVenda(itens);
+  async function criarPedidoNoServidor(itensCarrinho) {
+    const itensPayload = montarItensVenda(itensCarrinho);
     if (!itensPayload.length || itensPayload.some(item => !item.valido)) {
       throw new Error("Um ou mais produtos não estão sincronizados com o catálogo.");
     }
 
+    const dataIso = new Date().toISOString();
     const payload = {
       origem: "site",
       cliente: "Pedido site/celular",
@@ -168,64 +169,20 @@
       forma_pagamento: "Pix site/celular",
       vendedor: "Site/Celular",
       status: "Aguardando pagamento",
-      data_venda: new Date(venda.date).toLocaleString("pt-BR"),
-      data_iso: venda.date,
-      dia_operacional: new Date(venda.date).toISOString().slice(0, 10),
+      data_venda: new Date(dataIso).toLocaleString("pt-BR"),
+      data_iso: dataIso,
+      dia_operacional: dataIso.slice(0, 10),
       itens: itensPayload.map(({ valido, ...item }) => item),
     };
-    return api("/api/checkout/pedidos", { method: "POST", body: JSON.stringify(payload) });
+    // O Pix (chave, nome, cidade) é gerado só no servidor a partir do pedido
+    // real (ver backend/pix.py); o navegador nunca monta o payload sozinho.
+    const resposta = await api("/api/checkout/pedidos", { method: "POST", body: JSON.stringify(payload) });
+    if (!resposta || !resposta.id || !resposta.pix_copia_cola) {
+      throw new Error("O servidor não retornou um Pix válido para este pedido.");
+    }
+    return { id: resposta.id, pixTxid: resposta.pix_txid || null, pixPayload: resposta.pix_copia_cola, dataIso };
   }
-
-  function instalarEnvioVendas() {
-    if (typeof saveSale !== "function" || window.__misticaMobileSaveSaleInstalled) return;
-    window.__misticaMobileSaveSaleInstalled = true;
-    saveSale = function(payload, saleId) {
-      const saleItems = cart.map(item => ({ ...item }));
-      const total = getTotal();
-      const venda = {
-        date: new Date().toISOString(),
-        id: saleId,
-        total,
-        items: saleItems,
-        pixPayload: payload,
-        status: "Aguardando pagamento",
-        estoqueReposto: false,
-      };
-      sales.unshift(venda);
-      sales = sales.slice(0, 50);
-      cart = [];
-      saveState();
-      renderAll();
-
-      enviarVendaApi(venda, saleItems)
-        .then(resposta => {
-          if (resposta && resposta.id) {
-            // A partir daqui o número real do pedido no servidor passa a ser a
-            // identidade oficial da venda: usado no Pix, no WhatsApp e no
-            // acompanhamento de status, para nunca divergir do que o admin vê.
-            venda.id = resposta.id;
-            venda.pedidoBackendId = resposta.id;
-            venda.pixTxid = resposta.pix_txid || venda.pixTxid;
-            if (resposta.pix_copia_cola) {
-              venda.pixPayload = resposta.pix_copia_cola;
-              if (typeof pixPayloadInput !== "undefined" && pixPayloadInput) {
-                pixPayloadInput.value = resposta.pix_copia_cola;
-              }
-              if (window.QRCode && typeof pixCanvas !== "undefined" && pixCanvas) {
-                window.QRCode.toCanvas(pixCanvas, resposta.pix_copia_cola, { width: 220, margin: 2, errorCorrectionLevel: "M" }).catch(() => {});
-              }
-            }
-          }
-          saveState();
-          renderAll();
-          setSyncStatus(`Pedido #${venda.id} enviado com segurança. O estoque foi reservado até a confirmação do Pix.`, true);
-          return sincronizarAgora();
-        })
-        .catch(error => {
-          setSyncStatus(String(error.message || "Não foi possível enviar o pedido."), false);
-        });
-    };
-  }
+  window.misticaCriarPedido = criarPedidoNoServidor;
 
   function textoNormalizado(value) {
     return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -365,7 +322,7 @@
   window.misticaMobileSync = {
     apiBase: API_BASE,
     syncNow: sincronizarAgora,
-    sendSale: enviarVendaApi,
+    sendSale: criarPedidoNoServidor,
     cancelSale: cancelarVendaLocal,
     updateSaleStatus: atualizarStatusVendaLocal,
     openSaleStatusWhatsapp: abrirWhatsappStatus,
@@ -373,7 +330,6 @@
 
   window.addEventListener("load", () => {
     carregarPainelAuth();
-    instalarEnvioVendas();
     instalarCancelamentoVendas();
     sincronizarAgora();
     setInterval(sincronizarAgora, SYNC_INTERVAL_MS);

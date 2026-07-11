@@ -99,27 +99,33 @@
     } catch {}
   }
 
-  async function sendSaleToApi(localSale, items) {
+  async function criarPedidoNaApi(items, total) {
+    const dataIso = new Date().toISOString();
     const payload = {
       origem: "site",
       cliente: "Pedido site/celular",
-      subtotal: number(localSale.total),
+      subtotal: number(total),
       desconto: 0,
       taxa: 0,
-      total_final: number(localSale.total),
+      total_final: number(total),
       forma_pagamento: "Pix site/celular",
       vendedor: "Site/Celular",
       status: "Aguardando pagamento",
-      data_venda: new Date(localSale.date).toLocaleString("pt-BR"),
-      data_iso: localSale.date,
-      dia_operacional: new Date(localSale.date).toISOString().slice(0, 10),
+      data_venda: new Date(dataIso).toLocaleString("pt-BR"),
+      data_iso: dataIso,
+      dia_operacional: dataIso.slice(0, 10),
       itens: buildApiItems(items),
     };
     // Rota pública sem segredo: o navegador nunca envia a chave de API (ela
-    // fica só no servidor). O backend reserva o estoque na criação do pedido
-    // e devolve automaticamente se o Pix expirar/for cancelado (ver
+    // fica só no servidor). O backend reserva o estoque na criação do pedido,
+    // gera o Pix com a chave real (ver backend/pix.py) e devolve
+    // automaticamente se o Pix expirar/for cancelado (ver
     // backend/product_routes.py::criar_pedido_checkout_publico).
-    return api("/api/checkout/pedidos", { method: "POST", body: JSON.stringify(payload) });
+    const resposta = await api("/api/checkout/pedidos", { method: "POST", body: JSON.stringify(payload) });
+    if (!resposta || !resposta.id || !resposta.pix_copia_cola) {
+      throw new Error("O servidor não retornou um Pix válido para este pedido.");
+    }
+    return { ...resposta, dataIso };
   }
 
   async function guardedGeneratePix(event) {
@@ -135,53 +141,43 @@
     if (!canSendToApi(items)) {
       return status("Venda bloqueada em produção: sincronize o catálogo pela API antes de baixar estoque.");
     }
-    if (!storeConfig?.pixKey || storeConfig.pixKey === "misticapresentes@email.com") {
-      return status("Configure a chave Pix real antes de publicar ou vender.");
-    }
 
-    const saleId = `MISTICA${Date.now().toString().slice(-9)}`;
-    let payload = "";
+    if (pixPayloadInput) pixPayloadInput.value = "";
+    status("Enviando pedido para o sistema e gerando o Pix. O estoque só será baixado após a confirmação do pagamento...");
+
+    let pedido;
     try {
-      payload = buildPixPayload({
-        key: storeConfig.pixKey,
-        name: storeConfig.merchantName,
-        city: storeConfig.merchantCity,
-        amount: total,
-        txid: saleId,
-      });
-      if (pixPayloadInput) pixPayloadInput.value = payload;
-      if (window.QRCode && pixCanvas) {
-        await window.QRCode.toCanvas(pixCanvas, payload, { width: 220, margin: 2, errorCorrectionLevel: "M" });
-      }
+      pedido = await criarPedidoNaApi(items, total);
     } catch (error) {
-      return status(`Erro ao montar Pix: ${error.message || error}`);
+      storePendingOrder({ date: new Date().toISOString(), total, items });
+      return status(`Não foi possível gerar o Pix agora. Carrinho preservado e estoque não foi baixado: ${String(error.message || error).slice(0, 120)}`);
     }
 
-    const localSale = {
-      date: new Date().toISOString(),
-      id: saleId,
+    if (pixPayloadInput) pixPayloadInput.value = pedido.pix_copia_cola;
+    try {
+      if (window.QRCode && pixCanvas) {
+        await window.QRCode.toCanvas(pixCanvas, pedido.pix_copia_cola, { width: 220, margin: 2, errorCorrectionLevel: "M" });
+      }
+    } catch {}
+
+    sales.unshift({
+      date: pedido.dataIso,
+      id: String(pedido.id),
+      apiId: pedido.id,
+      pedidoBackendId: pedido.id,
+      pixTxid: pedido.pix_txid || null,
       total,
       items,
-      pixPayload: payload,
+      pixPayload: pedido.pix_copia_cola,
       status: "Aguardando pagamento",
       estoqueReposto: false,
-    };
-
-    try {
-      status("Enviando pedido para o sistema. O estoque só será baixado após a confirmação do pagamento...");
-      const saved = await sendSaleToApi(localSale, items);
-      const savedId = saved?.id || saved?.venda_id || saleId;
-      sales.unshift({ ...localSale, id: String(savedId), apiId: savedId });
-      sales = sales.slice(0, 50);
-      cart = [];
-      saveState();
-      if (typeof renderAll === "function") renderAll();
-      status("Pedido criado como \"Aguardando pagamento\". O estoque só será baixado quando o pagamento for confirmado no painel.", true);
-      if (window.misticaMobileSync?.syncNow) window.misticaMobileSync.syncNow();
-    } catch (error) {
-      storePendingOrder(localSale);
-      status(`API não confirmou o pedido. Carrinho preservado e estoque não foi baixado: ${String(error.message || error).slice(0, 120)}`);
-    }
+    });
+    sales = sales.slice(0, 50);
+    cart = [];
+    saveState();
+    if (typeof renderAll === "function") renderAll();
+    status(`Pedido #${pedido.id} criado como "Aguardando pagamento". O estoque só será baixado quando o pagamento for confirmado no painel.`, true);
+    if (window.misticaMobileSync?.syncNow) window.misticaMobileSync.syncNow();
   }
 
   async function submitClientToApi(event) {
@@ -368,7 +364,7 @@
   window.misticaProductionGuard = {
     enabled: true,
     apiBase: API_BASE,
-    sendSaleToApi,
+    sendSaleToApi: criarPedidoNaApi,
     updateSaleStatusApi,
     cancelSaleApi,
     scrubLocalClientData,

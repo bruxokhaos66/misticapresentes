@@ -1,15 +1,11 @@
 const storeConfig = {
   name: "Mística Presentes",
   whatsappNumber: "554999172137",
-  pixKey: "07353652969",
-  merchantName: "FREDINEI JEAN BACH",
-  merchantCity: "PINHALZINHO",
   instagram: "@misticaprodutos",
   minStock: 3
 };
 
 const PLACEHOLDER_WHATSAPP = "5549999999999";
-const PLACEHOLDER_PIX = "misticapresentes@email.com";
 
 const products = [
   { id: "incenso-natural", name: "Incensos Naturais", category: "Aromas e proteção", description: "Incensos para oração, limpeza do ambiente, acolhimento e boas energias.", price: 12.9, stock: 30, icon: "🌿", imageUrl: "" },
@@ -71,7 +67,7 @@ function escapeCsv(value) { return `"${text(value).replace(/"/g, '""')}"`; }
 function safeId(value) { return text(value).replace(/[^a-zA-Z0-9_-]/g, ""); }
 function buildWhatsappUrl(message) { return `https://wa.me/${storeConfig.whatsappNumber}?text=${encodeURIComponent(message)}`; }
 
-function setupConfig() { if (pixKeyInput) pixKeyInput.value = storeConfig.pixKey; if (merchantNameInput) merchantNameInput.value = storeConfig.merchantName; if (merchantCityInput) merchantCityInput.value = storeConfig.merchantCity; $$('[data-whatsapp-link]').forEach(link => { link.href = buildWhatsappUrl("Olá, vim pelo site da Mística Presentes e gostaria de atendimento."); }); const warnings = []; if (storeConfig.whatsappNumber === PLACEHOLDER_WHATSAPP) warnings.push("WhatsApp ainda está com número de exemplo."); if (storeConfig.pixKey === PLACEHOLDER_PIX) warnings.push("Chave Pix ainda está com valor de exemplo."); if (warnings.length && publishWarning) { publishWarning.hidden = false; publishWarning.innerHTML = `<strong>Atenção:</strong> ${warnings.join(" ")}`; } }
+function setupConfig() { if (pixKeyInput) pixKeyInput.value = "Gerada pelo servidor ao confirmar o pedido"; if (merchantNameInput) merchantNameInput.value = "Confira o nome no Pix copia e cola abaixo"; if (merchantCityInput) merchantCityInput.value = "Pinhalzinho-SC"; $$('[data-whatsapp-link]').forEach(link => { link.href = buildWhatsappUrl("Olá, vim pelo site da Mística Presentes e gostaria de atendimento."); }); const warnings = []; if (storeConfig.whatsappNumber === PLACEHOLDER_WHATSAPP) warnings.push("WhatsApp ainda está com número de exemplo."); if (warnings.length && publishWarning) { publishWarning.hidden = false; publishWarning.innerHTML = `<strong>Atenção:</strong> ${warnings.join(" ")}`; } }
 function setupFloatingWhatsapp() { if (document.querySelector(".floating-whatsapp")) return; const link = document.createElement("a"); link.className = "floating-whatsapp"; link.href = buildWhatsappUrl("Olá, vim pelo site da Mística Presentes e gostaria de atendimento."); link.target = "_blank"; link.rel = "noopener"; link.setAttribute("aria-label", "Chamar Mística Presentes no WhatsApp"); link.textContent = "☘ WhatsApp"; document.body.appendChild(link); }
 
 function productBadgeText(product) { return String(product.selo || product.tag || ""); }
@@ -91,16 +87,37 @@ function maskCpf(value) { return onlyDigits(value).slice(0, 11).replace(/(\d{3})
 function maskWhatsapp(value) { const digits = onlyDigits(value).slice(0, 11); if (digits.length <= 10) return digits.replace(/(\d{2})(\d)/, "($1) $2").replace(/(\d{4})(\d)/, "$1-$2"); return digits.replace(/(\d{2})(\d)/, "($1) $2").replace(/(\d{5})(\d)/, "$1-$2"); }
 function isValidCpf(cpf) { const digits = onlyDigits(cpf); if (digits.length !== 11 || /^(\d)\1{10}$/.test(digits)) return false; let sum = 0; for (let i = 0; i < 9; i++) sum += Number(digits[i]) * (10 - i); let first = (sum * 10) % 11; if (first === 10) first = 0; if (first !== Number(digits[9])) return false; sum = 0; for (let i = 0; i < 10; i++) sum += Number(digits[i]) * (11 - i); let second = (sum * 10) % 11; if (second === 10) second = 0; return second === Number(digits[10]); }
 function isValidWhatsapp(value) { const digits = onlyDigits(value); return digits.length === 10 || digits.length === 11; }
-function sanitizePixText(textValue, maxLength) { return text(textValue).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9 .@+\-_]/g, "").toUpperCase().slice(0, maxLength); }
-function emv(id, value) { const cleanValue = text(value); if (cleanValue.length > 99) throw new Error(`Campo Pix ${id} excedeu 99 caracteres.`); return `${id}${String(cleanValue.length).padStart(2, "0")}${cleanValue}`; }
-function crc16(payload) { let crc = 0xffff; for (let i = 0; i < payload.length; i++) { crc ^= payload.charCodeAt(i) << 8; for (let bit = 0; bit < 8; bit++) { crc = (crc & 0x8000) ? (crc << 1) ^ 0x1021 : crc << 1; crc &= 0xffff; } } return crc.toString(16).toUpperCase().padStart(4, "0"); }
-function buildPixPayload({ key, name, city, amount, txid }) { const merchantAccount = emv("26", emv("00", "br.gov.bcb.pix") + emv("01", text(key).trim())); const withoutCrc = emv("00", "01") + merchantAccount + emv("52", "0000") + emv("53", "986") + emv("54", amount.toFixed(2)) + emv("58", "BR") + emv("59", sanitizePixText(name, 25) || "MISTICA PRESENTES") + emv("60", sanitizePixText(city, 15) || "PINHALZINHO") + emv("62", emv("05", sanitizePixText(txid, 25) || "MISTICA")) + "6304"; return withoutCrc + crc16(withoutCrc); }
 function clearQrCanvas() { if (!pixCanvas) return; const ctx = pixCanvas.getContext("2d"); ctx.clearRect(0, 0, pixCanvas.width, pixCanvas.height); ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, pixCanvas.width, pixCanvas.height); }
 function hasEnoughStockForCart() { return cart.every(item => item.qty <= getStock(item.id)); }
 function reduceStockFromCart() { cart.forEach(item => { stock[item.id] = Math.max(0, getStock(item.id) - item.qty); }); }
 
-async function generatePix() { const total = getTotal(); if (!cart.length || total <= 0) return setStatus("Adicione pelo menos um produto ao carrinho antes de gerar o Pix."); if (!hasEnoughStockForCart()) return setStatus("Existe produto no carrinho acima do estoque disponível. Ajuste antes de gerar o Pix."); if (!storeConfig.pixKey || storeConfig.pixKey === PLACEHOLDER_PIX) return setStatus("Configure a chave Pix real antes de publicar ou vender."); window.misticaTrack?.("begin_checkout", { currency: "BRL", value: total, items: cart.map(item => ({ item_id: item.id, item_name: item.name, price: item.price, quantity: item.qty })) }); const saleId = `MISTICA${Date.now().toString().slice(-9)}`; let payload = ""; try { payload = buildPixPayload({ key: storeConfig.pixKey, name: storeConfig.merchantName, city: storeConfig.merchantCity, amount: total, txid: saleId }); } catch (error) { return setStatus(`Erro ao montar Pix: ${error.message}`); } pixPayloadInput.value = payload; try { if (!window.QRCode) throw new Error("Biblioteca de QR Code não carregou."); await window.QRCode.toCanvas(pixCanvas, payload, { width: 220, margin: 2, errorCorrectionLevel: "M" }); setStatus(`QR Code gerado para ${currency.format(total)}. Confira valor e recebedor no banco antes de pagar.`); } catch { setStatus("Pix copia e cola gerado. Não foi possível desenhar o QR Code agora."); } saveSale(payload, saleId); }
-function saveSale(payload, saleId) { const saleItems = cart.map(item => ({ ...item })); const total = getTotal(); reduceStockFromCart(); sales.unshift({ date: new Date().toISOString(), id: saleId, total, items: saleItems, pixPayload: payload, status: "Aguardando pagamento", estoqueReposto: false }); sales = sales.slice(0, 50); cart = []; saveState(); renderAll(); }
+async function generatePix() {
+  const total = getTotal();
+  if (!cart.length || total <= 0) return setStatus("Adicione pelo menos um produto ao carrinho antes de gerar o Pix.");
+  if (!hasEnoughStockForCart()) return setStatus("Existe produto no carrinho acima do estoque disponível. Ajuste antes de gerar o Pix.");
+  if (typeof window.misticaCriarPedido !== "function") return setStatus("Não foi possível conectar ao servidor para gerar o Pix. Tente novamente em instantes ou fale pelo WhatsApp.");
+  window.misticaTrack?.("begin_checkout", { currency: "BRL", value: total, items: cart.map(item => ({ item_id: item.id, item_name: item.name, price: item.price, quantity: item.qty })) });
+  clearQrCanvas();
+  pixPayloadInput.value = "";
+  setStatus("Enviando pedido e gerando o Pix com o servidor...");
+  let pedido;
+  try {
+    pedido = await window.misticaCriarPedido(cart);
+  } catch (error) {
+    return setStatus(error.message || "Não foi possível gerar o Pix agora. Tente novamente ou fale pelo WhatsApp.");
+  }
+  pixPayloadInput.value = pedido.pixPayload;
+  try {
+    if (!window.QRCode) throw new Error("Biblioteca de QR Code não carregou.");
+    await window.QRCode.toCanvas(pixCanvas, pedido.pixPayload, { width: 220, margin: 2, errorCorrectionLevel: "M" });
+    setStatus(`QR Code gerado para ${currency.format(total)}. Confira valor e recebedor no banco antes de pagar.`);
+  } catch {
+    setStatus("Pix copia e cola gerado. Não foi possível desenhar o QR Code agora.");
+  }
+  saveSale(pedido);
+  window.misticaMobileSync?.syncNow?.();
+}
+function saveSale(pedido) { const saleItems = cart.map(item => ({ ...item })); const total = getTotal(); reduceStockFromCart(); sales.unshift({ date: pedido.dataIso || new Date().toISOString(), id: pedido.id, pedidoBackendId: pedido.id, pixTxid: pedido.pixTxid || null, total, items: saleItems, pixPayload: pedido.pixPayload, status: "Aguardando pagamento", estoqueReposto: false }); sales = sales.slice(0, 50); cart = []; saveState(); renderAll(); }
 async function copyPix() { const payload = pixPayloadInput.value; if (!payload) return setStatus("Gere o Pix antes de copiar."); try { await navigator.clipboard.writeText(payload); setStatus("Pix copia e cola copiado."); } catch { pixPayloadInput.select(); document.execCommand("copy"); setStatus("Pix copia e cola selecionado para copiar."); } }
 function buildSaleSummary() { if (!cart.length) return ""; const items = cart.map(item => `• ${item.qty}x ${item.name} - ${currency.format(item.price * item.qty)}`).join("\n"); return `Olá, quero finalizar um pedido na ${storeConfig.name}:\n\n${items}\n\nTotal: ${currency.format(getTotal())}`; }
 function sendSaleWhatsapp() { if (!cart.length) return setStatus("Adicione produtos ao carrinho para enviar o resumo pelo WhatsApp."); window.misticaTrack?.("contact_whatsapp", { method: "carrinho", currency: "BRL", value: getTotal() }); window.open(buildWhatsappUrl(buildSaleSummary()), "_blank", "noopener"); }
