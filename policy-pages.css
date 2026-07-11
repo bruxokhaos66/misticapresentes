@@ -1,0 +1,27 @@
+.policy-page-shell {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.policy-page-shell .form-panel h1 {
+  margin-top: 0.2rem;
+}
+
+.policy-page-shell .form-panel h2 {
+  margin-top: 1.8rem;
+  font-size: 1.15rem;
+}
+
+.policy-page-shell .form-panel ul {
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.policy-page-shell .form-panel a {
+  color: var(--gold-strong, #e6c85c);
+}
+
+.policy-page-shell .form-panel .btn {
+  margin-top: 1.8rem;
+}

@@ -182,6 +182,8 @@
         description,
         image: product.images?.length ? product.images : [image],
         category: product.category,
+        sku: product.codigo || product.apiId || product.id,
+        url,
         brand: {
           "@type": "Brand",
           name: "Mística Presentes",
@@ -195,7 +197,28 @@
           seller: { "@id": `${baseUrl}/#loja` },
         },
       });
+      applyProductRatingSeo(product);
     }
+  }
+
+  function applyProductRatingSeo(product) {
+    if (!product.apiId) return;
+    const apiBase = (cfg.apiBaseUrl || "https://api.misticaesotericos.com.br").replace(/\/$/, "");
+    fetch(`${apiBase}/api/produtos/${encodeURIComponent(product.apiId)}/avaliacoes`)
+      .then(response => (response.ok ? response.json() : null))
+      .then(data => {
+        if (!data || !data.total) return;
+        const el = document.getElementById("seo-product");
+        if (!el) return;
+        const schema = JSON.parse(el.textContent);
+        schema.aggregateRating = {
+          "@type": "AggregateRating",
+          ratingValue: data.media,
+          reviewCount: data.total,
+        };
+        el.textContent = JSON.stringify(schema, null, 2);
+      })
+      .catch(() => {});
   }
 
   window.addEventListener("load", () => setTimeout(applyBaseSeo, 700));
