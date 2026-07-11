@@ -130,7 +130,7 @@ def test_upload_musica_ambiente_responde_rapido_e_salva_arquivo():
     assert response.status_code == 200
     data = response.json()
     assert data["ok"] is True
-    assert data["armazenamento"] == "arquivo+backup_banco"
+    assert data["armazenamento"] == "arquivo"
     assert data["url"].startswith("/api/uploads/musicas/arquivo-local/")
 
     arquivo = client.get(data["url"])
