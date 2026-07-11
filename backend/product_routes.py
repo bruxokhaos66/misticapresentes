@@ -52,6 +52,16 @@ def _chave_interna_checkout() -> str:
     return chave
 
 
+CAMPOS_PRODUTO_PUBLICO = (
+    "id, codigo_p, nome, marca, preco, quantidade, categoria,"
+    " descricao, imagem_url, imagens_json, link_externo, selo, atualizado_em"
+)
+CAMPOS_PRODUTO_COMPLETO = (
+    "id, codigo_p, nome, marca, preco, quantidade, categoria, custo, lucro,"
+    " estoque_minimo, descricao, imagem_url, imagens_json, link_externo, selo, atualizado_em"
+)
+
+
 def produto_row_to_dict(row):
     data = dict(row)
     imagens = []
@@ -68,15 +78,13 @@ def produto_row_to_dict(row):
     return data
 
 
-@router.get("/produtos")
-def listar_produtos_completos(busca: str = "", limite: int = Query(100, ge=1, le=500)):
+def _buscar_produtos(campos: str, busca: str, limite: int):
     termo = f"%{busca.strip()}%"
     with conectar() as conn:
         if busca.strip():
             rows = conn.execute(
-                """
-                SELECT id, codigo_p, nome, marca, preco, quantidade, categoria, custo, lucro,
-                       estoque_minimo, descricao, imagem_url, imagens_json, link_externo, selo, atualizado_em
+                f"""
+                SELECT {campos}
                 FROM produtos
                 WHERE COALESCE(ativo,1)=1
                   AND (nome LIKE ? OR codigo_p LIKE ? OR categoria LIKE ? OR marca LIKE ? OR descricao LIKE ? OR selo LIKE ?)
@@ -87,9 +95,8 @@ def listar_produtos_completos(busca: str = "", limite: int = Query(100, ge=1, le
             ).fetchall()
         else:
             rows = conn.execute(
-                """
-                SELECT id, codigo_p, nome, marca, preco, quantidade, categoria, custo, lucro,
-                       estoque_minimo, descricao, imagem_url, imagens_json, link_externo, selo, atualizado_em
+                f"""
+                SELECT {campos}
                 FROM produtos
                 WHERE COALESCE(ativo,1)=1
                 ORDER BY nome COLLATE NOCASE
@@ -98,6 +105,37 @@ def listar_produtos_completos(busca: str = "", limite: int = Query(100, ge=1, le
                 (limite,),
             ).fetchall()
     return [produto_row_to_dict(row) for row in rows]
+
+
+@router.get("/produtos")
+def listar_produtos_completos(busca: str = "", limite: int = Query(100, ge=1, le=500)):
+    """Endpoint público (sem autenticação): nunca deve devolver custo, lucro
+    ou estoque_minimo, que são dados comerciais sensíveis."""
+    return _buscar_produtos(CAMPOS_PRODUTO_PUBLICO, busca, limite)
+
+
+@router.get("/produtos/{produto_id}")
+def obter_produto_completo(produto_id: int):
+    """Endpoint público (sem autenticação): mesma restrição de campos da listagem."""
+    with conectar() as conn:
+        row = conn.execute(
+            f"SELECT {CAMPOS_PRODUTO_PUBLICO} FROM produtos WHERE id=? AND COALESCE(ativo,1)=1",
+            (produto_id,),
+        ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Produto não encontrado")
+    return produto_row_to_dict(row)
+
+
+@router.get("/produtos-gestao")
+def listar_produtos_gestao(
+    busca: str = "",
+    limite: int = Query(100, ge=1, le=500),
+    sessao: dict = Depends(exigir_sessao_ou_chave_api()),
+):
+    """Listagem completa (com custo, lucro e estoque_minimo) para o painel
+    administrativo, protegida por sessão de admin ou chave de API."""
+    return _buscar_produtos(CAMPOS_PRODUTO_COMPLETO, busca, limite)
 
 
 @router.post("/checkout/pedidos", dependencies=[Depends(limitar_checkout_publico)])

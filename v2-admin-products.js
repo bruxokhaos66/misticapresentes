@@ -66,6 +66,12 @@
     return data;
   };
 
+  const loadApiProductsAdmin = async () => {
+    const response = await fetch(`${API_BASE}/api/produtos-gestao?limite=500`, { credentials: 'include' });
+    if (!response.ok) throw new Error('Não foi possível carregar produtos da API.');
+    return response.json();
+  };
+
   ready(() => {
     const adminContent = document.getElementById('adminContent');
     if (!adminContent) return;
@@ -233,7 +239,10 @@
 
     const loadProducts = async () => {
       try {
-        currentProducts = await loadApiProductsPublic();
+        // Sincroniza a vitrine pública (cache/preview) e carrega a lista completa
+        // (com custo/estoque mínimo) autenticada só para o painel de gestão.
+        const [, produtosGestao] = await Promise.all([loadApiProductsPublic(), loadApiProductsAdmin()]);
+        currentProducts = produtosGestao;
         renderList();
         setStatus(`Produtos atualizados: ${currentProducts.length} item(ns).`, true);
       } catch (error) {

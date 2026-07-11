@@ -126,9 +126,7 @@ def garantir_admin_api():
 
 
 def _validar_chave_sync(x_mistica_sync_key: str | None):
-    chave = os.environ.get("MISTICA_SYNC_KEY", "").strip()
-    if chave and x_mistica_sync_key != chave:
-        raise HTTPException(status_code=403, detail="Chave de sincronização inválida")
+    validar_site_api_key(x_mistica_sync_key, "Configure MISTICA_SYNC_KEY ou MISTICA_SITE_API_KEY para permitir a sincronização em lote.")
 
 
 @app.get("/")
@@ -152,20 +150,6 @@ def health():
     }
 
 
-@app.get("/api/status")
-def status():
-    total_produtos = obter("SELECT COUNT(*) AS total FROM produtos WHERE COALESCE(ativo,1)=1") or {"total": 0}
-    total_clientes = obter("SELECT COUNT(*) AS total FROM clientes WHERE COALESCE(ativo,1)=1") or {"total": 0}
-    total_vendas = obter("SELECT COUNT(*) AS total FROM vendas WHERE COALESCE(status,'Concluído') NOT IN ('Cancelado','Cancelada')") or {"total": 0}
-    return {
-        "status": "online",
-        "produtos": total_produtos["total"],
-        "clientes": total_clientes["total"],
-        "vendas": total_vendas["total"],
-        "data_hora": datetime.now().isoformat(timespec="seconds"),
-    }
-
-
 @app.get("/api/painel/resumo")
 def painel_resumo(sessao: dict = Depends(exigir_sessao_ou_chave_api())):
     total_produtos = obter("SELECT COUNT(*) AS total FROM produtos WHERE COALESCE(ativo,1)=1") or {"total": 0}
@@ -181,32 +165,6 @@ def painel_resumo(sessao: dict = Depends(exigir_sessao_ou_chave_api())):
         "pecas_estoque": estoque_total["total"],
         "data_hora": datetime.now().isoformat(timespec="seconds"),
     }
-
-
-@app.get("/api/produtos")
-def listar_produtos(busca: str = "", limite: int = Query(100, ge=1, le=500)):
-    termo = f"%{busca.strip()}%"
-    if busca.strip():
-        return listar(
-            """
-            SELECT id, codigo_p, nome, preco, quantidade, categoria, custo, lucro, estoque_minimo
-            FROM produtos
-            WHERE COALESCE(ativo,1)=1 AND (nome LIKE ? OR codigo_p LIKE ? OR categoria LIKE ?)
-            ORDER BY nome COLLATE NOCASE
-            LIMIT ?
-            """,
-            (termo, termo, termo, limite),
-        )
-    return listar(
-        """
-        SELECT id, codigo_p, nome, preco, quantidade, categoria, custo, lucro, estoque_minimo
-        FROM produtos
-        WHERE COALESCE(ativo,1)=1
-        ORDER BY nome COLLATE NOCASE
-        LIMIT ?
-        """,
-        (limite,),
-    )
 
 
 @app.post("/api/sync/produtos-lote")
@@ -280,21 +238,6 @@ def sincronizar_produtos_lote(payload: ProdutosLotePayload, x_mistica_sync_key: 
         "total": criados + atualizados,
         "data_hora": datetime.now().isoformat(timespec="seconds"),
     }
-
-
-@app.get("/api/produtos/{produto_id}")
-def obter_produto(produto_id: int):
-    produto = obter(
-        """
-        SELECT id, codigo_p, nome, preco, quantidade, categoria, custo, lucro, estoque_minimo
-        FROM produtos
-        WHERE id=? AND COALESCE(ativo,1)=1
-        """,
-        (produto_id,),
-    )
-    if not produto:
-        raise HTTPException(status_code=404, detail="Produto não encontrado")
-    return produto
 
 
 @app.get("/api/clientes")
