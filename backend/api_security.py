@@ -3,6 +3,15 @@ import secrets
 
 from fastapi import HTTPException
 
+ORIGENS_PERMITIDAS = [
+    "https://misticaesotericos.com.br",
+    "https://www.misticaesotericos.com.br",
+    "https://api.misticaesotericos.com.br",
+    "https://bruxokhaos66.github.io",
+    "http://localhost:3000",
+    "http://localhost:8000",
+]
+
 
 def validar_site_api_key(chave_recebida: str | None, mensagem_indisponivel: str | None = None) -> None:
     """Confere a chave de integração do site/API (MISTICA_SITE_API_KEY ou o

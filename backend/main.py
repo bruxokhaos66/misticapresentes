@@ -17,7 +17,7 @@ from backend.database import conectar, executar, listar, obter
 from backend.order_status_routes import expirar_pedidos_pendentes, router as order_status_router
 from backend.panel_sessions import exigir_sessao_ou_chave_api
 from backend.payment_routes import router as payment_router
-from backend.api_security import validar_site_api_key as validar_chave_api
+from backend.api_security import ORIGENS_PERMITIDAS, validar_site_api_key as validar_chave_api
 from backend.product_routes import router as product_router, validar_site_api_key
 from backend.review_routes import router as review_router
 from backend.upload_routes import router as upload_router
@@ -50,14 +50,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://misticaesotericos.com.br",
-        "https://www.misticaesotericos.com.br",
-        "https://api.misticaesotericos.com.br",
-        "https://bruxokhaos66.github.io",
-        "http://localhost:3000",
-        "http://localhost:8000",
-    ],
+    allow_origins=ORIGENS_PERMITIDAS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -152,20 +145,6 @@ def health():
     return {
         "status": "online",
         "app": "Mística Presentes",
-    }
-
-
-@app.get("/api/status")
-def status():
-    total_produtos = obter("SELECT COUNT(*) AS total FROM produtos WHERE COALESCE(ativo,1)=1") or {"total": 0}
-    total_clientes = obter("SELECT COUNT(*) AS total FROM clientes WHERE COALESCE(ativo,1)=1") or {"total": 0}
-    total_vendas = obter("SELECT COUNT(*) AS total FROM vendas WHERE COALESCE(status,'Concluído') NOT IN ('Cancelado','Cancelada')") or {"total": 0}
-    return {
-        "status": "online",
-        "produtos": total_produtos["total"],
-        "clientes": total_clientes["total"],
-        "vendas": total_vendas["total"],
-        "data_hora": datetime.now().isoformat(timespec="seconds"),
     }
 
 

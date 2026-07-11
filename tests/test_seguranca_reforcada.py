@@ -132,3 +132,47 @@ def test_download_musica_local_ignora_tentativa_de_path_traversal():
     resposta = client.get("/api/uploads/musicas/arquivo-local/..%2f..%2f..%2f..%2fetc%2fpasswd")
     assert resposta.status_code in (400, 404)
     assert b"root:" not in resposta.content
+
+
+def test_upload_imagem_produto_rejeita_conteudo_que_nao_e_imagem_real():
+    # O content-type "image/png" vem do navegador do cliente e pode ser
+    # forjado; texto puro disfarçado de PNG deve ser rejeitado mesmo
+    # apresentando o header correto.
+    resposta = client.post(
+        "/api/uploads/produtos",
+        files={"arquivo": ("produto.png", b"nao sou uma imagem de verdade", "image/png")},
+        headers={"X-Mistica-Api-Key": TEST_API_KEY},
+    )
+    assert resposta.status_code == 400
+
+
+def test_upload_musica_ambiente_rejeita_conteudo_que_nao_e_audio_real():
+    resposta = client.post(
+        "/api/uploads/musicas",
+        files={"arquivo": ("ambiente.mp3", b"nao sou um mp3 de verdade", "audio/mpeg")},
+        data={"nome_base": "teste-invalido"},
+        headers={"X-Mistica-Api-Key": TEST_API_KEY},
+    )
+    assert resposta.status_code == 400
+
+
+def test_mutacao_com_sessao_de_cookie_e_origem_desconhecida_e_bloqueada(monkeypatch):
+    monkeypatch.delenv("MISTICA_DEFAULT_PANEL_PASSWORD", raising=False)
+    login = f"usuario-csrf-{uuid.uuid4().hex[:8]}"
+    senha = "senha-correta-789"
+    criar_usuario_teste(login, senha)
+
+    resposta_login = client.post(
+        "/api/auth/login",
+        json={"login": login, "senha": senha},
+        headers={"X-Forwarded-For": ip_unico()},
+    )
+    assert resposta_login.status_code == 200
+
+    resposta = client.post(
+        "/api/uploads/produtos",
+        files={"arquivo": ("produto.png", b"nao importa, deve bloquear antes", "image/png")},
+        headers={"Origin": "https://site-malicioso.exemplo"},
+    )
+    assert resposta.status_code == 403
+    client.cookies.clear()
