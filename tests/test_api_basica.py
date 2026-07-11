@@ -26,8 +26,23 @@ def test_health_online():
     response = client.get("/api/health")
     assert response.status_code == 200
     data = response.json()
-    assert data["status"] == "online"
-    assert data["app"] == "Mística Presentes"
+    assert data == {"status": "online", "app": "Mística Presentes"}
+
+
+def test_health_head_sem_autenticacao_e_sem_corpo():
+    response = client.head("/api/health")
+    assert response.status_code == 200
+    assert response.content == b""
+
+
+def test_health_nao_expoe_informacoes_internas():
+    response = client.get("/api/health")
+    assert response.status_code == 200
+    corpo = response.text
+    assert "mistica_gestao_v20.db" not in corpo
+    assert "/opt/render" not in corpo
+    for chave_proibida in ("database", "db_path", "server_url", "api_url", "domain", "secret", "token", "key"):
+        assert chave_proibida not in corpo.lower()
 
 
 def test_status_online():
