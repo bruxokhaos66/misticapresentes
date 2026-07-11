@@ -52,16 +52,6 @@ def _chave_interna_checkout() -> str:
     return chave
 
 
-CAMPOS_PRODUTO_PUBLICO = (
-    "p.id, p.codigo_p, p.nome, p.marca, p.preco, p.quantidade, p.categoria,"
-    " p.descricao, p.imagem_url, p.imagens_json, p.link_externo, p.selo, p.atualizado_em"
-)
-CAMPOS_PRODUTO_COMPLETO = (
-    "p.id, p.codigo_p, p.nome, p.marca, p.preco, p.quantidade, p.categoria, p.custo, p.lucro,"
-    " p.estoque_minimo, p.descricao, p.imagem_url, p.imagens_json, p.link_externo, p.selo, p.atualizado_em"
-)
-
-
 def produto_row_to_dict(row):
     data = dict(row)
     imagens = []
@@ -80,6 +70,19 @@ def produto_row_to_dict(row):
     return data
 
 
+_CAMPOS_PRODUTO_PUBLICO = """p.id, p.codigo_p, p.nome, p.marca, p.preco, p.quantidade, p.categoria,
+                       p.descricao, p.imagem_url, p.imagens_json, p.link_externo, p.selo, p.atualizado_em"""
+_CAMPOS_PRODUTO_ADMIN = """p.id, p.codigo_p, p.nome, p.marca, p.preco, p.quantidade, p.categoria, p.custo, p.lucro,
+                       p.estoque_minimo, p.descricao, p.imagem_url, p.imagens_json, p.link_externo, p.selo, p.atualizado_em"""
+_JOIN_AVALIACOES = """
+                LEFT JOIN (
+                    SELECT produto_id, COUNT(*) AS total, AVG(nota) AS media
+                    FROM avaliacoes_produtos
+                    WHERE COALESCE(aprovado, 1) = 1
+                    GROUP BY produto_id
+                ) a ON a.produto_id = p.id"""
+
+
 def _buscar_produtos(campos: str, busca: str, limite: int):
     # avaliacoes_total/avaliacoes_media vêm de um LEFT JOIN agregado para que o
     # catálogo mostre prova social (nota média + nº de avaliações) sem uma
@@ -92,13 +95,7 @@ def _buscar_produtos(campos: str, busca: str, limite: int):
                 SELECT {campos},
                        COALESCE(a.total, 0) AS avaliacoes_total,
                        ROUND(a.media, 1) AS avaliacoes_media
-                FROM produtos p
-                LEFT JOIN (
-                    SELECT produto_id, COUNT(*) AS total, AVG(nota) AS media
-                    FROM avaliacoes_produtos
-                    WHERE COALESCE(aprovado, 1) = 1
-                    GROUP BY produto_id
-                ) a ON a.produto_id = p.id
+                FROM produtos p{_JOIN_AVALIACOES}
                 WHERE COALESCE(p.ativo,1)=1
                   AND (p.nome LIKE ? OR p.codigo_p LIKE ? OR p.categoria LIKE ? OR p.marca LIKE ? OR p.descricao LIKE ? OR p.selo LIKE ?)
                 ORDER BY p.nome COLLATE NOCASE
@@ -112,13 +109,7 @@ def _buscar_produtos(campos: str, busca: str, limite: int):
                 SELECT {campos},
                        COALESCE(a.total, 0) AS avaliacoes_total,
                        ROUND(a.media, 1) AS avaliacoes_media
-                FROM produtos p
-                LEFT JOIN (
-                    SELECT produto_id, COUNT(*) AS total, AVG(nota) AS media
-                    FROM avaliacoes_produtos
-                    WHERE COALESCE(aprovado, 1) = 1
-                    GROUP BY produto_id
-                ) a ON a.produto_id = p.id
+                FROM produtos p{_JOIN_AVALIACOES}
                 WHERE COALESCE(p.ativo,1)=1
                 ORDER BY p.nome COLLATE NOCASE
                 LIMIT ?
@@ -130,45 +121,20 @@ def _buscar_produtos(campos: str, busca: str, limite: int):
 
 @router.get("/produtos")
 def listar_produtos_completos(busca: str = "", limite: int = Query(100, ge=1, le=500)):
-    """Endpoint público (sem autenticação): nunca deve devolver custo, lucro
-    ou estoque_minimo, que são dados comerciais sensíveis."""
-    return _buscar_produtos(CAMPOS_PRODUTO_PUBLICO, busca, limite)
+    """Catálogo público: não inclui custo, lucro nem estoque mínimo, que são
+    informações comerciais internas (ver GET /produtos/admin para o painel)."""
+    return _buscar_produtos(_CAMPOS_PRODUTO_PUBLICO, busca, limite)
 
 
-@router.get("/produtos/{produto_id}")
-def obter_produto_completo(produto_id: int):
-    """Endpoint público (sem autenticação): mesma restrição de campos da listagem."""
-    with conectar() as conn:
-        row = conn.execute(
-            f"""
-            SELECT {CAMPOS_PRODUTO_PUBLICO},
-                   COALESCE(a.total, 0) AS avaliacoes_total,
-                   ROUND(a.media, 1) AS avaliacoes_media
-            FROM produtos p
-            LEFT JOIN (
-                SELECT produto_id, COUNT(*) AS total, AVG(nota) AS media
-                FROM avaliacoes_produtos
-                WHERE COALESCE(aprovado, 1) = 1
-                GROUP BY produto_id
-            ) a ON a.produto_id = p.id
-            WHERE p.id=? AND COALESCE(p.ativo,1)=1
-            """,
-            (produto_id,),
-        ).fetchone()
-    if not row:
-        raise HTTPException(status_code=404, detail="Produto não encontrado")
-    return produto_row_to_dict(row)
-
-
-@router.get("/produtos-gestao")
-def listar_produtos_gestao(
+@router.get("/produtos/admin")
+def listar_produtos_admin(
     busca: str = "",
     limite: int = Query(100, ge=1, le=500),
     sessao: dict = Depends(exigir_sessao_ou_chave_api()),
 ):
-    """Listagem completa (com custo, lucro e estoque_minimo) para o painel
-    administrativo, protegida por sessão de admin ou chave de API."""
-    return _buscar_produtos(CAMPOS_PRODUTO_COMPLETO, busca, limite)
+    """Mesma listagem, mas autenticada e com os campos internos (custo, lucro,
+    estoque mínimo) usados pelo painel administrativo."""
+    return _buscar_produtos(_CAMPOS_PRODUTO_ADMIN, busca, limite)
 
 
 @router.post("/checkout/pedidos", dependencies=[Depends(limitar_checkout_publico)])

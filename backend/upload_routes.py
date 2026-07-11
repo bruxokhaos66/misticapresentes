@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import os
 import re
 import secrets
@@ -10,6 +11,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Header, HTTPException, Response, UploadFile
+from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, Field
 
 from backend.api_security import validar_site_api_key as validar_chave_api
@@ -150,6 +152,48 @@ def salvar_musica_no_banco(nome: str, content_type: str, data: bytes, criado_em:
         log_tempo("backup_banco_falhou", inicio, str(exc))
 
 
+FORMATOS_PIL_POR_TIPO = {"image/jpeg": "JPEG", "image/png": "PNG", "image/webp": "WEBP"}
+ASSINATURAS_AUDIO = {
+    ".mp3": (b"ID3", b"\xff\xfb", b"\xff\xf3", b"\xff\xf2"),
+    ".ogg": (b"OggS",),
+    ".webm": (b"\x1a\x45\xdf\xa3",),
+}
+
+
+def validar_imagem_real(data: bytes, content_type: str) -> None:
+    """O content-type do upload vem do navegador do cliente e pode ser
+    forjado; abrir o arquivo de fato com Pillow confirma que os bytes são
+    uma imagem válida e do formato declarado, não só a extensão/cabeçalho
+    HTTP."""
+    try:
+        imagem = Image.open(io.BytesIO(data))
+        formato_real = imagem.format
+        imagem.verify()
+    except (UnidentifiedImageError, OSError, ValueError):
+        raise HTTPException(status_code=400, detail="Arquivo não é uma imagem válida.")
+    esperado = FORMATOS_PIL_POR_TIPO.get(content_type)
+    if esperado and formato_real != esperado:
+        raise HTTPException(status_code=400, detail="Conteúdo do arquivo não corresponde ao formato de imagem declarado.")
+
+
+def validar_audio_real(data: bytes, ext: str) -> None:
+    """Confere a assinatura binária (magic bytes) do áudio recebido, em vez de
+    confiar apenas na extensão do nome do arquivo ou no content-type
+    informado pelo cliente."""
+    erro = HTTPException(status_code=400, detail="Conteúdo do arquivo não corresponde ao formato de áudio declarado.")
+    if ext == ".wav":
+        if not (data[:4] == b"RIFF" and data[8:12] == b"WAVE"):
+            raise erro
+        return
+    if ext == ".m4a":
+        if data[4:8] != b"ftyp":
+            raise erro
+        return
+    assinaturas = ASSINATURAS_AUDIO.get(ext)
+    if assinaturas and not any(data.startswith(sig) for sig in assinaturas):
+        raise erro
+
+
 def detectar_extensao_audio(arquivo: UploadFile) -> str:
     content_type = arquivo.content_type or ""
     if content_type in ALLOWED_AUDIO_TYPES:
@@ -227,6 +271,7 @@ async def upload_imagem_produto(arquivo: UploadFile = File(...), produto_id: str
         raise HTTPException(status_code=400, detail="Arquivo vazio.")
     if len(data) > MAX_IMAGE_BYTES:
         raise HTTPException(status_code=413, detail="Imagem muito grande. Limite: 4 MB.")
+    validar_imagem_real(data, content_type)
     ext = ALLOWED_CONTENT_TYPES[content_type]
     nome = f"{limpar_nome(produto_id)}-{uuid4().hex[:10]}{ext}"
     destino = UPLOAD_DIR / nome
@@ -279,6 +324,7 @@ async def upload_musica_ambiente(background_tasks: BackgroundTasks, arquivo: Upl
         raise HTTPException(status_code=400, detail="Arquivo vazio.")
     if len(data) > MAX_AUDIO_BYTES:
         raise HTTPException(status_code=413, detail="Áudio muito grande. Limite: 30 MB.")
+    validar_audio_real(data, ext)
     content_type = arquivo.content_type or media_type_por_nome(arquivo.filename or "")
     nome_original = arquivo.filename or nome_base or "ambiente-xamanico"
     nome_limpo = limpar_nome(nome_original.rsplit(".", 1)[0] or nome_base)

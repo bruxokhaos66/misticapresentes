@@ -17,6 +17,7 @@ from backend.database import conectar, executar, listar, obter
 from backend.order_status_routes import expirar_pedidos_pendentes, router as order_status_router
 from backend.panel_sessions import exigir_sessao_ou_chave_api
 from backend.payment_routes import router as payment_router
+from backend.api_security import ORIGENS_PERMITIDAS, validar_site_api_key as validar_chave_api
 from backend.product_routes import router as product_router, validar_site_api_key
 from backend.review_routes import router as review_router
 from backend.upload_routes import router as upload_router
@@ -49,14 +50,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://misticaesotericos.com.br",
-        "https://www.misticaesotericos.com.br",
-        "https://api.misticaesotericos.com.br",
-        "https://bruxokhaos66.github.io",
-        "http://localhost:3000",
-        "http://localhost:8000",
-    ],
+    allow_origins=ORIGENS_PERMITIDAS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -133,10 +127,6 @@ def garantir_admin_api():
         )
 
 
-def _validar_chave_sync(x_mistica_sync_key: str | None):
-    validar_site_api_key(x_mistica_sync_key, "Configure MISTICA_SYNC_KEY ou MISTICA_SITE_API_KEY para permitir a sincronização em lote.")
-
-
 @app.get("/")
 def raiz():
     return {
@@ -177,7 +167,7 @@ def painel_resumo(sessao: dict = Depends(exigir_sessao_ou_chave_api())):
 
 @app.post("/api/sync/produtos-lote")
 def sincronizar_produtos_lote(payload: ProdutosLotePayload, x_mistica_sync_key: str | None = Header(default=None)):
-    _validar_chave_sync(x_mistica_sync_key)
+    validar_chave_api(x_mistica_sync_key, "Configure MISTICA_SITE_API_KEY ou MISTICA_SYNC_KEY para permitir sincronização.")
     criados = 0
     atualizados = 0
     ignorados = 0
@@ -246,6 +236,22 @@ def sincronizar_produtos_lote(payload: ProdutosLotePayload, x_mistica_sync_key: 
         "total": criados + atualizados,
         "data_hora": datetime.now().isoformat(timespec="seconds"),
     }
+
+
+@app.get("/api/produtos/{produto_id}")
+def obter_produto(produto_id: int):
+    """Rota pública: não inclui custo, lucro nem estoque mínimo (dados internos)."""
+    produto = obter(
+        """
+        SELECT id, codigo_p, nome, preco, quantidade, categoria
+        FROM produtos
+        WHERE id=? AND COALESCE(ativo,1)=1
+        """,
+        (produto_id,),
+    )
+    if not produto:
+        raise HTTPException(status_code=404, detail="Produto não encontrado")
+    return produto
 
 
 @app.get("/api/clientes")
