@@ -324,6 +324,51 @@ def test_estoque_reservado_na_criacao_e_nao_baixa_de_novo_na_confirmacao():
     assert bool(pedido["estoque_baixado"]) is True
 
 
+def test_expiracao_de_pedido_nao_repoe_estoque_em_dobro_com_workers_concorrentes():
+    from backend.database import conectar
+    from backend.order_status_routes import expirar_pedidos_pendentes
+
+    produto = client.post(
+        "/api/produtos",
+        json={"nome": "Produto Expira", "codigo_p": codigo_unico("EXP"), "preco": 30.0, "quantidade": 5},
+        headers=PROTECTED_HEADERS,
+    ).json()
+    venda = client.post(
+        "/api/vendas",
+        json={
+            "cliente": "Cliente",
+            "status": "Aguardando pagamento",
+            "baixa_estoque": True,
+            "itens": [{"produto_id": produto["id"], "quantidade": 2}],
+        },
+        headers=PROTECTED_HEADERS,
+    ).json()
+
+    produto_reservado = client.get(f"/api/produtos/{produto['id']}").json()
+    assert produto_reservado["quantidade"] == 3
+
+    with conectar() as conn:
+        conn.execute("UPDATE pedidos SET expira_em='2000-01-01T00:00:00' WHERE id=?", (venda["id"],))
+        conn.commit()
+
+    # Simula dois workers rodando a varredura de expiração ao mesmo tempo: o
+    # segundo não deve encontrar mais o pedido "Aguardando pagamento" e,
+    # portanto, não deve repor o estoque de novo.
+    with conectar() as conn:
+        primeira_passada = expirar_pedidos_pendentes(conn)
+    with conectar() as conn:
+        segunda_passada = expirar_pedidos_pendentes(conn)
+
+    assert primeira_passada == 1
+    assert segunda_passada == 0
+
+    produto_apos = client.get(f"/api/produtos/{produto['id']}").json()
+    assert produto_apos["quantidade"] == 5
+
+    pedido = client.get(f"/api/pedidos/{venda['id']}", headers=PROTECTED_HEADERS).json()
+    assert pedido["status"] == "Cancelado"
+
+
 def test_links_audio_ambiente_salva_apenas_audio_direto():
     payload = {
         "links": [
@@ -371,6 +416,39 @@ def test_avaliacoes_publico_le_e_cria_para_produto_existente():
     assert data["media"] == 5
     assert data["avaliacoes"][0]["nome_cliente"] == "Maria"
     assert data["avaliacoes"][0]["comentario"] == "Produto lindo, chegou rápido!"
+
+
+def test_listagem_de_produtos_traz_prova_social():
+    # Insere as avaliações direto no banco (em vez de via POST /avaliacoes) para
+    # não consumir a cota do rate limit de criação de avaliação compartilhada
+    # com os outros testes deste arquivo (mesmo IP de teste).
+    from backend.database import conectar
+
+    codigo = codigo_unico("PROVA")
+    produto = client.post(
+        "/api/produtos",
+        json={"nome": "Produto Prova Social", "codigo_p": codigo, "preco": 15.0, "quantidade": 5},
+        headers=PROTECTED_HEADERS,
+    ).json()
+
+    listagem_sem_avaliacao = client.get("/api/produtos", params={"busca": codigo}).json()
+    assert listagem_sem_avaliacao[0]["avaliacoes_total"] == 0
+    assert listagem_sem_avaliacao[0]["avaliacoes_media"] == 0
+
+    with conectar() as conn:
+        conn.execute(
+            "INSERT INTO avaliacoes_produtos (produto_id, nome_cliente, nota, comentario, data_hora, aprovado) VALUES (?,?,?,?,?,1)",
+            (produto["id"], "Joana", 4, "Gostei bastante", "2026-01-01T10:00:00"),
+        )
+        conn.execute(
+            "INSERT INTO avaliacoes_produtos (produto_id, nome_cliente, nota, comentario, data_hora, aprovado) VALUES (?,?,?,?,?,1)",
+            (produto["id"], "Pedro", 5, "", "2026-01-01T10:05:00"),
+        )
+        conn.commit()
+
+    listagem = client.get("/api/produtos", params={"busca": codigo}).json()
+    assert listagem[0]["avaliacoes_total"] == 2
+    assert listagem[0]["avaliacoes_media"] == 4.5
 
 
 def test_avaliacoes_rejeita_produto_inexistente_e_nota_invalida():

@@ -53,12 +53,12 @@ def _chave_interna_checkout() -> str:
 
 
 CAMPOS_PRODUTO_PUBLICO = (
-    "id, codigo_p, nome, marca, preco, quantidade, categoria,"
-    " descricao, imagem_url, imagens_json, link_externo, selo, atualizado_em"
+    "p.id, p.codigo_p, p.nome, p.marca, p.preco, p.quantidade, p.categoria,"
+    " p.descricao, p.imagem_url, p.imagens_json, p.link_externo, p.selo, p.atualizado_em"
 )
 CAMPOS_PRODUTO_COMPLETO = (
-    "id, codigo_p, nome, marca, preco, quantidade, categoria, custo, lucro,"
-    " estoque_minimo, descricao, imagem_url, imagens_json, link_externo, selo, atualizado_em"
+    "p.id, p.codigo_p, p.nome, p.marca, p.preco, p.quantidade, p.categoria, p.custo, p.lucro,"
+    " p.estoque_minimo, p.descricao, p.imagem_url, p.imagens_json, p.link_externo, p.selo, p.atualizado_em"
 )
 
 
@@ -75,20 +75,33 @@ def produto_row_to_dict(row):
     data["imagens"] = imagens
     data["link_externo"] = data.get("link_externo") or ""
     data["selo"] = data.get("selo") or ""
+    data["avaliacoes_total"] = data.get("avaliacoes_total") or 0
+    data["avaliacoes_media"] = data.get("avaliacoes_media") or 0
     return data
 
 
 def _buscar_produtos(campos: str, busca: str, limite: int):
+    # avaliacoes_total/avaliacoes_media vêm de um LEFT JOIN agregado para que o
+    # catálogo mostre prova social (nota média + nº de avaliações) sem uma
+    # requisição extra por produto (ver product-reviews.js/review_routes.py).
     termo = f"%{busca.strip()}%"
     with conectar() as conn:
         if busca.strip():
             rows = conn.execute(
                 f"""
-                SELECT {campos}
-                FROM produtos
-                WHERE COALESCE(ativo,1)=1
-                  AND (nome LIKE ? OR codigo_p LIKE ? OR categoria LIKE ? OR marca LIKE ? OR descricao LIKE ? OR selo LIKE ?)
-                ORDER BY nome COLLATE NOCASE
+                SELECT {campos},
+                       COALESCE(a.total, 0) AS avaliacoes_total,
+                       ROUND(a.media, 1) AS avaliacoes_media
+                FROM produtos p
+                LEFT JOIN (
+                    SELECT produto_id, COUNT(*) AS total, AVG(nota) AS media
+                    FROM avaliacoes_produtos
+                    WHERE COALESCE(aprovado, 1) = 1
+                    GROUP BY produto_id
+                ) a ON a.produto_id = p.id
+                WHERE COALESCE(p.ativo,1)=1
+                  AND (p.nome LIKE ? OR p.codigo_p LIKE ? OR p.categoria LIKE ? OR p.marca LIKE ? OR p.descricao LIKE ? OR p.selo LIKE ?)
+                ORDER BY p.nome COLLATE NOCASE
                 LIMIT ?
                 """,
                 (termo, termo, termo, termo, termo, termo, limite),
@@ -96,10 +109,18 @@ def _buscar_produtos(campos: str, busca: str, limite: int):
         else:
             rows = conn.execute(
                 f"""
-                SELECT {campos}
-                FROM produtos
-                WHERE COALESCE(ativo,1)=1
-                ORDER BY nome COLLATE NOCASE
+                SELECT {campos},
+                       COALESCE(a.total, 0) AS avaliacoes_total,
+                       ROUND(a.media, 1) AS avaliacoes_media
+                FROM produtos p
+                LEFT JOIN (
+                    SELECT produto_id, COUNT(*) AS total, AVG(nota) AS media
+                    FROM avaliacoes_produtos
+                    WHERE COALESCE(aprovado, 1) = 1
+                    GROUP BY produto_id
+                ) a ON a.produto_id = p.id
+                WHERE COALESCE(p.ativo,1)=1
+                ORDER BY p.nome COLLATE NOCASE
                 LIMIT ?
                 """,
                 (limite,),
@@ -119,7 +140,19 @@ def obter_produto_completo(produto_id: int):
     """Endpoint público (sem autenticação): mesma restrição de campos da listagem."""
     with conectar() as conn:
         row = conn.execute(
-            f"SELECT {CAMPOS_PRODUTO_PUBLICO} FROM produtos WHERE id=? AND COALESCE(ativo,1)=1",
+            f"""
+            SELECT {CAMPOS_PRODUTO_PUBLICO},
+                   COALESCE(a.total, 0) AS avaliacoes_total,
+                   ROUND(a.media, 1) AS avaliacoes_media
+            FROM produtos p
+            LEFT JOIN (
+                SELECT produto_id, COUNT(*) AS total, AVG(nota) AS media
+                FROM avaliacoes_produtos
+                WHERE COALESCE(aprovado, 1) = 1
+                GROUP BY produto_id
+            ) a ON a.produto_id = p.id
+            WHERE p.id=? AND COALESCE(p.ativo,1)=1
+            """,
             (produto_id,),
         ).fetchone()
     if not row:

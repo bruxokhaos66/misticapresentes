@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import os
 from datetime import datetime
 from pathlib import Path
@@ -26,10 +27,24 @@ from config import hash_password_pbkdf2
 from database.migrations import init_db
 
 
+@contextlib.asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    garantir_admin_api()
+    tarefa_expiracao = asyncio.create_task(_expirar_pedidos_periodicamente())
+    try:
+        yield
+    finally:
+        tarefa_expiracao.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await tarefa_expiracao
+
+
 app = FastAPI(
     title="Mística Presentes API",
     description="API oficial para sincronização do app Mística Presentes.",
     version="0.3.8",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -76,13 +91,6 @@ class ProdutoIn(BaseModel):
 
 class ProdutosLotePayload(BaseModel):
     produtos: list[ProdutoIn] = Field(default_factory=list)
-
-
-@app.on_event("startup")
-def startup():
-    init_db()
-    garantir_admin_api()
-    asyncio.create_task(_expirar_pedidos_periodicamente())
 
 
 async def _expirar_pedidos_periodicamente():
