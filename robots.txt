@@ -1,4 +1,7 @@
 User-agent: *
 Allow: /
+Disallow: /admin.html
+Disallow: /painel-operacional.html
+Disallow: /teste-commerce.html
 
 Sitemap: https://www.misticaesotericos.com.br/sitemap.xml
