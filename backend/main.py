@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from backend.audio_table import migrar_musicas_blob_para_arquivo
 from backend.audit import registrar_auditoria
 from backend.backup_routes import router as backup_router
+from backend.campaign_routes import router as campaign_router
 from backend.course_routes import router as course_router
 from backend.database import conectar, executar, listar, obter
 from backend.logging_config import configurar_logging, get_logger
@@ -83,6 +84,7 @@ app.include_router(system_status_router)
 app.include_router(backup_router)
 app.include_router(course_router)
 app.include_router(review_router)
+app.include_router(campaign_router)
 
 
 class ProdutoIn(BaseModel):

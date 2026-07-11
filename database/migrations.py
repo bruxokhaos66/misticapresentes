@@ -321,6 +321,27 @@ def init_db():
         _exec_tolerante(sql_idx)
     _migrar_pedidos_de_vendas()
 
+    query_db(
+        """
+        CREATE TABLE IF NOT EXISTS campanhas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            titulo TEXT NOT NULL,
+            descricao TEXT DEFAULT '',
+            tipo TEXT NOT NULL DEFAULT 'banner',
+            valor REAL DEFAULT 0,
+            codigo_cupom TEXT,
+            link TEXT,
+            ativo INTEGER DEFAULT 1,
+            data_inicio TEXT,
+            data_fim TEXT,
+            criado_em TEXT NOT NULL,
+            atualizado_em TEXT
+        )
+        """,
+        commit=True,
+    )
+    _exec_tolerante("CREATE INDEX IF NOT EXISTS idx_campanhas_ativo ON campanhas(ativo, data_inicio, data_fim)")
+
     for tabela, col, typ in [("vendas", "status", "TEXT DEFAULT 'Concluído'"), ("vendas", "data_iso", "TEXT"), ("vendas", "dia_operacional", "TEXT"), ("fluxo_caixa", "data_iso", "TEXT"), ("fluxo_caixa", "forma_pagamento", "TEXT"), ("fluxo_caixa", "caixa_id", "INTEGER"), ("contas_a_pagar", "categoria", "TEXT DEFAULT 'Outros'")]:
         _exec_tolerante(f"ALTER TABLE {tabela} ADD COLUMN {col} {typ}")
 
