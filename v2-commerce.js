@@ -20,12 +20,23 @@
     return Array.from(document.querySelectorAll('[data-product-grid] .product-card'));
   }
 
+  function currentCategories() {
+    if (typeof products === 'undefined' || !Array.isArray(products)) return [];
+    return [...new Set(products.map(product => product.category).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }
+
   function createToolbar() {
     const section = document.querySelector('#produtos');
     const grid = document.querySelector('[data-product-grid]');
-    if (!section || !grid || section.querySelector('.v2-product-toolbar')) return;
+    if (!section || !grid) return;
 
-    const toolbar = document.createElement('div');
+    let toolbar = section.querySelector('.v2-product-toolbar');
+    if (toolbar) {
+      syncCategoryOptions(toolbar);
+      return;
+    }
+
+    toolbar = document.createElement('div');
     toolbar.className = 'container v2-product-toolbar';
 
     const searchWrap = document.createElement('label');
@@ -38,6 +49,14 @@
     input.setAttribute('aria-label', 'Buscar produtos');
     input.dataset.v2ProductSearch = 'true';
     searchWrap.appendChild(input);
+
+    const categoryWrap = document.createElement('label');
+    categoryWrap.className = 'v2-category-label';
+    categoryWrap.textContent = 'Categoria';
+    const categorySelect = document.createElement('select');
+    categorySelect.setAttribute('aria-label', 'Filtrar por categoria');
+    categorySelect.dataset.v2CategoryFilter = 'true';
+    categoryWrap.appendChild(categorySelect);
 
     const chips = document.createElement('div');
     chips.className = 'v2-filter-chips';
@@ -55,20 +74,23 @@
     count.className = 'v2-product-count';
     count.setAttribute('aria-live', 'polite');
 
-    toolbar.append(searchWrap, chips, count);
+    toolbar.append(searchWrap, categoryWrap, chips, count);
     grid.before(toolbar);
+    syncCategoryOptions(toolbar);
 
     function applyFilter() {
       const query = normalize(input.value);
       const active = chips.querySelector('.v2-chip.active')?.dataset.filter || '';
       const tokens = normalize(active).split(/\s+/).filter(Boolean);
+      const categoria = categorySelect.value;
       let visible = 0;
 
       productCards().forEach(card => {
         const text = normalize(card.textContent);
         const matchesQuery = !query || text.includes(query);
         const matchesChip = !tokens.length || tokens.some(token => text.includes(token));
-        const show = matchesQuery && matchesChip;
+        const matchesCategory = !categoria || card.querySelector('.eyebrow')?.textContent === categoria;
+        const show = matchesQuery && matchesChip && matchesCategory;
         card.hidden = !show;
         if (show) visible += 1;
       });
@@ -77,6 +99,7 @@
     }
 
     input.addEventListener('input', applyFilter);
+    categorySelect.addEventListener('change', applyFilter);
     chips.addEventListener('click', event => {
       const button = event.target.closest('.v2-chip');
       if (!button) return;
@@ -85,7 +108,24 @@
       applyFilter();
     });
 
+    toolbar.__misticaApplyFilter = applyFilter;
+
+    const observer = new MutationObserver(() => {
+      syncCategoryOptions(toolbar);
+      applyFilter();
+    });
+    observer.observe(grid, { childList: true });
+
     applyFilter();
+  }
+
+  function syncCategoryOptions(toolbar) {
+    const select = toolbar.querySelector('[data-v2-category-filter]');
+    if (!select) return;
+    const atual = select.value;
+    const categorias = currentCategories();
+    select.innerHTML = `<option value="">Todas as categorias</option>${categorias.map(categoria => `<option value="${categoria}">${categoria}</option>`).join('')}`;
+    if (categorias.includes(atual)) select.value = atual;
   }
 
   function protectHeroIsisImage() {
