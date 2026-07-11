@@ -27,6 +27,14 @@
 .isis-message.user { border-color: rgba(189,209,122,.26); background: rgba(189,209,122,.08); }
 .isis-message.bot { border-color: rgba(242,201,109,.22); background: rgba(242,201,109,.07); }
 
+.isis-recommend-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 10px; }
+.isis-recommend-item { border: 1px solid rgba(242,201,109,.22); border-radius: 14px; padding: 10px 12px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; background: rgba(255,255,255,.03); }
+.isis-recommend-item strong { color: #ffe7a3; }
+.isis-recommend-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.isis-followup-label { margin: 12px 0 6px; font-size: .82rem; color: #d7c8ad; }
+.isis-followup-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.isis-followup-chips .v2-chip { padding: 7px 12px; font-size: .78rem; }
+
 @media (max-width: 980px) {
   .v2-product-toolbar { grid-template-columns: 1fr; }
   .v2-filter-chips { justify-content: flex-start; }
