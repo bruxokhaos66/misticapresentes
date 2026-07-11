@@ -104,14 +104,28 @@
     };
   }
 
+  function produtoAssinatura(produto) {
+    return [produto.id, produto.stock, produto.price, produto.name, produto.imageUrl].join("|");
+  }
+
+  function produtosMudaram(atuais, novos) {
+    if (atuais.length !== novos.length) return true;
+    for (let i = 0; i < novos.length; i++) {
+      if (produtoAssinatura(atuais[i]) !== produtoAssinatura(novos[i])) return true;
+    }
+    return false;
+  }
+
   function aplicarProdutos(lista) {
-    if (!Array.isArray(lista) || !lista.length || typeof products === "undefined") return;
+    if (!Array.isArray(lista) || !lista.length || typeof products === "undefined") return false;
     const novos = lista.map(normalizarProduto);
+    if (!produtosMudaram(products, novos)) return false;
     products.splice(0, products.length, ...novos);
     stock = novos.reduce((map, product) => {
       map[product.id] = product.stock;
       return map;
     }, {});
+    return true;
   }
 
   async function sincronizarAgora() {
@@ -123,13 +137,15 @@
         api("/api/produtos?limite=500"),
       ]);
 
-      aplicarProdutos(produtos);
+      const mudou = aplicarProdutos(produtos);
       lastSyncAt = new Date();
 
-      try {
-        saveState();
-        renderAll();
-      } catch {}
+      if (mudou) {
+        try {
+          saveState();
+          renderAll();
+        } catch {}
+      }
 
       setSyncStatus(`Online • estoque sincronizado • ${status.produtos || 0} produtos • ${lastSyncAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`, true);
     } catch {
