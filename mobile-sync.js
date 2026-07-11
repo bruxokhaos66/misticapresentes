@@ -131,7 +131,7 @@
 
       setSyncStatus(`Online • estoque sincronizado • ${status.produtos || 0} produtos • ${lastSyncAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`, true);
     } catch {
-      setSyncStatus("Offline • catálogo temporariamente indisponível", false);
+      setSyncStatus("Catálogo local carregado • confirme disponibilidade pelo WhatsApp", true);
     } finally {
       syncRunning = false;
     }
