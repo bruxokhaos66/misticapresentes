@@ -2,9 +2,6 @@
   const COURSE_API_BASE = "https://misticapresentes-api.onrender.com";
 
   const storeConfig = {
-    pixKey: "07353652969",
-    merchantName: "FREDINEI JEAN BACH",
-    merchantCity: "PINHALZINHO",
     whatsappNumber: (window.misticaSiteConfig && window.misticaSiteConfig.whatsappNumber) || "554999172137"
   };
 
@@ -56,36 +53,20 @@
 
   function text(value) { return String(value ?? ""); }
 
-  function sanitizePixText(value, maxLength) {
-    return text(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9 .@+\-_]/g, "").toUpperCase().slice(0, maxLength);
-  }
-
-  function emv(id, value) {
-    const cleanValue = text(value);
-    if (cleanValue.length > 99) throw new Error(`Campo Pix ${id} excedeu 99 caracteres.`);
-    return `${id}${String(cleanValue.length).padStart(2, "0")}${cleanValue}`;
-  }
-
-  function crc16(payload) {
-    let crc = 0xffff;
-    for (let i = 0; i < payload.length; i++) {
-      crc ^= payload.charCodeAt(i) << 8;
-      for (let bit = 0; bit < 8; bit++) {
-        crc = (crc & 0x8000) ? (crc << 1) ^ 0x1021 : crc << 1;
-        crc &= 0xffff;
-      }
+  async function criarPedidoCurso(slug) {
+    // O Pix (chave, nome, cidade e pre\u00e7o) \u00e9 gerado s\u00f3 no servidor a partir do
+    // cat\u00e1logo autoritativo de cursos pagos (ver backend/course_routes.py);
+    // o navegador nunca monta o payload sozinho.
+    const response = await fetch(`${COURSE_API_BASE}/api/checkout/cursos`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || !body.pix_copia_cola) {
+      throw new Error(body.detail || body.message || "N\u00e3o foi poss\u00edvel gerar o Pix para este curso agora.");
     }
-    return crc.toString(16).toUpperCase().padStart(4, "0");
-  }
-
-  function buildPixPayload({ key, name, city, amount, txid }) {
-    const merchantAccount = emv("26", emv("00", "br.gov.bcb.pix") + emv("01", text(key).trim()));
-    const withoutCrc = emv("00", "01") + merchantAccount + emv("52", "0000") + emv("53", "986") +
-      emv("54", amount.toFixed(2)) + emv("58", "BR") +
-      emv("59", sanitizePixText(name, 25) || "MISTICA PRESENTES") +
-      emv("60", sanitizePixText(city, 15) || "PINHALZINHO") +
-      emv("62", emv("05", sanitizePixText(txid, 25) || "ESCOLA")) + "6304";
-    return withoutCrc + crc16(withoutCrc);
+    return body;
   }
 
   async function fetchMateriais() {
@@ -130,7 +111,6 @@
           <canvas width="180" height="180" data-purchase-qr aria-label="QR Code Pix do curso"></canvas>
           <div>
             <p><strong>Valor:</strong> ${currency.format(curso.preco)}</p>
-            <p><strong>Recebedor:</strong> ${storeConfig.merchantName}</p>
             <p class="escola-purchase-status" data-purchase-status>Gere o Pix para liberar o acesso ao curso.</p>
           </div>
         </div>
@@ -210,18 +190,19 @@
       const statusBox = purchasePanel.querySelector("[data-purchase-status]");
 
       purchasePanel.querySelector("[data-purchase-generate]")?.addEventListener("click", async () => {
-        const txid = `ESCOLA${Date.now().toString().slice(-9)}`;
-        let payload = "";
+        payloadBox.value = "";
+        statusBox.textContent = "Gerando Pix com o servidor...";
+        let pedido;
         try {
-          payload = buildPixPayload({ key: storeConfig.pixKey, name: storeConfig.merchantName, city: storeConfig.merchantCity, amount: curso.preco, txid });
+          pedido = await criarPedidoCurso(curso.slug);
         } catch (error) {
-          statusBox.textContent = `Erro ao montar Pix: ${error.message}`;
+          statusBox.textContent = error.message || "Não foi possível gerar o Pix agora. Tente novamente ou fale pelo WhatsApp.";
           return;
         }
-        payloadBox.value = payload;
+        payloadBox.value = pedido.pix_copia_cola;
         try {
           if (!window.QRCode) throw new Error("Biblioteca de QR Code não carregou.");
-          await window.QRCode.toCanvas(qrCanvas, payload, { width: 180, margin: 2, errorCorrectionLevel: "M" });
+          await window.QRCode.toCanvas(qrCanvas, pedido.pix_copia_cola, { width: 180, margin: 2, errorCorrectionLevel: "M" });
           statusBox.textContent = `QR Code gerado para ${currency.format(curso.preco)}. Pague e envie o comprovante pelo WhatsApp para liberarmos o acesso.`;
         } catch {
           statusBox.textContent = "Pix copia e cola gerado. Não foi possível desenhar o QR Code agora.";
