@@ -99,6 +99,8 @@
       images: imagens.length ? imagens : (imagemPrincipal ? [imagemPrincipal] : []),
       externalUrl: item.link_externo || item.externalUrl || "",
       tag: item.selo || item.tag || "",
+      avaliacoesTotal: Number(item.avaliacoes_total || 0),
+      avaliacoesMedia: Number(item.avaliacoes_media || 0),
     };
   }
 

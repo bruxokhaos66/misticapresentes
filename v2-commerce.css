@@ -54,6 +54,10 @@
   border-radius: 999px;
 }
 
+.product-rating { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
+.product-rating-stars { color: #f2c96d; font-size: .82rem; letter-spacing: 1px; }
+.product-rating-count { color: var(--muted); font-size: .78rem; font-weight: 850; }
+
 .v2-bestseller-strip { margin: 0 auto 20px; }
 .v2-bestseller-strip .eyebrow { margin-bottom: 10px; }
 .v2-bestseller-cards { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 6px; }
