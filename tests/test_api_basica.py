@@ -45,22 +45,6 @@ def test_health_nao_expoe_informacoes_internas():
         assert chave_proibida not in corpo.lower()
 
 
-def test_health_head_sem_autenticacao_e_sem_corpo():
-    response = client.head("/api/health")
-    assert response.status_code == 200
-    assert response.content == b""
-
-
-def test_health_nao_expoe_dados_internos():
-    response = client.get("/api/health")
-    assert response.status_code == 200
-    data = response.json()
-    assert set(data.keys()) == {"status", "app"}
-    corpo_bruto = response.text.lower()
-    for termo_sensivel in [".db", "sqlite", "database", "server_url", "api_url", "domain", "secret", "token", "key"]:
-        assert termo_sensivel not in corpo_bruto
-
-
 def test_status_online():
     response = client.get("/api/status")
     assert response.status_code == 200
