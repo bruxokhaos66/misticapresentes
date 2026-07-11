@@ -7,6 +7,7 @@ from typing import Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -46,7 +47,31 @@ app = FastAPI(
     description="API oficial para sincronização do app Mística Presentes.",
     version="0.3.8",
     lifespan=lifespan,
+    # A documentação interativa expõe todos os endpoints, schemas e exemplos da
+    # API; deixá-la pública facilita reconhecimento para ataques. As rotas
+    # nativas ficam desativadas e são substituídas abaixo por versões que
+    # exigem sessão de administrador (mesma dependência usada no painel).
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
+
+_OPENAPI_URL = "/openapi.json"
+
+
+@app.get("/openapi.json", include_in_schema=False)
+def openapi_protegido(sessao: dict = Depends(exigir_sessao_ou_chave_api("adm"))):
+    return app.openapi()
+
+
+@app.get("/docs", include_in_schema=False)
+def swagger_docs_protegido(sessao: dict = Depends(exigir_sessao_ou_chave_api("adm"))):
+    return get_swagger_ui_html(openapi_url=_OPENAPI_URL, title=f"{app.title} - Swagger UI")
+
+
+@app.get("/redoc", include_in_schema=False)
+def redoc_protegido(sessao: dict = Depends(exigir_sessao_ou_chave_api("adm"))):
+    return get_redoc_html(openapi_url=_OPENAPI_URL, title=f"{app.title} - ReDoc")
 
 app.add_middleware(
     CORSMiddleware,
