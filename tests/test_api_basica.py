@@ -418,6 +418,39 @@ def test_avaliacoes_publico_le_e_cria_para_produto_existente():
     assert data["avaliacoes"][0]["comentario"] == "Produto lindo, chegou rápido!"
 
 
+def test_listagem_de_produtos_traz_prova_social():
+    # Insere as avaliações direto no banco (em vez de via POST /avaliacoes) para
+    # não consumir a cota do rate limit de criação de avaliação compartilhada
+    # com os outros testes deste arquivo (mesmo IP de teste).
+    from backend.database import conectar
+
+    codigo = codigo_unico("PROVA")
+    produto = client.post(
+        "/api/produtos",
+        json={"nome": "Produto Prova Social", "codigo_p": codigo, "preco": 15.0, "quantidade": 5},
+        headers=PROTECTED_HEADERS,
+    ).json()
+
+    listagem_sem_avaliacao = client.get("/api/produtos", params={"busca": codigo}).json()
+    assert listagem_sem_avaliacao[0]["avaliacoes_total"] == 0
+    assert listagem_sem_avaliacao[0]["avaliacoes_media"] == 0
+
+    with conectar() as conn:
+        conn.execute(
+            "INSERT INTO avaliacoes_produtos (produto_id, nome_cliente, nota, comentario, data_hora, aprovado) VALUES (?,?,?,?,?,1)",
+            (produto["id"], "Joana", 4, "Gostei bastante", "2026-01-01T10:00:00"),
+        )
+        conn.execute(
+            "INSERT INTO avaliacoes_produtos (produto_id, nome_cliente, nota, comentario, data_hora, aprovado) VALUES (?,?,?,?,?,1)",
+            (produto["id"], "Pedro", 5, "", "2026-01-01T10:05:00"),
+        )
+        conn.commit()
+
+    listagem = client.get("/api/produtos", params={"busca": codigo}).json()
+    assert listagem[0]["avaliacoes_total"] == 2
+    assert listagem[0]["avaliacoes_media"] == 4.5
+
+
 def test_avaliacoes_rejeita_produto_inexistente_e_nota_invalida():
     resposta = client.post(
         "/api/produtos/999999999/avaliacoes",
