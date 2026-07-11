@@ -17,9 +17,7 @@
   <link rel="stylesheet" href="v2-commerce.css?v=20260710-busca-produtos" />
   <link rel="stylesheet" href="v2-contact-banner.css?v=20260708-force-contact-bg" />
   <link rel="stylesheet" href="v2-shamanic-player.css?v=20260709-mobile-audio-fix-2" />
-  <link rel="stylesheet" href="v2-admin-products.css?v=20260708-admin-products" />
   <link rel="stylesheet" href="v2-product-inspector.css?v=20260708-product-zoom" />
-  <link rel="stylesheet" href="v2-courses.css?v=20260710-cursos" />
   <script defer src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
   <script defer src="site-config.js"></script>
   <script defer src="analytics.js"></script>
@@ -30,8 +28,10 @@
   <script defer src="v2-commerce.js?v=20260710-busca-produtos"></script>
   <script defer src="isis-guided.js?v=20260711-isis-guiada"></script>
   <script defer src="v2-product-inspector.js?v=20260708-product-zoom"></script>
-  <script defer src="v2-admin-products.js?v=20260708-admin-products"></script>
-  <script defer src="v2-courses.js?v=20260710-cursos"></script>
+  <!-- v2-admin-products.css/js e v2-courses.css/js só existem para o painel
+       administrativo embutido em #admin; são carregados sob demanda por
+       site-config.js quando a rota #admin/?admin=mistica é acessada, em vez
+       de irem para todo visitante público. -->
 </head>
 <body>
   <div class="top-ribbon"><div class="container ribbon-grid"><span>🌙 Mística Presentes</span><span>Pinhalzinho-SC</span><a href="https://wa.me/554999172137" target="_blank" rel="noopener" data-whatsapp-link>Atendimento rápido pelo WhatsApp</a></div></div>

@@ -152,9 +152,29 @@ window.misticaSiteConfig = {
     document.head.appendChild(script);
   };
 
+  const loadStyle = (id, href) => {
+    if (document.getElementById(id)) return;
+    const link = document.createElement("link");
+    link.id = id;
+    link.rel = "stylesheet";
+    link.href = href;
+    document.head.appendChild(link);
+  };
+
+  const carregarPainelAdmin = () => {
+    // v2-admin-products e v2-courses só existem para o painel embutido em
+    // #admin: carregados aqui, sob demanda, em vez de irem para o bundle de
+    // todo visitante público.
+    loadStyle("misticaAdminProductsStyle", "v2-admin-products.css?v=20260708-admin-products");
+    loadStyle("misticaCoursesStyle", "v2-courses.css?v=20260710-cursos");
+    loadScript("misticaAdminProductsScript", "v2-admin-products.js?v=20260708-admin-products");
+    loadScript("misticaCoursesScript", "v2-courses.js?v=20260710-cursos");
+  };
+
   const iniciar = () => {
     loadScript("misticaProductionGuardScript", "site-production-guard.js?v=20260710-no-browser-secret");
     if (!adminRoute) return;
+    carregarPainelAdmin();
     mostrarAdmin();
     garantirCampoUsuario();
     restaurarSessao();
