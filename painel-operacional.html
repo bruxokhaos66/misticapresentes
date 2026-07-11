@@ -368,6 +368,11 @@
       sessionStorage.removeItem("misticaPainelSessao");
       location.reload();
     }
+    function esc(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+      }[ch]));
+    }
     function setStatus(apiTxt, freshTxt, detail) {
       $("apiPill").textContent = apiTxt;
       $("apiPill").className = `pill ${apiTxt === "ONLINE" ? "ok" : apiTxt === "OFFLINE" ? "bad" : ""}`;
@@ -386,19 +391,19 @@
         const cliente = venda.cliente && String(venda.cliente).trim() ? venda.cliente : "Consumidor";
         const itens = Array.isArray(venda.itens) ? venda.itens : [];
         const itensHtml = itens.length
-          ? itens.map((item) => `<li>${Number(item.quantidade || 0)} ${item.nome_p || "produto"}</li>`).join("")
+          ? itens.map((item) => `<li>${Number(item.quantidade || 0)} ${esc(item.nome_p || "produto")}</li>`).join("")
           : "<li>Itens nao enviados pela API</li>";
         const card = document.createElement("article");
         card.className = "sale";
         card.innerHTML = `
           <div class="sale-head">
-            <p class="sale-title">Cliente ${cliente} comprou:</p>
+            <p class="sale-title">Cliente ${esc(cliente)} comprou:</p>
             <span class="sale-time">${data.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
           </div>
           <ul class="items">${itensHtml}</ul>
           <div class="sale-foot">
             <div>Total: <span>${brl(venda.total_final)}</span></div>
-            <div>Pagamento: <span>${venda.forma_pagamento || "Nao informado"}</span></div>
+            <div>Pagamento: <span>${esc(venda.forma_pagamento || "Nao informado")}</span></div>
           </div>
         `;
         lista.appendChild(card);

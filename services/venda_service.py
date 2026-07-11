@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal, ROUND_HALF_UP
 import unicodedata
 
 from database import get_connection
@@ -7,6 +8,17 @@ from repositories import vendas as vendas_repo
 from services.dia_operacional_service import etiqueta_dia_operacional
 from services.estoque_service import validar_estoque_carrinho
 from services.pagamento_misto_service import extrair_pagamentos_mistos
+
+
+def _centavos(valor) -> Decimal:
+    """Converte para Decimal arredondado em centavos (ROUND_HALF_UP). Usado nas
+    somas de dinheiro do módulo de vendas para não acumular erro de ponto
+    flutuante; o resultado final ainda vira float no retorno das funções
+    públicas, pois é o que os chamadores e as colunas REAL do banco esperam."""
+    try:
+        return Decimal(str(valor if valor is not None else 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    except Exception:
+        return Decimal("0.00")
 
 
 FORMAS_PAGAMENTO_PADRAO = ["Dinheiro", "Pix", "Debito", "Credito 1x", "Credito 2x", "Credito 3x"]
@@ -80,22 +92,22 @@ def _taxa_por_forma(forma, valor_base):
 
 
 def _subtotal_base(carrinho, desconto_percentual=0):
-    subtotal = sum(float(item.get("t", 0) or 0) for item in carrinho)
+    subtotal = sum((_centavos(item.get("t", 0)) for item in carrinho), Decimal("0.00"))
     try:
-        desconto_percentual = dinheiro_para_float(desconto_percentual)
+        desconto_percentual = Decimal(str(dinheiro_para_float(desconto_percentual)))
     except Exception:
-        desconto_percentual = 0.0
-    desconto_percentual = max(0.0, min(12.0, desconto_percentual))
-    desconto = subtotal * (desconto_percentual / 100)
-    base = max(0.0, subtotal - desconto)
-    return subtotal, desconto, base
+        desconto_percentual = Decimal("0")
+    desconto_percentual = max(Decimal("0"), min(Decimal("12"), desconto_percentual))
+    desconto = _centavos(subtotal * desconto_percentual / Decimal("100"))
+    base = max(Decimal("0.00"), subtotal - desconto)
+    return float(subtotal), float(desconto), float(base)
 
 
 def _base_do_calculo(calculo):
     try:
         if "base" in calculo:
-            return round(float(calculo.get("base") or 0), 2)
-        return round(float(calculo.get("s", 0) or 0) - float(calculo.get("d", 0) or 0), 2)
+            return float(_centavos(calculo.get("base") or 0))
+        return float(_centavos(_centavos(calculo.get("s", 0)) - _centavos(calculo.get("d", 0))))
     except Exception:
         return 0.0
 
@@ -121,27 +133,28 @@ def normalizar_pagamentos_mistos(pagamentos):
             continue
         valor = dinheiro_para_float(valor)
         if valor > 0:
-            normalizados.append({"forma": forma, "valor": round(valor, 2)})
+            normalizados.append({"forma": forma, "valor": float(_centavos(valor))})
     return normalizados
 
 
 def total_taxas_pagamentos_mistos(pagamentos):
-    total = 0.0
-    for p in normalizar_pagamentos_mistos(pagamentos):
-        total += _taxa_por_forma(p["forma"], p["valor"])
-    return round(total, 2)
+    total = sum(
+        (_centavos(_taxa_por_forma(p["forma"], p["valor"])) for p in normalizar_pagamentos_mistos(pagamentos)),
+        Decimal("0.00"),
+    )
+    return float(total)
 
 
 def validar_pagamentos_mistos_fechados(calculo, pagamentos):
     pagamentos = normalizar_pagamentos_mistos(pagamentos)
-    base = _base_do_calculo(calculo)
-    taxas = total_taxas_pagamentos_mistos(pagamentos)
-    total_final = round(base + taxas, 2)
-    total_pago = round(sum(float(p.get("valor", 0) or 0) for p in pagamentos), 2)
+    base = _centavos(_base_do_calculo(calculo))
+    taxas = _centavos(total_taxas_pagamentos_mistos(pagamentos))
+    total_final = _centavos(base + taxas)
+    total_pago = sum((_centavos(p.get("valor", 0)) for p in pagamentos), Decimal("0.00"))
     if not pagamentos:
         raise ValueError("Pagamento misto incompleto. Informe as formas e valores antes de salvar.")
-    if abs(total_pago - total_final) > 0.01:
-        falta = round(total_final - total_pago, 2)
+    if abs(total_pago - total_final) > Decimal("0.01"):
+        falta = float(total_final - total_pago)
         if falta > 0:
             raise ValueError(f"Pagamento misto não fechado. Falta receber R$ {falta:,.2f} incluindo taxas.".replace(",", "X").replace(".", ",").replace("X", "."))
         raise ValueError(f"Pagamento misto acima do total. Valor excedente R$ {abs(falta):,.2f}.".replace(",", "X").replace(".", ",").replace("X", "."))
@@ -165,15 +178,15 @@ def calcular_total_venda(carrinho, desconto_percentual=0, forma_pagamento="Dinhe
     subtotal, desconto, base = _subtotal_base(carrinho, desconto_percentual)
     forma = normalizar_forma_pagamento(forma_pagamento or "Dinheiro")
     taxa = _taxa_por_forma(forma, base)
-    return {"s": subtotal, "d": desconto, "tx": taxa, "tot": base + taxa}
+    return {"s": subtotal, "d": desconto, "tx": taxa, "tot": float(_centavos(base) + _centavos(taxa))}
 
 
 def calcular_total_venda_misto(carrinho, desconto_percentual=0, pagamentos=None):
     subtotal, desconto, base = _subtotal_base(carrinho, desconto_percentual)
     pagamentos = normalizar_pagamentos_mistos(pagamentos)
     taxa = total_taxas_pagamentos_mistos(pagamentos)
-    total_pago = round(sum(p["valor"] for p in pagamentos), 2)
-    return {"s": subtotal, "d": desconto, "tx": taxa, "tot": base + taxa, "base": base, "total_pago": total_pago}
+    total_pago = float(sum((_centavos(p["valor"]) for p in pagamentos), Decimal("0.00")))
+    return {"s": subtotal, "d": desconto, "tx": taxa, "tot": float(_centavos(base) + _centavos(taxa)), "base": base, "total_pago": total_pago}
 
 
 def _confirmar_venda_no_banco_central(venda_id):

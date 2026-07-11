@@ -117,7 +117,7 @@ def status_visual():
     return HTMLResponse(html, headers=NO_CACHE_HEADERS)
 
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health():
     return {"ok": True, "servico": "Mística Presentes API Local"}
 
