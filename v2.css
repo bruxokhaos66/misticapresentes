@@ -91,6 +91,7 @@ button, input, textarea { font: inherit; }
 .section-title p:not(.eyebrow), .contact-section p, .privacy-note { color: var(--muted); line-height: 1.65; }
 .category-grid, .confidence-grid, .product-grid { display: grid; gap: 16px; }
 .category-grid { grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); }
+.category-grid > a { display: block; text-decoration: none; color: inherit; }
 .category-grid article, .confidence-grid article { padding: 20px; }
 .category-grid article span { font-size: 2rem; }
 .category-grid article strong, .confidence-grid article strong { display: block; margin: 10px 0 7px; color: var(--gold-2); font-family: Cinzel, serif; }
