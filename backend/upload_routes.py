@@ -15,8 +15,11 @@ from pydantic import BaseModel, Field
 from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.database import conectar
 from backend.drive_storage import drive_configured, upload_bytes_to_drive
+from backend.logging_config import get_logger
 from backend.panel_sessions import exigir_sessao_ou_chave_api
 from config import DB_PATH
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["uploads"])
 
@@ -63,8 +66,11 @@ class AudioLinksIn(BaseModel):
 
 def log_tempo(etapa: str, inicio: float, detalhe: str = ""):
     duracao_ms = int((time.perf_counter() - inicio) * 1000)
-    sufixo = f" | {detalhe}" if detalhe else ""
-    print(f"[API][musicas] {etapa}: {duracao_ms}ms{sufixo}")
+    logger.info(
+        "musicas %s",
+        etapa,
+        extra={"evento": "musicas", "etapa": etapa, "duracao_ms": duracao_ms, "detalhe": detalhe or None},
+    )
 
 
 def conectar_rapido(timeout: float = 0.08):

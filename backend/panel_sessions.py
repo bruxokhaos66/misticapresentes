@@ -9,7 +9,10 @@ from datetime import datetime, timedelta
 from fastapi import Cookie, Depends, Header, HTTPException, Request, Response
 
 from backend.database import conectar
+from backend.logging_config import get_logger
 from backend.rate_limit import _client_ip
+
+logger = get_logger(__name__)
 
 COOKIE_NOME = "mistica_painel_sessao"
 DURACAO_MAXIMA_HORAS = 12
@@ -207,7 +210,10 @@ def registrar_tentativa_login(login: str, request: Request, sucesso: bool) -> No
                 "INSERT INTO painel_alertas_seguranca (tipo, login, ip, detalhe, criado_em) VALUES (?,?,?,?,?)",
                 ("login_suspeito", login, ip, detalhe, _txt(agora)),
             )
-            print(f"[ALERTA_SEGURANCA] login={login} ip={ip} {detalhe}")
+            logger.warning(
+                "alerta de segurança: login suspeito",
+                extra={"evento": "alerta_seguranca", "tipo": "login_suspeito", "login": login, "ip": ip, "detalhe": detalhe},
+            )
 
     if novo_bloqueio:
         raise _erro_bloqueio(novo_bloqueio, agora)

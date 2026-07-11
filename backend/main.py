@@ -14,6 +14,7 @@ from backend.audit import registrar_auditoria
 from backend.backup_routes import router as backup_router
 from backend.course_routes import router as course_router
 from backend.database import conectar, executar, listar, obter
+from backend.logging_config import configurar_logging, get_logger
 from backend.order_status_routes import expirar_pedidos_pendentes, router as order_status_router
 from backend.panel_sessions import exigir_sessao_ou_chave_api
 from backend.payment_routes import router as payment_router
@@ -26,6 +27,9 @@ from backend.site_stock_routes import router as site_stock_router
 from backend.system_status_routes import router as system_status_router
 from config import hash_password_pbkdf2
 from database.migrations import init_db
+
+configurar_logging()
+logger = get_logger(__name__)
 
 
 @contextlib.asynccontextmanager
@@ -103,14 +107,17 @@ async def _expirar_pedidos_periodicamente():
             with conectar() as conn:
                 expirar_pedidos_pendentes(conn)
         except Exception as exc:
-            print(f"[API] Aviso: varredura de expiração de pedidos falhou: {exc}")
+            logger.warning("varredura de expiração de pedidos falhou", extra={"evento": "expiracao_pedidos", "erro": str(exc)})
         await asyncio.sleep(60)
 
 
 def garantir_admin_api():
     senha_admin = os.environ.get("MISTICA_ADMIN_PASSWORD", "").strip()
     if not senha_admin:
-        print("[API] MISTICA_ADMIN_PASSWORD não configurada; admin automático não será criado ou redefinido.")
+        logger.info(
+            "MISTICA_ADMIN_PASSWORD não configurada; admin automático não será criado ou redefinido.",
+            extra={"evento": "startup_aviso"},
+        )
         return
     salt = "mistica_api_admin"
     senha_hash = hash_password_pbkdf2(senha_admin, salt.encode("utf-8"))
