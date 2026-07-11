@@ -31,14 +31,15 @@
       el.setAttribute("aria-live", "polite");
       el.style.position = "fixed";
       el.style.right = "12px";
-      el.style.bottom = "12px";
-      el.style.zIndex = "9999";
+      el.style.bottom = "78px";
+      el.style.zIndex = "89";
       el.style.padding = "8px 10px";
       el.style.borderRadius = "999px";
       el.style.font = "600 12px Inter, Arial, sans-serif";
       el.style.boxShadow = "0 8px 24px rgba(0,0,0,.25)";
       el.style.background = "#162116";
       el.style.color = "#dff5d8";
+      el.style.maxWidth = "min(92vw, 360px)";
       document.body.appendChild(el);
     }
     return el;
