@@ -17,6 +17,7 @@ from backend.order_status_routes import expirar_pedidos_pendentes, router as ord
 from backend.panel_sessions import exigir_sessao_ou_chave_api
 from backend.payment_routes import router as payment_router
 from backend.product_routes import router as product_router, validar_site_api_key
+from backend.review_routes import router as review_router
 from backend.upload_routes import router as upload_router
 from backend.user_sync_routes import router as user_sync_router
 from backend.site_stock_routes import router as site_stock_router
@@ -59,6 +60,7 @@ app.include_router(upload_router)
 app.include_router(system_status_router)
 app.include_router(backup_router)
 app.include_router(course_router)
+app.include_router(review_router)
 
 
 class ProdutoIn(BaseModel):

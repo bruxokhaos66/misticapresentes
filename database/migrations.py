@@ -65,6 +65,25 @@ def _migrar_pedidos_de_vendas():
 def init_db():
     query_db("CREATE TABLE IF NOT EXISTS produtos (id INTEGER PRIMARY KEY, codigo_p TEXT, nome TEXT, preco REAL, quantidade INTEGER, categoria TEXT)", commit=True)
     query_db("CREATE TABLE IF NOT EXISTS categorias (id INTEGER PRIMARY KEY, nome TEXT UNIQUE)", commit=True)
+    query_db(
+        """
+        CREATE TABLE IF NOT EXISTS avaliacoes_produtos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            produto_id INTEGER NOT NULL,
+            nome_cliente TEXT NOT NULL,
+            nota INTEGER NOT NULL,
+            comentario TEXT,
+            data_hora TEXT,
+            aprovado INTEGER DEFAULT 1,
+            ip_hash TEXT
+        )
+        """,
+        commit=True,
+    )
+    query_db(
+        "CREATE INDEX IF NOT EXISTS idx_avaliacoes_produto ON avaliacoes_produtos(produto_id, aprovado)",
+        commit=True,
+    )
     query_db("CREATE TABLE IF NOT EXISTS clientes (id INTEGER PRIMARY KEY, nome TEXT, telefone TEXT, cpf TEXT, endereco TEXT, nascimento TEXT)", commit=True)
     for col, typ in [("telefone", "TEXT"), ("cpf", "TEXT"), ("endereco", "TEXT"), ("nascimento", "TEXT")]:
         _exec_tolerante(f"ALTER TABLE clientes ADD COLUMN {col} {typ}")

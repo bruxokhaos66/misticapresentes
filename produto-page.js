@@ -132,6 +132,9 @@
       rel.appendChild(grid);
       root.appendChild(rel);
     }
+
+    window.misticaCurrentProduct = product;
+    window.dispatchEvent(new CustomEvent("mistica:product-rendered", { detail: { product } }));
   }
 
   function init() {

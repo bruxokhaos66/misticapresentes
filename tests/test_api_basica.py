@@ -327,3 +327,49 @@ def test_links_audio_ambiente_salva_apenas_audio_direto():
     response_get = client.get("/api/uploads/musicas/links")
     assert response_get.status_code == 200
     assert response_get.json()["links"] == data["links"]
+
+
+def test_avaliacoes_publico_le_e_cria_para_produto_existente():
+    produto = client.post(
+        "/api/produtos",
+        json={"nome": "Produto Avaliado", "codigo_p": codigo_unico("AVL"), "preco": 20.0, "quantidade": 5},
+        headers=PROTECTED_HEADERS,
+    ).json()
+
+    vazio = client.get(f"/api/produtos/{produto['id']}/avaliacoes")
+    assert vazio.status_code == 200
+    assert vazio.json() == {"avaliacoes": [], "total": 0, "media": 0}
+
+    resposta = client.post(
+        f"/api/produtos/{produto['id']}/avaliacoes",
+        json={"nome_cliente": "Maria", "nota": 5, "comentario": "Produto lindo, chegou rápido!"},
+    )
+    assert resposta.status_code == 200
+    assert resposta.json() == {"ok": True}
+
+    listagem = client.get(f"/api/produtos/{produto['id']}/avaliacoes")
+    assert listagem.status_code == 200
+    data = listagem.json()
+    assert data["total"] == 1
+    assert data["media"] == 5
+    assert data["avaliacoes"][0]["nome_cliente"] == "Maria"
+    assert data["avaliacoes"][0]["comentario"] == "Produto lindo, chegou rápido!"
+
+
+def test_avaliacoes_rejeita_produto_inexistente_e_nota_invalida():
+    resposta = client.post(
+        "/api/produtos/999999999/avaliacoes",
+        json={"nome_cliente": "Ana", "nota": 4, "comentario": "Ótimo"},
+    )
+    assert resposta.status_code == 404
+
+    produto = client.post(
+        "/api/produtos",
+        json={"nome": "Produto Nota Invalida", "codigo_p": codigo_unico("AVL2"), "preco": 15.0, "quantidade": 3},
+        headers=PROTECTED_HEADERS,
+    ).json()
+    resposta_nota = client.post(
+        f"/api/produtos/{produto['id']}/avaliacoes",
+        json={"nome_cliente": "Ana", "nota": 9, "comentario": "Nota fora do intervalo"},
+    )
+    assert resposta_nota.status_code == 422
