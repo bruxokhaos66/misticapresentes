@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal, ROUND_HALF_UP
 import unicodedata
 
 from database import query_db
@@ -12,6 +13,16 @@ FORMAS_CAIXA_DETALHADAS = [
     "Credito 2x",
     "Credito 3x",
 ]
+
+
+def _centavos(valor) -> Decimal:
+    """Converte para Decimal arredondado em centavos (ROUND_HALF_UP), evitando
+    que a soma de muitos lançamentos de fluxo de caixa acumule erro de ponto
+    flutuante antes do fechamento do caixa."""
+    try:
+        return Decimal(str(valor if valor is not None else 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    except Exception:
+        return Decimal("0.00")
 
 
 def _sem_acento(texto):
@@ -79,17 +90,17 @@ def _soma_fluxo(caixa_id, tipo=None, forma_pagamento=None):
 def _saldo_por_forma(caixa_id, forma):
     alvo = normalizar_forma_caixa(forma)
     res = query_db("SELECT tipo, valor, forma_pagamento, descricao FROM fluxo_caixa WHERE caixa_id=?", (caixa_id,))
-    total = 0.0
+    total = Decimal("0.00")
     for tipo, valor, forma_pagamento, descricao in res or []:
         forma_linha = normalizar_forma_caixa(forma_pagamento or descricao or "")
         if forma_linha != alvo:
             continue
-        valor = float(valor or 0.0)
+        valor = _centavos(valor)
         if str(tipo or "").lower() in ("saida", "saída"):
             total -= valor
         else:
             total += valor
-    return total
+    return float(total)
 
 
 def _fallback_antigo(caixa_id, padrao):
@@ -105,37 +116,37 @@ def resumo_fechamento_caixa():
     if not cx:
         return None
     cx_id = cx[0][0]
-    entradas = _soma_fluxo(cx_id, "Entrada")
-    saidas = _soma_fluxo(cx_id, "Saida") + _soma_fluxo(cx_id, "Saída")
-    saldo = float(entradas or 0.0) - float(saidas or 0.0)
+    entradas = _centavos(_soma_fluxo(cx_id, "Entrada"))
+    saidas = _centavos(_soma_fluxo(cx_id, "Saida")) + _centavos(_soma_fluxo(cx_id, "Saída"))
+    saldo = entradas - saidas
 
-    pix = _saldo_por_forma(cx_id, "Pix")
-    debito = _saldo_por_forma(cx_id, "Debito")
-    credito_1x = _saldo_por_forma(cx_id, "Credito 1x")
-    credito_2x = _saldo_por_forma(cx_id, "Credito 2x")
-    credito_3x = _saldo_por_forma(cx_id, "Credito 3x")
+    pix = _centavos(_saldo_por_forma(cx_id, "Pix"))
+    debito = _centavos(_saldo_por_forma(cx_id, "Debito"))
+    credito_1x = _centavos(_saldo_por_forma(cx_id, "Credito 1x"))
+    credito_2x = _centavos(_saldo_por_forma(cx_id, "Credito 2x"))
+    credito_3x = _centavos(_saldo_por_forma(cx_id, "Credito 3x"))
 
-    pix += _fallback_antigo(cx_id, "%(Pix)%")
-    debito += _fallback_antigo(cx_id, "%(Debito)%") + _fallback_antigo(cx_id, "%(Débito)%")
-    credito_1x += _fallback_antigo(cx_id, "%(Credito 1x)%") + _fallback_antigo(cx_id, "%(Crédito 1x)%")
-    credito_2x += _fallback_antigo(cx_id, "%(Credito 2x)%") + _fallback_antigo(cx_id, "%(Crédito 2x)%")
-    credito_3x += _fallback_antigo(cx_id, "%(Credito 3x)%") + _fallback_antigo(cx_id, "%(Crédito 3x)%")
+    pix += _centavos(_fallback_antigo(cx_id, "%(Pix)%"))
+    debito += _centavos(_fallback_antigo(cx_id, "%(Debito)%")) + _centavos(_fallback_antigo(cx_id, "%(Débito)%"))
+    credito_1x += _centavos(_fallback_antigo(cx_id, "%(Credito 1x)%")) + _centavos(_fallback_antigo(cx_id, "%(Crédito 1x)%"))
+    credito_2x += _centavos(_fallback_antigo(cx_id, "%(Credito 2x)%")) + _centavos(_fallback_antigo(cx_id, "%(Crédito 2x)%"))
+    credito_3x += _centavos(_fallback_antigo(cx_id, "%(Credito 3x)%")) + _centavos(_fallback_antigo(cx_id, "%(Crédito 3x)%"))
 
-    credito_total = float(credito_1x or 0.0) + float(credito_2x or 0.0) + float(credito_3x or 0.0)
-    dinheiro = saldo - float(pix or 0.0) - float(debito or 0.0) - credito_total
+    credito_total = credito_1x + credito_2x + credito_3x
+    dinheiro = saldo - pix - debito - credito_total
 
     formas_detalhadas = {
-        "Dinheiro": float(dinheiro or 0.0),
-        "Pix": float(pix or 0.0),
-        "Debito": float(debito or 0.0),
-        "Credito 1x": float(credito_1x or 0.0),
-        "Credito 2x": float(credito_2x or 0.0),
-        "Credito 3x": float(credito_3x or 0.0),
+        "Dinheiro": float(dinheiro),
+        "Pix": float(pix),
+        "Debito": float(debito),
+        "Credito 1x": float(credito_1x),
+        "Credito 2x": float(credito_2x),
+        "Credito 3x": float(credito_3x),
     }
     formas = dict(formas_detalhadas)
-    formas["Credito"] = credito_total
+    formas["Credito"] = float(credito_total)
 
-    return {"caixa_id": cx_id, "entradas": float(entradas or 0.0), "saidas": float(saidas or 0.0), "saldo": saldo, "formas": formas, "formas_detalhadas": formas_detalhadas}
+    return {"caixa_id": cx_id, "entradas": float(entradas), "saidas": float(saidas), "saldo": float(saldo), "formas": formas, "formas_detalhadas": formas_detalhadas}
 
 
 def fechar_caixa_conferido(caixa_id, saldo, formas, informado):
@@ -143,14 +154,14 @@ def fechar_caixa_conferido(caixa_id, saldo, formas, informado):
     informado = informado or {}
     credito_sistema = formas.get("Credito", None)
     if credito_sistema is None:
-        credito_sistema = sum(float(formas.get(f, 0.0) or 0.0) for f in ("Credito 1x", "Credito 2x", "Credito 3x"))
+        credito_sistema = float(sum((_centavos(formas.get(f, 0.0)) for f in ("Credito 1x", "Credito 2x", "Credito 3x")), Decimal("0.00")))
     credito_informado = informado.get("Credito", None)
     if credito_informado is None:
-        credito_informado = sum(float(informado.get(f, 0.0) or 0.0) for f in ("Credito 1x", "Credito 2x", "Credito 3x"))
+        credito_informado = float(sum((_centavos(informado.get(f, 0.0)) for f in ("Credito 1x", "Credito 2x", "Credito 3x")), Decimal("0.00")))
 
-    total_sistema = float(formas.get("Dinheiro", 0.0) or 0.0) + float(formas.get("Pix", 0.0) or 0.0) + float(formas.get("Debito", 0.0) or 0.0) + float(credito_sistema or 0.0)
-    total_informado = float(informado.get("Dinheiro", 0.0) or 0.0) + float(informado.get("Pix", 0.0) or 0.0) + float(informado.get("Debito", 0.0) or 0.0) + float(credito_informado or 0.0)
-    diferenca = total_informado - total_sistema
+    total_sistema = _centavos(formas.get("Dinheiro", 0.0)) + _centavos(formas.get("Pix", 0.0)) + _centavos(formas.get("Debito", 0.0)) + _centavos(credito_sistema)
+    total_informado = _centavos(informado.get("Dinheiro", 0.0)) + _centavos(informado.get("Pix", 0.0)) + _centavos(informado.get("Debito", 0.0)) + _centavos(credito_informado)
+    diferenca = float(total_informado - total_sistema)
 
     query_db(
         """

@@ -276,3 +276,18 @@ def test_resumo_fechamento_caixa_agrega_parcelas_de_credito(banco_temporario):
     assert resumo["formas_detalhadas"]["Credito 1x"] == pytest.approx(30.0)
     assert resumo["formas_detalhadas"]["Credito 2x"] == pytest.approx(20.0)
     assert resumo["formas_detalhadas"]["Credito 3x"] == pytest.approx(10.0)
+
+
+def test_resumo_fechamento_caixa_muitos_lancamentos_pequenos_fecha_exato(banco_temporario):
+    """Regressão específica para a migração a Decimal: 41 lançamentos de
+    R$ 0,10 em dinheiro precisam fechar em exatamente R$ 4,10, sem sobra de
+    ponto flutuante tipo 4.099999999999999."""
+    from services.caixa_service import abrir_caixa, lancar_fluxo, resumo_fechamento_caixa
+
+    caixa_id = abrir_caixa(0.0, "Teste")
+    for _ in range(41):
+        lancar_fluxo("Entrada", "Venda avulsa", 0.10, caixa_id, forma_pagamento="Dinheiro")
+
+    resumo = resumo_fechamento_caixa()
+    assert resumo["saldo"] == 4.10
+    assert resumo["formas"]["Dinheiro"] == 4.10
