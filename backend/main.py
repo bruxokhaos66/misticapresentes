@@ -26,25 +26,32 @@ from config import hash_password_pbkdf2
 from database.migrations import init_db
 
 
+APP_ENV = os.environ.get("APP_ENV", "development").strip().lower()
+IS_PRODUCTION = APP_ENV == "production"
+
+ORIGENS_PERMITIDAS = [
+    "https://misticaesotericos.com.br",
+    "https://www.misticaesotericos.com.br",
+    "https://api.misticaesotericos.com.br",
+]
+if not IS_PRODUCTION:
+    ORIGENS_PERMITIDAS += ["http://localhost:3000", "http://localhost:8000"]
+
 app = FastAPI(
     title="Mística Presentes API",
     description="API oficial para sincronização do app Mística Presentes.",
     version="0.3.8",
+    docs_url=None if IS_PRODUCTION else "/docs",
+    redoc_url=None if IS_PRODUCTION else "/redoc",
+    openapi_url=None if IS_PRODUCTION else "/openapi.json",
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://misticaesotericos.com.br",
-        "https://www.misticaesotericos.com.br",
-        "https://api.misticaesotericos.com.br",
-        "https://bruxokhaos66.github.io",
-        "http://localhost:3000",
-        "http://localhost:8000",
-    ],
+    allow_origins=ORIGENS_PERMITIDAS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Content-Type", "X-Mistica-Api-Key", "X-Mistica-Sync-Key", "Idempotency-Key"],
 )
 
 UPLOADS_DIR = Path(__file__).resolve().parent / "uploads"
@@ -136,7 +143,7 @@ def raiz():
     return {
         "app": "Mística Presentes API",
         "status": "online",
-        "docs": "/docs",
+        "docs": None if IS_PRODUCTION else "/docs",
         "health": "/api/health",
     }
 
