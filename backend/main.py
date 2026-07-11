@@ -135,7 +135,9 @@ def garantir_admin_api():
 
 def _validar_chave_sync(x_mistica_sync_key: str | None):
     chave = os.environ.get("MISTICA_SYNC_KEY", "").strip()
-    if chave and x_mistica_sync_key != chave:
+    if not chave:
+        raise HTTPException(status_code=503, detail="Sincronização temporariamente indisponível.")
+    if x_mistica_sync_key != chave:
         raise HTTPException(status_code=403, detail="Chave de sincronização inválida")
 
 
@@ -189,32 +191,6 @@ def painel_resumo(sessao: dict = Depends(exigir_sessao_ou_chave_api())):
         "pecas_estoque": estoque_total["total"],
         "data_hora": datetime.now().isoformat(timespec="seconds"),
     }
-
-
-@app.get("/api/produtos")
-def listar_produtos(busca: str = "", limite: int = Query(100, ge=1, le=500)):
-    termo = f"%{busca.strip()}%"
-    if busca.strip():
-        return listar(
-            """
-            SELECT id, codigo_p, nome, preco, quantidade, categoria, custo, lucro, estoque_minimo
-            FROM produtos
-            WHERE COALESCE(ativo,1)=1 AND (nome LIKE ? OR codigo_p LIKE ? OR categoria LIKE ?)
-            ORDER BY nome COLLATE NOCASE
-            LIMIT ?
-            """,
-            (termo, termo, termo, limite),
-        )
-    return listar(
-        """
-        SELECT id, codigo_p, nome, preco, quantidade, categoria, custo, lucro, estoque_minimo
-        FROM produtos
-        WHERE COALESCE(ativo,1)=1
-        ORDER BY nome COLLATE NOCASE
-        LIMIT ?
-        """,
-        (limite,),
-    )
 
 
 @app.post("/api/sync/produtos-lote")
@@ -294,7 +270,7 @@ def sincronizar_produtos_lote(payload: ProdutosLotePayload, x_mistica_sync_key: 
 def obter_produto(produto_id: int):
     produto = obter(
         """
-        SELECT id, codigo_p, nome, preco, quantidade, categoria, custo, lucro, estoque_minimo
+        SELECT id, codigo_p, nome, preco, quantidade, categoria
         FROM produtos
         WHERE id=? AND COALESCE(ativo,1)=1
         """,

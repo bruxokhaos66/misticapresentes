@@ -70,18 +70,19 @@ def produto_row_to_dict(row):
     return data
 
 
-@router.get("/produtos")
-def listar_produtos_completos(busca: str = "", limite: int = Query(100, ge=1, le=500)):
-    # avaliacoes_total/avaliacoes_media vêm de um LEFT JOIN agregado para que o
-    # catálogo público mostre prova social (nota média + nº de avaliações) sem
-    # uma requisição extra por produto (ver product-reviews.js/review_routes.py).
+_CAMPOS_PRODUTO_PUBLICO = """p.id, p.codigo_p, p.nome, p.marca, p.preco, p.quantidade, p.categoria,
+                       p.descricao, p.imagem_url, p.imagens_json, p.link_externo, p.selo"""
+_CAMPOS_PRODUTO_ADMIN = """p.id, p.codigo_p, p.nome, p.marca, p.preco, p.quantidade, p.categoria, p.custo, p.lucro,
+                       p.estoque_minimo, p.descricao, p.imagem_url, p.imagens_json, p.link_externo, p.selo, p.atualizado_em"""
+
+
+def _listar_produtos_query(campos: str, busca: str, limite: int):
     termo = f"%{busca.strip()}%"
     with conectar() as conn:
         if busca.strip():
             rows = conn.execute(
-                """
-                SELECT p.id, p.codigo_p, p.nome, p.marca, p.preco, p.quantidade, p.categoria, p.custo, p.lucro,
-                       p.estoque_minimo, p.descricao, p.imagem_url, p.imagens_json, p.link_externo, p.selo, p.atualizado_em,
+                f"""
+                SELECT {campos},
                        COALESCE(a.total, 0) AS avaliacoes_total,
                        ROUND(a.media, 1) AS avaliacoes_media
                 FROM produtos p
@@ -100,9 +101,8 @@ def listar_produtos_completos(busca: str = "", limite: int = Query(100, ge=1, le
             ).fetchall()
         else:
             rows = conn.execute(
-                """
-                SELECT p.id, p.codigo_p, p.nome, p.marca, p.preco, p.quantidade, p.categoria, p.custo, p.lucro,
-                       p.estoque_minimo, p.descricao, p.imagem_url, p.imagens_json, p.link_externo, p.selo, p.atualizado_em,
+                f"""
+                SELECT {campos},
                        COALESCE(a.total, 0) AS avaliacoes_total,
                        ROUND(a.media, 1) AS avaliacoes_media
                 FROM produtos p
@@ -119,6 +119,25 @@ def listar_produtos_completos(busca: str = "", limite: int = Query(100, ge=1, le
                 (limite,),
             ).fetchall()
     return [produto_row_to_dict(row) for row in rows]
+
+
+@router.get("/produtos")
+def listar_produtos_completos(busca: str = "", limite: int = Query(100, ge=1, le=500)):
+    # avaliacoes_total/avaliacoes_media vêm de um LEFT JOIN agregado para que o
+    # catálogo público mostre prova social (nota média + nº de avaliações) sem
+    # uma requisição extra por produto (ver product-reviews.js/review_routes.py).
+    # Campos internos (custo, lucro, estoque_minimo) não são expostos aqui —
+    # ver GET /api/admin/produtos para o painel autenticado.
+    return _listar_produtos_query(_CAMPOS_PRODUTO_PUBLICO, busca, limite)
+
+
+@router.get("/admin/produtos")
+def listar_produtos_admin(
+    busca: str = "",
+    limite: int = Query(100, ge=1, le=500),
+    sessao: dict = Depends(exigir_sessao_ou_chave_api()),
+):
+    return _listar_produtos_query(_CAMPOS_PRODUTO_ADMIN, busca, limite)
 
 
 @router.post("/checkout/pedidos", dependencies=[Depends(limitar_checkout_publico)])
