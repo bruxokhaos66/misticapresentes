@@ -92,6 +92,19 @@ def test_backup_status_responde():
     assert "ultimos_backups" in data
 
 
+def test_backup_download_retorna_arquivo():
+    response = client.get("/api/backup/download", headers=PROTECTED_HEADERS)
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/octet-stream"
+    assert "mistica_backup_" in response.headers["content-disposition"]
+    assert len(response.content) > 0
+
+
+def test_backup_download_exige_chave_valida():
+    response = client.get("/api/backup/download")
+    assert response.status_code in (401, 403)
+
+
 def test_playlist_ambiente_responde():
     response = client.get("/api/site/playlist-ambiente")
     assert response.status_code == 200
