@@ -52,8 +52,9 @@ def test_status_online():
     assert data["status"] == "online"
     assert data["api"] == "mistica"
     assert data["app"] == "Mística Presentes"
-    assert "timestamp" in data
     assert "data_hora" in data
+    for chave_negocio in ("clientes", "vendas", "produtos"):
+        assert chave_negocio not in data
 
 
 def test_diagnostico_sistema_responde():

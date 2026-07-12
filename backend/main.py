@@ -7,9 +7,11 @@ from typing import Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from backend.aluno_auth import router as aluno_router
 from backend.audio_table import migrar_musicas_blob_para_arquivo
 from backend.audit import registrar_auditoria
 from backend.backup_routes import router as backup_router
@@ -20,7 +22,7 @@ from backend.logging_config import configurar_logging, get_logger
 from backend.order_status_routes import expirar_pedidos_pendentes, router as order_status_router
 from backend.panel_sessions import exigir_sessao_ou_chave_api
 from backend.payment_routes import router as payment_router
-from backend.api_security import validar_site_api_key as validar_chave_api
+from backend.api_security import ORIGENS_PERMITIDAS, validar_site_api_key as validar_chave_api
 from backend.product_routes import router as product_router, validar_site_api_key
 from backend.review_routes import router as review_router
 from backend.upload_routes import router as upload_router
@@ -53,21 +55,38 @@ app = FastAPI(
     description="API oficial para sincronização do app Mística Presentes.",
     version="0.3.8",
     lifespan=lifespan,
+    # A documentação interativa expõe todos os endpoints, schemas e exemplos da
+    # API; deixá-la pública facilita reconhecimento para ataques. As rotas
+    # nativas ficam desativadas e são substituídas abaixo por versões que
+    # exigem sessão de administrador (mesma dependência usada no painel).
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
+
+_OPENAPI_URL = "/openapi.json"
+
+
+@app.get("/openapi.json", include_in_schema=False)
+def openapi_protegido(sessao: dict = Depends(exigir_sessao_ou_chave_api("adm"))):
+    return app.openapi()
+
+
+@app.get("/docs", include_in_schema=False)
+def swagger_docs_protegido(sessao: dict = Depends(exigir_sessao_ou_chave_api("adm"))):
+    return get_swagger_ui_html(openapi_url=_OPENAPI_URL, title=f"{app.title} - Swagger UI")
+
+
+@app.get("/redoc", include_in_schema=False)
+def redoc_protegido(sessao: dict = Depends(exigir_sessao_ou_chave_api("adm"))):
+    return get_redoc_html(openapi_url=_OPENAPI_URL, title=f"{app.title} - ReDoc")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://misticaesotericos.com.br",
-        "https://www.misticaesotericos.com.br",
-        "https://api.misticaesotericos.com.br",
-        "https://bruxokhaos66.github.io",
-        "http://localhost:3000",
-        "http://localhost:8000",
-    ],
+    allow_origins=ORIGENS_PERMITIDAS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Content-Type", "X-Mistica-Api-Key", "X-Mistica-Sync-Key", "Idempotency-Key"],
 )
 
 UPLOADS_DIR = Path(__file__).resolve().parent / "uploads"
@@ -83,6 +102,7 @@ app.include_router(upload_router)
 app.include_router(system_status_router)
 app.include_router(backup_router)
 app.include_router(course_router)
+app.include_router(aluno_router)
 app.include_router(review_router)
 app.include_router(campaign_router)
 
@@ -163,20 +183,6 @@ def health():
     return {
         "status": "online",
         "app": "Mística Presentes",
-    }
-
-
-@app.get("/api/status")
-def status():
-    total_produtos = obter("SELECT COUNT(*) AS total FROM produtos WHERE COALESCE(ativo,1)=1") or {"total": 0}
-    total_clientes = obter("SELECT COUNT(*) AS total FROM clientes WHERE COALESCE(ativo,1)=1") or {"total": 0}
-    total_vendas = obter("SELECT COUNT(*) AS total FROM vendas WHERE COALESCE(status,'Concluído') NOT IN ('Cancelado','Cancelada')") or {"total": 0}
-    return {
-        "status": "online",
-        "produtos": total_produtos["total"],
-        "clientes": total_clientes["total"],
-        "vendas": total_vendas["total"],
-        "data_hora": datetime.now().isoformat(timespec="seconds"),
     }
 
 

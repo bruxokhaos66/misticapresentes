@@ -31,14 +31,15 @@
       el.setAttribute("aria-live", "polite");
       el.style.position = "fixed";
       el.style.right = "12px";
-      el.style.bottom = "12px";
-      el.style.zIndex = "9999";
+      el.style.bottom = "78px";
+      el.style.zIndex = "89";
       el.style.padding = "8px 10px";
       el.style.borderRadius = "999px";
       el.style.font = "600 12px Inter, Arial, sans-serif";
       el.style.boxShadow = "0 8px 24px rgba(0,0,0,.25)";
       el.style.background = "#162116";
       el.style.color = "#dff5d8";
+      el.style.maxWidth = "min(92vw, 360px)";
       document.body.appendChild(el);
     }
     return el;
@@ -104,14 +105,28 @@
     };
   }
 
+  function produtoAssinatura(produto) {
+    return [produto.id, produto.stock, produto.price, produto.name, produto.imageUrl].join("|");
+  }
+
+  function produtosMudaram(atuais, novos) {
+    if (atuais.length !== novos.length) return true;
+    for (let i = 0; i < novos.length; i++) {
+      if (produtoAssinatura(atuais[i]) !== produtoAssinatura(novos[i])) return true;
+    }
+    return false;
+  }
+
   function aplicarProdutos(lista) {
-    if (!Array.isArray(lista) || !lista.length || typeof products === "undefined") return;
+    if (!Array.isArray(lista) || !lista.length || typeof products === "undefined") return false;
     const novos = lista.map(normalizarProduto);
+    if (!produtosMudaram(products, novos)) return false;
     products.splice(0, products.length, ...novos);
     stock = novos.reduce((map, product) => {
       map[product.id] = product.stock;
       return map;
     }, {});
+    return true;
   }
 
   async function sincronizarAgora() {
@@ -123,13 +138,15 @@
         api("/api/produtos?limite=500"),
       ]);
 
-      aplicarProdutos(produtos);
+      const mudou = aplicarProdutos(produtos);
       lastSyncAt = new Date();
 
-      try {
-        saveState();
-        renderAll();
-      } catch {}
+      if (mudou) {
+        try {
+          saveState();
+          renderAll();
+        } catch {}
+      }
 
       setSyncStatus(`Online • estoque sincronizado • ${status.produtos || 0} produtos • ${lastSyncAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`, true);
     } catch {

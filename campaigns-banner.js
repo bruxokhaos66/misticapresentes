@@ -2,19 +2,46 @@
   const cfg = window.misticaSiteConfig || {};
   const API_BASE = String(cfg.apiBaseUrl || "https://api.misticaesotericos.com.br").replace(/\/$/, "");
 
+  function montarConteudo(campanha) {
+    const frag = document.createDocumentFragment();
+    const titulo = document.createElement("strong");
+    titulo.textContent = campanha.titulo;
+    frag.appendChild(titulo);
+    if (campanha.descricao) {
+      frag.appendChild(document.createTextNode(` — ${campanha.descricao}`));
+    }
+    if (campanha.codigo_cupom) {
+      frag.appendChild(document.createTextNode(" Use o cupom "));
+      const cupom = document.createElement("strong");
+      cupom.textContent = campanha.codigo_cupom;
+      frag.appendChild(cupom);
+      frag.appendChild(document.createTextNode("."));
+    }
+    return frag;
+  }
+
+  function linkSeguro(link) {
+    if (!link) return null;
+    try {
+      const url = new URL(link, window.location.href);
+      return url.protocol === "http:" || url.protocol === "https:" ? url.href : null;
+    } catch {
+      return null;
+    }
+  }
+
   function montarBanner(campanha) {
     const banner = document.createElement("div");
     banner.className = "campaign-banner";
     banner.setAttribute("role", "note");
-    const cupom = campanha.codigo_cupom ? ` Use o cupom <strong>${campanha.codigo_cupom}</strong>.` : "";
-    const conteudo = `<strong>${campanha.titulo}</strong>${campanha.descricao ? ` — ${campanha.descricao}` : ""}${cupom}`;
-    if (campanha.link) {
+    const href = linkSeguro(campanha.link);
+    if (href) {
       const link = document.createElement("a");
-      link.href = campanha.link;
-      link.innerHTML = conteudo;
+      link.href = href;
+      link.appendChild(montarConteudo(campanha));
       banner.appendChild(link);
     } else {
-      banner.innerHTML = conteudo;
+      banner.appendChild(montarConteudo(campanha));
     }
     return banner;
   }
