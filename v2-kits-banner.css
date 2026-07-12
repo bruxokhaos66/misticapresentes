@@ -23,9 +23,9 @@
   position: absolute;
   inset: 0;
   z-index: -2;
-  background-image: url("isis-hero.webp");
+  background-image: url("assets/xamanicaintencao.webp");
   background-size: cover;
-  background-position: 78% 22%;
+  background-position: 68% 20%;
   filter: saturate(1.04) brightness(.92);
 }
 
@@ -178,7 +178,7 @@
 /* -------- responsivo -------- */
 @media (max-width: 900px) {
   .kits-banner { min-height: 0; }
-  .kits-banner::before { background-position: 72% 18%; }
+  .kits-banner::before { background-position: 66% 18%; }
   .kits-banner::after {
     background:
       linear-gradient(90deg, rgba(7, 6, 3, .93) 0%, rgba(7, 6, 3, .82) 46%, rgba(7, 6, 3, .45) 100%),
