@@ -41,8 +41,13 @@ class LoginAppRequest(BaseModel):
     senha: str
 
 
+APP_ENV = os.environ.get("APP_ENV", "development").strip().lower()
+IS_PRODUCTION = APP_ENV == "production"
+
+
 def _allowed_origins() -> list[str]:
-    configurado = os.getenv("MISTICA_ALLOWED_ORIGINS", "http://localhost,http://127.0.0.1").strip()
+    padrao = "" if IS_PRODUCTION else "http://localhost,http://127.0.0.1"
+    configurado = os.getenv("MISTICA_ALLOWED_ORIGINS", padrao).strip()
     if not configurado:
         return []
     return [origem.strip() for origem in configurado.split(",") if origem.strip()]
@@ -81,8 +86,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins(),
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "X-Mistica-Token", "X-Mistica-App-Session"],
 )
 
 

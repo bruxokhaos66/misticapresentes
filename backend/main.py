@@ -78,8 +78,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ORIGENS_PERMITIDAS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Content-Type", "X-Mistica-Api-Key", "X-Mistica-Sync-Key", "Idempotency-Key"],
 )
 
 UPLOADS_DIR = Path(__file__).resolve().parent / "uploads"
