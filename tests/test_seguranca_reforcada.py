@@ -156,6 +156,17 @@ def test_upload_musica_ambiente_rejeita_conteudo_que_nao_e_audio_real():
     assert resposta.status_code == 400
 
 
+def test_resumo_acessos_site_exige_sessao_ou_chave_api():
+    client.cookies.clear()
+    resposta_sem_credencial = client.get("/api/site/acessos/resumo")
+    assert resposta_sem_credencial.status_code == 401
+
+    resposta_com_chave = client.get(
+        "/api/site/acessos/resumo", headers={"X-Mistica-Api-Key": TEST_API_KEY}
+    )
+    assert resposta_com_chave.status_code == 200
+
+
 def test_mutacao_com_sessao_de_cookie_e_origem_desconhecida_e_bloqueada(monkeypatch):
     monkeypatch.delenv("MISTICA_DEFAULT_PANEL_PASSWORD", raising=False)
     login = f"usuario-csrf-{uuid.uuid4().hex[:8]}"
