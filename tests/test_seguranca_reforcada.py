@@ -25,8 +25,12 @@ def ip_unico() -> str:
     # entre execuções da suite (mesmo arquivo real, sem isolamento por
     # tmp_path), e o bloqueio por força bruta é contado por login+IP. Um IP
     # novo a cada teste evita que uma execução anterior deixe o IP bloqueado
-    # e quebre a execução seguinte.
-    return f"203.0.113.{uuid.uuid4().int % 250 + 1}"
+    # e quebre a execução seguinte. Variando os 3 últimos octetos (~16M
+    # combinações) em vez de só o último (250), a chance de dois testes desta
+    # mesma suíte sortearem o mesmo IP fica desprezível — com só o último
+    # octeto já se viu colisão ocasional derrubar test_rate_limit_login_*.
+    n = uuid.uuid4().int
+    return f"203.{(n >> 16) % 256}.{(n >> 8) % 256}.{n % 256}"
 
 
 def criar_usuario_teste(login: str, senha: str, perfil: str = "adm") -> None:
