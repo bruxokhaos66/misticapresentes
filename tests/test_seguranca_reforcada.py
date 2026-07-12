@@ -191,3 +191,104 @@ def test_mutacao_com_sessao_de_cookie_e_origem_desconhecida_e_bloqueada(monkeypa
     )
     assert resposta.status_code == 403
     client.cookies.clear()
+
+
+def criar_aluno_com_sessao(*, slug_com_acesso: str | None = None) -> str:
+    """Cria um aluno de teste e devolve o token de sessão dele. Se
+    slug_com_acesso for informado, libera o acesso a esse curso."""
+    from backend.aluno_auth import garantir_tabelas_alunos
+    from backend.database import conectar
+
+    email = f"aluno-teste-{uuid.uuid4().hex[:8]}@exemplo.com"
+    token = uuid.uuid4().hex
+    agora = "2026-01-01 00:00:00"
+    expira = "2099-01-01 00:00:00"
+    with conectar() as conn:
+        garantir_tabelas_alunos(conn)
+        cur = conn.execute(
+            "INSERT INTO alunos (nome, email, criado_em) VALUES (?,?,?)",
+            ("Aluno Teste", email, agora),
+        )
+        aluno_id = int(cur.lastrowid)
+        conn.execute(
+            "INSERT INTO alunos_sessoes (token, aluno_id, criada_em, expira_em) VALUES (?,?,?,?)",
+            (token, aluno_id, agora, expira),
+        )
+        if slug_com_acesso:
+            conn.execute(
+                "INSERT INTO alunos_cursos (aluno_id, slug, liberado_em) VALUES (?,?,?)",
+                (aluno_id, slug_com_acesso, agora),
+            )
+    return token
+
+
+def test_material_de_curso_pago_nao_e_servido_pelo_mount_estatico_publico():
+    from backend.upload_routes import CURSOS_DIR
+
+    CURSOS_DIR.mkdir(parents=True, exist_ok=True)
+    nome = f"material-teste-{uuid.uuid4().hex[:8]}.pdf"
+    (CURSOS_DIR / nome).write_bytes(b"conteudo pago de teste")
+    try:
+        client.cookies.clear()
+        resposta = client.get(f"/uploads/cursos/{nome}")
+        assert resposta.status_code == 401
+    finally:
+        (CURSOS_DIR / nome).unlink(missing_ok=True)
+
+
+def test_material_de_curso_pago_exige_aluno_com_acesso_liberado():
+    from backend.database import conectar
+    from backend.course_routes import garantir_tabela_cursos
+    from backend.upload_routes import CURSOS_DIR
+
+    CURSOS_DIR.mkdir(parents=True, exist_ok=True)
+    nome = f"material-teste-{uuid.uuid4().hex[:8]}.pdf"
+    (CURSOS_DIR / nome).write_bytes(b"conteudo pago de teste")
+    slug = f"curso-teste-{uuid.uuid4().hex[:8]}"
+    url_arquivo = f"/uploads/cursos/{nome}"
+
+    try:
+        with conectar() as conn:
+            garantir_tabela_cursos(conn)
+            conn.execute(
+                "INSERT INTO cursos_materiais (titulo, categoria, tipo, descricao, url, criado_em) VALUES (?,?,?,?,?,?)",
+                ("Material Teste", slug, "pdf", None, url_arquivo, "2026-01-01 00:00:00"),
+            )
+
+        client.cookies.clear()
+
+        # aluno logado mas sem acesso liberado a este curso -> 403
+        token_sem_acesso = criar_aluno_com_sessao()
+        client.cookies.set("mistica_aluno_sessao", token_sem_acesso)
+        resposta_negada = client.get(url_arquivo)
+        assert resposta_negada.status_code == 403
+        client.cookies.clear()
+
+        # aluno logado com acesso liberado a este curso -> 200
+        token_com_acesso = criar_aluno_com_sessao(slug_com_acesso=slug)
+        client.cookies.set("mistica_aluno_sessao", token_com_acesso)
+        resposta_liberada = client.get(url_arquivo)
+        assert resposta_liberada.status_code == 200
+        assert resposta_liberada.content == b"conteudo pago de teste"
+        client.cookies.clear()
+
+        # chave de API do painel também deve funcionar (integrações servidor-a-servidor)
+        resposta_api_key = client.get(url_arquivo, headers={"X-Mistica-Api-Key": TEST_API_KEY})
+        assert resposta_api_key.status_code == 200
+    finally:
+        (CURSOS_DIR / nome).unlink(missing_ok=True)
+
+
+def test_imagem_de_produto_continua_publica_no_mount_estatico():
+    from backend.upload_routes import UPLOAD_DIR
+
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    nome = f"produto-teste-{uuid.uuid4().hex[:8]}.png"
+    (UPLOAD_DIR / nome).write_bytes(b"imagem de produto de teste")
+    try:
+        client.cookies.clear()
+        resposta = client.get(f"/uploads/produtos/{nome}")
+        assert resposta.status_code == 200
+        assert resposta.content == b"imagem de produto de teste"
+    finally:
+        (UPLOAD_DIR / nome).unlink(missing_ok=True)
