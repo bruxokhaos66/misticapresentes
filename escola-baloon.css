@@ -6,12 +6,14 @@
   max-width: 320px;
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 14px;
   padding: 18px 20px;
-  border-radius: 20px 20px 20px 4px;
-  background: linear-gradient(155deg, #4a0904, #200302 75%);
-  border: 1px solid rgba(255, 122, 64, 0.55);
-  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.55), 0 0 34px rgba(255, 84, 24, 0.35);
+  border-radius: 22px 22px 22px 4px;
+  background: linear-gradient(160deg, rgba(120, 8, 4, 0.55), rgba(30, 2, 1, 0.72) 65%, rgba(90, 12, 3, 0.6));
+  border: 1px solid rgba(255, 110, 60, 0.4);
+  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.4), 0 0 40px rgba(255, 70, 20, 0.28), inset 0 1px 0 rgba(255, 200, 160, 0.12);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
   color: #fff3ea;
   font-family: "Inter", system-ui, sans-serif;
   opacity: 0;
@@ -19,13 +21,25 @@
   pointer-events: none;
   transition: opacity 0.5s ease, transform 0.5s ease;
   overflow: visible;
+  isolation: isolate;
+}
+
+.escola-baloon::before {
+  content: "";
+  position: absolute;
+  inset: -30%;
+  z-index: -1;
+  border-radius: inherit;
+  background: radial-gradient(circle at 25% 100%, rgba(255, 90, 20, 0.45), transparent 60%);
+  filter: blur(18px);
+  animation: escolaHeatHaze 3.2s ease-in-out infinite;
 }
 
 .escola-baloon.is-visible {
   opacity: 1;
   transform: translateY(0) scale(1);
   pointer-events: auto;
-  animation: escolaBaloonFloat 4.5s ease-in-out infinite, escolaBaloonGlow 2.4s ease-in-out infinite;
+  animation: escolaBaloonFloat 4.5s ease-in-out infinite, escolaBaloonGlow 2.6s ease-in-out infinite;
 }
 
 @keyframes escolaBaloonFloat {
@@ -34,8 +48,13 @@
 }
 
 @keyframes escolaBaloonGlow {
-  0%, 100% { box-shadow: 0 20px 55px rgba(0, 0, 0, 0.55), 0 0 26px rgba(255, 84, 24, 0.3); }
-  50% { box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55), 0 0 46px rgba(255, 138, 40, 0.55); }
+  0%, 100% { box-shadow: 0 20px 55px rgba(0, 0, 0, 0.4), 0 0 28px rgba(255, 70, 20, 0.24), inset 0 1px 0 rgba(255, 200, 160, 0.12); }
+  50% { box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4), 0 0 50px rgba(255, 110, 30, 0.5), inset 0 1px 0 rgba(255, 200, 160, 0.18); }
+}
+
+@keyframes escolaHeatHaze {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 0.9; transform: scale(1.08); }
 }
 
 .escola-baloon::after {
@@ -45,9 +64,9 @@
   bottom: -9px;
   width: 18px;
   height: 18px;
-  background: #200302;
-  border-right: 1px solid rgba(255, 122, 64, 0.55);
-  border-bottom: 1px solid rgba(255, 122, 64, 0.55);
+  background: rgba(40, 3, 1, 0.72);
+  border-right: 1px solid rgba(255, 110, 60, 0.4);
+  border-bottom: 1px solid rgba(255, 110, 60, 0.4);
   clip-path: polygon(0 0, 100% 0, 0 100%);
 }
 
@@ -98,16 +117,45 @@
 }
 
 .escola-baloon-emblem {
+  position: relative;
   flex: none;
-  width: 44px;
-  height: 44px;
+  width: 46px;
+  height: 46px;
   border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 22px;
-  background: radial-gradient(circle at 30% 30%, #ffd97a, #ff5a1f 55%, #a30f02 100%);
-  box-shadow: 0 0 18px rgba(255, 106, 32, 0.7);
+  background: radial-gradient(circle at 50% 65%, rgba(255, 130, 40, 0.35), rgba(255, 60, 10, 0.12) 65%, transparent 75%);
+  box-shadow: 0 0 20px rgba(255, 90, 30, 0.45);
+}
+
+.escola-baloon-flame {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  width: 20px;
+  height: 26px;
+  transform: translateX(-50%);
+  background: linear-gradient(200deg, #ffd980, #ff7a1f 55%, #d81404 100%);
+  border-radius: 50% 50% 50% 50% / 62% 62% 38% 38%;
+  animation: escolaFlameFlicker 1.6s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+
+.escola-baloon-flame::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 3px;
+  width: 9px;
+  height: 13px;
+  transform: translateX(-50%);
+  background: radial-gradient(circle at 50% 70%, #fff6d8, #ffb24d 70%, transparent 100%);
+  border-radius: 50% 50% 50% 50% / 65% 65% 35% 35%;
+}
+
+@keyframes escolaFlameFlicker {
+  0%, 100% { transform: translateX(-50%) scaleY(1) skewX(0deg); }
+  30% { transform: translateX(-50%) scaleY(1.08) skewX(-3deg); }
+  55% { transform: translateX(-52%) scaleY(0.94) skewX(4deg); }
+  80% { transform: translateX(-48%) scaleY(1.05) skewX(-2deg); }
 }
 
 .escola-baloon-body {
@@ -130,6 +178,7 @@
   font-weight: 900;
   line-height: 1.25;
   color: #fff;
+  text-shadow: 0 1px 8px rgba(255, 90, 30, 0.35);
 }
 
 .escola-baloon-text {
@@ -142,15 +191,25 @@
 .escola-baloon-cta {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   padding: 9px 16px;
   border-radius: 999px;
-  background: linear-gradient(135deg, #ff8a3d, #e0210a);
+  background: linear-gradient(135deg, rgba(255, 138, 61, 0.92), rgba(200, 25, 8, 0.92));
   color: #fff;
   font-weight: 900;
   font-size: 13.5px;
   text-decoration: none;
-  box-shadow: 0 8px 22px rgba(224, 33, 10, 0.55);
+  box-shadow: 0 8px 22px rgba(224, 33, 10, 0.5);
+  border: 1px solid rgba(255, 190, 140, 0.35);
+}
+
+.escola-baloon-cta::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff6d8, #ff8a28 70%);
+  box-shadow: 0 0 6px rgba(255, 150, 50, 0.9);
 }
 
 .escola-baloon-close {

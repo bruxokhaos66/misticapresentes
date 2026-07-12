@@ -43,7 +43,9 @@
     const emblema = document.createElement("div");
     emblema.className = "escola-baloon-emblem";
     emblema.setAttribute("aria-hidden", "true");
-    emblema.textContent = "🔥";
+    const chama = document.createElement("span");
+    chama.className = "escola-baloon-flame";
+    emblema.appendChild(chama);
 
     const corpo = document.createElement("div");
     corpo.className = "escola-baloon-body";
@@ -63,7 +65,7 @@
     const cta = document.createElement("a");
     cta.className = "escola-baloon-cta";
     cta.href = "/escola.html";
-    cta.textContent = "🔥 Ver cursos";
+    cta.textContent = "Ver cursos";
 
     corpo.appendChild(eyebrow);
     corpo.appendChild(titulo);
