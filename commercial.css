@@ -16,6 +16,14 @@ body::before {
     radial-gradient(circle at 14% 16%, rgba(184,201,119,.15), transparent 24rem),
     radial-gradient(circle at 90% 8%, rgba(240,197,106,.12), transparent 22rem),
     radial-gradient(circle at 62% 72%, rgba(54,32,68,.20), transparent 28rem);
+  /* position:fixed + z-index negativo faz o Safari/WebKit repintar essa
+     camada de forma instável durante o scroll (e às vezes na primeira
+     pintura da página), piscando visivelmente -- mesmo bug corrigido em
+     v2.css (body::before) para a home/kit/escola; este arquivo cobre as
+     páginas de categoria, produto e políticas. Forçar uma camada de
+     composição própria via GPU resolve sem mudar a aparência. */
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 .site-header {
