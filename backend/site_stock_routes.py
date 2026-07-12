@@ -70,6 +70,9 @@ class VendaSiteIn(BaseModel):
     data_iso: Optional[str] = None
     dia_operacional: Optional[str] = None
     baixa_estoque: bool = True
+    # Código de cupom opcional. O desconto NUNCA é aceito do cliente: se houver
+    # cupom, o servidor busca a campanha vigente e recalcula o desconto.
+    cupom: Optional[str] = None
     itens: list[ItemEstoqueSite] = Field(default_factory=list)
 
 
@@ -305,22 +308,37 @@ def registrar_venda_site(
         try:
             produtos_validados = validar_itens_e_estoque(conn, venda.itens, exigir_estoque=venda.baixa_estoque)
             itens_calculados, subtotal = recalcular_venda_site(produtos_validados)
-            total_final = subtotal
+
+            # Aplicação de cupom no servidor: o desconto é derivado da campanha
+            # vigente, nunca de um valor enviado pelo cliente (ver
+            # backend/campaign_routes.py::calcular_desconto_cupom).
+            desconto = 0.0
+            cupom_info = None
+            codigo_cupom = str(venda.cupom or "").strip().upper()
+            if codigo_cupom:
+                from backend.campaign_routes import buscar_cupom_ativo, calcular_desconto_cupom
+
+                campanha = buscar_cupom_ativo(conn, codigo_cupom)
+                if not campanha:
+                    raise HTTPException(status_code=400, detail="Cupom inválido ou expirado.")
+                cupom_info = calcular_desconto_cupom(campanha, subtotal)
+                desconto = cupom_info["desconto"]
+            total_final = float(_centavos(subtotal - desconto))
 
             cur = conn.execute(
                 """
                 INSERT INTO pedidos (
                     cliente, telefone, data_venda, subtotal, desconto, taxa, total_final,
                     forma_pagamento, vendedor, status, data_iso, dia_operacional,
-                    origem, expira_em
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    origem, expira_em, cupom
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     venda.cliente,
                     telefone or None,
                     data_venda,
                     subtotal,
-                    0.0,
+                    desconto,
                     0.0,
                     total_final,
                     venda.forma_pagamento,
@@ -330,6 +348,7 @@ def registrar_venda_site(
                     dia_operacional,
                     venda.origem,
                     expira_em,
+                    codigo_cupom or None,
                 ),
             )
             venda_id = int(cur.lastrowid)
@@ -388,6 +407,9 @@ def registrar_venda_site(
                 "id": venda_id,
                 "status": "criado",
                 "subtotal": subtotal,
+                "desconto": desconto,
+                "cupom": codigo_cupom or None,
+                "frete_gratis": bool(cupom_info["frete_gratis"]) if cupom_info else False,
                 "total_final": total_final,
                 "estoque_baixado": venda.baixa_estoque,
                 "estoque_reservado": pedido_pendente and venda.baixa_estoque,

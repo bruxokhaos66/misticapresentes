@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,10 +10,75 @@ from pydantic import BaseModel, Field
 from backend.audit import registrar_auditoria
 from backend.database import conectar, listar, obter
 from backend.panel_sessions import exigir_sessao_ou_chave_api
+from backend.rate_limit import limitar_requisicoes
 
 router = APIRouter(prefix="/api", tags=["campanhas"])
 
 TIPOS_CAMPANHA = {"banner", "desconto_percentual", "desconto_fixo", "frete_gratis"}
+TIPOS_COM_DESCONTO = {"desconto_percentual", "desconto_fixo", "frete_gratis"}
+
+limitar_validar_cupom = limitar_requisicoes("validar_cupom", limite=30, janela_segundos=60)
+
+
+def _centavos(valor) -> Decimal:
+    return Decimal(str(valor or 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def buscar_cupom_ativo(conn, codigo: str):
+    """Busca uma campanha vigente cujo código de cupom bate com `codigo`
+    (case-insensitive). Só campanhas ativas e dentro do período retornam."""
+    codigo = (codigo or "").strip().upper()
+    if not codigo:
+        return None
+    agora = datetime.now().isoformat(timespec="seconds")
+    return conn.execute(
+        """
+        SELECT id, titulo, tipo, valor, codigo_cupom
+        FROM campanhas
+        WHERE COALESCE(ativo,1)=1
+          AND codigo_cupom IS NOT NULL
+          AND UPPER(TRIM(codigo_cupom)) = ?
+          AND (data_inicio IS NULL OR data_inicio <= ?)
+          AND (data_fim IS NULL OR data_fim >= ?)
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (codigo, agora, agora),
+    ).fetchone()
+
+
+def calcular_desconto_cupom(campanha, subtotal: float) -> dict:
+    """Calcula, no servidor, o desconto de um cupom sobre o subtotal. O valor do
+    desconto NUNCA vem do cliente: é sempre derivado do tipo/valor da campanha
+    salva no banco. Retorna o desconto em reais e um flag de frete grátis."""
+    tipo = str(campanha["tipo"] or "").strip().lower()
+    valor = _centavos(campanha["valor"])
+    sub = _centavos(subtotal)
+    desconto = Decimal("0.00")
+    frete_gratis = False
+    if tipo == "desconto_percentual":
+        desconto = _centavos(sub * valor / Decimal("100"))
+    elif tipo == "desconto_fixo":
+        desconto = valor
+    elif tipo == "frete_gratis":
+        frete_gratis = True
+    # O desconto nunca ultrapassa o subtotal (total mínimo é zero).
+    desconto = min(desconto, sub)
+    if desconto < 0:
+        desconto = Decimal("0.00")
+    return {
+        "campanha_id": int(campanha["id"]),
+        "codigo": (campanha["codigo_cupom"] or "").strip().upper(),
+        "titulo": campanha["titulo"],
+        "tipo": tipo,
+        "desconto": float(desconto),
+        "frete_gratis": frete_gratis,
+    }
+
+
+class CupomValidarIn(BaseModel):
+    codigo: str = Field(min_length=1, max_length=40)
+    subtotal: float = Field(default=0.0, ge=0)
 
 
 class CampanhaIn(BaseModel):
@@ -50,6 +116,20 @@ def listar_campanhas_ativas():
         """,
         (agora, agora),
     )
+
+
+@router.post("/cupons/validar", dependencies=[Depends(limitar_validar_cupom)])
+def validar_cupom(payload: CupomValidarIn):
+    """Rota pública usada pelo carrinho para pré-visualizar o desconto de um
+    cupom antes de gerar o Pix. O desconto é sempre calculado no servidor a
+    partir da campanha vigente; o cliente só informa o código e o subtotal."""
+    with conectar() as conn:
+        campanha = buscar_cupom_ativo(conn, payload.codigo)
+    if not campanha:
+        return {"valido": False, "motivo": "Cupom inválido ou expirado.", "desconto": 0.0, "frete_gratis": False}
+    resultado = calcular_desconto_cupom(campanha, payload.subtotal)
+    total = round(max(float(payload.subtotal or 0) - resultado["desconto"], 0.0), 2)
+    return {"valido": True, "total_com_desconto": total, **resultado}
 
 
 @router.get("/campanhas")

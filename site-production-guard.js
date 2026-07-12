@@ -114,6 +114,7 @@
       data_venda: new Date(dataIso).toLocaleString("pt-BR"),
       data_iso: dataIso,
       dia_operacional: dataIso.slice(0, 10),
+      cupom: window.misticaCupomAtivo || null,
       itens: buildApiItems(items),
     };
     // Rota pública sem segredo: o navegador nunca envia a chave de API (ela
@@ -176,7 +177,11 @@
     cart = [];
     saveState();
     if (typeof renderAll === "function") renderAll();
-    status(`Pedido #${pedido.id} criado como "Aguardando pagamento". O estoque só será baixado quando o pagamento for confirmado no painel.`, true);
+    const descontoAplicado = Number(pedido.desconto || 0);
+    const resumoDesconto = descontoAplicado > 0
+      ? ` Cupom ${pedido.cupom || ""} aplicado: -${currency.format(descontoAplicado)}. Total com desconto: ${currency.format(Number(pedido.total_final || total))}.`
+      : "";
+    status(`Pedido #${pedido.id} criado como "Aguardando pagamento".${resumoDesconto} O estoque só será baixado quando o pagamento for confirmado no painel.`, true);
     if (window.misticaMobileSync?.syncNow) window.misticaMobileSync.syncNow();
   }
 

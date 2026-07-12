@@ -85,7 +85,7 @@ function renderProducts() { if (!productGrid) return; productGrid.innerHTML = pr
 function validateQuantity(rawQty, productId) { const qty = Number.parseInt(rawQty, 10); const available = getStock(productId); const inCart = cart.find(item => item.id === productId)?.qty || 0; if (!Number.isInteger(qty) || qty < 1) return { ok: false, message: "Informe uma quantidade inteira maior que zero." }; if (qty + inCart > available) return { ok: false, message: `Estoque insuficiente. Disponível: ${Math.max(available - inCart, 0)}.` }; return { ok: true, qty }; }
 function addToCart(productId) { const product = products.find(item => item.id === productId); if (!product) return; const qtyInput = document.getElementById(`qty-${safeId(productId)}`); const validation = validateQuantity(qtyInput.value, productId); if (!validation.ok) return setStatus(validation.message); const existing = cart.find(item => item.id === productId); if (existing) existing.qty += validation.qty; else cart.push({ id: product.id, name: product.name, price: product.price, qty: validation.qty }); saveState(); renderCart(); renderProducts(); setStatus(`${product.name} adicionado ao carrinho.`); window.misticaTrack?.("add_to_cart", { currency: "BRL", value: product.price * validation.qty, items: [{ item_id: product.id, item_name: product.name, price: product.price, quantity: validation.qty }] }); }
 function removeFromCart(productId) { cart = cart.filter(item => item.id !== productId); saveState(); renderCart(); renderProducts(); }
-function clearCart() { cart = []; pixPayloadInput.value = ""; setStatus("Carrinho limpo. Adicione produtos para gerar um novo Pix."); clearQrCanvas(); pararAcompanhamentoPedido(); const el = reservaStatusEl(); if (el) el.textContent = ""; saveState(); renderCart(); renderProducts(); }
+function clearCart() { cart = []; window.misticaCupomAtivo = null; const cupomInput = document.getElementById("cartCoupon"); if (cupomInput) cupomInput.value = ""; const cupomStatus = document.getElementById("couponStatus"); if (cupomStatus) cupomStatus.hidden = true; pixPayloadInput.value = ""; setStatus("Carrinho limpo. Adicione produtos para gerar um novo Pix."); clearQrCanvas(); pararAcompanhamentoPedido(); const el = reservaStatusEl(); if (el) el.textContent = ""; saveState(); renderCart(); renderProducts(); }
 function renderCart() { if (!cartList || !cartTotal) return; if (!cart.length) cartList.innerHTML = `<div class="cart-item"><span>Nenhum produto adicionado ainda.</span></div>`; else cartList.innerHTML = cart.map(item => `<div class="cart-item"><div><strong>${item.name}</strong><span>${item.qty}x ${currency.format(item.price)} = ${currency.format(item.price * item.qty)}</span></div><button class="cart-remove" type="button" onclick="removeFromCart('${item.id}')">Remover</button></div>`).join(""); cartTotal.textContent = currency.format(getTotal()); }
 function getTotal() { return cart.reduce((sum, item) => sum + item.price * item.qty, 0); }
 function renderClients() { if (!clientList) return; if (!clients.length) { clientList.innerHTML = `<div class="client-item"><span>Nenhum cliente cadastrado ainda.</span></div>`; return; } clientList.replaceChildren(); clients.slice(0, 5).forEach(client => { const item = document.createElement("div"); item.className = "client-item"; const name = document.createElement("strong"); name.textContent = client.name; const cpf = document.createElement("span"); cpf.textContent = `CPF: ${client.cpf}`; const whatsapp = document.createElement("span"); whatsapp.textContent = `WhatsApp: ${client.whatsapp}`; const address = document.createElement("span"); address.textContent = client.address; item.append(name, cpf, document.createElement("br"), whatsapp, document.createElement("br"), address); clientList.appendChild(item); }); }
@@ -207,6 +207,51 @@ function printReceipt(sale = sales[0]) { if (!sale) return alert("Nenhuma venda 
 function sendLastReceiptWhatsapp() { const sale = sales[0]; if (!sale) return alert("Nenhuma venda para enviar."); const items = sale.items.map(item => `• ${item.qty}x ${item.name} - ${currency.format(item.price * item.qty)}`).join("\n"); const message = `Comprovante/Pedido - ${storeConfig.name}\n\nVenda: ${sale.id}\nData: ${new Date(sale.date).toLocaleString("pt-BR")}\n\n${items}\n\nTotal: ${currency.format(sale.total)}\nStatus: ${sale.status}`; window.open(buildWhatsappUrl(message), "_blank", "noopener"); }
 function renderSuppliers() { if (!supplierList) return; if (!suppliers.length) { supplierList.innerHTML = `<div class="history-item"><span>Nenhum fornecedor cadastrado ainda.</span></div>`; return; } supplierList.innerHTML = suppliers.map(supplier => `<div class="history-item"><strong>${supplier.name}</strong><span>${supplier.category}</span><span>WhatsApp: ${supplier.whatsapp || "não informado"}</span><span>${supplier.notes || "Sem observação"}</span></div>`).join(""); }
 function handleSupplierSubmit(event) { event.preventDefault(); const supplier = { id: `FORN${Date.now()}`, name: $("#supplierName").value.trim(), category: $("#supplierCategory").value.trim(), whatsapp: maskWhatsapp($("#supplierWhatsapp").value.trim()), notes: $("#supplierNotes").value.trim(), createdAt: new Date().toISOString() }; suppliers.unshift(supplier); suppliers = suppliers.slice(0, 100); saveState(); renderSuppliers(); supplierForm.reset(); }
+// Cupom de desconto: o código é validado no servidor (POST /api/cupons/validar)
+// e o desconto real é sempre recalculado no backend ao gerar o Pix. Aqui só
+// guardamos o código aplicado e mostramos uma prévia; o navegador nunca define
+// o valor do desconto.
+window.misticaCupomAtivo = null;
+function couponApiBase() { return String((window.misticaSiteConfig || {}).apiBaseUrl || "https://api.misticaesotericos.com.br").replace(/\/$/, ""); }
+function setCouponStatus(message, error = false) {
+  const el = document.getElementById("couponStatus");
+  if (!el) return;
+  el.hidden = false;
+  el.textContent = message;
+  el.classList.toggle("coupon-status-error", Boolean(error));
+  el.classList.toggle("coupon-status-ok", !error);
+}
+async function applyCoupon() {
+  const input = document.getElementById("cartCoupon");
+  const codigo = String(input?.value || "").trim().toUpperCase();
+  if (!codigo) { window.misticaCupomAtivo = null; setCouponStatus("Digite um código de cupom.", true); return; }
+  const subtotal = getTotal();
+  if (subtotal <= 0) { setCouponStatus("Adicione produtos ao carrinho antes de aplicar o cupom.", true); return; }
+  setCouponStatus("Validando cupom...");
+  try {
+    const response = await fetch(`${couponApiBase()}/api/cupons/validar`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ codigo, subtotal })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.valido) {
+      window.misticaCupomAtivo = null;
+      setCouponStatus(data.motivo || "Cupom inválido ou expirado.", true);
+      return;
+    }
+    window.misticaCupomAtivo = codigo;
+    if (data.frete_gratis) {
+      setCouponStatus(`Cupom ${codigo} aplicado: frete grátis. Confirmado ao gerar o Pix.`);
+    } else {
+      setCouponStatus(`Cupom ${codigo} aplicado: -${currency.format(data.desconto || 0)}. Total: ${currency.format(data.total_com_desconto ?? subtotal)} (confirmado ao gerar o Pix).`);
+    }
+  } catch {
+    window.misticaCupomAtivo = null;
+    setCouponStatus("Não foi possível validar o cupom agora. Tente novamente.", true);
+  }
+}
+
 function unlockAdmin() { adminLoginStatus.hidden = false; adminLoginStatus.textContent = "Use o login do Mística Painel. A senha local foi removida por segurança."; }
 function appendIsis(role, message) { const box = document.createElement("div"); box.className = `isis-message ${role}`; box.textContent = message; isisChat.appendChild(box); isisChat.scrollTop = isisChat.scrollHeight; }
 function answerIsis() { return "A Isis comercial está carregando. Use os botões de kits e produtos para receber sugestões conectadas ao catálogo."; }
@@ -217,6 +262,7 @@ function renderAll() { renderProducts(); renderCart(); renderClients(); renderHi
 
 $("#clientCpf")?.addEventListener("input", event => { event.target.value = maskCpf(event.target.value); });
 $("#clientWhatsapp")?.addEventListener("input", event => { event.target.value = maskWhatsapp(event.target.value); });
+$("[data-apply-coupon]")?.addEventListener("click", applyCoupon);
 $("[data-clear-cart]")?.addEventListener("click", clearCart);
 $("[data-generate-pix]")?.addEventListener("click", generatePix);
 $("[data-copy-pix]")?.addEventListener("click", copyPix);

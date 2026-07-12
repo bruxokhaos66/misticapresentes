@@ -1,5 +1,10 @@
 (() => {
-  const COURSE_API_BASE = "https://misticapresentes-api.onrender.com";
+  // Fonte única da URL da API: site-config.js (window.misticaSiteConfig).
+  // Evita hosts divergentes espalhados pelos scripts (antes esta página
+  // apontava direto para o host do provedor de hospedagem).
+  const COURSE_API_BASE = String(
+    (window.misticaSiteConfig || {}).apiBaseUrl || "https://api.misticaesotericos.com.br"
+  ).replace(/\/$/, "");
 
   const storeConfig = {
     whatsappNumber: (window.misticaSiteConfig && window.misticaSiteConfig.whatsappNumber) || "554999172137"

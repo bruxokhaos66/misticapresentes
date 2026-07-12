@@ -1,5 +1,8 @@
 (() => {
-  const API_BASE = 'https://misticapresentes-api.onrender.com';
+  // Fonte única da URL da API: site-config.js (window.misticaSiteConfig).
+  const API_BASE = String(
+    (window.misticaSiteConfig || {}).apiBaseUrl || 'https://api.misticaesotericos.com.br'
+  ).replace(/\/$/, '');
   const PRODUCT_CACHE_KEY = 'misticaApiProductsCache';
 
   const ready = (fn) => document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', fn) : fn();

@@ -191,6 +191,7 @@
       data_venda: new Date(dataIso).toLocaleString("pt-BR"),
       data_iso: dataIso,
       dia_operacional: dataIso.slice(0, 10),
+      cupom: window.misticaCupomAtivo || null,
       itens: itensPayload.map(({ valido, ...item }) => item),
     };
     // O Pix (chave, nome, cidade) é gerado só no servidor a partir do pedido

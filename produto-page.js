@@ -208,5 +208,18 @@
     else renderProduct(product);
   }
 
-  window.addEventListener("load", () => setTimeout(init, 400));
+  // Renderiza o quanto antes (sem atraso artificial) para reduzir CLS/LCP; o
+  // espaço já é reservado no CSS (.product-page-shell / .product-page-photo).
+  // Um único re-render tardio capta o catálogo sincronizado pela API
+  // (mobile-sync.js) sem provocar novo salto de layout, pois o espaço é fixo.
+  function boot() {
+    init();
+    window.setTimeout(init, 1500);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot, { once: true });
+  } else {
+    boot();
+  }
 })();

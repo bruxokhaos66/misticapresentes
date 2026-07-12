@@ -482,3 +482,76 @@ def test_avaliacoes_rejeita_produto_inexistente_e_nota_invalida():
         json={"nome_cliente": "Ana", "nota": 9, "comentario": "Nota fora do intervalo"},
     )
     assert resposta_nota.status_code == 422
+
+
+def _criar_cupom(codigo: str, tipo: str, valor: float) -> None:
+    resposta = client.post(
+        "/api/campanhas",
+        json={"titulo": f"Campanha {codigo}", "tipo": tipo, "valor": valor, "codigo_cupom": codigo, "ativo": True},
+        headers=PROTECTED_HEADERS,
+    )
+    assert resposta.status_code == 200
+
+
+def test_cupom_percentual_aplica_desconto_no_checkout():
+    codigo = codigo_unico("CUP").upper()
+    _criar_cupom(codigo, "desconto_percentual", 10.0)
+    produto = client.post(
+        "/api/produtos",
+        json={"nome": "Produto Cupom", "codigo_p": codigo_unico("CUPP"), "preco": 100.0, "quantidade": 10},
+        headers=PROTECTED_HEADERS,
+    ).json()
+
+    # Pré-visualização pública do cupom (usada pelo carrinho).
+    preview = client.post("/api/cupons/validar", json={"codigo": codigo, "subtotal": 200.0}).json()
+    assert preview["valido"] is True
+    assert preview["desconto"] == 20.0
+    assert preview["total_com_desconto"] == 180.0
+
+    # Checkout aplica o desconto no servidor (200 - 10% = 180).
+    resposta = client.post(
+        "/api/vendas",
+        json={
+            "cliente": "Cliente Cupom",
+            "status": "Aguardando pagamento",
+            "baixa_estoque": True,
+            "cupom": codigo,
+            "itens": [{"produto_id": produto["id"], "quantidade": 2}],
+        },
+        headers=PROTECTED_HEADERS,
+    )
+    assert resposta.status_code == 200
+    data = resposta.json()
+    assert data["subtotal"] == 200.0
+    assert data["desconto"] == 20.0
+    assert data["total_final"] == 180.0
+    assert data["cupom"] == codigo
+
+
+def test_cupom_invalido_no_checkout_e_rejeitado():
+    produto = client.post(
+        "/api/produtos",
+        json={"nome": "Produto Sem Cupom", "codigo_p": codigo_unico("CUPX"), "preco": 30.0, "quantidade": 5},
+        headers=PROTECTED_HEADERS,
+    ).json()
+    resposta = client.post(
+        "/api/vendas",
+        json={
+            "cliente": "Cliente",
+            "status": "Aguardando pagamento",
+            "baixa_estoque": True,
+            "cupom": "NAOEXISTE-XYZ",
+            "itens": [{"produto_id": produto["id"], "quantidade": 1}],
+        },
+        headers=PROTECTED_HEADERS,
+    )
+    assert resposta.status_code == 400
+    # Cupom inválido não pode ter baixado estoque: o pedido inteiro é revertido.
+    produto_apos = client.get(f"/api/produtos/{produto['id']}").json()
+    assert produto_apos["quantidade"] == 5
+
+
+def test_cupom_validar_publico_rejeita_codigo_inexistente():
+    resposta = client.post("/api/cupons/validar", json={"codigo": "INEXISTENTE-123", "subtotal": 50.0})
+    assert resposta.status_code == 200
+    assert resposta.json()["valido"] is False

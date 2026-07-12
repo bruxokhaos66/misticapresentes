@@ -38,9 +38,38 @@ configurar_logging()
 logger = get_logger(__name__)
 
 
+def _verificar_persistencia_banco() -> None:
+    """Registra no startup se o banco está num caminho persistente ou efêmero.
+
+    Serve para confirmar objetivamente, nos logs do Render, o item mais crítico
+    da auditoria: no plano Free (sem Persistent Disk) o SQLite volta vazio a
+    cada redeploy/sleep. Se MISTICA_DB_PATH não estiver configurada apontando
+    para um disco montado (ex.: /data), este aviso alto sinaliza o risco.
+    """
+    from config import DB_PATH
+
+    db_path = str(DB_PATH)
+    env_configurada = bool(
+        os.environ.get("MISTICA_DB_PATH", "").strip() or os.environ.get("DATABASE_PATH", "").strip()
+    )
+    parece_persistente = env_configurada and db_path.startswith(("/data", "/var/data", "/mnt"))
+    if parece_persistente:
+        logger.info(
+            "banco em caminho persistente",
+            extra={"evento": "startup_persistencia", "persistente": True, "db_dir": os.path.dirname(db_path)},
+        )
+    else:
+        logger.warning(
+            "ATENCAO: banco pode estar em disco EFEMERO (dados podem ser perdidos em redeploy/sleep). "
+            "Configure MISTICA_DB_PATH para um Persistent Disk (ex.: /data/mistica_gestao_v20.db).",
+            extra={"evento": "startup_persistencia", "persistente": False, "db_dir": os.path.dirname(db_path)},
+        )
+
+
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    _verificar_persistencia_banco()
     migrar_musicas_blob_para_arquivo()
     garantir_admin_api()
     tarefa_expiracao = asyncio.create_task(_expirar_pedidos_periodicamente())

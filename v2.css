@@ -126,6 +126,15 @@ label { display: grid; gap: 7px; color: var(--muted); font-weight: 750; }
 .cart-item, .stock-item { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
 .cart-item span, .history-item span, .stock-item span { color: var(--muted); }
 .cart-remove { border: 1px solid rgba(242,201,109,.22); border-radius: 999px; padding: 8px 10px; color: var(--gold-2); background: transparent; cursor: pointer; }
+.coupon-row { margin: 14px 0 4px; display: grid; gap: 8px; }
+.coupon-row label { color: var(--muted); font-weight: 600; font-size: .92rem; }
+.coupon-input-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.coupon-input-row input { flex: 1 1 160px; min-width: 0; border: 1px solid rgba(242,201,109,.28); border-radius: 12px; padding: 12px 14px; background: rgba(0,0,0,.18); color: var(--text); text-transform: uppercase; }
+.coupon-input-row input::placeholder { text-transform: none; }
+.coupon-status { margin: 4px 0 0; font-size: .9rem; }
+.coupon-status-ok { color: var(--gold-2); }
+.coupon-status-error { color: #ffb0b0; }
+@media (max-width: 520px) { .coupon-input-row .btn { width: 100%; } }
 .total-box { display: flex; justify-content: space-between; align-items: center; margin: 18px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 18px 0; }
 .total-box strong { color: var(--gold-2); font-size: 1.8rem; }
 .checkout-actions, .quick-actions, .stack-actions { display: flex; flex-wrap: wrap; gap: 10px; }
