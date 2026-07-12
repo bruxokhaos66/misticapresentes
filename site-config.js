@@ -24,7 +24,8 @@ window.misticaSiteConfig = {
   if (!productionMode) return;
 
   const params = new URLSearchParams(window.location.search);
-  const adminRoute = window.location.hash === "#admin" || window.location.hash === "#adminbruxo" || params.get("admin") === "mistica";
+  const onAdminPage = /(^|\/)admin\.html$/.test(window.location.pathname);
+  const adminRoute = onAdminPage || window.location.hash === "#admin" || window.location.hash === "#adminbruxo" || params.get("admin") === "mistica";
 
   function mostrarAdmin() {
     const section = document.getElementById("admin");
@@ -64,7 +65,7 @@ window.misticaSiteConfig = {
     status.className = error ? "warning-box warning-danger" : "warning-box";
   }
 
-  function liberarPainel(sessao) {
+  function liberarPainel() {
     const loginPanel = document.getElementById("adminLoginPanel");
     const adminContent = document.getElementById("adminContent");
     if (loginPanel) loginPanel.hidden = true;
@@ -73,10 +74,12 @@ window.misticaSiteConfig = {
       adminContent.removeAttribute("hidden");
       adminContent.style.display = "block";
     }
-    try {
-      sessionStorage.setItem("misticaAdminUnlocked", "true");
-      sessionStorage.setItem("misticaPainelSessao", JSON.stringify(sessao || {}));
-    } catch {}
+    // Só um indício de UI para saber se vale a pena perguntar ao servidor na
+    // próxima visita (ver restaurarSessao). A autorização real é sempre via
+    // cookie HttpOnly revalidado em /api/auth/me; guardar o objeto de sessão
+    // (nome, perfil, permissões) no sessionStorage seria só superfície extra
+    // de furto via XSS, sem uso funcional.
+    try { sessionStorage.setItem("misticaAdminUnlocked", "true"); } catch {}
   }
 
   async function restaurarSessao() {
@@ -88,7 +91,7 @@ window.misticaSiteConfig = {
       });
       if (!response.ok) return;
       const sessao = await response.json();
-      if (sessao?.usuario) liberarPainel(sessao);
+      if (sessao?.usuario) liberarPainel();
     } catch {}
   }
 
@@ -120,7 +123,7 @@ window.misticaSiteConfig = {
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.detail || "Login ou senha inválidos.");
-        liberarPainel(data);
+        liberarPainel();
         mostrarStatus("Acesso administrativo liberado.");
       } catch (error) {
         mostrarStatus(error?.message || "Não foi possível entrar no painel.", true);
@@ -168,12 +171,19 @@ window.misticaSiteConfig = {
     loadStyle("misticaAdminProductsStyle", "v2-admin-products.css?v=20260708-admin-products");
     loadStyle("misticaCoursesStyle", "v2-courses.css?v=20260710-cursos");
     loadScript("misticaAdminProductsScript", "v2-admin-products.js?v=20260708-admin-products");
-    loadScript("misticaCoursesScript", "v2-courses.js?v=20260710-cursos");
+    loadScript("misticaCoursesScript", "v2-courses.js?v=20260711-convite");
   };
 
   const iniciar = () => {
     loadScript("misticaProductionGuardScript", "site-production-guard.js?v=20260710-no-browser-secret");
     if (!adminRoute) return;
+    if (!onAdminPage) {
+      // O painel administrativo não faz parte do bundle público: rotas
+      // antigas para #admin/?admin=mistica são encaminhadas para a página
+      // separada, que carrega o HTML/CSS/JS do admin sob demanda.
+      window.location.replace("admin.html");
+      return;
+    }
     carregarPainelAdmin();
     mostrarAdmin();
     garantirCampoUsuario();

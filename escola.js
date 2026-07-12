@@ -45,7 +45,10 @@
   ];
 
   const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
-  let materiaisCache = null;
+
+  // Estado do aluno logado (nulo enquanto não carregado ou deslogado).
+  let alunoAtual = null;
+  let alunoCarregado = false;
 
   function buildWhatsappUrl(message) {
     return `https://wa.me/${storeConfig.whatsappNumber}?text=${encodeURIComponent(message)}`;
@@ -53,32 +56,68 @@
 
   function text(value) { return String(value ?? ""); }
 
-  async function criarPedidoCurso(slug) {
-    // O Pix (chave, nome, cidade e pre\u00e7o) \u00e9 gerado s\u00f3 no servidor a partir do
-    // cat\u00e1logo autoritativo de cursos pagos (ver backend/course_routes.py);
-    // o navegador nunca monta o payload sozinho.
-    const response = await fetch(`${COURSE_API_BASE}/api/checkout/cursos`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slug }),
+  async function apiJson(path, options = {}) {
+    const response = await fetch(`${COURSE_API_BASE}${path}`, {
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+      ...options,
     });
     const body = await response.json().catch(() => ({}));
-    if (!response.ok || !body.pix_copia_cola) {
-      throw new Error(body.detail || body.message || "N\u00e3o foi poss\u00edvel gerar o Pix para este curso agora.");
+    return { ok: response.ok, status: response.status, body };
+  }
+
+  async function criarPedidoCurso(slug, cadastro) {
+    // O Pix (chave, nome, cidade e preço) é gerado só no servidor a partir do
+    // catálogo autoritativo de cursos pagos (ver backend/course_routes.py);
+    // o navegador nunca monta o payload sozinho. O cadastro (nome/e-mail)
+    // identifica o comprador; a senha só é criada depois, pelo link enviado
+    // quando o pagamento é confirmado.
+    const { ok, body } = await apiJson("/api/checkout/cursos", {
+      method: "POST",
+      body: JSON.stringify({ slug, ...cadastro }),
+    });
+    if (!ok || !body.pix_copia_cola) {
+      throw new Error(body.detail || body.message || "Não foi possível gerar o Pix para este curso agora.");
     }
     return body;
   }
 
-  async function fetchMateriais() {
-    if (materiaisCache) return materiaisCache;
-    try {
-      const response = await fetch(`${COURSE_API_BASE}/api/cursos`);
-      if (!response.ok) throw new Error("Falha ao carregar materiais.");
-      materiaisCache = await response.json();
-    } catch {
-      materiaisCache = [];
-    }
-    return materiaisCache;
+  async function definirSenhaAluno(token, senha) {
+    const { ok, body } = await apiJson("/api/alunos/definir-senha", {
+      method: "POST",
+      body: JSON.stringify({ token, senha }),
+    });
+    if (!ok) throw new Error(body.detail || "Não foi possível criar sua senha. O link pode ter expirado.");
+    alunoAtual = { nome: body.nome, email: body.email, cursos: [] };
+    alunoCarregado = false;
+    await carregarAlunoAtual();
+    return alunoAtual;
+  }
+
+  async function carregarAlunoAtual() {
+    if (alunoCarregado) return alunoAtual;
+    alunoCarregado = true;
+    const { ok, body } = await apiJson("/api/alunos/me");
+    alunoAtual = ok ? body : null;
+    return alunoAtual;
+  }
+
+  async function loginAluno(email, senha) {
+    const { ok, body } = await apiJson("/api/alunos/login", {
+      method: "POST",
+      body: JSON.stringify({ email, senha }),
+    });
+    if (!ok) throw new Error(body.detail || "E-mail ou senha inválidos.");
+    alunoAtual = { nome: body.nome, email: body.email, cursos: [] };
+    alunoCarregado = false;
+    await carregarAlunoAtual();
+    return alunoAtual;
+  }
+
+  async function logoutAluno() {
+    await apiJson("/api/alunos/logout", { method: "POST" });
+    alunoAtual = null;
+    alunoCarregado = true;
   }
 
   function normalizeUrl(url) {
@@ -89,13 +128,11 @@
     return value;
   }
 
-  async function renderMateriais(curso, container) {
-    const materiais = (await fetchMateriais()).filter(item => item.categoria === curso.slug);
+  function materiaisHtml(materiais) {
     if (!materiais.length) {
-      container.innerHTML = `<div class="escola-materials-empty">Conteúdo em preparação. Assim que as aulas forem publicadas elas aparecem aqui automaticamente.</div>`;
-      return;
+      return `<div class="escola-materials-empty">Conteúdo em preparação. Assim que as aulas forem publicadas elas aparecem aqui automaticamente.</div>`;
     }
-    container.innerHTML = materiais.map(item => {
+    return materiais.map(item => {
       const url = normalizeUrl(item.url);
       return url
         ? `<a class="escola-material-item" href="${url}" target="_blank" rel="noopener">📘 ${item.titulo}</a>`
@@ -103,15 +140,76 @@
     }).join("");
   }
 
+  function loginFormHtml(curso) {
+    return `
+      <div class="escola-login-box" data-login-box>
+        <p><strong>Já comprou este curso?</strong> Entre com o e-mail e a senha que você criou no link de acesso enviado pelo WhatsApp após a confirmação do pagamento.</p>
+        <form class="escola-login-form" data-login-form>
+          <input type="email" placeholder="Seu e-mail" data-login-email required autocomplete="email">
+          <input type="password" placeholder="Sua senha" data-login-senha required autocomplete="current-password">
+          <button class="btn" type="submit">Entrar</button>
+        </form>
+        <p class="escola-login-status" data-login-status hidden></p>
+      </div>`;
+  }
+
+  async function renderMateriaisArea(curso, container) {
+    if (curso.tipo === "gratuito") {
+      const { ok, body } = await apiJson(`/api/cursos/${encodeURIComponent(curso.slug)}/conteudo`);
+      container.innerHTML = ok ? materiaisHtml(body) : `<div class="escola-materials-empty">Não foi possível carregar o conteúdo agora. Tente novamente em instantes.</div>`;
+      return;
+    }
+
+    const aluno = await carregarAlunoAtual();
+    if (aluno && aluno.cursos && aluno.cursos.includes(curso.slug)) {
+      const { ok, body } = await apiJson(`/api/cursos/${encodeURIComponent(curso.slug)}/conteudo`);
+      container.innerHTML = ok ? materiaisHtml(body) : `<div class="escola-materials-empty">Não foi possível carregar o conteúdo agora. Tente novamente em instantes.</div>`;
+      return;
+    }
+
+    if (aluno) {
+      container.innerHTML = `<div class="escola-materials-empty">Seu pagamento ainda está em análise. Assim que confirmarmos, o conteúdo aparece aqui automaticamente. Se já pagou, fale com a gente pelo WhatsApp.</div>`;
+      return;
+    }
+
+    container.innerHTML = loginFormHtml(curso);
+    setupLoginForm(container, curso, container.closest("[data-detail]"));
+  }
+
+  function setupLoginForm(container, curso, detail) {
+    const form = container.querySelector("[data-login-form]");
+    const status = container.querySelector("[data-login-status]");
+    form?.addEventListener("submit", async event => {
+      event.preventDefault();
+      const email = form.querySelector("[data-login-email]").value.trim();
+      const senha = form.querySelector("[data-login-senha]").value;
+      status.hidden = false;
+      status.textContent = "Entrando...";
+      try {
+        await loginAluno(email, senha);
+        status.textContent = "Login realizado! Carregando conteúdo...";
+        await renderMateriaisArea(curso, container);
+        atualizarBarraConta();
+      } catch (error) {
+        status.textContent = error.message || "Não foi possível entrar. Confira e-mail e senha.";
+      }
+    });
+  }
+
   function purchasePanelHtml(curso) {
     return `
       <div class="escola-purchase" data-purchase-panel hidden>
         <div class="warning-box"><strong>Antes de pagar:</strong> confira no banco se o valor e o recebedor estão corretos.</div>
+        <form class="escola-cadastro-form" data-purchase-cadastro>
+          <p class="escola-cadastro-eyebrow">Identificação da compra</p>
+          <input type="text" placeholder="Seu nome completo" data-cadastro-nome required autocomplete="name">
+          <input type="email" placeholder="Seu e-mail (será seu login)" data-cadastro-email required autocomplete="email">
+        </form>
         <div class="escola-qr-wrap">
           <canvas width="180" height="180" data-purchase-qr aria-label="QR Code Pix do curso"></canvas>
           <div>
             <p><strong>Valor:</strong> ${currency.format(curso.preco)}</p>
-            <p class="escola-purchase-status" data-purchase-status>Gere o Pix para liberar o acesso ao curso.</p>
+            <p class="escola-purchase-status" data-purchase-status>Preencha seus dados e gere o Pix para liberar o acesso ao curso.</p>
           </div>
         </div>
         <textarea readonly data-purchase-payload placeholder="Pix copia e cola aparecerá aqui"></textarea>
@@ -120,7 +218,7 @@
           <button class="btn btn-ghost" type="button" data-purchase-copy>Copiar Pix copia e cola</button>
           <button class="btn btn-ghost" type="button" data-purchase-whatsapp>Enviar comprovante pelo WhatsApp</button>
         </div>
-        <p class="escola-purchase-status">Após a confirmação do pagamento, nossa equipe libera o acesso completo ao curso pelo WhatsApp.</p>
+        <p class="escola-purchase-status">Após a confirmação do pagamento, você recebe pelo WhatsApp um link para criar sua senha e acessar o curso nesta página.</p>
       </div>`;
   }
 
@@ -160,7 +258,7 @@
       detail.hidden = false;
       if (!materiaisLoaded) {
         materiaisLoaded = true;
-        await renderMateriais(curso, materialsBox);
+        await renderMateriaisArea(curso, materialsBox);
       }
     }
 
@@ -188,13 +286,18 @@
       const qrCanvas = purchasePanel.querySelector("[data-purchase-qr]");
       const payloadBox = purchasePanel.querySelector("[data-purchase-payload]");
       const statusBox = purchasePanel.querySelector("[data-purchase-status]");
+      const cadastroForm = purchasePanel.querySelector("[data-purchase-cadastro]");
 
       purchasePanel.querySelector("[data-purchase-generate]")?.addEventListener("click", async () => {
+        const nome = cadastroForm.querySelector("[data-cadastro-nome]").value.trim();
+        const email = cadastroForm.querySelector("[data-cadastro-email]").value.trim();
+        if (!cadastroForm.reportValidity()) return;
+
         payloadBox.value = "";
         statusBox.textContent = "Gerando Pix com o servidor...";
         let pedido;
         try {
-          pedido = await criarPedidoCurso(curso.slug);
+          pedido = await criarPedidoCurso(curso.slug, { nome, email });
         } catch (error) {
           statusBox.textContent = error.message || "Não foi possível gerar o Pix agora. Tente novamente ou fale pelo WhatsApp.";
           return;
@@ -203,7 +306,7 @@
         try {
           if (!window.QRCode) throw new Error("Biblioteca de QR Code não carregou.");
           await window.QRCode.toCanvas(qrCanvas, pedido.pix_copia_cola, { width: 180, margin: 2, errorCorrectionLevel: "M" });
-          statusBox.textContent = `QR Code gerado para ${currency.format(curso.preco)}. Pague e envie o comprovante pelo WhatsApp para liberarmos o acesso.`;
+          statusBox.textContent = `QR Code gerado para ${currency.format(curso.preco)}. Pague e envie o comprovante pelo WhatsApp: assim que confirmarmos, você recebe o link para criar sua senha.`;
         } catch {
           statusBox.textContent = "Pix copia e cola gerado. Não foi possível desenhar o QR Code agora.";
         }
@@ -228,14 +331,74 @@
     }
   }
 
+  function accountBarHtml() {
+    return `<div class="escola-account" data-escola-account></div>`;
+  }
+
+  function criarSenhaBoxHtml() {
+    return `
+      <div class="escola-login-box" data-criar-senha-box>
+        <p><strong>Pagamento confirmado!</strong> Crie sua senha de acesso para entrar na Escola Mística.</p>
+        <form class="escola-login-form" data-criar-senha-form>
+          <input type="password" placeholder="Crie uma senha (mín. 8 caracteres)" data-criar-senha-valor required minlength="8" autocomplete="new-password">
+          <button class="btn" type="submit">Criar senha e entrar</button>
+        </form>
+        <p class="escola-login-status" data-criar-senha-status hidden></p>
+      </div>`;
+  }
+
+  function setupCriarSenhaBox(token) {
+    const grid = document.querySelector("[data-escola-grid]");
+    if (!grid) return;
+    grid.insertAdjacentHTML("beforebegin", criarSenhaBoxHtml());
+    const box = document.querySelector("[data-criar-senha-box]");
+    const form = box.querySelector("[data-criar-senha-form]");
+    const status = box.querySelector("[data-criar-senha-status]");
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+      const senha = form.querySelector("[data-criar-senha-valor]").value;
+      status.hidden = false;
+      status.textContent = "Criando sua senha...";
+      try {
+        await definirSenhaAluno(token, senha);
+        status.textContent = "Senha criada! Você já está logado.";
+        const url = new URL(window.location.href);
+        url.searchParams.delete("acesso");
+        window.history.replaceState({}, "", url);
+        box.remove();
+        await atualizarBarraConta();
+      } catch (error) {
+        status.textContent = error.message || "Não foi possível criar sua senha agora.";
+      }
+    });
+  }
+
+  async function atualizarBarraConta() {
+    const box = document.querySelector("[data-escola-account]");
+    if (!box) return;
+    const aluno = await carregarAlunoAtual();
+    box.innerHTML = aluno
+      ? `<span>Olá, ${aluno.nome}</span><button class="btn btn-ghost btn-small" type="button" data-escola-logout>Sair</button>`
+      : `<span>Já comprou algum curso? Faça login abrindo o curso e informando seu e-mail e senha.</span>`;
+    box.querySelector("[data-escola-logout]")?.addEventListener("click", async () => {
+      await logoutAluno();
+      await atualizarBarraConta();
+    });
+  }
+
   function renderCatalog() {
     const grid = document.querySelector("[data-escola-grid]");
     if (!grid) return;
+    grid.insertAdjacentHTML("beforebegin", accountBarHtml());
     grid.innerHTML = cursos.map(cardHtml).join("");
     grid.querySelectorAll("[data-course-card]").forEach(article => {
       const curso = cursos.find(item => item.slug === article.dataset.courseCard);
       if (curso) setupCard(article, curso);
     });
+    atualizarBarraConta();
+
+    const tokenAcesso = new URL(window.location.href).searchParams.get("acesso");
+    if (tokenAcesso) setupCriarSenhaBox(tokenAcesso);
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", renderCatalog, { once: true });

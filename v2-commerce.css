@@ -33,6 +33,71 @@
 .isis-followup-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .isis-followup-chips .v2-chip { padding: 7px 12px; font-size: .78rem; }
 
+/* Kits por intenção — vitrine centralizada com identidade xamânica */
+#kits { position: relative; overflow: hidden; }
+#kits::before {
+  content: "";
+  position: absolute;
+  top: -18%;
+  left: 50%;
+  width: min(920px, 130%);
+  height: 620px;
+  transform: translateX(-50%);
+  background:
+    radial-gradient(circle, rgba(242,201,109,.16) 0%, transparent 62%),
+    radial-gradient(circle at 30% 70%, rgba(189,209,122,.10) 0%, transparent 55%);
+  pointer-events: none;
+  z-index: 0;
+}
+#kits .container { position: relative; z-index: 1; }
+#kits .eyebrow {
+  font-size: .82rem;
+  letter-spacing: .22em;
+  padding: 9px 18px;
+  gap: 10px;
+}
+#kits .eyebrow::before { content: "☾"; font-size: 1rem; line-height: 1; }
+#kits .section-title h2 {
+  font-size: clamp(2.4rem, 5vw, 4.1rem);
+  background: linear-gradient(120deg, #fff8e8 0%, #ffe7a3 45%, #f2c96d 75%, #fff8e8 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 30px 90px rgba(0,0,0,.5);
+}
+#kits .section-title p {
+  max-width: 640px;
+  margin-inline: auto;
+  font-size: clamp(1rem, 1.3vw, 1.18rem);
+  letter-spacing: .01em;
+}
+#kits .isis-followup-chips {
+  justify-content: center;
+  gap: 12px;
+  margin-top: 6px;
+}
+#kits .isis-followup-chips .v2-chip {
+  padding: 13px 26px;
+  font-size: .95rem;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  border-width: 1px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255,248,230,.07), rgba(255,248,230,.02)), rgba(6,6,9,.5);
+  box-shadow: 0 12px 34px rgba(0,0,0,.22);
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+}
+#kits .isis-followup-chips .v2-chip:hover,
+#kits .isis-followup-chips .v2-chip:focus-visible {
+  transform: translateY(-3px);
+  border-color: rgba(242,201,109,.72);
+  box-shadow: 0 18px 46px rgba(0,0,0,.3), 0 0 30px rgba(242,201,109,.22);
+}
+@media (max-width: 680px) {
+  #kits .isis-followup-chips { gap: 10px; }
+  #kits .isis-followup-chips .v2-chip { padding: 11px 20px; font-size: .86rem; }
+}
+
 .v2-category-label { grid-column: 1 / -1; margin: 4px 0 0; color: #d7c8ad; font-weight: 850; font-size: .82rem; text-transform: uppercase; letter-spacing: .06em; }
 .v2-category-chips { grid-column: 1 / -1; justify-content: flex-start; }
 .v2-best-toggle { grid-column: 1 / -1; justify-self: start; }
@@ -53,6 +118,10 @@
   padding: 5px 10px;
   border-radius: 999px;
 }
+
+.product-rating { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
+.product-rating-stars { color: #f2c96d; font-size: .82rem; letter-spacing: 1px; }
+.product-rating-count { color: var(--muted); font-size: .78rem; font-weight: 850; }
 
 .v2-bestseller-strip { margin: 0 auto 20px; }
 .v2-bestseller-strip .eyebrow { margin-bottom: 10px; }

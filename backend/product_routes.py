@@ -65,39 +65,76 @@ def produto_row_to_dict(row):
     data["imagens"] = imagens
     data["link_externo"] = data.get("link_externo") or ""
     data["selo"] = data.get("selo") or ""
+    data["avaliacoes_total"] = data.get("avaliacoes_total") or 0
+    data["avaliacoes_media"] = data.get("avaliacoes_media") or 0
     return data
 
 
-@router.get("/produtos")
-def listar_produtos_completos(busca: str = "", limite: int = Query(100, ge=1, le=500)):
+_CAMPOS_PRODUTO_PUBLICO = """p.id, p.codigo_p, p.nome, p.marca, p.preco, p.quantidade, p.categoria,
+                       p.descricao, p.imagem_url, p.imagens_json, p.link_externo, p.selo, p.atualizado_em"""
+_CAMPOS_PRODUTO_ADMIN = """p.id, p.codigo_p, p.nome, p.marca, p.preco, p.quantidade, p.categoria, p.custo, p.lucro,
+                       p.estoque_minimo, p.descricao, p.imagem_url, p.imagens_json, p.link_externo, p.selo, p.atualizado_em"""
+_JOIN_AVALIACOES = """
+                LEFT JOIN (
+                    SELECT produto_id, COUNT(*) AS total, AVG(nota) AS media
+                    FROM avaliacoes_produtos
+                    WHERE COALESCE(aprovado, 1) = 1
+                    GROUP BY produto_id
+                ) a ON a.produto_id = p.id"""
+
+
+def _buscar_produtos(campos: str, busca: str, limite: int):
+    # avaliacoes_total/avaliacoes_media vêm de um LEFT JOIN agregado para que o
+    # catálogo mostre prova social (nota média + nº de avaliações) sem uma
+    # requisição extra por produto (ver product-reviews.js/review_routes.py).
     termo = f"%{busca.strip()}%"
     with conectar() as conn:
         if busca.strip():
             rows = conn.execute(
-                """
-                SELECT id, codigo_p, nome, marca, preco, quantidade, categoria, custo, lucro,
-                       estoque_minimo, descricao, imagem_url, imagens_json, link_externo, selo, atualizado_em
-                FROM produtos
-                WHERE COALESCE(ativo,1)=1
-                  AND (nome LIKE ? OR codigo_p LIKE ? OR categoria LIKE ? OR marca LIKE ? OR descricao LIKE ? OR selo LIKE ?)
-                ORDER BY nome COLLATE NOCASE
+                f"""
+                SELECT {campos},
+                       COALESCE(a.total, 0) AS avaliacoes_total,
+                       ROUND(a.media, 1) AS avaliacoes_media
+                FROM produtos p{_JOIN_AVALIACOES}
+                WHERE COALESCE(p.ativo,1)=1
+                  AND (p.nome LIKE ? OR p.codigo_p LIKE ? OR p.categoria LIKE ? OR p.marca LIKE ? OR p.descricao LIKE ? OR p.selo LIKE ?)
+                ORDER BY p.nome COLLATE NOCASE
                 LIMIT ?
                 """,
                 (termo, termo, termo, termo, termo, termo, limite),
             ).fetchall()
         else:
             rows = conn.execute(
-                """
-                SELECT id, codigo_p, nome, marca, preco, quantidade, categoria, custo, lucro,
-                       estoque_minimo, descricao, imagem_url, imagens_json, link_externo, selo, atualizado_em
-                FROM produtos
-                WHERE COALESCE(ativo,1)=1
-                ORDER BY nome COLLATE NOCASE
+                f"""
+                SELECT {campos},
+                       COALESCE(a.total, 0) AS avaliacoes_total,
+                       ROUND(a.media, 1) AS avaliacoes_media
+                FROM produtos p{_JOIN_AVALIACOES}
+                WHERE COALESCE(p.ativo,1)=1
+                ORDER BY p.nome COLLATE NOCASE
                 LIMIT ?
                 """,
                 (limite,),
             ).fetchall()
     return [produto_row_to_dict(row) for row in rows]
+
+
+@router.get("/produtos")
+def listar_produtos_completos(busca: str = "", limite: int = Query(100, ge=1, le=500)):
+    """Catálogo público: não inclui custo, lucro nem estoque mínimo, que são
+    informações comerciais internas (ver GET /produtos/admin para o painel)."""
+    return _buscar_produtos(_CAMPOS_PRODUTO_PUBLICO, busca, limite)
+
+
+@router.get("/produtos/admin")
+def listar_produtos_admin(
+    busca: str = "",
+    limite: int = Query(100, ge=1, le=500),
+    sessao: dict = Depends(exigir_sessao_ou_chave_api()),
+):
+    """Mesma listagem, mas autenticada e com os campos internos (custo, lucro,
+    estoque mínimo) usados pelo painel administrativo."""
+    return _buscar_produtos(_CAMPOS_PRODUTO_ADMIN, busca, limite)
 
 
 @router.post("/checkout/pedidos", dependencies=[Depends(limitar_checkout_publico)])

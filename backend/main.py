@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import os
 from datetime import datetime
 from pathlib import Path
@@ -6,9 +7,11 @@ from typing import Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from backend.aluno_auth import router as aluno_router
 from backend.audit import registrar_auditoria
 from backend.backup_routes import router as backup_router
 from backend.course_routes import router as course_router
@@ -16,6 +19,7 @@ from backend.database import conectar, executar, listar, obter
 from backend.order_status_routes import expirar_pedidos_pendentes, router as order_status_router
 from backend.panel_sessions import exigir_sessao_ou_chave_api
 from backend.payment_routes import router as payment_router
+from backend.api_security import ORIGENS_PERMITIDAS, validar_site_api_key as validar_chave_api
 from backend.product_routes import router as product_router, validar_site_api_key
 from backend.review_routes import router as review_router
 from backend.upload_routes import router as upload_router
@@ -26,25 +30,49 @@ from config import hash_password_pbkdf2
 from database.migrations import init_db
 
 
-APP_ENV = os.environ.get("APP_ENV", "development").strip().lower()
-IS_PRODUCTION = APP_ENV == "production"
+@contextlib.asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    garantir_admin_api()
+    tarefa_expiracao = asyncio.create_task(_expirar_pedidos_periodicamente())
+    try:
+        yield
+    finally:
+        tarefa_expiracao.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await tarefa_expiracao
 
-ORIGENS_PERMITIDAS = [
-    "https://misticaesotericos.com.br",
-    "https://www.misticaesotericos.com.br",
-    "https://api.misticaesotericos.com.br",
-]
-if not IS_PRODUCTION:
-    ORIGENS_PERMITIDAS += ["http://localhost:3000", "http://localhost:8000"]
 
 app = FastAPI(
     title="Mística Presentes API",
     description="API oficial para sincronização do app Mística Presentes.",
     version="0.3.8",
-    docs_url=None if IS_PRODUCTION else "/docs",
-    redoc_url=None if IS_PRODUCTION else "/redoc",
-    openapi_url=None if IS_PRODUCTION else "/openapi.json",
+    lifespan=lifespan,
+    # A documentação interativa expõe todos os endpoints, schemas e exemplos da
+    # API; deixá-la pública facilita reconhecimento para ataques. As rotas
+    # nativas ficam desativadas e são substituídas abaixo por versões que
+    # exigem sessão de administrador (mesma dependência usada no painel).
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
+
+_OPENAPI_URL = "/openapi.json"
+
+
+@app.get("/openapi.json", include_in_schema=False)
+def openapi_protegido(sessao: dict = Depends(exigir_sessao_ou_chave_api("adm"))):
+    return app.openapi()
+
+
+@app.get("/docs", include_in_schema=False)
+def swagger_docs_protegido(sessao: dict = Depends(exigir_sessao_ou_chave_api("adm"))):
+    return get_swagger_ui_html(openapi_url=_OPENAPI_URL, title=f"{app.title} - Swagger UI")
+
+
+@app.get("/redoc", include_in_schema=False)
+def redoc_protegido(sessao: dict = Depends(exigir_sessao_ou_chave_api("adm"))):
+    return get_redoc_html(openapi_url=_OPENAPI_URL, title=f"{app.title} - ReDoc")
 
 app.add_middleware(
     CORSMiddleware,
@@ -67,6 +95,7 @@ app.include_router(upload_router)
 app.include_router(system_status_router)
 app.include_router(backup_router)
 app.include_router(course_router)
+app.include_router(aluno_router)
 app.include_router(review_router)
 
 
@@ -83,13 +112,6 @@ class ProdutoIn(BaseModel):
 
 class ProdutosLotePayload(BaseModel):
     produtos: list[ProdutoIn] = Field(default_factory=list)
-
-
-@app.on_event("startup")
-def startup():
-    init_db()
-    garantir_admin_api()
-    asyncio.create_task(_expirar_pedidos_periodicamente())
 
 
 async def _expirar_pedidos_periodicamente():
@@ -132,18 +154,12 @@ def garantir_admin_api():
         )
 
 
-def _validar_chave_sync(x_mistica_sync_key: str | None):
-    chave = os.environ.get("MISTICA_SYNC_KEY", "").strip()
-    if chave and x_mistica_sync_key != chave:
-        raise HTTPException(status_code=403, detail="Chave de sincronização inválida")
-
-
 @app.get("/")
 def raiz():
     return {
         "app": "Mística Presentes API",
         "status": "online",
-        "docs": None if IS_PRODUCTION else "/docs",
+        "docs": "/docs",
         "health": "/api/health",
     }
 
@@ -156,20 +172,6 @@ def health():
     return {
         "status": "online",
         "app": "Mística Presentes",
-    }
-
-
-@app.get("/api/status")
-def status():
-    total_produtos = obter("SELECT COUNT(*) AS total FROM produtos WHERE COALESCE(ativo,1)=1") or {"total": 0}
-    total_clientes = obter("SELECT COUNT(*) AS total FROM clientes WHERE COALESCE(ativo,1)=1") or {"total": 0}
-    total_vendas = obter("SELECT COUNT(*) AS total FROM vendas WHERE COALESCE(status,'Concluído') NOT IN ('Cancelado','Cancelada')") or {"total": 0}
-    return {
-        "status": "online",
-        "produtos": total_produtos["total"],
-        "clientes": total_clientes["total"],
-        "vendas": total_vendas["total"],
-        "data_hora": datetime.now().isoformat(timespec="seconds"),
     }
 
 
@@ -190,35 +192,9 @@ def painel_resumo(sessao: dict = Depends(exigir_sessao_ou_chave_api())):
     }
 
 
-@app.get("/api/produtos")
-def listar_produtos(busca: str = "", limite: int = Query(100, ge=1, le=500)):
-    termo = f"%{busca.strip()}%"
-    if busca.strip():
-        return listar(
-            """
-            SELECT id, codigo_p, nome, preco, quantidade, categoria, custo, lucro, estoque_minimo
-            FROM produtos
-            WHERE COALESCE(ativo,1)=1 AND (nome LIKE ? OR codigo_p LIKE ? OR categoria LIKE ?)
-            ORDER BY nome COLLATE NOCASE
-            LIMIT ?
-            """,
-            (termo, termo, termo, limite),
-        )
-    return listar(
-        """
-        SELECT id, codigo_p, nome, preco, quantidade, categoria, custo, lucro, estoque_minimo
-        FROM produtos
-        WHERE COALESCE(ativo,1)=1
-        ORDER BY nome COLLATE NOCASE
-        LIMIT ?
-        """,
-        (limite,),
-    )
-
-
 @app.post("/api/sync/produtos-lote")
 def sincronizar_produtos_lote(payload: ProdutosLotePayload, x_mistica_sync_key: str | None = Header(default=None)):
-    _validar_chave_sync(x_mistica_sync_key)
+    validar_chave_api(x_mistica_sync_key, "Configure MISTICA_SITE_API_KEY ou MISTICA_SYNC_KEY para permitir sincronização.")
     criados = 0
     atualizados = 0
     ignorados = 0
@@ -291,9 +267,10 @@ def sincronizar_produtos_lote(payload: ProdutosLotePayload, x_mistica_sync_key: 
 
 @app.get("/api/produtos/{produto_id}")
 def obter_produto(produto_id: int):
+    """Rota pública: não inclui custo, lucro nem estoque mínimo (dados internos)."""
     produto = obter(
         """
-        SELECT id, codigo_p, nome, preco, quantidade, categoria, custo, lucro, estoque_minimo
+        SELECT id, codigo_p, nome, preco, quantidade, categoria
         FROM produtos
         WHERE id=? AND COALESCE(ativo,1)=1
         """,

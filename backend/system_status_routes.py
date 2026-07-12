@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import secrets
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Header, HTTPException
@@ -43,13 +43,16 @@ def contar_registros(conn, nome: str) -> int | None:
     return int(row["total"] or 0)
 
 
-@router.get("/status")
+@router.api_route("/status", methods=["GET", "HEAD"])
 def status_publico():
+    # Rota pública e sem autenticação (mesma superfície de /api/health): não
+    # deve expor contagem de clientes, vendas ou qualquer outro dado de
+    # negócio. Esses números continuam disponíveis, mas só com sessão de
+    # painel ou chave de API, em /api/painel/resumo.
     return {
         "status": "online",
         "api": "mistica",
         "app": "Mística Presentes",
-        "timestamp": datetime.now(UTC).isoformat(timespec="seconds"),
         "data_hora": datetime.now().isoformat(timespec="seconds"),
     }
 

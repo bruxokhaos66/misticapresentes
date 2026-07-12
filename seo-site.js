@@ -135,6 +135,11 @@
         "@type": "PostalAddress",
         ...storeAddress,
       },
+      geo: {
+        "@type": "GeoCoordinates",
+        latitude: -26.8367,
+        longitude: -52.9906,
+      },
       contactPoint: {
         "@type": "ContactPoint",
         telephone: "+55 49 99917-2137",

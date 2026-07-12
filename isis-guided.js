@@ -12,6 +12,10 @@
     { id: "aromas", label: "Aromas", keywords: ["aroma", "perfume", "incenso", "cheiro"], terms: ["aroma", "incenso", "perfume"] },
   ];
 
+  // Exposto para as páginas de vitrine por intenção (kit.html/kit-page.js),
+  // que reaproveitam esta mesma lista para não duplicar as categorias.
+  window.misticaIntents = INTENTS;
+
   function normalize(value) {
     return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   }
@@ -80,9 +84,14 @@
     return String(value || "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
   }
 
-  function renderRecommendations(found) {
+  function vitrineLinkHtml(intent) {
+    if (!intent) return "";
+    return `<a class="btn btn-ghost btn-small" href="kit.html?intencao=${encodeURIComponent(intent.id)}">Ver vitrine completa de ${escapeHtml(intent.label)}</a>`;
+  }
+
+  function renderRecommendations(found, intent) {
     if (!found.length) {
-      return `<p>Ainda não encontrei um produto certeiro para isso. Me conte um pouco mais (ex.: "quero algo para proteção" ou "presente para minha mãe") ou escolha uma intenção abaixo.</p>${renderFollowupChips()}`;
+      return `<p>Ainda não encontrei um produto certeiro para isso. Me conte um pouco mais (ex.: "quero algo para proteção" ou "presente para minha mãe") ou escolha uma intenção abaixo.</p>${vitrineLinkHtml(intent)}${renderFollowupChips()}`;
     }
     const items = found.map(product => `
       <li class="isis-recommend-item">
@@ -94,7 +103,7 @@
         </div>
       </li>
     `).join("");
-    return `<p>Encontrei estas opções para você:</p><ul class="isis-recommend-list">${items}</ul>${renderFollowupChips()}`;
+    return `<p>Encontrei estas opções para você:</p><ul class="isis-recommend-list">${items}</ul>${vitrineLinkHtml(intent)}${renderFollowupChips()}`;
   }
 
   function renderFollowupChips() {
@@ -108,7 +117,7 @@
     const intent = detectIntent(text);
     const terms = intent ? intent.terms : normalize(text).split(/\s+/).filter(word => word.length > 2);
     const found = searchProducts(terms);
-    appendBotHtml(renderRecommendations(found));
+    appendBotHtml(renderRecommendations(found, intent));
   }
 
   function handleIntent(intentId) {
@@ -116,7 +125,7 @@
     if (!intent) return;
     appendUser(intent.label);
     const found = searchProducts(intent.terms);
-    appendBotHtml(renderRecommendations(found));
+    appendBotHtml(renderRecommendations(found, intent));
   }
 
   function installChatDelegation() {

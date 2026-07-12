@@ -3,6 +3,19 @@ import secrets
 
 from fastapi import HTTPException
 
+APP_ENV = os.environ.get("APP_ENV", "development").strip().lower()
+IS_PRODUCTION = APP_ENV == "production"
+
+# https://bruxokhaos66.github.io era o endereço do GitHub Pages antigo; o site
+# usa domínio próprio (ver CNAME) e não deve mais receber tráfego de API.
+ORIGENS_PERMITIDAS = [
+    "https://misticaesotericos.com.br",
+    "https://www.misticaesotericos.com.br",
+    "https://api.misticaesotericos.com.br",
+]
+if not IS_PRODUCTION:
+    ORIGENS_PERMITIDAS += ["http://localhost:3000", "http://localhost:8000"]
+
 
 def validar_site_api_key(chave_recebida: str | None, mensagem_indisponivel: str | None = None) -> None:
     """Confere a chave de integração do site/API (MISTICA_SITE_API_KEY ou o

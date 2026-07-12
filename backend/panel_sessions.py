@@ -8,10 +8,12 @@ from datetime import datetime, timedelta
 
 from fastapi import Cookie, Depends, Header, HTTPException, Request, Response
 
+from backend.api_security import ORIGENS_PERMITIDAS
 from backend.database import conectar
 from backend.rate_limit import _client_ip
 
 COOKIE_NOME = "mistica_painel_sessao"
+METODOS_MUTAVEIS = {"POST", "PUT", "PATCH", "DELETE"}
 DURACAO_MAXIMA_HORAS = 12
 INATIVIDADE_MAXIMA_MINUTOS = 30
 LOGIN_JANELA_MINUTOS = int(os.environ.get("MISTICA_LOGIN_WINDOW_MINUTES", "10") or "10")
@@ -313,12 +315,31 @@ def sessao_atual(mistica_painel_sessao: str | None = Cookie(default=None)) -> di
     return dados
 
 
+def _validar_origem_csrf(request: Request) -> None:
+    """Defesa em profundidade contra CSRF nas rotas autenticadas por cookie de
+    sessão: o cookie já é SameSite=Lax (o navegador não o envia em POST/PUT/
+    PATCH/DELETE de origem cruzada), mas se algum navegador antigo ignorar
+    SameSite, uma requisição que muda estado sem Origin/Referer batendo com um
+    domínio conhecido nosso é rejeitada. Chamadas autenticadas por
+    X-Mistica-Api-Key (integrações servidor-a-servidor, sem cookie) não
+    passam por aqui."""
+    if request.method not in METODOS_MUTAVEIS:
+        return
+    origem = request.headers.get("origin") or ""
+    if not origem:
+        referer = request.headers.get("referer") or ""
+        origem = referer.split("/", 3)[0] + "//" + referer.split("/", 3)[2] if referer.count("/") >= 2 else ""
+    if origem not in ORIGENS_PERMITIDAS:
+        raise HTTPException(status_code=403, detail="Origem da requisição não permitida.")
+
+
 def exigir_perfil(perfil_minimo: str = "vendedor"):
     """Dependência FastAPI para proteger rotas por sessão e perfil."""
 
-    def dependencia(sessao: dict = Depends(sessao_atual)) -> dict:
+    def dependencia(request: Request, sessao: dict = Depends(sessao_atual)) -> dict:
         if perfil_minimo == "adm" and sessao.get("perfil") != "adm":
             raise HTTPException(status_code=403, detail="Acesso restrito a administradores.")
+        _validar_origem_csrf(request)
         return sessao
 
     return dependencia
@@ -332,6 +353,7 @@ def exigir_sessao_ou_chave_api(perfil_minimo: str = "vendedor"):
     """
 
     def dependencia(
+        request: Request,
         mistica_painel_sessao: str | None = Cookie(default=None),
         x_mistica_api_key: str | None = Header(default=None),
     ) -> dict:
@@ -339,6 +361,7 @@ def exigir_sessao_ou_chave_api(perfil_minimo: str = "vendedor"):
         if sessao:
             if perfil_minimo == "adm" and sessao.get("perfil") != "adm":
                 raise HTTPException(status_code=403, detail="Acesso restrito a administradores.")
+            _validar_origem_csrf(request)
             return sessao
 
         chave = os.environ.get("MISTICA_SITE_API_KEY", "").strip() or os.environ.get("MISTICA_SYNC_KEY", "").strip()
