@@ -120,6 +120,26 @@ app.add_middleware(
     allow_headers=["Content-Type", "X-Mistica-Api-Key", "X-Mistica-Sync-Key", "Idempotency-Key"],
 )
 
+
+@app.middleware("http")
+async def cabecalhos_seguranca(request, call_next):
+    """Defesa em profundidade: adiciona cabeçalhos de segurança a todas as
+    respostas da API. As respostas são JSON/arquivos (não HTML de app), então
+    estes headers têm baixo risco de quebrar o front e melhoram a postura de
+    segurança (sniffing, clickjacking, vazamento de referer). HSTS só é
+    enviado sob HTTPS, para não atrapalhar desenvolvimento local em HTTP."""
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    # cross-origin (não same-site): a API serve imagens de produto, áudio de
+    # ambiente e prévias públicas que o site carrega legitimamente de outra
+    # origem; same-site bloquearia esse carregamento.
+    response.headers.setdefault("Cross-Origin-Resource-Policy", "cross-origin")
+    if request.url.scheme == "https":
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    return response
+
 UPLOADS_DIR = Path(__file__).resolve().parent / "uploads"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 # Só produtos e músicas (conteúdo público da loja) vão para o mount estático
