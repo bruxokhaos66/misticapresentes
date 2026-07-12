@@ -45,17 +45,17 @@ nome: Fredi Bach
 ## Sintomas que indicam falta de sincronizacao
 
 - App mostra login ou senha invalidos.
-- API lista apenas o usuario admin em `/api/auth/usuarios-debug`.
+- API lista apenas o usuario admin em `/api/usuarios`.
 - Painel aparece zerado mesmo com vendas no desktop.
 - Vendas hoje e vendas mes aparecem R$ 0,00.
 - Produtos aparecem 0.
 
 ## Verificacoes uteis
 
-Listar usuarios existentes na API:
+Listar usuarios existentes na API (requer a chave de sincronizacao):
 
 ```bash
-curl https://api.misticaesotericos.com.br/api/auth/usuarios-debug
+curl -H "X-Mistica-Sync-Key: SUA_CHAVE_AQUI" https://api.misticaesotericos.com.br/api/usuarios
 ```
 
 Testar login direto na API:

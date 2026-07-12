@@ -1,17 +1,19 @@
 import asyncio
 import contextlib
 import os
+import secrets
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from backend.aluno_auth import router as aluno_router
+from backend.aluno_auth import _validar_sessao_aluno, aluno_tem_acesso, router as aluno_router
 from backend.audio_table import migrar_musicas_blob_para_arquivo
 from backend.audit import registrar_auditoria
 from backend.backup_routes import router as backup_router
@@ -20,12 +22,12 @@ from backend.course_routes import router as course_router
 from backend.database import conectar, executar, listar, obter
 from backend.logging_config import configurar_logging, get_logger
 from backend.order_status_routes import expirar_pedidos_pendentes, router as order_status_router
-from backend.panel_sessions import exigir_sessao_ou_chave_api
+from backend.panel_sessions import exigir_sessao_ou_chave_api, validar_sessao
 from backend.payment_routes import router as payment_router
 from backend.api_security import ORIGENS_PERMITIDAS, validar_site_api_key as validar_chave_api
 from backend.product_routes import router as product_router, validar_site_api_key
 from backend.review_routes import router as review_router
-from backend.upload_routes import router as upload_router
+from backend.upload_routes import CURSOS_DIR, router as upload_router
 from backend.user_sync_routes import router as user_sync_router
 from backend.site_stock_routes import router as site_stock_router
 from backend.system_status_routes import router as system_status_router
@@ -91,7 +93,53 @@ app.add_middleware(
 
 UPLOADS_DIR = Path(__file__).resolve().parent / "uploads"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
+# Só produtos e músicas (conteúdo público da loja) vão para o mount estático
+# sem autenticação. Cursos pagos NÃO entram aqui -- ver
+# servir_material_curso_protegido abaixo, que confere sessão de aluno com
+# acesso liberado (ou sessão/chave de admin) antes de devolver o arquivo.
+# Antes, tudo em backend/uploads/ (incluindo cursos/) era servido por um
+# único StaticFiles público, então quem tivesse a URL do material -- que
+# pode vazar por histórico do navegador, log de rede ou print -- baixava o
+# conteúdo pago sem ter comprado.
+(UPLOADS_DIR / "produtos").mkdir(parents=True, exist_ok=True)
+(UPLOADS_DIR / "musicas").mkdir(parents=True, exist_ok=True)
+app.mount("/uploads/produtos", StaticFiles(directory=str(UPLOADS_DIR / "produtos")), name="uploads-produtos")
+app.mount("/uploads/musicas", StaticFiles(directory=str(UPLOADS_DIR / "musicas")), name="uploads-musicas")
+
+
+@app.get("/uploads/cursos/{filename}")
+def servir_material_curso_protegido(
+    filename: str,
+    mistica_painel_sessao: str | None = Cookie(default=None),
+    mistica_aluno_sessao: str | None = Cookie(default=None),
+    x_mistica_api_key: str | None = Header(default=None),
+):
+    nome = Path(filename).name
+    caminho = CURSOS_DIR / nome
+    if not caminho.exists() or not caminho.is_file():
+        raise HTTPException(status_code=404, detail="Material não encontrado.")
+
+    if validar_sessao(mistica_painel_sessao):
+        return FileResponse(caminho)
+
+    chave = os.environ.get("MISTICA_SITE_API_KEY", "").strip() or os.environ.get("MISTICA_SYNC_KEY", "").strip()
+    if chave and x_mistica_api_key and secrets.compare_digest(str(x_mistica_api_key), chave):
+        return FileResponse(caminho)
+
+    sessao_aluno = _validar_sessao_aluno(mistica_aluno_sessao)
+    if not sessao_aluno:
+        raise HTTPException(status_code=401, detail="Faça login para acessar este material.")
+
+    url_arquivo = f"/uploads/cursos/{nome}"
+    with conectar() as conn:
+        material = conn.execute(
+            "SELECT categoria FROM cursos_materiais WHERE url=?", (url_arquivo,)
+        ).fetchone()
+        tem_acesso = bool(material) and aluno_tem_acesso(conn, aluno_id=sessao_aluno["aluno_id"], slug=material["categoria"])
+    if not tem_acesso:
+        raise HTTPException(status_code=403, detail="Você ainda não tem acesso a este curso.")
+    return FileResponse(caminho)
+
 
 app.include_router(product_router)
 app.include_router(user_sync_router)

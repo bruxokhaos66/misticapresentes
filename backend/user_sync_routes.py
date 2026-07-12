@@ -375,15 +375,3 @@ def listar_usuarios_api(x_mistica_sync_key: str | None = Header(default=None)):
         ORDER BY nome COLLATE NOCASE
         """
     )
-
-
-@router.get("/api/auth/usuarios-debug")
-def listar_usuarios_debug(x_mistica_sync_key: str | None = Header(default=None)):
-    _validar_chave_sync(x_mistica_sync_key)
-    return listar(
-        """
-        SELECT id, nome, login, perfil, COALESCE(ativo,1) AS ativo
-        FROM usuarios
-        ORDER BY login COLLATE NOCASE
-        """
-    )
