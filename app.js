@@ -85,7 +85,7 @@ function renderProducts() { if (!productGrid) return; productGrid.innerHTML = pr
 function validateQuantity(rawQty, productId) { const qty = Number.parseInt(rawQty, 10); const available = getStock(productId); const inCart = cart.find(item => item.id === productId)?.qty || 0; if (!Number.isInteger(qty) || qty < 1) return { ok: false, message: "Informe uma quantidade inteira maior que zero." }; if (qty + inCart > available) return { ok: false, message: `Estoque insuficiente. Disponível: ${Math.max(available - inCart, 0)}.` }; return { ok: true, qty }; }
 function addToCart(productId) { const product = products.find(item => item.id === productId); if (!product) return; const qtyInput = document.getElementById(`qty-${safeId(productId)}`); const validation = validateQuantity(qtyInput.value, productId); if (!validation.ok) return setStatus(validation.message); const existing = cart.find(item => item.id === productId); if (existing) existing.qty += validation.qty; else cart.push({ id: product.id, name: product.name, price: product.price, qty: validation.qty }); saveState(); renderCart(); renderProducts(); setStatus(`${product.name} adicionado ao carrinho.`); window.misticaTrack?.("add_to_cart", { currency: "BRL", value: product.price * validation.qty, items: [{ item_id: product.id, item_name: product.name, price: product.price, quantity: validation.qty }] }); }
 function removeFromCart(productId) { cart = cart.filter(item => item.id !== productId); saveState(); renderCart(); renderProducts(); }
-function clearCart() { cart = []; pixPayloadInput.value = ""; setStatus("Carrinho limpo. Adicione produtos para gerar um novo Pix."); clearQrCanvas(); saveState(); renderCart(); renderProducts(); }
+function clearCart() { cart = []; pixPayloadInput.value = ""; setStatus("Carrinho limpo. Adicione produtos para gerar um novo Pix."); clearQrCanvas(); pararAcompanhamentoPedido(); const el = reservaStatusEl(); if (el) el.textContent = ""; saveState(); renderCart(); renderProducts(); }
 function renderCart() { if (!cartList || !cartTotal) return; if (!cart.length) cartList.innerHTML = `<div class="cart-item"><span>Nenhum produto adicionado ainda.</span></div>`; else cartList.innerHTML = cart.map(item => `<div class="cart-item"><div><strong>${item.name}</strong><span>${item.qty}x ${currency.format(item.price)} = ${currency.format(item.price * item.qty)}</span></div><button class="cart-remove" type="button" onclick="removeFromCart('${item.id}')">Remover</button></div>`).join(""); cartTotal.textContent = currency.format(getTotal()); }
 function getTotal() { return cart.reduce((sum, item) => sum + item.price * item.qty, 0); }
 function renderClients() { if (!clientList) return; if (!clients.length) { clientList.innerHTML = `<div class="client-item"><span>Nenhum cliente cadastrado ainda.</span></div>`; return; } clientList.replaceChildren(); clients.slice(0, 5).forEach(client => { const item = document.createElement("div"); item.className = "client-item"; const name = document.createElement("strong"); name.textContent = client.name; const cpf = document.createElement("span"); cpf.textContent = `CPF: ${client.cpf}`; const whatsapp = document.createElement("span"); whatsapp.textContent = `WhatsApp: ${client.whatsapp}`; const address = document.createElement("span"); address.textContent = client.address; item.append(name, cpf, document.createElement("br"), whatsapp, document.createElement("br"), address); clientList.appendChild(item); }); }
@@ -100,12 +100,76 @@ function clearQrCanvas() { if (!pixCanvas) return; const ctx = pixCanvas.getCont
 function hasEnoughStockForCart() { return cart.every(item => item.qty <= getStock(item.id)); }
 function reduceStockFromCart() { cart.forEach(item => { stock[item.id] = Math.max(0, getStock(item.id) - item.qty); }); }
 
+let reservaTimerInterval = null;
+let pedidoStatusPollInterval = null;
+
+function reservaStatusEl() {
+  let el = document.getElementById("pixReservaStatus");
+  if (!el && pixStatus) {
+    el = document.createElement("p");
+    el.id = "pixReservaStatus";
+    el.className = "pix-reserva-status";
+    pixStatus.insertAdjacentElement("afterend", el);
+  }
+  return el;
+}
+
+function pararAcompanhamentoPedido() {
+  if (reservaTimerInterval) clearInterval(reservaTimerInterval);
+  if (pedidoStatusPollInterval) clearInterval(pedidoStatusPollInterval);
+  reservaTimerInterval = null;
+  pedidoStatusPollInterval = null;
+}
+
+function iniciarAcompanhamentoPedido(pedido) {
+  pararAcompanhamentoPedido();
+  const el = reservaStatusEl();
+  if (!el) return;
+
+  if (pedido.expiraEm) {
+    const expiraEm = new Date(pedido.expiraEm).getTime();
+    const atualizarContagem = () => {
+      const restanteMs = expiraEm - Date.now();
+      if (restanteMs <= 0) {
+        el.textContent = "Reserva de estoque expirada. Gere um novo Pix para reservar os produtos novamente.";
+        clearInterval(reservaTimerInterval);
+        reservaTimerInterval = null;
+        return;
+      }
+      const minutos = String(Math.floor(restanteMs / 60000)).padStart(2, "0");
+      const segundos = String(Math.floor((restanteMs % 60000) / 1000)).padStart(2, "0");
+      el.textContent = `Estoque reservado por mais ${minutos}:${segundos}. Pague dentro desse prazo para garantir os produtos.`;
+    };
+    atualizarContagem();
+    reservaTimerInterval = setInterval(atualizarContagem, 1000);
+  }
+
+  if (pedido.id && typeof window.misticaConsultarStatusPedido === "function") {
+    pedidoStatusPollInterval = setInterval(async () => {
+      try {
+        const { status } = await window.misticaConsultarStatusPedido(pedido.id);
+        if (status && status !== "Aguardando pagamento") {
+          pararAcompanhamentoPedido();
+          const cancelado = /cancel/i.test(status);
+          el.textContent = cancelado
+            ? "Este pedido foi cancelado e o estoque reservado foi liberado."
+            : `Pagamento confirmado! Status do pedido: ${status}.`;
+        }
+      } catch {
+        // Falha de rede ao consultar status não deve interromper o checkout;
+        // a próxima verificação tenta de novo.
+      }
+    }, 20000);
+  }
+}
+
 async function generatePix() {
   const total = getTotal();
   if (!cart.length || total <= 0) return setStatus("Adicione pelo menos um produto ao carrinho antes de gerar o Pix.");
   if (!hasEnoughStockForCart()) return setStatus("Existe produto no carrinho acima do estoque disponível. Ajuste antes de gerar o Pix.");
   if (typeof window.misticaCriarPedido !== "function") return setStatus("Não foi possível conectar ao servidor para gerar o Pix. Tente novamente em instantes ou fale pelo WhatsApp.");
   window.misticaTrack?.("begin_checkout", { currency: "BRL", value: total, items: cart.map(item => ({ item_id: item.id, item_name: item.name, price: item.price, quantity: item.qty })) });
+  pararAcompanhamentoPedido();
   clearQrCanvas();
   pixPayloadInput.value = "";
   setStatus("Enviando pedido e gerando o Pix com o servidor...");
@@ -123,6 +187,7 @@ async function generatePix() {
   } catch {
     setStatus("Pix copia e cola gerado. Não foi possível desenhar o QR Code agora.");
   }
+  iniciarAcompanhamentoPedido(pedido);
   saveSale(pedido);
   window.misticaMobileSync?.syncNow?.();
 }

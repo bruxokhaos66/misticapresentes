@@ -5,10 +5,12 @@
   "description": "Testes end-to-end (Playwright) do site publico da Mistica Presentes.",
   "scripts": {
     "test:e2e": "playwright test",
-    "test:lighthouse": "lhci autorun"
+    "test:lighthouse": "lhci autorun",
+    "build:site": "node scripts/minify-assets.mjs"
   },
   "devDependencies": {
     "@lhci/cli": "^0.15.1",
-    "@playwright/test": "^1.48.0"
+    "@playwright/test": "^1.48.0",
+    "esbuild": "^0.28.1"
   }
 }

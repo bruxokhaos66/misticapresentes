@@ -12,10 +12,13 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from backend.aluno_auth import router as aluno_router
+from backend.audio_table import migrar_musicas_blob_para_arquivo
 from backend.audit import registrar_auditoria
 from backend.backup_routes import router as backup_router
+from backend.campaign_routes import router as campaign_router
 from backend.course_routes import router as course_router
 from backend.database import conectar, executar, listar, obter
+from backend.logging_config import configurar_logging, get_logger
 from backend.order_status_routes import expirar_pedidos_pendentes, router as order_status_router
 from backend.panel_sessions import exigir_sessao_ou_chave_api
 from backend.payment_routes import router as payment_router
@@ -29,10 +32,14 @@ from backend.system_status_routes import router as system_status_router
 from config import hash_password_pbkdf2
 from database.migrations import init_db
 
+configurar_logging()
+logger = get_logger(__name__)
+
 
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    migrar_musicas_blob_para_arquivo()
     garantir_admin_api()
     tarefa_expiracao = asyncio.create_task(_expirar_pedidos_periodicamente())
     try:
@@ -97,6 +104,7 @@ app.include_router(backup_router)
 app.include_router(course_router)
 app.include_router(aluno_router)
 app.include_router(review_router)
+app.include_router(campaign_router)
 
 
 class ProdutoIn(BaseModel):
@@ -123,14 +131,17 @@ async def _expirar_pedidos_periodicamente():
             with conectar() as conn:
                 expirar_pedidos_pendentes(conn)
         except Exception as exc:
-            print(f"[API] Aviso: varredura de expiração de pedidos falhou: {exc}")
+            logger.warning("varredura de expiração de pedidos falhou", extra={"evento": "expiracao_pedidos", "erro": str(exc)})
         await asyncio.sleep(60)
 
 
 def garantir_admin_api():
     senha_admin = os.environ.get("MISTICA_ADMIN_PASSWORD", "").strip()
     if not senha_admin:
-        print("[API] MISTICA_ADMIN_PASSWORD não configurada; admin automático não será criado ou redefinido.")
+        logger.info(
+            "MISTICA_ADMIN_PASSWORD não configurada; admin automático não será criado ou redefinido.",
+            extra={"evento": "startup_aviso"},
+        )
         return
     salt = "mistica_api_admin"
     senha_hash = hash_password_pbkdf2(senha_admin, salt.encode("utf-8"))

@@ -4,7 +4,6 @@ import io
 import os
 import re
 import secrets
-import sqlite3
 import time
 from datetime import datetime
 from pathlib import Path
@@ -15,10 +14,11 @@ from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, Field
 
 from backend.api_security import validar_site_api_key as validar_chave_api
-from backend.database import conectar
 from backend.drive_storage import drive_configured, upload_bytes_to_drive
+from backend.logging_config import get_logger
 from backend.panel_sessions import exigir_sessao_ou_chave_api
-from config import DB_PATH
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["uploads"])
 
@@ -65,15 +65,11 @@ class AudioLinksIn(BaseModel):
 
 def log_tempo(etapa: str, inicio: float, detalhe: str = ""):
     duracao_ms = int((time.perf_counter() - inicio) * 1000)
-    sufixo = f" | {detalhe}" if detalhe else ""
-    print(f"[API][musicas] {etapa}: {duracao_ms}ms{sufixo}")
-
-
-def conectar_rapido(timeout: float = 0.08):
-    conn = sqlite3.connect(DB_PATH, timeout=timeout)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA query_only = ON")
-    return conn
+    logger.info(
+        "musicas %s",
+        etapa,
+        extra={"evento": "musicas", "etapa": etapa, "duracao_ms": duracao_ms, "detalhe": detalhe or None},
+    )
 
 
 def validar_site_api_key(chave_recebida: str | None):
@@ -118,38 +114,6 @@ def adicionar_link_audio_persistente(link: str):
     AUDIO_LINKS_FILE.write_text("\n".join(limpos), encoding="utf-8")
 
 
-def garantir_tabela_musicas_ambiente(conn):
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS site_musicas_ambiente (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            filename TEXT NOT NULL,
-            content_type TEXT NOT NULL,
-            size_bytes INTEGER NOT NULL,
-            dados BLOB NOT NULL,
-            criado_em TEXT NOT NULL
-        )
-        """
-    )
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_site_musicas_ambiente_criado ON site_musicas_ambiente(criado_em)")
-
-
-def salvar_musica_no_banco(nome: str, content_type: str, data: bytes, criado_em: str):
-    inicio = time.perf_counter()
-    try:
-        with conectar() as conn:
-            garantir_tabela_musicas_ambiente(conn)
-            conn.execute(
-                """
-                INSERT INTO site_musicas_ambiente (filename, content_type, size_bytes, dados, criado_em)
-                VALUES (?,?,?,?,?)
-                """,
-                (nome, content_type, len(data), data, criado_em),
-            )
-            conn.commit()
-        log_tempo("backup_banco_ok", inicio, nome)
-    except Exception as exc:
-        log_tempo("backup_banco_falhou", inicio, str(exc))
 
 
 FORMATOS_PIL_POR_TIPO = {"image/jpeg": "JPEG", "image/png": "PNG", "image/webp": "WEBP"}
@@ -244,23 +208,6 @@ def listar_musicas_arquivo_local(nomes_existentes: set[str]) -> list[dict]:
     return musicas
 
 
-def listar_musicas_banco_rapido() -> tuple[list[dict], set[str], str | None]:
-    musicas = []
-    nomes = set()
-    try:
-        conn = conectar_rapido(timeout=0.08)
-        try:
-            rows = conn.execute("SELECT id, filename, content_type, size_bytes, criado_em FROM site_musicas_ambiente ORDER BY id DESC LIMIT 30").fetchall()
-            for row in rows:
-                nomes.add(row["filename"])
-                musicas.append({"id": row["id"], "filename": row["filename"], "content_type": row["content_type"], "size_bytes": row["size_bytes"], "modificado_em": row["criado_em"], "url": f"/api/uploads/musicas/arquivo/{row['id']}", "armazenamento": "banco"})
-        finally:
-            conn.close()
-    except Exception as exc:
-        return musicas, nomes, str(exc)
-    return musicas, nomes, None
-
-
 @router.post("/uploads/produtos")
 async def upload_imagem_produto(arquivo: UploadFile = File(...), produto_id: str = "produto", sessao: dict = Depends(exigir_sessao_ou_chave_api())):
     content_type = arquivo.content_type or ""
@@ -316,7 +263,7 @@ async def upload_material_curso(background_tasks: BackgroundTasks, arquivo: Uplo
 
 
 @router.post("/uploads/musicas")
-async def upload_musica_ambiente(background_tasks: BackgroundTasks, arquivo: UploadFile = File(...), nome_base: str = "ambiente-xamanico", x_mistica_api_key: str | None = Header(default=None)):
+async def upload_musica_ambiente(arquivo: UploadFile = File(...), nome_base: str = "ambiente-xamanico", x_mistica_api_key: str | None = Header(default=None)):
     validar_site_api_key(x_mistica_api_key)
     ext = detectar_extensao_audio(arquivo)
     data = await arquivo.read()
@@ -346,10 +293,9 @@ async def upload_musica_ambiente(background_tasks: BackgroundTasks, arquivo: Upl
 
     destino = AUDIO_DIR / nome
     destino.write_bytes(data)
-    background_tasks.add_task(salvar_musica_no_banco, nome, content_type, data, criado_em)
     _MUSICAS_CACHE["at"] = 0.0
     _MUSICAS_CACHE["data"] = None
-    return {"ok": True, "filename": nome, "content_type": content_type, "size_bytes": len(data), "url": f"/api/uploads/musicas/arquivo-local/{nome}", "data_hora": criado_em, "armazenamento": "arquivo+backup_banco"}
+    return {"ok": True, "filename": nome, "content_type": content_type, "size_bytes": len(data), "url": f"/api/uploads/musicas/arquivo-local/{nome}", "data_hora": criado_em, "armazenamento": "arquivo"}
 
 
 @router.get("/uploads/musicas")
@@ -359,11 +305,10 @@ def listar_musicas_ambiente():
     cache_data = _MUSICAS_CACHE.get("data")
     if cache_data and agora - float(_MUSICAS_CACHE.get("at") or 0) < 20:
         return cache_data
-    musicas_banco, nomes_banco, erro_banco = listar_musicas_banco_rapido()
-    musicas_arquivos = listar_musicas_arquivo_local(nomes_banco)
+    musicas_arquivos = listar_musicas_arquivo_local(set())
     musicas_links = listar_musicas_links()
-    musicas = (musicas_links + musicas_arquivos + musicas_banco)[:30]
-    resposta = {"ok": True, "musicas": musicas, "total": len(musicas), "fonte": "drive+arquivo+banco_rapido", "banco_erro": erro_banco, "data_hora": datetime.now().isoformat(timespec="seconds")}
+    musicas = (musicas_links + musicas_arquivos)[:30]
+    resposta = {"ok": True, "musicas": musicas, "total": len(musicas), "fonte": "drive+arquivo", "data_hora": datetime.now().isoformat(timespec="seconds")}
     _MUSICAS_CACHE["at"] = agora
     _MUSICAS_CACHE["data"] = resposta
     log_tempo("fim_resposta", inicio, f"total={len(musicas)}")
@@ -379,16 +324,6 @@ def obter_musica_local_ambiente(filename: str):
     if not arquivo.exists() or not arquivo.is_file():
         raise HTTPException(status_code=404, detail="Música não encontrada.")
     return Response(content=arquivo.read_bytes(), media_type=media_type_por_nome(nome), headers={"Accept-Ranges": "bytes", "Cache-Control": "public, max-age=3600", "Content-Disposition": f"inline; filename={nome}"})
-
-
-@router.get("/uploads/musicas/arquivo/{musica_id}")
-def obter_musica_ambiente(musica_id: int):
-    with conectar() as conn:
-        garantir_tabela_musicas_ambiente(conn)
-        row = conn.execute("SELECT filename, content_type, dados FROM site_musicas_ambiente WHERE id=?", (musica_id,)).fetchone()
-    if not row:
-        raise HTTPException(status_code=404, detail="Música não encontrada.")
-    return Response(content=row["dados"], media_type=row["content_type"], headers={"Accept-Ranges": "bytes", "Cache-Control": "public, max-age=3600", "Content-Disposition": f"inline; filename={row['filename']}"})
 
 
 @router.get("/uploads/musicas/links")

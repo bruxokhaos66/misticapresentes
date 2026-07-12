@@ -12,8 +12,11 @@ from pydantic import BaseModel, Field
 from backend.audit import registrar_auditoria
 from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.database import conectar
+from backend.logging_config import get_logger
 from backend.panel_sessions import exigir_sessao_ou_chave_api
 from backend.rate_limit import limitar_requisicoes
+
+logger = get_logger(__name__)
 
 limitar_status_pedido = limitar_requisicoes("status_pedido", limite=20, janela_segundos=60)
 limitar_cancelar_pedido = limitar_requisicoes("cancelar_pedido", limite=20, janela_segundos=60)
@@ -523,4 +526,4 @@ try:
     from backend.order_api_guard_inner_routes import router as order_api_guard_inner_router
     router.include_router(order_api_guard_inner_router)
 except Exception as exc:
-    print(f"[API] Aviso: rotas seguras de pedido não carregadas: {exc}")
+    logger.warning("rotas seguras de pedido não carregadas", extra={"evento": "startup_aviso", "erro": str(exc)})

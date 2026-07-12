@@ -49,22 +49,16 @@ jobs:
       - name: Exibir versão publicada
         run: cat deploy-version.txt
 
-      - name: Remover código-fonte não público antes de publicar
-        shell: bash
-        run: |
-          set -euo pipefail
-          # O checkout inclui backend, app desktop e ferramentas internas que
-          # nunca devem ir para o artefato público do GitHub Pages. Note que
-          # updates/, app-update.json e mistica-painel-config.json ficam de
-          # fora desta lista de propósito: o app desktop os busca via HTTP no
-          # domínio público.
-          rm -rf .git .github api backend cloud_server database docs installer \
-            isis mobile_android reports repositories screens services scripts tools tests
-          find . -maxdepth 1 -type f \( -name '*.py' -o -name '*.bat' \) -delete
-          rm -f .env.example .gitignore .lighthouserc.json .secrets.baseline \
-            CHECKLIST_V2.md README.md STATUS_ATUAL.md render.yaml \
-            requirements.txt requirements-win7-32.txt requirements-win7-x86.txt \
-            requirements-windows7.txt package.json package-lock.json playwright.config.js
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Instalar dependências de build
+        run: npm install --no-save esbuild
+
+      - name: Minificar CSS e JS do site
+        run: node scripts/minify-assets.mjs
 
       - name: Configurar GitHub Pages
         uses: actions/configure-pages@v5
@@ -72,7 +66,7 @@ jobs:
       - name: Preparar artefato estático
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: dist-site
 
   publicar:
     environment:

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Request, 
 from pydantic import BaseModel, Field
 
 from backend.database import conectar, listar
+from backend.logging_config import get_logger
 from backend.panel_sessions import (
     criar_sessao,
     encerrar_sessao,
@@ -15,6 +16,8 @@ from backend.panel_sessions import (
 )
 from backend.rate_limit import limitar_requisicoes
 from config import hash_password_pbkdf2
+
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -70,10 +73,7 @@ class VendasLotePayload(BaseModel):
 
 
 def _log_auth(tag, detalhe):
-    try:
-        print(f"[{tag}] {datetime.now().isoformat(timespec='seconds')} - {detalhe}")
-    except Exception:
-        pass
+    logger.info(detalhe, extra={"evento": "autenticacao", "tag": tag})
 
 
 def _normalizar_login(login):

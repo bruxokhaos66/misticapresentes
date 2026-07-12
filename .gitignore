@@ -34,6 +34,7 @@ Mística_Erros/
 # Build / executaveis
 build/
 dist/
+dist-site/
 *.spec
 
 # IDE / sistema operacional

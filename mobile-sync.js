@@ -199,9 +199,15 @@
     if (!resposta || !resposta.id || !resposta.pix_copia_cola) {
       throw new Error("O servidor não retornou um Pix válido para este pedido.");
     }
-    return { id: resposta.id, pixTxid: resposta.pix_txid || null, pixPayload: resposta.pix_copia_cola, dataIso };
+    return { id: resposta.id, pixTxid: resposta.pix_txid || null, pixPayload: resposta.pix_copia_cola, dataIso, expiraEm: resposta.expira_em || null };
   }
   window.misticaCriarPedido = criarPedidoNoServidor;
+
+  async function consultarStatusPedido(pedidoId) {
+    const resposta = await api(`/api/pedidos/${encodeURIComponent(pedidoId)}/status`, { method: "GET" });
+    return { status: resposta.status_atual, estoqueBaixado: Boolean(resposta.estoque_baixado) };
+  }
+  window.misticaConsultarStatusPedido = consultarStatusPedido;
 
   function textoNormalizado(value) {
     return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();

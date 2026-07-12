@@ -15,10 +15,13 @@ from backend.audit import registrar_auditoria
 from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.database import conectar, listar
 from backend.idempotency import resposta_idempotente_existente, salvar_resposta_idempotente
+from backend.logging_config import get_logger
 from backend.order_status_routes import MINUTOS_EXPIRACAO_PEDIDO_PENDENTE, STATUS_PEDIDO
 from backend.pix import gerar_pix_do_pedido
 from backend.rate_limit import _client_ip, limitar_requisicoes
 from config import DB_PATH
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["site-estoque"])
 
@@ -82,8 +85,11 @@ class PlaylistAmbienteIn(BaseModel):
 
 def log_playlist(etapa: str, inicio: float, detalhe: str = ""):
     duracao_ms = int((time.perf_counter() - inicio) * 1000)
-    sufixo = f" | {detalhe}" if detalhe else ""
-    print(f"[API][playlist-ambiente] {etapa}: {duracao_ms}ms{sufixo}")
+    logger.info(
+        "playlist-ambiente %s",
+        etapa,
+        extra={"evento": "playlist_ambiente", "etapa": etapa, "duracao_ms": duracao_ms, "detalhe": detalhe or None},
+    )
 
 
 def conectar_rapido(timeout: float = 0.35):
