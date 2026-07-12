@@ -36,6 +36,12 @@ body::before {
   opacity: .34;
   background-image: radial-gradient(circle, rgba(242,201,109,.45) 0 1px, transparent 1.3px);
   background-size: 90px 90px;
+  /* position:fixed + z-index negativo faz o Safari/WebKit repintar essa
+     camada de forma instável durante o scroll (e às vezes na primeira
+     pintura da página), piscando visivelmente. Forçar uma camada de
+     composição própria via GPU resolve sem mudar a aparência. */
+  transform: translateZ(0);
+  will-change: transform;
 }
 a { color: inherit; text-decoration: none; }
 button, input, textarea { font: inherit; }
