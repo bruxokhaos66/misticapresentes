@@ -17,6 +17,7 @@ from backend.database import conectar, listar
 from backend.idempotency import resposta_idempotente_existente, salvar_resposta_idempotente
 from backend.logging_config import get_logger
 from backend.order_status_routes import MINUTOS_EXPIRACAO_PEDIDO_PENDENTE, STATUS_PEDIDO
+from backend.panel_sessions import exigir_sessao_ou_chave_api
 from backend.pix import gerar_pix_do_pedido
 from backend.rate_limit import _client_ip, limitar_requisicoes
 from config import DB_PATH
@@ -537,7 +538,7 @@ def registrar_acesso_site(payload: AcessoSiteIn, x_mistica_api_key: str | None =
 
 
 @router.get("/site/acessos/resumo")
-def resumo_acessos_site():
+def resumo_acessos_site(sessao: dict = Depends(exigir_sessao_ou_chave_api())):
     hoje = datetime.now().strftime("%Y-%m-%d")
     with conectar() as conn:
         garantir_tabela_acessos_site(conn)
