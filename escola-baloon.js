@@ -38,10 +38,12 @@
       setTimeout(() => baloon.remove(), 500);
     });
 
+    const particulas = montarParticulas();
+
     const emblema = document.createElement("div");
     emblema.className = "escola-baloon-emblem";
     emblema.setAttribute("aria-hidden", "true");
-    emblema.textContent = "☾";
+    emblema.textContent = "🔥";
 
     const corpo = document.createElement("div");
     corpo.className = "escola-baloon-body";
@@ -61,13 +63,14 @@
     const cta = document.createElement("a");
     cta.className = "escola-baloon-cta";
     cta.href = "/escola.html";
-    cta.textContent = "🍃 Ver cursos";
+    cta.textContent = "🔥 Ver cursos";
 
     corpo.appendChild(eyebrow);
     corpo.appendChild(titulo);
     corpo.appendChild(texto);
     corpo.appendChild(cta);
 
+    baloon.appendChild(particulas);
     baloon.appendChild(fechar);
     baloon.appendChild(emblema);
     baloon.appendChild(corpo);
@@ -75,10 +78,49 @@
     return baloon;
   }
 
+  function montarParticulas() {
+    const container = document.createElement("div");
+    container.className = "escola-baloon-particles";
+    container.setAttribute("aria-hidden", "true");
+
+    for (let i = 0; i < 9; i += 1) {
+      const spark = document.createElement("span");
+      spark.className = "escola-baloon-spark";
+      const esquerda = 10 + Math.random() * 80;
+      const deriva = (Math.random() - 0.5) * 30;
+      const duracao = 1.6 + Math.random() * 1.4;
+      const atraso = Math.random() * 2.5;
+      spark.style.left = `${esquerda}%`;
+      spark.style.setProperty("--drift", `${deriva}px`);
+      spark.style.animationDuration = `${duracao}s`;
+      spark.style.animationDelay = `${atraso}s`;
+      container.appendChild(spark);
+    }
+
+    for (let i = 0; i < 5; i += 1) {
+      const cinza = document.createElement("span");
+      cinza.className = "escola-baloon-ash";
+      const esquerda = 15 + Math.random() * 70;
+      const deriva = (Math.random() - 0.5) * 24;
+      const tamanho = 3 + Math.random() * 4;
+      const duracao = 2.6 + Math.random() * 1.8;
+      const atraso = Math.random() * 3;
+      cinza.style.left = `${esquerda}%`;
+      cinza.style.width = `${tamanho}px`;
+      cinza.style.height = `${tamanho}px`;
+      cinza.style.setProperty("--drift", `${deriva}px`);
+      cinza.style.animationDuration = `${duracao}s`;
+      cinza.style.animationDelay = `${atraso}s`;
+      container.appendChild(cinza);
+    }
+
+    return container;
+  }
+
   function reposicionar(baloon) {
     const consentBanner = document.getElementById("consentBanner");
     const espacoExtra = consentBanner ? consentBanner.offsetHeight + 12 : 0;
-    baloon.style.bottom = `${18 + espacoExtra}px`;
+    baloon.style.bottom = `${96 + espacoExtra}px`;
   }
 
   function iniciar() {
