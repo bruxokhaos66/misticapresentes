@@ -234,6 +234,18 @@ def health():
     }
 
 
+@app.api_route("/api/version", methods=["GET", "HEAD"])
+def versao():
+    # Público como /api/health: só a versão declarada em app.version (única
+    # fonte, ver FastAPI(...) acima) -- dá visibilidade rápida de qual build
+    # está de fato no ar em cada ambiente (produção, staging, local) sem
+    # expor nada sensível.
+    return {
+        "app": "Mística Presentes",
+        "version": app.version,
+    }
+
+
 @app.get("/api/painel/resumo")
 def painel_resumo(sessao: dict = Depends(exigir_sessao_ou_chave_api())):
     total_produtos = obter("SELECT COUNT(*) AS total FROM produtos WHERE COALESCE(ativo,1)=1") or {"total": 0}
