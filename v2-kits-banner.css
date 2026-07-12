@@ -6,10 +6,14 @@
 
 .kits-banner {
   position: relative;
-  overflow: hidden;
+  /* overflow visível para a imagem da mulher "sair um pouco fora da caixa"
+     (bleed no topo e à direita). O véu e o conteúdo continuam contidos pelo
+     border-radius do próprio elemento. Em telas menores volta a overflow
+     hidden (ver media queries) para não arriscar rolagem horizontal. */
+  overflow: visible;
   border: 1px solid rgba(242, 201, 109, .3);
   border-radius: var(--radius);
-  min-height: clamp(480px, 52vw, 620px);
+  min-height: clamp(520px, 56vw, 700px);
   display: flex;
   align-items: center;
   background: #0a0906;
@@ -17,28 +21,33 @@
   isolation: isolate;
 }
 
-/* Imagem xamânica ancorada à direita */
+/* Imagem xamânica ancorada à direita, transbordando levemente a caixa (topo e
+   direita) para destacar a mulher. Mais clara/visível que antes. */
 .kits-banner::before {
   content: "";
   position: absolute;
-  inset: 0;
+  inset: -26px -30px -14px 0;
   z-index: -2;
+  border-radius: var(--radius);
   background-image: url("assets/xamanicaintencao.webp");
   background-size: cover;
-  background-position: 68% 20%;
-  filter: saturate(1.04) brightness(.92);
+  background-position: 68% 18%;
+  filter: saturate(1.06) brightness(1.14) contrast(1.02);
 }
 
-/* Véu escuro que abre espaço para o texto à esquerda */
+/* Véu escuro que abre espaço para o texto à esquerda. Mantém o lado esquerdo
+   bem escuro (legibilidade do texto) e alivia bastante o lado direito para a
+   mulher aparecer mais. Contido no formato arredondado da caixa. */
 .kits-banner::after {
   content: "";
   position: absolute;
   inset: 0;
   z-index: -1;
+  border-radius: var(--radius);
   background:
-    linear-gradient(90deg, rgba(7, 6, 3, .96) 0%, rgba(7, 6, 3, .9) 34%, rgba(7, 6, 3, .55) 58%, rgba(7, 6, 3, .18) 82%, rgba(7, 6, 3, .3) 100%),
-    linear-gradient(0deg, rgba(7, 6, 3, .82) 0%, transparent 34%),
-    linear-gradient(180deg, rgba(7, 6, 3, .5) 0%, transparent 22%);
+    linear-gradient(90deg, rgba(7, 6, 3, .95) 0%, rgba(7, 6, 3, .86) 32%, rgba(7, 6, 3, .42) 56%, rgba(7, 6, 3, .08) 80%, rgba(7, 6, 3, 0) 100%),
+    linear-gradient(0deg, rgba(7, 6, 3, .7) 0%, transparent 30%),
+    linear-gradient(180deg, rgba(7, 6, 3, .42) 0%, transparent 20%);
 }
 
 .kits-banner-content {
@@ -176,9 +185,16 @@
 }
 
 /* -------- responsivo -------- */
+@media (max-width: 1024px) {
+  /* Sem bleed em telas menores: a imagem volta para dentro da caixa para não
+     arriscar rolagem horizontal nem cortar a mulher de forma estranha. */
+  .kits-banner { overflow: hidden; }
+  .kits-banner::before { inset: 0; }
+}
+
 @media (max-width: 900px) {
   .kits-banner { min-height: 0; }
-  .kits-banner::before { background-position: 66% 18%; }
+  .kits-banner::before { background-position: 66% 18%; filter: saturate(1.06) brightness(1.06); }
   .kits-banner::after {
     background:
       linear-gradient(90deg, rgba(7, 6, 3, .93) 0%, rgba(7, 6, 3, .82) 46%, rgba(7, 6, 3, .45) 100%),
