@@ -11,7 +11,10 @@ const seedCourseMaterials = [
 ];
 
 (() => {
-  const COURSE_API_BASE = "https://misticapresentes-api.onrender.com";
+  // Fonte única da URL da API: site-config.js (window.misticaSiteConfig).
+  const COURSE_API_BASE = String(
+    (window.misticaSiteConfig || {}).apiBaseUrl || "https://api.misticaesotericos.com.br"
+  ).replace(/\/$/, "");
   const COURSE_CACHE_KEY = "misticaCourseMaterialsCache";
 
   let courseMaterials = [];

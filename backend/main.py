@@ -38,9 +38,38 @@ configurar_logging()
 logger = get_logger(__name__)
 
 
+def _verificar_persistencia_banco() -> None:
+    """Registra no startup se o banco está num caminho persistente ou efêmero.
+
+    Serve para confirmar objetivamente, nos logs do Render, o item mais crítico
+    da auditoria: no plano Free (sem Persistent Disk) o SQLite volta vazio a
+    cada redeploy/sleep. Se MISTICA_DB_PATH não estiver configurada apontando
+    para um disco montado (ex.: /data), este aviso alto sinaliza o risco.
+    """
+    from config import DB_PATH
+
+    db_path = str(DB_PATH)
+    env_configurada = bool(
+        os.environ.get("MISTICA_DB_PATH", "").strip() or os.environ.get("DATABASE_PATH", "").strip()
+    )
+    parece_persistente = env_configurada and db_path.startswith(("/data", "/var/data", "/mnt"))
+    if parece_persistente:
+        logger.info(
+            "banco em caminho persistente",
+            extra={"evento": "startup_persistencia", "persistente": True, "db_dir": os.path.dirname(db_path)},
+        )
+    else:
+        logger.warning(
+            "ATENCAO: banco pode estar em disco EFEMERO (dados podem ser perdidos em redeploy/sleep). "
+            "Configure MISTICA_DB_PATH para um Persistent Disk (ex.: /data/mistica_gestao_v20.db).",
+            extra={"evento": "startup_persistencia", "persistente": False, "db_dir": os.path.dirname(db_path)},
+        )
+
+
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    _verificar_persistencia_banco()
     migrar_musicas_blob_para_arquivo()
     garantir_admin_api()
     tarefa_expiracao = asyncio.create_task(_expirar_pedidos_periodicamente())
@@ -90,6 +119,26 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["Content-Type", "X-Mistica-Api-Key", "X-Mistica-Sync-Key", "Idempotency-Key"],
 )
+
+
+@app.middleware("http")
+async def cabecalhos_seguranca(request, call_next):
+    """Defesa em profundidade: adiciona cabeçalhos de segurança a todas as
+    respostas da API. As respostas são JSON/arquivos (não HTML de app), então
+    estes headers têm baixo risco de quebrar o front e melhoram a postura de
+    segurança (sniffing, clickjacking, vazamento de referer). HSTS só é
+    enviado sob HTTPS, para não atrapalhar desenvolvimento local em HTTP."""
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    # cross-origin (não same-site): a API serve imagens de produto, áudio de
+    # ambiente e prévias públicas que o site carrega legitimamente de outra
+    # origem; same-site bloquearia esse carregamento.
+    response.headers.setdefault("Cross-Origin-Resource-Policy", "cross-origin")
+    if request.url.scheme == "https":
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    return response
 
 UPLOADS_DIR = Path(__file__).resolve().parent / "uploads"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)

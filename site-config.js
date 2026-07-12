@@ -5,7 +5,7 @@ window.misticaSiteConfig = {
   serverMode: "production",
   usePublicDomainAccess: true,
   storageMode: "api_first",
-  instagram: "@misticaprodutos",
+  instagram: "@misticaeso",
   whatsappNumber: "554999172137",
   whatsappDisplay: "(49) 99917-2137",
   headerTitle: "Mística Presentes",

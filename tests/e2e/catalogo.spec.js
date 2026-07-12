@@ -65,4 +65,14 @@ test.describe("Página individual de produto", () => {
     await page.goto("/produto.html?id=produto-que-nao-existe");
     await expect(page.getByText("Não encontramos este produto.")).toBeVisible();
   });
+
+  test("adiciona ao carrinho pela página de produto e mostra o carrinho flutuante", async ({ page }) => {
+    await page.goto("/produto.html?id=pedra-energetica");
+    const floatingCart = page.locator(".floating-cart");
+    await expect(floatingCart).not.toHaveClass(/has-items/);
+    await page.locator("#addProductToCart").click();
+    await expect(floatingCart).toHaveClass(/has-items/);
+    await expect(page.locator(".floating-cart-count")).toHaveText("1");
+    await expect(page.locator("#addProductFeedback")).toBeVisible();
+  });
 });

@@ -16,6 +16,17 @@
   // que reaproveitam esta mesma lista para não duplicar as categorias.
   window.misticaIntents = INTENTS;
 
+  // Cursos da Escola Mística: a Isis também guia para os estudos quando o
+  // visitante demonstra interesse em aprender (atendimento + retenção). Mantém
+  // sincronia com o catálogo de escola.js (mesmos slugs).
+  const CURSOS = [
+    { slug: "xamanismo-introducao", titulo: "Xamanismo: Introdução", keywords: ["xaman", "aprender", "estudar", "curso", "iniciante"] },
+    { slug: "rape-uso-tradicao", titulo: "Rapé: Uso e Tradição", keywords: ["rape", "rapé", "medicina", "tradic"] },
+    { slug: "ayahuasca-fundamentos", titulo: "Ayahuasca: Fundamentos", keywords: ["ayahuasca", "daime", "cha", "chá"] },
+    { slug: "origem-universo-dias-atuais", titulo: "Origem do Universo até os Dias Atuais", keywords: ["universo", "cosmos", "astronomia", "ciencia", "ciência", "estrela"] },
+  ];
+  const PALAVRAS_ESTUDO = ["curso", "aula", "aprender", "estudar", "estudo", "formacao", "formação", "escola"];
+
   function normalize(value) {
     return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   }
@@ -111,13 +122,30 @@
     return `<p class="isis-followup-label">Buscar por outra intenção:</p><div class="isis-followup-chips">${chips}</div>`;
   }
 
+  function detectCursos(text) {
+    const norm = normalize(text);
+    const querEstudar = PALAVRAS_ESTUDO.some(p => norm.includes(normalize(p)));
+    const porTema = CURSOS.filter(curso => curso.keywords.some(k => norm.includes(normalize(k))));
+    if (porTema.length) return porTema;
+    return querEstudar ? CURSOS : [];
+  }
+
+  function renderCursosHtml(cursos) {
+    if (!cursos.length) return "";
+    const items = cursos.slice(0, 3).map(curso =>
+      `<li><a class="btn btn-ghost btn-small" href="escola.html#${encodeURIComponent(curso.slug)}">🎓 ${escapeHtml(curso.titulo)}</a></li>`
+    ).join("");
+    return `<p class="isis-followup-label">Quer aprender sobre isso? Na Escola Mística:</p><ul class="isis-recommend-list">${items}</ul>`;
+  }
+
   function handleMessage(text) {
     if (!text || !text.trim()) return;
     appendUser(text);
     const intent = detectIntent(text);
     const terms = intent ? intent.terms : normalize(text).split(/\s+/).filter(word => word.length > 2);
     const found = searchProducts(terms);
-    appendBotHtml(renderRecommendations(found, intent));
+    const cursos = detectCursos(text);
+    appendBotHtml(renderRecommendations(found, intent) + renderCursosHtml(cursos));
   }
 
   function handleIntent(intentId) {

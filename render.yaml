@@ -2,10 +2,24 @@ services:
   - type: web
     name: misticapresentes-api
     env: python
-    plan: free
+    # IMPORTANTE: Persistent Disk exige plano pago (Starter ou superior). No
+    # plano Free o filesystem é EFÊMERO e o SQLite volta vazio a cada
+    # redeploy/sleep/reinício, perdendo pedidos, alunos, liberação de cursos,
+    # avaliações e campanhas. Mantenha 'starter' (ou superior) para que o
+    # disco abaixo seja provisionado e os dados persistam.
+    plan: starter
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
     autoDeploy: true
     envVars:
       - key: APP_ENV
         value: production
+      # O banco vive no disco persistente montado em /data (ver 'disk' abaixo).
+      # config.py::carregar_db_path lê MISTICA_DB_PATH; sem esta variável o
+      # padrão cai em ~/Documents (efêmero no Render).
+      - key: MISTICA_DB_PATH
+        value: /data/mistica_gestao_v20.db
+    disk:
+      name: mistica-dados
+      mountPath: /data
+      sizeGB: 1

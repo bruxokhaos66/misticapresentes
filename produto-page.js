@@ -120,6 +120,9 @@
     const images = productImages(product);
     const stock = available(product);
     const related = relatedProducts(product);
+    // Mesmo saneamento de id usado por safeId() em app.js, para que o input
+    // de quantidade case com o que addToCart() procura (qty-<id>).
+    const cartId = String(product.id).replace(/[^a-zA-Z0-9_-]/g, "");
     document.title = `${product.name} | Mística Presentes`;
 
     const badgeText = String(product.selo || product.tag || "");
@@ -146,12 +149,17 @@
           <p>${product.description || "Produto especial selecionado pela Mística Presentes."}</p>
           <strong class="product-price">${money(product.price)}</strong>
           <span class="stock-badge ${stock <= storeConfig.minStock ? "stock-low" : ""}">${stock > 0 ? `Estoque: ${stock}` : "Sob encomenda"}</span>
-          <div class="product-page-actions">
-            <a class="btn" href="${whatsappUrl(product)}" target="_blank" rel="noopener" id="buyProductWhatsapp">Comprar pelo WhatsApp</a>
-            <button class="btn btn-ghost" type="button" id="copyProductLink">Copiar link</button>
-            <a class="btn btn-ghost" href="index.html#produtos">Voltar à vitrine</a>
+          <div class="product-page-buy">
+            <input id="qty-${cartId}" class="product-page-qty" type="number" min="1" max="${Math.max(stock, 1)}" step="1" value="1" aria-label="Quantidade de ${product.name}" ${stock <= 0 ? "disabled" : ""}>
+            <button class="btn" type="button" id="addProductToCart" ${stock <= 0 ? "disabled" : ""}>${stock > 0 ? "Adicionar ao carrinho" : "Sob encomenda"}</button>
           </div>
-          <small class="privacy-note">Confira disponibilidade, valor e prazo de entrega pelo WhatsApp antes de finalizar.</small>
+          <p class="product-page-buy-feedback" id="addProductFeedback" role="status" hidden></p>
+          <div class="product-page-actions">
+            <a class="btn btn-ghost" href="${whatsappUrl(product)}" target="_blank" rel="noopener" id="buyProductWhatsapp">Comprar pelo WhatsApp</a>
+            <a class="btn btn-ghost" href="#checkout-jump" id="goToCartFromProduct">Ir para o carrinho</a>
+            <button class="btn btn-ghost" type="button" id="copyProductLink">Copiar link</button>
+          </div>
+          <small class="privacy-note">Adicione ao carrinho e finalize com Pix ou WhatsApp. Confira disponibilidade e prazo de entrega antes de pagar.</small>
         </div>
       </article>
     `;
@@ -159,6 +167,29 @@
     window.misticaTrack?.("view_item", { currency: "BRL", value: product.price, items: [{ item_id: product.id, item_name: product.name, price: product.price }] });
     document.getElementById("buyProductWhatsapp")?.addEventListener("click", () => {
       window.misticaTrack?.("contact_whatsapp", { method: "produto_pagina", item_id: product.id, item_name: product.name });
+    });
+
+    const addButton = document.getElementById("addProductToCart");
+    const feedback = document.getElementById("addProductFeedback");
+    addButton?.addEventListener("click", () => {
+      if (typeof window.addToCart !== "function") {
+        if (feedback) { feedback.hidden = false; feedback.textContent = "Carregando a loja, tente novamente em instantes."; }
+        return;
+      }
+      const antes = typeof getTotal === "function" ? getTotal() : 0;
+      window.addToCart(product.id);
+      const depois = typeof getTotal === "function" ? getTotal() : 0;
+      if (feedback) {
+        feedback.hidden = false;
+        feedback.textContent = depois > antes
+          ? "Produto adicionado ao carrinho. Toque em “Ir para o carrinho” para finalizar."
+          : "Não foi possível adicionar (confira o estoque disponível).";
+      }
+    });
+
+    document.getElementById("goToCartFromProduct")?.addEventListener("click", event => {
+      event.preventDefault();
+      window.location.href = "index.html#checkout";
     });
 
     const copy = document.getElementById("copyProductLink");
@@ -208,5 +239,18 @@
     else renderProduct(product);
   }
 
-  window.addEventListener("load", () => setTimeout(init, 400));
+  // Renderiza o quanto antes (sem atraso artificial) para reduzir CLS/LCP; o
+  // espaço já é reservado no CSS (.product-page-shell / .product-page-photo).
+  // Um único re-render tardio capta o catálogo sincronizado pela API
+  // (mobile-sync.js) sem provocar novo salto de layout, pois o espaço é fixo.
+  function boot() {
+    init();
+    window.setTimeout(init, 1500);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot, { once: true });
+  } else {
+    boot();
+  }
 })();

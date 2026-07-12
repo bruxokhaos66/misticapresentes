@@ -147,7 +147,7 @@
         areaServed: "BR",
         availableLanguage: ["Portuguese"],
       },
-      sameAs: ["https://www.instagram.com/misticaprodutos"],
+      sameAs: ["https://www.instagram.com/misticaeso"],
       areaServed: [
         "Pinhalzinho, Santa Catarina, Brasil",
         "Oeste de Santa Catarina",
