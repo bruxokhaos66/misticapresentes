@@ -88,10 +88,48 @@
   border-radius: 999px;
 }
 
+.product-page-buy {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+  margin: 6px 0 4px;
+}
+
+.product-page-qty {
+  width: 88px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  padding: 12px;
+  font-size: 1rem;
+  text-align: center;
+}
+
+.product-page-buy .btn {
+  flex: 1;
+}
+
+.product-page-buy-feedback {
+  margin: 2px 0 8px;
+  color: var(--gold-strong);
+  font-weight: 600;
+}
+
 .product-page-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+}
+
+/* Carrinho flutuante com contador (mesmo componente da home) */
+.floating-cart { position: fixed; right: 16px; bottom: 84px; z-index: 90; display: none; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 999px; background: linear-gradient(135deg, var(--gold, #f0c56a), var(--gold-strong, #d9a441)); color: #1a1206; box-shadow: 0 12px 30px rgba(0,0,0,.35); text-decoration: none; }
+.floating-cart.has-items { display: inline-flex; }
+.floating-cart-icon { font-size: 1.35rem; }
+.floating-cart-count { position: absolute; top: -4px; right: -4px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: #7a1f1f; color: #fff; font: 800 12px/22px Inter, Arial, sans-serif; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,.3); }
+
+@media (max-width: 520px) {
+  .product-page-qty { width: 72px; }
 }
 
 /* Confiança e localização */

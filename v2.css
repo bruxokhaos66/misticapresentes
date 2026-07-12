@@ -126,6 +126,22 @@ label { display: grid; gap: 7px; color: var(--muted); font-weight: 750; }
 .cart-item, .stock-item { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
 .cart-item span, .history-item span, .stock-item span { color: var(--muted); }
 .cart-remove { border: 1px solid rgba(242,201,109,.22); border-radius: 999px; padding: 8px 10px; color: var(--gold-2); background: transparent; cursor: pointer; }
+/* Carrinho flutuante com contador */
+.floating-cart { position: fixed; right: 16px; bottom: 84px; z-index: 90; display: none; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 999px; background: linear-gradient(135deg, var(--gold), var(--gold-2)); color: #1a1206; box-shadow: 0 12px 30px rgba(0,0,0,.35); text-decoration: none; }
+.floating-cart.has-items { display: inline-flex; }
+.floating-cart-icon { font-size: 1.35rem; }
+.floating-cart-count { position: absolute; top: -4px; right: -4px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: #7a1f1f; color: #fff; font: 800 12px/22px Inter, Arial, sans-serif; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,.3); }
+
+/* Cross-sell no carrinho */
+.cross-sell { grid-column: 1 / -1; margin-top: 8px; padding-top: 18px; border-top: 1px solid var(--line); }
+.cross-sell h3 { margin: 4px 0 14px; }
+.cross-sell-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.cross-sell-card { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; padding: 14px; border: 1px solid rgba(242,201,109,.18); border-radius: 16px; background: rgba(0,0,0,.18); }
+.cross-sell-card span { font-size: 1.5rem; }
+.cross-sell-card strong { font-size: .98rem; }
+.cross-sell-card small { color: var(--gold-2); font-weight: 700; }
+.cross-sell-card .btn { margin-top: auto; }
+
 .coupon-row { margin: 14px 0 4px; display: grid; gap: 8px; }
 .coupon-row label { color: var(--muted); font-weight: 600; font-size: .92rem; }
 .coupon-input-row { display: flex; gap: 8px; flex-wrap: wrap; }

@@ -70,6 +70,30 @@ function buildWhatsappUrl(message) { return `https://wa.me/${storeConfig.whatsap
 function setupConfig() { if (pixKeyInput) pixKeyInput.value = "Gerada pelo servidor ao confirmar o pedido"; if (merchantNameInput) merchantNameInput.value = "Confira o nome no Pix copia e cola abaixo"; if (merchantCityInput) merchantCityInput.value = "Pinhalzinho-SC"; $$('[data-whatsapp-link]').forEach(link => { link.href = buildWhatsappUrl("Olá, vim pelo site da Mística Presentes e gostaria de atendimento."); }); const warnings = []; if (storeConfig.whatsappNumber === PLACEHOLDER_WHATSAPP) warnings.push("WhatsApp ainda está com número de exemplo."); if (warnings.length && publishWarning) { publishWarning.hidden = false; publishWarning.innerHTML = `<strong>Atenção:</strong> ${warnings.join(" ")}`; } }
 function setupFloatingWhatsapp() { if (document.querySelector(".floating-whatsapp")) return; const link = document.createElement("a"); link.className = "floating-whatsapp"; link.href = buildWhatsappUrl("Olá, vim pelo site da Mística Presentes e gostaria de atendimento."); link.target = "_blank"; link.rel = "noopener"; link.setAttribute("aria-label", "Chamar Mística Presentes no WhatsApp"); link.textContent = "☘ WhatsApp"; document.body.appendChild(link); }
 
+// Carrinho flutuante com contador de itens, presente em todas as páginas. Dá
+// visibilidade constante ao carrinho (reduz abandono) e leva direto ao
+// checkout. Em páginas que não são a home, aponta para index.html#checkout.
+function cartItemCount() { return cart.reduce((sum, item) => sum + Number(item.qty || 0), 0); }
+function checkoutHref() { const onIndex = /(^|\/)(index\.html)?$/.test(window.location.pathname); return onIndex ? "#checkout" : "index.html#checkout"; }
+function setupFloatingCart() {
+  if (document.querySelector(".floating-cart")) return;
+  const link = document.createElement("a");
+  link.className = "floating-cart";
+  link.href = checkoutHref();
+  link.setAttribute("aria-label", "Abrir carrinho");
+  link.innerHTML = `<span class="floating-cart-icon" aria-hidden="true">🛒</span><span class="floating-cart-count" data-cart-count>0</span>`;
+  document.body.appendChild(link);
+  updateCartCount();
+}
+function updateCartCount() {
+  const badge = document.querySelector("[data-cart-count]");
+  const link = document.querySelector(".floating-cart");
+  if (!badge || !link) return;
+  const count = cartItemCount();
+  badge.textContent = String(count);
+  link.classList.toggle("has-items", count > 0);
+}
+
 function productBadgeText(product) { return String(product.selo || product.tag || ""); }
 function isBestSeller(product) { return /mais vendid/i.test(productBadgeText(product)); }
 function socialProofHtml(product) {
@@ -86,7 +110,30 @@ function validateQuantity(rawQty, productId) { const qty = Number.parseInt(rawQt
 function addToCart(productId) { const product = products.find(item => item.id === productId); if (!product) return; const qtyInput = document.getElementById(`qty-${safeId(productId)}`); const validation = validateQuantity(qtyInput.value, productId); if (!validation.ok) return setStatus(validation.message); const existing = cart.find(item => item.id === productId); if (existing) existing.qty += validation.qty; else cart.push({ id: product.id, name: product.name, price: product.price, qty: validation.qty }); saveState(); renderCart(); renderProducts(); setStatus(`${product.name} adicionado ao carrinho.`); window.misticaTrack?.("add_to_cart", { currency: "BRL", value: product.price * validation.qty, items: [{ item_id: product.id, item_name: product.name, price: product.price, quantity: validation.qty }] }); }
 function removeFromCart(productId) { cart = cart.filter(item => item.id !== productId); saveState(); renderCart(); renderProducts(); }
 function clearCart() { cart = []; window.misticaCupomAtivo = null; const cupomInput = document.getElementById("cartCoupon"); if (cupomInput) cupomInput.value = ""; const cupomStatus = document.getElementById("couponStatus"); if (cupomStatus) cupomStatus.hidden = true; pixPayloadInput.value = ""; setStatus("Carrinho limpo. Adicione produtos para gerar um novo Pix."); clearQrCanvas(); pararAcompanhamentoPedido(); const el = reservaStatusEl(); if (el) el.textContent = ""; saveState(); renderCart(); renderProducts(); }
-function renderCart() { if (!cartList || !cartTotal) return; if (!cart.length) cartList.innerHTML = `<div class="cart-item"><span>Nenhum produto adicionado ainda.</span></div>`; else cartList.innerHTML = cart.map(item => `<div class="cart-item"><div><strong>${item.name}</strong><span>${item.qty}x ${currency.format(item.price)} = ${currency.format(item.price * item.qty)}</span></div><button class="cart-remove" type="button" onclick="removeFromCart('${item.id}')">Remover</button></div>`).join(""); cartTotal.textContent = currency.format(getTotal()); }
+function renderCart() { updateCartCount(); renderCrossSell(); if (!cartList || !cartTotal) return; if (!cart.length) cartList.innerHTML = `<div class="cart-item"><span>Nenhum produto adicionado ainda.</span></div>`; else cartList.innerHTML = cart.map(item => `<div class="cart-item"><div><strong>${item.name}</strong><span>${item.qty}x ${currency.format(item.price)} = ${currency.format(item.price * item.qty)}</span></div><button class="cart-remove" type="button" onclick="removeFromCart('${item.id}')">Remover</button></div>`).join(""); cartTotal.textContent = currency.format(getTotal()); }
+
+// Cross-sell no carrinho: sugere até 4 produtos disponíveis que ainda não
+// estão no carrinho, priorizando categorias diferentes das já escolhidas
+// (para compor um "kit"). Aumenta o ticket médio sem pressão nem escassez
+// falsa. Só aparece quando há itens no carrinho.
+function renderCrossSell() {
+  const checkout = document.querySelector("#checkout .checkout-grid");
+  if (!checkout) return;
+  let box = document.getElementById("cartCrossSell");
+  if (!cart.length) { if (box) box.remove(); return; }
+  const noCarrinho = new Set(cart.map(item => item.id));
+  const sugestoes = products
+    .filter(product => !noCarrinho.has(product.id) && getStock(product.id) > 0)
+    .slice(0, 4);
+  if (!sugestoes.length) { if (box) box.remove(); return; }
+  if (!box) {
+    box = document.createElement("div");
+    box.id = "cartCrossSell";
+    box.className = "cross-sell";
+    checkout.appendChild(box);
+  }
+  box.innerHTML = `<p class="eyebrow">Combine seu ritual</p><h3>Quem levou esses, também gostou de</h3><div class="cross-sell-grid">${sugestoes.map(product => `<div class="cross-sell-card"><span aria-hidden="true">${product.icon || "✨"}</span><strong>${product.name}</strong><small>${currency.format(product.price)}</small><button class="btn btn-ghost btn-full" type="button" onclick="addToCart('${product.id}')">Adicionar</button></div>`).join("")}</div>`;
+}
 function getTotal() { return cart.reduce((sum, item) => sum + item.price * item.qty, 0); }
 function renderClients() { if (!clientList) return; if (!clients.length) { clientList.innerHTML = `<div class="client-item"><span>Nenhum cliente cadastrado ainda.</span></div>`; return; } clientList.replaceChildren(); clients.slice(0, 5).forEach(client => { const item = document.createElement("div"); item.className = "client-item"; const name = document.createElement("strong"); name.textContent = client.name; const cpf = document.createElement("span"); cpf.textContent = `CPF: ${client.cpf}`; const whatsapp = document.createElement("span"); whatsapp.textContent = `WhatsApp: ${client.whatsapp}`; const address = document.createElement("span"); address.textContent = client.address; item.append(name, cpf, document.createElement("br"), whatsapp, document.createElement("br"), address); clientList.appendChild(item); }); }
 function renderHistory() { if (!salesHistory) return; if (!sales.length) { salesHistory.innerHTML = `<div class="history-item"><span>Nenhuma venda registrada ainda.</span></div>`; return; } salesHistory.innerHTML = sales.slice(0, 10).map(sale => `<div class="history-item"><strong>${currency.format(sale.total)} • ${new Date(sale.date).toLocaleString("pt-BR")}</strong><span>${sale.items.map(item => `${item.qty}x ${item.name}`).join(" | ")}</span><span>Status: ${sale.status}</span></div>`).join(""); }
@@ -283,6 +330,7 @@ if (isisForm) isisForm.addEventListener("submit", handleIsisSubmit);
 
 setupConfig();
 setupFloatingWhatsapp();
+setupFloatingCart();
 renderAll();
 clearQrCanvas();
 saveState();
