@@ -45,6 +45,19 @@ def test_health_nao_expoe_informacoes_internas():
         assert chave_proibida not in corpo.lower()
 
 
+def test_version_online():
+    response = client.get("/api/version")
+    assert response.status_code == 200
+    data = response.json()
+    assert data == {"app": "Mística Presentes", "version": main.app.version}
+
+
+def test_version_head_sem_autenticacao_e_sem_corpo():
+    response = client.head("/api/version")
+    assert response.status_code == 200
+    assert response.content == b""
+
+
 def test_status_online():
     response = client.get("/api/status")
     assert response.status_code == 200
