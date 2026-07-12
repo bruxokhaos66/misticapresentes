@@ -555,3 +555,52 @@ def test_cupom_validar_publico_rejeita_codigo_inexistente():
     resposta = client.post("/api/cupons/validar", json={"codigo": "INEXISTENTE-123", "subtotal": 50.0})
     assert resposta.status_code == 200
     assert resposta.json()["valido"] is False
+
+
+def _aluno_logado_com_curso(slug: str, email: str):
+    """Cria comprador, confirma pagamento (admin), define senha e retorna um
+    cliente autenticado como aluno (cookie de sessão de aluno)."""
+    pedido = client.post(
+        "/api/checkout/cursos",
+        json={"slug": slug, "nome": "Aluna Teste", "email": email},
+    ).json()
+    confirm = client.post(f"/api/checkout/cursos/{pedido['id']}/confirmar", headers=PROTECTED_HEADERS).json()
+    token = confirm["link_acesso"].split("acesso=")[1]
+    aluno_client = TestClient(main.app)
+    resp = aluno_client.post("/api/alunos/definir-senha", json={"token": token, "senha": "senhaforte123"})
+    assert resp.status_code == 200
+    return aluno_client
+
+
+def test_progresso_e_certificado_do_curso():
+    slug = "rape-uso-tradicao"  # curso pago do catálogo
+    email = f"aluna-{uuid.uuid4().hex[:8]}@example.com"
+    aluno = _aluno_logado_com_curso(slug, email)
+
+    material = client.post(
+        "/api/cursos",
+        json={"titulo": "Aula 1", "categoria": slug, "tipo": "pdf", "url": "https://exemplo/aula1.pdf"},
+        headers=PROTECTED_HEADERS,
+    ).json()
+
+    progresso = aluno.get(f"/api/cursos/{slug}/progresso").json()
+    assert progresso["total"] >= 1
+    assert progresso["completo"] is False
+
+    # Sem concluir tudo, o certificado é negado.
+    assert aluno.get(f"/api/cursos/{slug}/certificado").status_code == 403
+
+    marca = aluno.post(f"/api/cursos/{slug}/progresso", json={"material_id": material["id"], "concluido": True}).json()
+    assert material["id"] in marca["materiais_concluidos"]
+
+    # Se este material for o único do curso, agora está completo e emite certificado.
+    resumo = aluno.get(f"/api/cursos/{slug}/progresso").json()
+    if resumo["completo"]:
+        cert = aluno.get(f"/api/cursos/{slug}/certificado")
+        assert cert.status_code == 200
+        assert "Certificado de Conclusão" in cert.text
+
+
+def test_progresso_exige_login_de_aluno():
+    resposta = client.get("/api/cursos/rape-uso-tradicao/progresso")
+    assert resposta.status_code == 401

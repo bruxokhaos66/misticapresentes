@@ -64,6 +64,22 @@ body.escola-page{
 .escola-material-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid rgba(231,198,128,.2);border-radius:14px;background:rgba(8,8,12,.5);font-size:.85rem;color:#f7e7bd}
 .escola-materials-empty{padding:12px;border:1px dashed rgba(242,201,109,.3);border-radius:14px;color:#e7d7b7;font-size:.85rem}
 
+/* Progresso do aluno, continuar estudando e certificado */
+.escola-progress{display:grid;gap:10px;padding:14px;margin-bottom:12px;border:1px solid rgba(242,201,109,.24);border-radius:16px;background:rgba(8,8,12,.5)}
+.escola-progress-head{display:flex;justify-content:space-between;align-items:center;color:#fff2cb;font-size:.9rem}
+.escola-progress-head span{color:#f2c96d;font-weight:800}
+.escola-progress-bar{height:10px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden}
+.escola-progress-bar span{display:block;height:100%;background:linear-gradient(135deg,#fff0b6,#e3b64f 62%,#bdd17a);border-radius:999px;transition:width .3s ease}
+.escola-progress-actions{display:flex;flex-wrap:wrap;gap:8px}
+.escola-progress-actions .btn:disabled{opacity:.55;cursor:not-allowed}
+.escola-material-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.escola-material-row{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid rgba(231,198,128,.2);border-radius:14px;background:rgba(8,8,12,.5);font-size:.85rem;color:#f7e7bd}
+.escola-material-row.is-done{border-color:rgba(189,209,122,.45);background:rgba(70,90,45,.22)}
+.escola-material-check{display:flex;align-items:center;gap:6px;color:#cfe0a8;font-size:.78rem;white-space:nowrap;cursor:pointer}
+.escola-material-check input{accent-color:#bdd17a;width:16px;height:16px}
+.escola-material-link{color:#f7e7bd;text-decoration:none;overflow-wrap:anywhere}
+.escola-material-link:hover{text-decoration:underline}
+
 .escola-purchase{display:grid;gap:12px;padding:16px;border-radius:18px;border:1px solid rgba(242,201,109,.32);background:rgba(8,8,12,.55)}
 .escola-purchase .warning-box{margin:0}
 .escola-qr-wrap{display:flex;flex-wrap:wrap;gap:16px;align-items:center}

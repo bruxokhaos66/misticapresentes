@@ -133,6 +133,10 @@
     return value;
   }
 
+  function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+  }
+
   function materiaisHtml(materiais) {
     if (!materiais.length) {
       return `<div class="escola-materials-empty">Conteúdo em preparação. Assim que as aulas forem publicadas elas aparecem aqui automaticamente.</div>`;
@@ -140,9 +144,96 @@
     return materiais.map(item => {
       const url = normalizeUrl(item.url);
       return url
-        ? `<a class="escola-material-item" href="${url}" target="_blank" rel="noopener">📘 ${item.titulo}</a>`
-        : `<div class="escola-material-item">📘 ${item.titulo}</div>`;
+        ? `<a class="escola-material-item" href="${url}" target="_blank" rel="noopener">📘 ${escapeHtml(item.titulo)}</a>`
+        : `<div class="escola-material-item">📘 ${escapeHtml(item.titulo)}</div>`;
     }).join("");
+  }
+
+  async function fetchProgresso(slug) {
+    const { ok, body } = await apiJson(`/api/cursos/${encodeURIComponent(slug)}/progresso`);
+    return ok ? body : null;
+  }
+
+  async function toggleMaterial(slug, materialId, concluido) {
+    const { ok, body } = await apiJson(`/api/cursos/${encodeURIComponent(slug)}/progresso`, {
+      method: "POST",
+      body: JSON.stringify({ material_id: materialId, concluido }),
+    });
+    return ok ? body : null;
+  }
+
+  // Renderiza o conteúdo do curso com barra de progresso, marcação de aula
+  // concluída, "continuar estudando" e certificado (retenção do aluno).
+  function renderCursoComProgresso(curso, container, materiais, progresso) {
+    const concluidos = new Set((progresso && progresso.materiais_concluidos) || []);
+    const total = materiais.length;
+    const feitos = materiais.filter(m => concluidos.has(m.id)).length;
+    const pct = total ? Math.round((feitos / total) * 100) : 0;
+    const completo = total > 0 && feitos >= total;
+
+    const listaHtml = total
+      ? materiais.map(item => {
+          const url = normalizeUrl(item.url);
+          const feito = concluidos.has(item.id);
+          const link = url
+            ? `<a class="escola-material-link" href="${url}" target="_blank" rel="noopener">📘 ${escapeHtml(item.titulo)}</a>`
+            : `<span class="escola-material-link">📘 ${escapeHtml(item.titulo)}</span>`;
+          return `<li class="escola-material-row${feito ? " is-done" : ""}">
+            <label class="escola-material-check"><input type="checkbox" data-material-id="${item.id}" ${feito ? "checked" : ""}><span>Concluí</span></label>
+            ${link}
+          </li>`;
+        }).join("")
+      : `<li class="escola-materials-empty">Conteúdo em preparação. Assim que as aulas forem publicadas elas aparecem aqui.</li>`;
+
+    container.innerHTML = `
+      <div class="escola-progress" data-progress-box>
+        <div class="escola-progress-head">
+          <strong data-progress-label>${feitos}/${total} aulas concluídas</strong>
+          <span data-progress-pct>${pct}%</span>
+        </div>
+        <div class="escola-progress-bar"><span data-progress-fill style="width:${pct}%"></span></div>
+        <div class="escola-progress-actions">
+          <button class="btn btn-ghost" type="button" data-continuar ${completo || !total ? "disabled" : ""}>Continuar estudando</button>
+          <button class="btn" type="button" data-certificado ${completo ? "" : "disabled"}>${completo ? "Emitir certificado 🎓" : "Certificado ao concluir"}</button>
+        </div>
+      </div>
+      <ul class="escola-material-list">${listaHtml}</ul>
+    `;
+
+    const fill = container.querySelector("[data-progress-fill]");
+    const label = container.querySelector("[data-progress-label]");
+    const pctEl = container.querySelector("[data-progress-pct]");
+    const btnContinuar = container.querySelector("[data-continuar]");
+    const btnCert = container.querySelector("[data-certificado]");
+
+    function atualizar(resumo) {
+      if (!resumo) return;
+      const p = resumo.percentual ?? 0;
+      if (fill) fill.style.width = `${p}%`;
+      if (pctEl) pctEl.textContent = `${p}%`;
+      if (label) label.textContent = `${resumo.concluidos}/${resumo.total} aulas concluídas`;
+      if (btnCert) { btnCert.disabled = !resumo.completo; btnCert.textContent = resumo.completo ? "Emitir certificado 🎓" : "Certificado ao concluir"; }
+      if (btnContinuar) btnContinuar.disabled = resumo.completo || !resumo.total;
+    }
+
+    container.querySelectorAll("[data-material-id]").forEach(chk => {
+      chk.addEventListener("change", async () => {
+        chk.disabled = true;
+        const resumo = await toggleMaterial(curso.slug, Number(chk.dataset.materialId), chk.checked);
+        chk.disabled = false;
+        chk.closest(".escola-material-row")?.classList.toggle("is-done", chk.checked);
+        if (resumo) atualizar(resumo);
+      });
+    });
+
+    btnContinuar?.addEventListener("click", () => {
+      const proximo = materiais.find(m => !concluidos.has(m.id) && normalizeUrl(m.url));
+      if (proximo) window.open(normalizeUrl(proximo.url), "_blank", "noopener");
+    });
+
+    btnCert?.addEventListener("click", () => {
+      window.open(`${COURSE_API_BASE}/api/cursos/${encodeURIComponent(curso.slug)}/certificado`, "_blank", "noopener");
+    });
   }
 
   function loginFormHtml(curso) {
@@ -161,14 +252,24 @@
   async function renderMateriaisArea(curso, container) {
     if (curso.tipo === "gratuito") {
       const { ok, body } = await apiJson(`/api/cursos/${encodeURIComponent(curso.slug)}/conteudo`);
-      container.innerHTML = ok ? materiaisHtml(body) : `<div class="escola-materials-empty">Não foi possível carregar o conteúdo agora. Tente novamente em instantes.</div>`;
+      if (!ok) { container.innerHTML = `<div class="escola-materials-empty">Não foi possível carregar o conteúdo agora. Tente novamente em instantes.</div>`; return; }
+      // Aluno logado num curso gratuito também ganha progresso/certificado.
+      const aluno = await carregarAlunoAtual();
+      if (aluno) {
+        const progresso = await fetchProgresso(curso.slug);
+        renderCursoComProgresso(curso, container, body, progresso);
+      } else {
+        container.innerHTML = materiaisHtml(body);
+      }
       return;
     }
 
     const aluno = await carregarAlunoAtual();
     if (aluno && aluno.cursos && aluno.cursos.includes(curso.slug)) {
       const { ok, body } = await apiJson(`/api/cursos/${encodeURIComponent(curso.slug)}/conteudo`);
-      container.innerHTML = ok ? materiaisHtml(body) : `<div class="escola-materials-empty">Não foi possível carregar o conteúdo agora. Tente novamente em instantes.</div>`;
+      if (!ok) { container.innerHTML = `<div class="escola-materials-empty">Não foi possível carregar o conteúdo agora. Tente novamente em instantes.</div>`; return; }
+      const progresso = await fetchProgresso(curso.slug);
+      renderCursoComProgresso(curso, container, body, progresso);
       return;
     }
 

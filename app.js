@@ -1,7 +1,7 @@
 const storeConfig = {
   name: "Mística Presentes",
   whatsappNumber: "554999172137",
-  instagram: "@misticaprodutos",
+  instagram: "@misticaeso",
   minStock: 3
 };
 

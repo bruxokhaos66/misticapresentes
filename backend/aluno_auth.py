@@ -29,6 +29,15 @@ def _txt(dt: datetime) -> str:
     return dt.strftime("%Y-%m-%d %H:%M:%S")
 
 
+def _escape_certificado(valor) -> str:
+    return (
+        str(valor if valor is not None else "")
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+
 def garantir_tabelas_alunos(conn) -> None:
     conn.execute(
         """
@@ -74,6 +83,19 @@ def garantir_tabelas_alunos(conn) -> None:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS alunos_progresso (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            aluno_id INTEGER NOT NULL,
+            slug TEXT NOT NULL,
+            material_id INTEGER NOT NULL,
+            concluido_em TEXT NOT NULL,
+            UNIQUE(aluno_id, material_id)
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_alunos_progresso_aluno_slug ON alunos_progresso(aluno_id, slug)")
 
 
 def obter_ou_criar_aluno_sem_senha(conn, *, nome: str, email: str) -> int:
@@ -300,6 +322,123 @@ def conteudo_curso(slug: str, sessao: dict | None = Depends(sessao_aluno_opciona
             (slug,),
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+class ProgressoIn(BaseModel):
+    material_id: int = Field(gt=0)
+    concluido: bool = True
+
+
+def _garantir_acesso_curso(conn, sessao: dict, slug: str) -> None:
+    """Para cursos pagos exige acesso liberado; cursos gratuitos bastam sessão."""
+    from backend.course_routes import CATALOGO_CURSOS_PAGOS
+
+    if slug in CATALOGO_CURSOS_PAGOS and not aluno_tem_acesso(conn, aluno_id=sessao["aluno_id"], slug=slug):
+        raise HTTPException(status_code=403, detail="Você ainda não tem acesso a este curso.")
+
+
+def _resumo_progresso(conn, *, aluno_id: int, slug: str) -> dict:
+    from backend.course_routes import garantir_tabela_cursos
+
+    garantir_tabela_cursos(conn)
+    materiais = conn.execute(
+        "SELECT id FROM cursos_materiais WHERE categoria=? ORDER BY id", (slug,)
+    ).fetchall()
+    ids_materiais = [int(m["id"]) for m in materiais]
+    total = len(ids_materiais)
+    concluidos = [
+        int(row["material_id"])
+        for row in conn.execute(
+            "SELECT material_id FROM alunos_progresso WHERE aluno_id=? AND slug=?", (aluno_id, slug)
+        ).fetchall()
+        if int(row["material_id"]) in ids_materiais
+    ]
+    feitos = len(concluidos)
+    percentual = round((feitos / total) * 100) if total else 0
+    return {
+        "slug": slug,
+        "total": total,
+        "concluidos": feitos,
+        "percentual": percentual,
+        "completo": total > 0 and feitos >= total,
+        "materiais_concluidos": concluidos,
+    }
+
+
+@router.get("/cursos/{slug}/progresso")
+def obter_progresso_curso(slug: str, sessao: dict = Depends(sessao_aluno_atual)):
+    with conectar() as conn:
+        garantir_tabelas_alunos(conn)
+        _garantir_acesso_curso(conn, sessao, slug)
+        return _resumo_progresso(conn, aluno_id=sessao["aluno_id"], slug=slug)
+
+
+@router.post("/cursos/{slug}/progresso")
+def marcar_progresso_curso(slug: str, payload: ProgressoIn, sessao: dict = Depends(sessao_aluno_atual)):
+    """Marca (ou desmarca) uma aula/material como concluído para o aluno logado.
+    Base da retenção: barra de progresso, 'continuar estudando' e certificado."""
+    from backend.course_routes import garantir_tabela_cursos
+
+    with conectar() as conn:
+        garantir_tabelas_alunos(conn)
+        _garantir_acesso_curso(conn, sessao, slug)
+        garantir_tabela_cursos(conn)
+        material = conn.execute(
+            "SELECT id FROM cursos_materiais WHERE id=? AND categoria=?", (payload.material_id, slug)
+        ).fetchone()
+        if not material:
+            raise HTTPException(status_code=404, detail="Aula não encontrada neste curso.")
+        if payload.concluido:
+            conn.execute(
+                "INSERT OR IGNORE INTO alunos_progresso (aluno_id, slug, material_id, concluido_em) VALUES (?,?,?,?)",
+                (sessao["aluno_id"], slug, payload.material_id, _txt(_agora())),
+            )
+        else:
+            conn.execute(
+                "DELETE FROM alunos_progresso WHERE aluno_id=? AND material_id=?",
+                (sessao["aluno_id"], payload.material_id),
+            )
+        resumo = _resumo_progresso(conn, aluno_id=sessao["aluno_id"], slug=slug)
+    return {"ok": True, **resumo}
+
+
+@router.get("/cursos/{slug}/certificado")
+def certificado_curso(slug: str, sessao: dict = Depends(sessao_aluno_atual)):
+    """Gera um certificado imprimível quando o aluno concluiu 100% do curso.
+    Retenção: recompensa concreta ao final da trilha."""
+    from fastapi.responses import HTMLResponse
+
+    from backend.course_routes import CATALOGO_CURSOS_PAGOS
+
+    with conectar() as conn:
+        garantir_tabelas_alunos(conn)
+        _garantir_acesso_curso(conn, sessao, slug)
+        resumo = _resumo_progresso(conn, aluno_id=sessao["aluno_id"], slug=slug)
+    if not resumo["completo"]:
+        raise HTTPException(status_code=403, detail="Conclua todas as aulas para emitir o certificado.")
+
+    titulo_curso = (CATALOGO_CURSOS_PAGOS.get(slug) or {}).get("titulo") or slug.replace("-", " ").title()
+    nome = _escape_certificado(sessao["nome"])
+    curso = _escape_certificado(titulo_curso)
+    data = _agora().strftime("%d/%m/%Y")
+    html = f"""<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<title>Certificado - {curso}</title><style>
+body{{font-family:Georgia,'Times New Roman',serif;margin:0;background:#0b0a10;color:#1c150a}}
+.cert{{max-width:900px;margin:32px auto;padding:56px;background:linear-gradient(135deg,#fff8e6,#f3e6c4);
+border:6px double #b8862f;border-radius:14px;text-align:center;box-shadow:0 24px 80px rgba(0,0,0,.5)}}
+.mark{{font-size:3rem;color:#b8862f}} h1{{font-size:2.2rem;margin:8px 0;letter-spacing:.04em}}
+.nome{{font-size:2rem;margin:24px 0 8px;color:#5a3d0a}} .curso{{font-size:1.4rem;font-weight:bold;margin:8px 0 24px}}
+.rodape{{margin-top:36px;display:flex;justify-content:space-between;font-size:.95rem;color:#4a3a1a}}
+@media print{{body{{background:#fff}} .cert{{box-shadow:none;margin:0}}}}
+</style></head><body><div class="cert">
+<div class="mark">☾</div><p>Escola Mística • Mística Presentes</p>
+<h1>Certificado de Conclusão</h1>
+<p>Certificamos que</p><div class="nome">{nome}</div>
+<p>concluiu com dedicação o curso</p><div class="curso">{curso}</div>
+<div class="rodape"><span>Emitido em {data}</span><span>Escola Mística</span></div>
+</div><p style="text-align:center"><button onclick="window.print()">Imprimir certificado</button></p>
+</body></html>"""
+    return HTMLResponse(content=html)
 
 
 @router.get("/checkout/cursos")
