@@ -261,7 +261,8 @@ def criar_pedido_checkout_publico(venda: CheckoutPublicoIn, request: Request):
     venda.status = "Aguardando pagamento"
     venda.vendedor = "Site/Celular"
     venda.forma_pagamento = "Pix site/celular"
-    return registrar_checkout_publico(venda, request, _chave_interna_checkout())
+    idempotency_key = request.headers.get("Idempotency-Key")
+    return registrar_checkout_publico(venda, request, _chave_interna_checkout(), idempotency_key)
 
 
 def _codigo_duplicado(conn, codigo: Optional[str], *, excluir_id: Optional[int] = None):

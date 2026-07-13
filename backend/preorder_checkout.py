@@ -8,10 +8,20 @@ from fastapi import HTTPException, Request
 from backend.audit import registrar_auditoria
 from backend.campaign_routes import buscar_cupom_ativo, calcular_desconto_cupom
 from backend.database import conectar
+from backend.idempotency import (
+    concluir_chave_idempotente,
+    liberar_chave_idempotente,
+    reivindicar_chave_idempotente,
+)
 from backend.order_status_routes import MINUTOS_EXPIRACAO_PEDIDO_PENDENTE
 from backend.pix import gerar_pix_do_pedido
 from backend.product_commercial_rules import garantir_colunas_comerciais
-from backend.site_stock_routes import VendaSiteIn, registrar_venda_site, validar_site_api_key
+from backend.site_stock_routes import (
+    VendaSiteIn,
+    payload_idempotencia_venda,
+    registrar_venda_site,
+    validar_site_api_key,
+)
 
 
 def _centavos(valor) -> Decimal:
@@ -48,7 +58,12 @@ def _buscar_produto(conn, item):
     return None
 
 
-def registrar_checkout_publico(venda: VendaSiteIn, request: Request, chave_api: str | None):
+def registrar_checkout_publico(
+    venda: VendaSiteIn,
+    request: Request,
+    chave_api: str | None,
+    idempotency_key: str | None = None,
+):
     validar_site_api_key(chave_api)
     if not venda.itens:
         raise HTTPException(status_code=400, detail="Nenhum item informado.")
@@ -68,7 +83,7 @@ def registrar_checkout_publico(venda: VendaSiteIn, request: Request, chave_api: 
         flags = {bool(produto["sob_encomenda"]) for _, produto in validados}
 
     if flags == {False}:
-        return registrar_venda_site(venda, request, chave_api, None)
+        return registrar_venda_site(venda, request, chave_api, idempotency_key)
 
     if len(flags) > 1:
         raise HTTPException(
@@ -82,6 +97,12 @@ def registrar_checkout_publico(venda: VendaSiteIn, request: Request, chave_api: 
             detail="Confirme que está ciente das condições do produto sob encomenda.",
         )
 
+    resposta_existente = reivindicar_chave_idempotente(
+        conectar, "criar_pedido", idempotency_key, payload_idempotencia_venda(venda)
+    )
+    if resposta_existente is not None:
+        return resposta_existente
+
     agora = datetime.now()
     data_iso = venda.data_iso or agora.isoformat(timespec="seconds")
     data_venda = venda.data_venda or agora.strftime("%d/%m/%Y %H:%M:%S")
@@ -89,116 +110,122 @@ def registrar_checkout_publico(venda: VendaSiteIn, request: Request, chave_api: 
     expira_em = (agora + timedelta(minutes=MINUTOS_EXPIRACAO_PEDIDO_PENDENTE)).isoformat(timespec="seconds")
     telefone = "".join(ch for ch in str(venda.telefone or "") if ch.isdigit() or ch in "+ ").strip()[:32]
 
-    with conectar() as conn:
-        garantir_colunas_comerciais(conn)
-        itens_calculados = []
-        subtotal = Decimal("0.00")
-        for item in venda.itens:
-            produto = _buscar_produto(conn, item)
-            if not produto or not bool(produto["sob_encomenda"]):
-                raise HTTPException(status_code=409, detail="O catálogo mudou. Atualize a página e tente novamente.")
-            limite = int(produto["limite_encomenda"] or 10)
-            if item.quantidade > limite:
-                raise HTTPException(
-                    status_code=409,
-                    detail=f"Quantidade máxima sob encomenda para {produto['nome']}: {limite}.",
-                )
-            preco = _centavos(produto["preco"])
-            custo = _centavos(produto["custo"])
-            total_item = _centavos(preco * item.quantidade)
-            subtotal += total_item
-            itens_calculados.append((item, produto, preco, custo, total_item))
+    try:
+        with conectar() as conn:
+            garantir_colunas_comerciais(conn)
+            itens_calculados = []
+            subtotal = Decimal("0.00")
+            for item in venda.itens:
+                produto = _buscar_produto(conn, item)
+                if not produto or not bool(produto["sob_encomenda"]):
+                    raise HTTPException(status_code=409, detail="O catálogo mudou. Atualize a página e tente novamente.")
+                limite = int(produto["limite_encomenda"] or 10)
+                if item.quantidade > limite:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"Quantidade máxima sob encomenda para {produto['nome']}: {limite}.",
+                    )
+                preco = _centavos(produto["preco"])
+                custo = _centavos(produto["custo"])
+                total_item = _centavos(preco * item.quantidade)
+                subtotal += total_item
+                itens_calculados.append((item, produto, preco, custo, total_item))
 
-        subtotal = _centavos(subtotal)
-        codigo_cupom = str(venda.cupom or "").strip().upper()
-        desconto = 0.0
-        cupom_info = None
-        if codigo_cupom:
-            campanha = buscar_cupom_ativo(conn, codigo_cupom)
-            if not campanha:
-                raise HTTPException(status_code=400, detail="Cupom inválido ou expirado.")
-            cupom_info = calcular_desconto_cupom(campanha, float(subtotal))
-            desconto = float(cupom_info["desconto"])
-        total_final = float(_centavos(subtotal - _centavos(desconto)))
+            subtotal = _centavos(subtotal)
+            codigo_cupom = str(venda.cupom or "").strip().upper()
+            desconto = 0.0
+            cupom_info = None
+            if codigo_cupom:
+                campanha = buscar_cupom_ativo(conn, codigo_cupom)
+                if not campanha:
+                    raise HTTPException(status_code=400, detail="Cupom inválido ou expirado.")
+                cupom_info = calcular_desconto_cupom(campanha, float(subtotal))
+                desconto = float(cupom_info["desconto"])
+            total_final = float(_centavos(subtotal - _centavos(desconto)))
 
-        cur = conn.execute(
-            """
-            INSERT INTO pedidos (
-                cliente, telefone, data_venda, subtotal, desconto, taxa, total_final,
-                forma_pagamento, vendedor, status, data_iso, dia_operacional,
-                origem, expira_em, cupom, estoque_baixado, estoque_reservado
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-            """,
-            (
-                venda.cliente,
-                telefone or None,
-                data_venda,
-                float(subtotal),
-                desconto,
-                0.0,
-                total_final,
-                "Pix site/celular",
-                "Site/Celular",
-                "Aguardando pagamento",
-                data_iso,
-                dia_operacional,
-                "site",
-                expira_em,
-                codigo_cupom or None,
-                0,
-                0,
-            ),
-        )
-        pedido_id = int(cur.lastrowid)
-
-        for item, produto, preco, custo, total_item in itens_calculados:
-            conn.execute(
+            cur = conn.execute(
                 """
-                INSERT INTO pedidos_itens
-                (pedido_id, codigo_p, nome_p, quantidade, custo_unitario, valor_unitario, valor_total)
-                VALUES (?,?,?,?,?,?,?)
+                INSERT INTO pedidos (
+                    cliente, telefone, data_venda, subtotal, desconto, taxa, total_final,
+                    forma_pagamento, vendedor, status, data_iso, dia_operacional,
+                    origem, expira_em, cupom, estoque_baixado, estoque_reservado
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
-                    pedido_id,
-                    produto["codigo_p"],
-                    produto["nome"],
-                    item.quantidade,
-                    float(custo),
-                    float(preco),
-                    float(total_item),
+                    venda.cliente,
+                    telefone or None,
+                    data_venda,
+                    float(subtotal),
+                    desconto,
+                    0.0,
+                    total_final,
+                    "Pix site/celular",
+                    "Site/Celular",
+                    "Aguardando pagamento",
+                    data_iso,
+                    dia_operacional,
+                    "site",
+                    expira_em,
+                    codigo_cupom or None,
+                    0,
+                    0,
                 ),
             )
+            pedido_id = int(cur.lastrowid)
 
-        pix = gerar_pix_do_pedido(pedido_id, total_final)
-        if pix:
-            conn.execute(
-                "UPDATE pedidos SET pix_txid=?, pix_copia_cola=? WHERE id=?",
-                (pix["txid"], pix["copia_cola"], pedido_id),
+            for item, produto, preco, custo, total_item in itens_calculados:
+                conn.execute(
+                    """
+                    INSERT INTO pedidos_itens
+                    (pedido_id, codigo_p, nome_p, quantidade, custo_unitario, valor_unitario, valor_total)
+                    VALUES (?,?,?,?,?,?,?)
+                    """,
+                    (
+                        pedido_id,
+                        produto["codigo_p"],
+                        produto["nome"],
+                        item.quantidade,
+                        float(custo),
+                        float(preco),
+                        float(total_item),
+                    ),
+                )
+
+            pix = gerar_pix_do_pedido(pedido_id, total_final)
+            if pix:
+                conn.execute(
+                    "UPDATE pedidos SET pix_txid=?, pix_copia_cola=? WHERE id=?",
+                    (pix["txid"], pix["copia_cola"], pedido_id),
+                )
+
+            resposta = {
+                "ok": True,
+                "id": pedido_id,
+                "status": "criado",
+                "subtotal": float(subtotal),
+                "desconto": desconto,
+                "cupom": codigo_cupom or None,
+                "frete_gratis": bool(cupom_info["frete_gratis"]) if cupom_info else False,
+                "total_final": total_final,
+                "estoque_baixado": False,
+                "estoque_reservado": False,
+                "sob_encomenda": True,
+                "expira_em": expira_em,
+                "pix_txid": pix["txid"] if pix else None,
+                "pix_copia_cola": pix["copia_cola"] if pix else None,
+            }
+            registrar_auditoria(
+                conn,
+                "pedido",
+                pedido_id,
+                "criar_sob_encomenda",
+                "Site/Celular",
+                depois={"total_final": total_final, "itens": len(itens_calculados), "estoque_baixado": False},
             )
+            concluir_chave_idempotente(conn, "criar_pedido", idempotency_key, resposta)
+            conn.commit()
+    except Exception:
+        liberar_chave_idempotente(conectar, "criar_pedido", idempotency_key)
+        raise
 
-        resposta = {
-            "ok": True,
-            "id": pedido_id,
-            "status": "criado",
-            "subtotal": float(subtotal),
-            "desconto": desconto,
-            "cupom": codigo_cupom or None,
-            "frete_gratis": bool(cupom_info["frete_gratis"]) if cupom_info else False,
-            "total_final": total_final,
-            "estoque_baixado": False,
-            "estoque_reservado": False,
-            "sob_encomenda": True,
-            "expira_em": expira_em,
-            "pix_txid": pix["txid"] if pix else None,
-            "pix_copia_cola": pix["copia_cola"] if pix else None,
-        }
-        registrar_auditoria(
-            conn,
-            "pedido",
-            pedido_id,
-            "criar_sob_encomenda",
-            "Site/Celular",
-            depois={"total_final": total_final, "itens": len(itens_calculados), "estoque_baixado": False},
-        )
-        conn.commit()
-        return resposta
+    return resposta

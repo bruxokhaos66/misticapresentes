@@ -263,6 +263,14 @@ def init_db():
         """,
         commit=True,
     )
+    # payload_hash guarda um hash canônico do pedido associado à chave, para
+    # detectar reuso da mesma Idempotency-Key com um carrinho diferente
+    # (retorna 409 em vez de reaproveitar a resposta de outro pedido).
+    # status distingue uma chave reivindicada (mas ainda em processamento) de
+    # uma chave com resposta final salva, permitindo que duas requisições
+    # concorrentes com a mesma chave disputem a reivindicação atomicamente.
+    _exec_tolerante("ALTER TABLE idempotency_keys ADD COLUMN payload_hash TEXT")
+    _exec_tolerante("ALTER TABLE idempotency_keys ADD COLUMN status TEXT NOT NULL DEFAULT 'concluido'")
 
     # Pedidos (site) são uma entidade própria, separada de vendas (caixa/POS).
     # Os IDs são preservados ao migrar de `vendas` para não quebrar links já
