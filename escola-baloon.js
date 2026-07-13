@@ -25,18 +25,40 @@
     if (!navigator.webdriver) return;
 
     baloon.classList.add("is-e2e");
-    baloon.style.transition = "none";
 
-    fechar.style.animation = "none";
-    fechar.style.transition = "none";
+    const estilosE2E = document.createElement("style");
+    estilosE2E.textContent = `
+      .escola-baloon.is-e2e,
+      .escola-baloon.is-e2e.is-visible {
+        transition: none !important;
+      }
+
+      .escola-baloon.is-e2e .escola-baloon-close {
+        animation: none !important;
+        transition: none !important;
+        transform: none !important;
+      }
+
+      .escola-baloon.is-e2e .escola-fx-halo-red,
+      .escola-baloon.is-e2e .escola-fx-halo-orange,
+      .escola-baloon.is-e2e .escola-fx-smoke::before,
+      .escola-baloon.is-e2e .escola-fx-smoke::after,
+      .escola-baloon.is-e2e .escola-fx-glow-outer,
+      .escola-baloon.is-e2e .escola-fx-glow-inner,
+      .escola-baloon.is-e2e .escola-fx-glass::before,
+      .escola-baloon.is-e2e .escola-fx-rim,
+      .escola-baloon.is-e2e .escola-fx-rim::before,
+      .escola-baloon.is-e2e .escola-fx-rim::after,
+      .escola-baloon.is-e2e .escola-baloon-spark,
+      .escola-baloon.is-e2e .escola-baloon-ash,
+      .escola-baloon.is-e2e .escola-baloon-flame {
+        animation: none !important;
+        transition: none !important;
+      }
+    `;
+
+    baloon.appendChild(estilosE2E);
     fechar.style.transform = "none";
-
-    baloon.querySelectorAll(
-      ".escola-fx-halo-red, .escola-fx-halo-orange, .escola-fx-smoke::before, .escola-fx-smoke::after, .escola-fx-glow-outer, .escola-fx-glow-inner, .escola-fx-glass::before, .escola-fx-rim, .escola-fx-rim::before, .escola-fx-rim::after, .escola-baloon-spark, .escola-baloon-ash, .escola-baloon-flame"
-    ).forEach((elemento) => {
-      elemento.style.animation = "none";
-      elemento.style.transition = "none";
-    });
   }
 
   function montarBaloon() {
