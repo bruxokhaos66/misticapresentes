@@ -35,6 +35,7 @@
     fechar.addEventListener("click", () => {
       baloon.classList.remove("is-visible");
       registrarFechamento();
+      baloon.dispatchEvent(new CustomEvent("escola-baloon:fechado"));
       setTimeout(() => baloon.remove(), 500);
     });
 
@@ -148,7 +149,12 @@
 
     const observer = new MutationObserver(() => reposicionar(baloon));
     observer.observe(document.body, { childList: true });
-    window.addEventListener("resize", () => reposicionar(baloon));
+    const aoRedimensionar = () => reposicionar(baloon);
+    window.addEventListener("resize", aoRedimensionar);
+    baloon.addEventListener("escola-baloon:fechado", () => {
+      observer.disconnect();
+      window.removeEventListener("resize", aoRedimensionar);
+    }, { once: true });
 
     requestAnimationFrame(() => {
       setTimeout(() => baloon.classList.add("is-visible"), SHOW_DELAY_MS);
