@@ -9,6 +9,7 @@ from fastapi import APIRouter, Header, HTTPException
 
 from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.database import conectar
+from backend.infra_diagnostics import disco_acessivel, espaco_disco_bytes
 from config import API_URL, DB_PATH, OFFICIAL_DOMAIN, SERVER_URL
 
 router = APIRouter(prefix="/api", tags=["status-sistema"])
@@ -72,6 +73,8 @@ def status_sistema(x_mistica_api_key: str | None = Header(default=None)):
     except Exception as exc:
         erros.append(str(exc))
 
+    espaco = espaco_disco_bytes()
+
     return {
         "status": "ok" if not erros else "verificar",
         "app": "Mística Presentes",
@@ -79,6 +82,12 @@ def status_sistema(x_mistica_api_key: str | None = Header(default=None)):
         "server_url": SERVER_URL,
         "api_url": API_URL,
         "banco": {"caminho": str(db_path), "arquivo_existe": db_path.exists(), "pasta_existe": db_path.parent.exists()},
+        "disco": {
+            "acessivel": disco_acessivel(),
+            "espaco_livre_bytes": espaco["livre_bytes"] if espaco else None,
+            "espaco_total_bytes": espaco["total_bytes"] if espaco else None,
+            "espaco_usado_bytes": espaco["usado_bytes"] if espaco else None,
+        },
         "tabelas": tabelas,
         "erros": erros,
         "data_hora": datetime.now().isoformat(timespec="seconds"),

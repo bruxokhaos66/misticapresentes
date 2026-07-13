@@ -26,7 +26,24 @@ def test_health_online():
     response = client.get("/api/health")
     assert response.status_code == 200
     data = response.json()
-    assert data == {"status": "online", "app": "Mística Presentes"}
+    assert data["status"] in ("online", "degradado")
+    assert data["app"] == "Mística Presentes"
+    assert data["version"] == main.app.version
+    assert data["ambiente"]
+    assert isinstance(data["uptime_segundos"], (int, float))
+    assert data["uptime_segundos"] >= 0
+    assert isinstance(data["banco_acessivel"], bool)
+    assert isinstance(data["disco_acessivel"], bool)
+
+
+def test_health_reflete_banco_e_disco_acessiveis_em_ambiente_de_teste():
+    # A suite roda contra um banco SQLite real (arquivo local ou tmp), então o
+    # health deve reportar tudo acessível quando não há falha simulada.
+    response = client.get("/api/health")
+    data = response.json()
+    assert data["status"] == "online"
+    assert data["banco_acessivel"] is True
+    assert data["disco_acessivel"] is True
 
 
 def test_health_head_sem_autenticacao_e_sem_corpo():
@@ -41,7 +58,9 @@ def test_health_nao_expoe_informacoes_internas():
     corpo = response.text
     assert "mistica_gestao_v20.db" not in corpo
     assert "/opt/render" not in corpo
-    for chave_proibida in ("database", "db_path", "server_url", "api_url", "domain", "secret", "token", "key"):
+    assert "/data" not in corpo
+    assert "/home" not in corpo
+    for chave_proibida in ("database", "db_path", "server_url", "api_url", "domain", "secret", "token", "key", "traceback"):
         assert chave_proibida not in corpo.lower()
 
 
@@ -49,7 +68,19 @@ def test_version_online():
     response = client.get("/api/version")
     assert response.status_code == 200
     data = response.json()
-    assert data == {"app": "Mística Presentes", "version": main.app.version}
+    assert data["app"] == "Mística Presentes"
+    assert data["version"] == main.app.version
+    assert data["commit"]
+    assert data["ambiente"]
+    assert "release" in data
+    assert "build_data" in data
+
+
+def test_version_nao_expoe_informacoes_internas():
+    response = client.get("/api/version")
+    corpo = response.text
+    for chave_proibida in ("db_path", "secret", "token", "traceback", "/opt/render", "/data", "/home"):
+        assert chave_proibida not in corpo.lower()
 
 
 def test_version_head_sem_autenticacao_e_sem_corpo():
@@ -78,6 +109,14 @@ def test_diagnostico_sistema_responde():
     assert data["status"] in ["ok", "verificar"]
     assert "banco" in data
     assert "tabelas" in data
+    assert data["disco"]["acessivel"] is True
+    assert data["disco"]["espaco_total_bytes"] > 0
+    assert data["disco"]["espaco_livre_bytes"] >= 0
+
+
+def test_diagnostico_sistema_exige_chave_valida():
+    response = client.get("/api/diagnostico/sistema")
+    assert response.status_code in (401, 403)
 
 
 def test_backup_status_responde():

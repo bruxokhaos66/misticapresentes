@@ -22,6 +22,7 @@ from backend.course_routes import router as course_router
 from backend.lms_routes import router as lms_router
 from backend.lms_admin_routes import router as lms_admin_router
 from backend.database import conectar, executar, listar, obter
+from backend.infra_diagnostics import banco_acessivel, disco_acessivel
 from backend.logging_config import configurar_logging, get_logger
 from backend.order_status_routes import expirar_pedidos_pendentes, router as order_status_router
 from backend.panel_sessions import exigir_sessao_ou_chave_api, validar_sessao
@@ -38,6 +39,8 @@ from database.migrations import init_db
 
 configurar_logging()
 logger = get_logger(__name__)
+
+_INICIADO_EM = datetime.now()
 
 
 def _verificar_persistencia_banco() -> None:
@@ -70,10 +73,23 @@ def _verificar_persistencia_banco() -> None:
 
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
+    inicio = datetime.now()
     init_db()
     _verificar_persistencia_banco()
     migrar_musicas_blob_para_arquivo()
     garantir_admin_api()
+    duracao_ms = (datetime.now() - inicio).total_seconds() * 1000
+    logger.info(
+        "inicializacao concluida",
+        extra={
+            "evento": "startup_concluido",
+            "versao": app.version,
+            "ambiente": os.environ.get("APP_ENV", "development"),
+            "banco_ok": banco_acessivel(),
+            "disco_ok": disco_acessivel(),
+            "duracao_ms": round(duracao_ms, 1),
+        },
+    )
     tarefa_expiracao = asyncio.create_task(_expirar_pedidos_periodicamente())
     try:
         yield
@@ -280,10 +296,19 @@ def raiz():
 def health():
     # Endpoint público e sem autenticação (usado por monitores de uptime como
     # UptimeRobot): não deve expor caminhos de arquivo, credenciais ou outros
-    # detalhes de infraestrutura interna, só a confirmação de que está online.
+    # detalhes de infraestrutura interna, só a confirmação de que está online
+    # e um resumo booleano de banco/disco (sem caminhos nem mensagens de erro).
+    banco_ok = banco_acessivel()
+    disco_ok = disco_acessivel()
+    uptime_segundos = (datetime.now() - _INICIADO_EM).total_seconds()
     return {
-        "status": "online",
+        "status": "online" if (banco_ok and disco_ok) else "degradado",
         "app": "Mística Presentes",
+        "version": app.version,
+        "ambiente": os.environ.get("APP_ENV", "development"),
+        "uptime_segundos": round(uptime_segundos, 3),
+        "banco_acessivel": banco_ok,
+        "disco_acessivel": disco_ok,
     }
 
 
@@ -292,10 +317,17 @@ def versao():
     # Público como /api/health: só a versão declarada em app.version (única
     # fonte, ver FastAPI(...) acima) -- dá visibilidade rápida de qual build
     # está de fato no ar em cada ambiente (produção, staging, local) sem
-    # expor nada sensível.
+    # expor nada sensível. Commit/release vêm de variáveis opcionais
+    # preenchidas automaticamente pelo Render (RENDER_GIT_COMMIT) ou, na
+    # ausência delas, ficam como "desconhecido" -- nunca stack trace ou path.
+    commit = os.environ.get("RENDER_GIT_COMMIT", "").strip()[:12] or "desconhecido"
     return {
         "app": "Mística Presentes",
         "version": app.version,
+        "commit": commit,
+        "ambiente": os.environ.get("APP_ENV", "development"),
+        "build_data": os.environ.get("MISTICA_BUILD_DATE", "").strip() or None,
+        "release": os.environ.get("MISTICA_RELEASE", "").strip() or app.version,
     }
 
 
