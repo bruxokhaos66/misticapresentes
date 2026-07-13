@@ -236,3 +236,17 @@
     max-width: none;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .escola-baloon,
+  .escola-baloon::before,
+  .escola-baloon.is-visible,
+  .escola-baloon-flame,
+  .escola-baloon-spark,
+  .escola-baloon-ash {
+    animation: none;
+  }
+  .escola-baloon {
+    transition: opacity 0.5s ease;
+  }
+}
