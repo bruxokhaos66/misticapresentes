@@ -40,9 +40,17 @@
 
     const particulas = montarParticulas();
 
+    const calor = document.createElement("div");
+    calor.className = "escola-baloon-heat";
+    calor.setAttribute("aria-hidden", "true");
+
     const brasa = document.createElement("div");
     brasa.className = "escola-baloon-edge";
     brasa.setAttribute("aria-hidden", "true");
+
+    const nucleo = document.createElement("div");
+    nucleo.className = "escola-baloon-edge-core";
+    nucleo.setAttribute("aria-hidden", "true");
 
     const emblema = document.createElement("div");
     emblema.className = "escola-baloon-emblem";
@@ -76,7 +84,9 @@
     corpo.appendChild(texto);
     corpo.appendChild(cta);
 
+    baloon.appendChild(calor);
     baloon.appendChild(brasa);
+    baloon.appendChild(nucleo);
     baloon.appendChild(particulas);
     baloon.appendChild(fechar);
     baloon.appendChild(emblema);
@@ -90,10 +100,10 @@
     container.className = "escola-baloon-particles";
     container.setAttribute("aria-hidden", "true");
 
-    for (let i = 0; i < 9; i += 1) {
+    for (let i = 0; i < 13; i += 1) {
       const spark = document.createElement("span");
       spark.className = "escola-baloon-spark";
-      const esquerda = 10 + Math.random() * 80;
+      const esquerda = i % 3 === 0 ? Math.random() * 12 + (i % 2 === 0 ? 0 : 82) : 10 + Math.random() * 80;
       const deriva = (Math.random() - 0.5) * 30;
       const duracao = 1.6 + Math.random() * 1.4;
       const atraso = Math.random() * 2.5;
