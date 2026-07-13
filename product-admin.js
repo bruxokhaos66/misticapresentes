@@ -170,19 +170,25 @@ renderProducts = function renderProductsWithAdminItems() {
     productGrid.appendChild(make("div", "empty-catalog", "Nenhum produto encontrado. Tente outra busca ou categoria."));
     return;
   }
+  const encomenda = window.misticaEncomenda || null;
   list.forEach(product => {
     const available = getStock(product.id);
+    const sob = Boolean(encomenda && encomenda.isSobEncomenda(product));
     const card = make("article", "product-card");
+    if (sob) card.appendChild(make("span", "product-badge-encomenda", encomenda.BADGE));
     card.appendChild(make("span", "product-tag", getProductTag(product, available)));
     renderProductGallery(card, product);
     const info = make("div");
     info.appendChild(make("p", "eyebrow", product.category));
     info.appendChild(make("h3", "", product.name));
     info.appendChild(make("p", "", product.description));
+    if (sob) info.appendChild(make("p", "product-encomenda-note", encomenda.CARD_NOTE));
     card.appendChild(info);
     card.appendChild(make("strong", "product-price", currency.format(product.price)));
-    const stockText = available > 0 ? `Estoque: ${available}` : `Sob encomenda${product.deliveryDate ? " • entrega: " + product.deliveryDate : ""}`;
-    card.appendChild(make("span", `stock-badge ${available <= storeConfig.minStock ? "stock-low" : ""}`, stockText));
+    const stockText = sob
+      ? encomenda.ESTOQUE_NOTE
+      : (available > 0 ? `Estoque: ${available}` : `Sob encomenda${product.deliveryDate ? " • entrega: " + product.deliveryDate : ""}`);
+    card.appendChild(make("span", `stock-badge ${!sob && available <= storeConfig.minStock ? "stock-low" : ""}`, stockText));
     const qtyRow = make("div", "qty-row");
     const input = document.createElement("input");
     input.id = `qty-${safeId(product.id)}`;
@@ -202,7 +208,10 @@ renderProducts = function renderProductsWithAdminItems() {
     whats.type = "button";
     whats.addEventListener("click", () => buyProductWhatsapp(product.id));
     card.appendChild(whats);
-    if (product.externalUrl) {
+    // O link do fornecedor nunca é exibido publicamente em produtos sob
+    // encomenda (uso interno do administrador). Produtos comuns mantêm o
+    // comportamento anterior.
+    if (product.externalUrl && !sob) {
       const external = document.createElement("a");
       external.className = "btn btn-ghost btn-full";
       external.href = product.externalUrl;

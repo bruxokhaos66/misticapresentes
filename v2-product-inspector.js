@@ -13,6 +13,8 @@
   const safeId = (value) => clean(value).replace(/[^a-zA-Z0-9_-]/g, '');
   const productById = (productId) => products.find((item) => item.id === productId);
   const esc = (value) => clean(value).replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
+  const encomenda = () => window.misticaEncomenda || null;
+  const isSobEncomenda = (product) => Boolean(encomenda()?.isSobEncomenda?.(product));
 
   function categoryInfo(product) {
     const source = `${product.category || ''} ${product.name || ''} ${product.description || ''}`;
@@ -71,8 +73,21 @@
     const available = typeof getStock === 'function' ? getStock(product.id) : Number(product.stock || 0);
     const modal = ensureModal();
     const content = modal.querySelector('[data-product-inspector-content]');
+    const sob = isSobEncomenda(product);
     const brand = product.brand ? `<span>Marca: ${esc(product.brand)}</span>` : '';
-    const external = product.externalUrl ? `<a class="btn btn-ghost btn-full" href="${esc(product.externalUrl)}" target="_blank" rel="noopener">Ver link do produto</a>` : '';
+    // O link do fornecedor nunca é exibido para produtos sob encomenda (uso
+    // interno do administrador). Para produtos comuns, o comportamento anterior
+    // é preservado.
+    const external = (!sob && product.externalUrl) ? `<a class="btn btn-ghost btn-full" href="${esc(product.externalUrl)}" target="_blank" rel="noopener">Ver link do produto</a>` : '';
+    const t = encomenda();
+    const stockLabel = sob ? (t?.ESTOQUE_NOTE || 'Disponibilidade confirmada após o pagamento') : `Estoque: ${available}`;
+    const encomendaInfo = (sob && t) ? `
+          <div class="encomenda-info">
+            <p class="encomenda-info-title">${esc(t.COMO_FUNCIONA_TITULO)}</p>
+            <p>${esc(t.COMO_FUNCIONA_TEXTO)}</p>
+            <span class="encomenda-prazo">⏳ ${esc(t.PRAZO_TEXTO)}</span>
+            <p class="encomenda-aviso">${esc(t.COMO_FUNCIONA_AVISO)}</p>
+          </div>` : '';
     content.innerHTML = `
       <div class="product-inspector-grid">
         <div>
@@ -82,13 +97,14 @@
         <div class="product-inspector-copy">
           <p class="eyebrow">${esc(product.category || 'Produto místico')}</p>
           <h3>${esc(product.name)}</h3>
-          <div class="product-inspector-meta">${brand}<span>Estoque: ${available}</span></div>
+          <div class="product-inspector-meta">${brand}<span>${esc(stockLabel)}</span></div>
           <p>${esc(product.description || 'Produto selecionado pela Mística Presentes.')}</p>
           <strong class="product-inspector-price">${currency.format(Number(product.price || 0))}</strong>
           <div class="product-inspector-actions">
             <button class="btn" type="button" onclick="addToCart('${esc(product.id)}'); closeProductInspector();" ${available <= 0 ? 'disabled' : ''}>Adicionar ao carrinho</button>
             <button class="btn btn-ghost" type="button" onclick="buyProductWhatsapp('${esc(product.id)}')">WhatsApp</button>
           </div>
+          ${encomendaInfo}
           ${external}
         </div>
       </div>`;
@@ -104,7 +120,14 @@
       const media = `<div class="product-media-wrap">${productMedia(product)}<button class="product-zoom-button" type="button" onclick="inspectProduct('${esc(product.id)}')" aria-label="Inspecionar ${esc(product.name)}">🔍</button></div>`;
       const bestSeller = typeof isBestSeller === 'function' && isBestSeller(product) ? `<span class="product-badge-best">${esc(typeof productBadgeText === 'function' ? productBadgeText(product) : product.selo)}</span>` : '';
       const rating = typeof socialProofHtml === 'function' ? socialProofHtml(product) : '';
-      return `<article class="product-card" data-category="${esc(product.category || '')}" data-best-seller="${typeof isBestSeller === 'function' ? isBestSeller(product) : false}">${bestSeller}${media}<div><p class="eyebrow">${esc(product.category)}</p><h3>${esc(product.name)}</h3>${rating}<p>${esc(product.description)}</p></div><strong class="product-price">${currency.format(product.price)}</strong><span class="stock-badge ${available <= storeConfig.minStock ? 'stock-low' : ''}">Estoque: ${available}</span><div class="qty-row"><input id="qty-${safeId(product.id)}" type="number" min="1" max="${available}" step="1" value="1" aria-label="Quantidade de ${esc(product.name)}" ${disabled} /><button class="btn" type="button" onclick="addToCart('${esc(product.id)}')" ${disabled}>Adicionar</button></div><button class="btn btn-ghost btn-full" type="button" onclick="buyProductWhatsapp('${esc(product.id)}')">Comprar pelo WhatsApp</button></article>`;
+      const sob = isSobEncomenda(product);
+      const t = encomenda();
+      const encomendaBadge = sob && t ? `<span class="product-badge-encomenda">${esc(t.BADGE)}</span>` : '';
+      const encomendaNote = sob && t ? `<p class="product-encomenda-note">${esc(t.CARD_NOTE)}</p>` : '';
+      const stockBadge = sob && t
+        ? `<span class="stock-badge">${esc(t.ESTOQUE_NOTE)}</span>`
+        : `<span class="stock-badge ${available <= storeConfig.minStock ? 'stock-low' : ''}">Estoque: ${available}</span>`;
+      return `<article class="product-card" data-category="${esc(product.category || '')}" data-best-seller="${typeof isBestSeller === 'function' ? isBestSeller(product) : false}">${bestSeller}${encomendaBadge}${media}<div><p class="eyebrow">${esc(product.category)}</p><h3>${esc(product.name)}</h3>${rating}<p>${esc(product.description)}</p>${encomendaNote}</div><strong class="product-price">${currency.format(product.price)}</strong>${stockBadge}<div class="qty-row"><input id="qty-${safeId(product.id)}" type="number" min="1" max="${available}" step="1" value="1" aria-label="Quantidade de ${esc(product.name)}" ${disabled} /><button class="btn" type="button" onclick="addToCart('${esc(product.id)}')" ${disabled}>Adicionar</button></div><button class="btn btn-ghost btn-full" type="button" onclick="buyProductWhatsapp('${esc(product.id)}')">Comprar pelo WhatsApp</button></article>`;
     }).join('');
   }
 
