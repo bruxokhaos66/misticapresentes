@@ -1,6 +1,7 @@
 import asyncio
 import contextlib
 import os
+import re
 import secrets
 from datetime import datetime
 from pathlib import Path
@@ -9,7 +10,7 @@ from typing import Optional
 from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -22,7 +23,7 @@ from backend.course_routes import router as course_router
 from backend.lms_routes import router as lms_router
 from backend.lms_admin_routes import router as lms_admin_router
 from backend.database import conectar, executar, listar, obter
-from backend.infra_diagnostics import banco_acessivel, disco_acessivel
+from backend.infra_diagnostics import banco_acessivel, disco_diretorio_disponivel
 from backend.logging_config import configurar_logging, get_logger
 from backend.order_status_routes import expirar_pedidos_pendentes, router as order_status_router
 from backend.panel_sessions import exigir_sessao_ou_chave_api, validar_sessao
@@ -40,8 +41,6 @@ from database.migrations import init_db
 configurar_logging()
 logger = get_logger(__name__)
 
-_INICIADO_EM = datetime.now()
-
 
 def _verificar_persistencia_banco() -> None:
     """Registra no startup se o banco está num caminho persistente ou efêmero.
@@ -50,6 +49,9 @@ def _verificar_persistencia_banco() -> None:
     da auditoria: no plano Free (sem Persistent Disk) o SQLite volta vazio a
     cada redeploy/sleep. Se MISTICA_DB_PATH não estiver configurada apontando
     para um disco montado (ex.: /data), este aviso alto sinaliza o risco.
+
+    O log nunca inclui o caminho (nem o diretório) configurado -- só o
+    booleano `persistente`, para nunca vazar estrutura de disco do servidor.
     """
     from config import DB_PATH
 
@@ -61,13 +63,13 @@ def _verificar_persistencia_banco() -> None:
     if parece_persistente:
         logger.info(
             "banco em caminho persistente",
-            extra={"evento": "startup_persistencia", "persistente": True, "db_dir": os.path.dirname(db_path)},
+            extra={"evento": "startup_persistencia", "persistente": True},
         )
     else:
         logger.warning(
             "ATENCAO: banco pode estar em disco EFEMERO (dados podem ser perdidos em redeploy/sleep). "
-            "Configure MISTICA_DB_PATH para um Persistent Disk (ex.: /data/mistica_gestao_v20.db).",
-            extra={"evento": "startup_persistencia", "persistente": False, "db_dir": os.path.dirname(db_path)},
+            "Configure MISTICA_DB_PATH para um Persistent Disk.",
+            extra={"evento": "startup_persistencia", "persistente": False},
         )
 
 
@@ -86,7 +88,7 @@ async def lifespan(app: FastAPI):
             "versao": app.version,
             "ambiente": os.environ.get("APP_ENV", "development"),
             "banco_ok": banco_acessivel(),
-            "disco_ok": disco_acessivel(),
+            "disco_ok": disco_diretorio_disponivel(),
             "duracao_ms": round(duracao_ms, 1),
         },
     )
@@ -292,42 +294,50 @@ def raiz():
     }
 
 
+_BUILD_ID_SEGURO_RE = re.compile(r"[^a-zA-Z0-9._-]+")
+
+
+def _build_id_sanitizado() -> str:
+    """Identificador curto e seguro do build, sem branch, sem usuário, sem
+    caminho: só o SHA curto de MISTICA_BUILD_ID/RENDER_GIT_COMMIT, filtrado
+    para conter apenas caracteres inofensivos e truncado a 12 posições."""
+    bruto = (os.environ.get("MISTICA_BUILD_ID", "").strip() or os.environ.get("RENDER_GIT_COMMIT", "").strip())[:12]
+    limpo = _BUILD_ID_SEGURO_RE.sub("", bruto)
+    return limpo or "unknown"
+
+
 @app.api_route("/api/health", methods=["GET", "HEAD"])
 def health():
     # Endpoint público e sem autenticação (usado por monitores de uptime como
-    # UptimeRobot): não deve expor caminhos de arquivo, credenciais ou outros
-    # detalhes de infraestrutura interna, só a confirmação de que está online
-    # e um resumo booleano de banco/disco (sem caminhos nem mensagens de erro).
+    # UptimeRobot): resposta mínima, sem caminhos, hostnames, variáveis de
+    # ambiente, versões de dependências ou mensagens internas de exceção. A
+    # checagem de disco aqui é só leitura de permissão (sem criar/remover
+    # arquivo) para não gerar I/O a cada chamada de monitor externo.
     banco_ok = banco_acessivel()
-    disco_ok = disco_acessivel()
-    uptime_segundos = (datetime.now() - _INICIADO_EM).total_seconds()
-    return {
-        "status": "online" if (banco_ok and disco_ok) else "degradado",
-        "app": "Mística Presentes",
+    disco_ok = disco_diretorio_disponivel()
+    saudavel = banco_ok and disco_ok
+    corpo = {
+        "status": "ok" if saudavel else "error",
+        "service": "mistica-api",
         "version": app.version,
-        "ambiente": os.environ.get("APP_ENV", "development"),
-        "uptime_segundos": round(uptime_segundos, 3),
-        "banco_acessivel": banco_ok,
-        "disco_acessivel": disco_ok,
+        "database": "available" if banco_ok else "unavailable",
     }
+    if not saudavel:
+        return JSONResponse(status_code=503, content=corpo)
+    return corpo
 
 
 @app.api_route("/api/version", methods=["GET", "HEAD"])
 def versao():
-    # Público como /api/health: só a versão declarada em app.version (única
-    # fonte, ver FastAPI(...) acima) -- dá visibilidade rápida de qual build
-    # está de fato no ar em cada ambiente (produção, staging, local) sem
-    # expor nada sensível. Commit/release vêm de variáveis opcionais
-    # preenchidas automaticamente pelo Render (RENDER_GIT_COMMIT) ou, na
-    # ausência delas, ficam como "desconhecido" -- nunca stack trace ou path.
-    commit = os.environ.get("RENDER_GIT_COMMIT", "").strip()[:12] or "desconhecido"
+    # Público como /api/health: só dados controlados por variável de
+    # ambiente própria da aplicação -- nunca branch, usuário de build, URL
+    # interna ou lista de dependências. Nenhum comando git é executado por
+    # requisição; o identificador de build vem só de env var, sanitizado.
     return {
         "app": "Mística Presentes",
         "version": app.version,
-        "commit": commit,
-        "ambiente": os.environ.get("APP_ENV", "development"),
-        "build_data": os.environ.get("MISTICA_BUILD_DATE", "").strip() or None,
-        "release": os.environ.get("MISTICA_RELEASE", "").strip() or app.version,
+        "build": _build_id_sanitizado(),
+        "release_date": os.environ.get("MISTICA_BUILD_DATE", "").strip() or None,
     }
 
 
