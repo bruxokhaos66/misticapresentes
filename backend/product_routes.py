@@ -16,6 +16,12 @@ from backend.audit import registrar_auditoria
 from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.database import conectar
 from backend.panel_sessions import exigir_sessao_ou_chave_api
+from backend.product_commercial_rules import (
+    LIMITE_ENCOMENDA_MAXIMO,
+    LIMITE_ENCOMENDA_PADRAO,
+    garantir_colunas_comerciais,
+    normalizar_regra_encomenda,
+)
 from backend.rate_limit import limitar_requisicoes
 from backend.site_stock_routes import VendaSiteIn, registrar_venda_site
 
@@ -88,6 +94,12 @@ class ProdutoCompletoIn(BaseModel):
     imagens: list[str] = Field(default_factory=list, max_length=12)
     link_externo: Optional[str] = Field(default=None, max_length=URL_MAX)
     selo: Optional[str] = Field(default=None, max_length=SELO_MAX)
+    sob_encomenda: bool = False
+    limite_encomenda: int = Field(
+        default=LIMITE_ENCOMENDA_PADRAO,
+        ge=1,
+        le=LIMITE_ENCOMENDA_MAXIMO,
+    )
 
     @field_validator("codigo_p")
     @classmethod
@@ -189,15 +201,19 @@ def produto_row_to_dict(row):
     data["imagens"] = imagens
     data["link_externo"] = data.get("link_externo") or ""
     data["selo"] = data.get("selo") or ""
+    data["sob_encomenda"] = bool(data.get("sob_encomenda"))
+    data["limite_encomenda"] = int(data.get("limite_encomenda") or LIMITE_ENCOMENDA_PADRAO)
     data["avaliacoes_total"] = data.get("avaliacoes_total") or 0
     data["avaliacoes_media"] = data.get("avaliacoes_media") or 0
     return data
 
 
 _CAMPOS_PRODUTO_PUBLICO = """p.id, p.codigo_p, p.nome, p.marca, p.preco, p.quantidade, p.categoria,
-                       p.descricao, p.imagem_url, p.imagens_json, p.link_externo, p.selo, p.atualizado_em"""
+                       p.descricao, p.imagem_url, p.imagens_json, p.link_externo, p.selo,
+                       p.sob_encomenda, p.limite_encomenda, p.atualizado_em"""
 _CAMPOS_PRODUTO_ADMIN = """p.id, p.codigo_p, p.nome, p.marca, p.preco, p.quantidade, p.categoria, p.custo, p.lucro,
-                       p.estoque_minimo, p.descricao, p.imagem_url, p.imagens_json, p.link_externo, p.selo, p.atualizado_em"""
+                       p.estoque_minimo, p.descricao, p.imagem_url, p.imagens_json, p.link_externo, p.selo,
+                       p.sob_encomenda, p.limite_encomenda, p.atualizado_em"""
 _JOIN_AVALIACOES = """
                 LEFT JOIN (
                     SELECT produto_id, COUNT(*) AS total, AVG(nota) AS media
@@ -210,6 +226,7 @@ _JOIN_AVALIACOES = """
 def _buscar_produtos(campos: str, busca: str, limite: int):
     termo = f"%{busca.strip()}%"
     with conectar() as conn:
+        garantir_colunas_comerciais(conn)
         if busca.strip():
             rows = conn.execute(
                 f"""SELECT {campos}, COALESCE(a.total, 0) AS avaliacoes_total, ROUND(a.media, 1) AS avaliacoes_media
@@ -268,24 +285,40 @@ def criar_produto_completo(produto: ProdutoCompletoIn, sessao: dict = Depends(ex
     agora = datetime.now().isoformat(timespec="seconds")
     imagens_json = json.dumps(produto.imagens or [], ensure_ascii=False)
     lucro = _lucro_calculado(produto.preco, produto.custo)
+    sob_encomenda, limite_encomenda = normalizar_regra_encomenda(
+        sob_encomenda=produto.sob_encomenda,
+        limite_encomenda=produto.limite_encomenda,
+    )
     with conectar() as conn:
+        garantir_colunas_comerciais(conn)
         if _codigo_duplicado(conn, produto.codigo_p):
             raise HTTPException(status_code=409, detail=f"Já existe um produto ativo com o código '{produto.codigo_p}'")
         cur = conn.execute(
             """INSERT INTO produtos (
                 codigo_p, nome, marca, preco, quantidade, categoria, custo, lucro, estoque_minimo,
-                descricao, imagem_url, imagens_json, link_externo, selo, atualizado_em, ativo
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)""",
+                descricao, imagem_url, imagens_json, link_externo, selo, sob_encomenda,
+                limite_encomenda, atualizado_em, ativo
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)""",
             (produto.codigo_p, produto.nome, produto.marca, produto.preco, produto.quantidade, produto.categoria,
              produto.custo, lucro, produto.estoque_minimo, produto.descricao, produto.imagem_url, imagens_json,
-             produto.link_externo, produto.selo, agora),
+             produto.link_externo, produto.selo, sob_encomenda, limite_encomenda, agora),
         )
         produto_id = int(cur.lastrowid)
         depois = produto.model_dump()
         depois["lucro"] = lucro
+        depois["sob_encomenda"] = bool(sob_encomenda)
+        depois["limite_encomenda"] = limite_encomenda
         registrar_auditoria(conn, "produto", produto_id, "criar", depois=depois)
         conn.commit()
-    return {"ok": True, "id": produto_id, "status": "criado", "lucro": lucro, "atualizado_em": agora}
+    return {
+        "ok": True,
+        "id": produto_id,
+        "status": "criado",
+        "lucro": lucro,
+        "sob_encomenda": bool(sob_encomenda),
+        "limite_encomenda": limite_encomenda,
+        "atualizado_em": agora,
+    }
 
 
 @router.put("/produtos/{produto_id}")
@@ -293,7 +326,12 @@ def atualizar_produto_completo(produto_id: int, produto: ProdutoCompletoIn, sess
     agora = datetime.now().isoformat(timespec="seconds")
     imagens_json = json.dumps(produto.imagens or [], ensure_ascii=False)
     lucro = _lucro_calculado(produto.preco, produto.custo)
+    sob_encomenda, limite_encomenda = normalizar_regra_encomenda(
+        sob_encomenda=produto.sob_encomenda,
+        limite_encomenda=produto.limite_encomenda,
+    )
     with conectar() as conn:
+        garantir_colunas_comerciais(conn)
         existente = conn.execute("SELECT * FROM produtos WHERE id=?", (produto_id,)).fetchone()
         if not existente:
             raise HTTPException(status_code=404, detail="Produto não encontrado")
@@ -302,17 +340,28 @@ def atualizar_produto_completo(produto_id: int, produto: ProdutoCompletoIn, sess
         conn.execute(
             """UPDATE produtos
                SET codigo_p=?, nome=?, marca=?, preco=?, quantidade=?, categoria=?, custo=?, lucro=?, estoque_minimo=?,
-                   descricao=?, imagem_url=?, imagens_json=?, link_externo=?, selo=?, atualizado_em=?, ativo=1
+                   descricao=?, imagem_url=?, imagens_json=?, link_externo=?, selo=?, sob_encomenda=?,
+                   limite_encomenda=?, atualizado_em=?, ativo=1
              WHERE id=?""",
             (produto.codigo_p, produto.nome, produto.marca, produto.preco, produto.quantidade, produto.categoria,
              produto.custo, lucro, produto.estoque_minimo, produto.descricao, produto.imagem_url, imagens_json,
-             produto.link_externo, produto.selo, agora, produto_id),
+             produto.link_externo, produto.selo, sob_encomenda, limite_encomenda, agora, produto_id),
         )
         depois = produto.model_dump()
         depois["lucro"] = lucro
+        depois["sob_encomenda"] = bool(sob_encomenda)
+        depois["limite_encomenda"] = limite_encomenda
         registrar_auditoria(conn, "produto", produto_id, "atualizar", antes=dict(existente), depois=depois)
         conn.commit()
-    return {"ok": True, "id": produto_id, "status": "atualizado", "lucro": lucro, "atualizado_em": agora}
+    return {
+        "ok": True,
+        "id": produto_id,
+        "status": "atualizado",
+        "lucro": lucro,
+        "sob_encomenda": bool(sob_encomenda),
+        "limite_encomenda": limite_encomenda,
+        "atualizado_em": agora,
+    }
 
 
 @router.delete("/produtos/{produto_id}")
