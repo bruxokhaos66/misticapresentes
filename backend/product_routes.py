@@ -16,6 +16,7 @@ from backend.audit import registrar_auditoria
 from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.database import conectar
 from backend.panel_sessions import exigir_sessao_ou_chave_api
+from backend.preorder_checkout import registrar_checkout_publico
 from backend.product_commercial_rules import (
     LIMITE_ENCOMENDA_MAXIMO,
     LIMITE_ENCOMENDA_PADRAO,
@@ -23,7 +24,7 @@ from backend.product_commercial_rules import (
     normalizar_regra_encomenda,
 )
 from backend.rate_limit import limitar_requisicoes
-from backend.site_stock_routes import VendaSiteIn, registrar_venda_site
+from backend.site_stock_routes import VendaSiteIn
 
 router = APIRouter(prefix="/api", tags=["produtos-completos"])
 limitar_checkout_publico = limitar_requisicoes("checkout_publico", limite=12, janela_segundos=60)
@@ -52,9 +53,7 @@ def _texto_limpo(valor: Optional[str], *, limite: int, vazio_como_none: bool = T
 
 def normalizar_codigo_produto(valor: Optional[str]) -> Optional[str]:
     texto = _texto_limpo(valor, limite=CODIGO_MAX)
-    if texto is None:
-        return None
-    return texto.upper()
+    return texto.upper() if texto else None
 
 
 def _validar_url_https(valor: Optional[str], *, campo: str) -> Optional[str]:
@@ -83,10 +82,10 @@ class ProdutoCompletoIn(BaseModel):
     codigo_p: Optional[str] = None
     nome: str = Field(min_length=1, max_length=NOME_MAX)
     marca: Optional[str] = Field(default=None, max_length=MARCA_MAX)
-    preco: float = Field(default=0.0)
+    preco: float = 0.0
     quantidade: int = Field(default=0, ge=0, le=ESTOQUE_MAX)
     categoria: Optional[str] = Field(default=None, max_length=CATEGORIA_MAX)
-    custo: float = Field(default=0.0)
+    custo: float = 0.0
     lucro: float = 0.0
     estoque_minimo: int = Field(default=0, ge=0, le=ESTOQUE_MAX)
     descricao: Optional[str] = Field(default=None, max_length=DESCRICAO_MAX)
@@ -95,20 +94,16 @@ class ProdutoCompletoIn(BaseModel):
     link_externo: Optional[str] = Field(default=None, max_length=URL_MAX)
     selo: Optional[str] = Field(default=None, max_length=SELO_MAX)
     sob_encomenda: bool = False
-    limite_encomenda: int = Field(
-        default=LIMITE_ENCOMENDA_PADRAO,
-        ge=1,
-        le=LIMITE_ENCOMENDA_MAXIMO,
-    )
+    limite_encomenda: int = Field(default=LIMITE_ENCOMENDA_PADRAO, ge=1, le=LIMITE_ENCOMENDA_MAXIMO)
 
     @field_validator("codigo_p")
     @classmethod
-    def _normalizar_codigo(cls, valor: Optional[str]) -> Optional[str]:
+    def _normalizar_codigo(cls, valor):
         return normalizar_codigo_produto(valor)
 
     @field_validator("nome")
     @classmethod
-    def _normalizar_nome(cls, valor: str) -> str:
+    def _normalizar_nome(cls, valor):
         texto = _texto_limpo(valor, limite=NOME_MAX, vazio_como_none=False)
         if not texto:
             raise ValueError("Nome do produto é obrigatório.")
@@ -116,17 +111,17 @@ class ProdutoCompletoIn(BaseModel):
 
     @field_validator("marca")
     @classmethod
-    def _normalizar_marca(cls, valor: Optional[str]) -> Optional[str]:
+    def _normalizar_marca(cls, valor):
         return _texto_limpo(valor, limite=MARCA_MAX)
 
     @field_validator("categoria")
     @classmethod
-    def _normalizar_categoria(cls, valor: Optional[str]) -> Optional[str]:
+    def _normalizar_categoria(cls, valor):
         return _texto_limpo(valor, limite=CATEGORIA_MAX)
 
     @field_validator("descricao")
     @classmethod
-    def _normalizar_descricao(cls, valor: Optional[str]) -> Optional[str]:
+    def _normalizar_descricao(cls, valor):
         if valor is None:
             return None
         texto = str(valor).strip()
@@ -136,22 +131,22 @@ class ProdutoCompletoIn(BaseModel):
 
     @field_validator("selo")
     @classmethod
-    def _normalizar_selo(cls, valor: Optional[str]) -> Optional[str]:
+    def _normalizar_selo(cls, valor):
         return _texto_limpo(valor, limite=SELO_MAX)
 
     @field_validator("preco")
     @classmethod
-    def _validar_preco(cls, valor: float) -> float:
+    def _validar_preco(cls, valor):
         return _decimal_monetario(valor, campo="Preço")
 
     @field_validator("custo")
     @classmethod
-    def _validar_custo(cls, valor: float) -> float:
+    def _validar_custo(cls, valor):
         return _decimal_monetario(valor, campo="Custo")
 
     @field_validator("lucro")
     @classmethod
-    def _ignorar_lucro_cliente(cls, valor: float) -> float:
+    def _ignorar_lucro_cliente(cls, valor):
         numero = float(valor)
         if not math.isfinite(numero):
             raise ValueError("Lucro deve ser um número finito.")
@@ -159,23 +154,27 @@ class ProdutoCompletoIn(BaseModel):
 
     @field_validator("imagem_url")
     @classmethod
-    def _validar_imagem_principal(cls, valor: Optional[str]) -> Optional[str]:
+    def _validar_imagem_principal(cls, valor):
         return _validar_url_https(valor, campo="Imagem principal")
 
     @field_validator("link_externo")
     @classmethod
-    def _validar_link_externo(cls, valor: Optional[str]) -> Optional[str]:
+    def _validar_link_externo(cls, valor):
         return _validar_url_https(valor, campo="Link externo")
 
     @field_validator("imagens")
     @classmethod
-    def _validar_imagens(cls, valores: list[str]) -> list[str]:
-        limpas: list[str] = []
+    def _validar_imagens(cls, valores):
+        limpas = []
         for valor in valores:
             url = _validar_url_https(valor, campo="Imagem")
             if url and url not in limpas:
                 limpas.append(url)
         return limpas
+
+
+class CheckoutPublicoIn(VendaSiteIn):
+    ciente_sob_encomenda: bool = False
 
 
 def validar_site_api_key(chave_recebida: str | None):
@@ -215,12 +214,12 @@ _CAMPOS_PRODUTO_ADMIN = """p.id, p.codigo_p, p.nome, p.marca, p.preco, p.quantid
                        p.estoque_minimo, p.descricao, p.imagem_url, p.imagens_json, p.link_externo, p.selo,
                        p.sob_encomenda, p.limite_encomenda, p.atualizado_em"""
 _JOIN_AVALIACOES = """
-                LEFT JOIN (
-                    SELECT produto_id, COUNT(*) AS total, AVG(nota) AS media
-                    FROM avaliacoes_produtos
-                    WHERE COALESCE(aprovado, 1) = 1
-                    GROUP BY produto_id
-                ) a ON a.produto_id = p.id"""
+LEFT JOIN (
+    SELECT produto_id, COUNT(*) AS total, AVG(nota) AS media
+    FROM avaliacoes_produtos
+    WHERE COALESCE(aprovado, 1) = 1
+    GROUP BY produto_id
+) a ON a.produto_id = p.id"""
 
 
 def _buscar_produtos(campos: str, busca: str, limite: int):
@@ -229,7 +228,7 @@ def _buscar_produtos(campos: str, busca: str, limite: int):
         garantir_colunas_comerciais(conn)
         if busca.strip():
             rows = conn.execute(
-                f"""SELECT {campos}, COALESCE(a.total, 0) AS avaliacoes_total, ROUND(a.media, 1) AS avaliacoes_media
+                f"""SELECT {campos}, COALESCE(a.total,0) AS avaliacoes_total, ROUND(a.media,1) AS avaliacoes_media
                 FROM produtos p{_JOIN_AVALIACOES}
                 WHERE COALESCE(p.ativo,1)=1
                   AND (p.nome LIKE ? OR p.codigo_p LIKE ? OR p.categoria LIKE ? OR p.marca LIKE ? OR p.descricao LIKE ? OR p.selo LIKE ?)
@@ -238,7 +237,7 @@ def _buscar_produtos(campos: str, busca: str, limite: int):
             ).fetchall()
         else:
             rows = conn.execute(
-                f"""SELECT {campos}, COALESCE(a.total, 0) AS avaliacoes_total, ROUND(a.media, 1) AS avaliacoes_media
+                f"""SELECT {campos}, COALESCE(a.total,0) AS avaliacoes_total, ROUND(a.media,1) AS avaliacoes_media
                 FROM produtos p{_JOIN_AVALIACOES}
                 WHERE COALESCE(p.ativo,1)=1 ORDER BY p.nome COLLATE NOCASE LIMIT ?""",
                 (limite,),
@@ -257,19 +256,19 @@ def listar_produtos_admin(busca: str = "", limite: int = Query(100, ge=1, le=500
 
 
 @router.post("/checkout/pedidos", dependencies=[Depends(limitar_checkout_publico)])
-def criar_pedido_checkout_publico(venda: VendaSiteIn, request: Request):
+def criar_pedido_checkout_publico(venda: CheckoutPublicoIn, request: Request):
     venda.origem = "site"
     venda.status = "Aguardando pagamento"
     venda.vendedor = "Site/Celular"
     venda.forma_pagamento = "Pix site/celular"
-    return registrar_venda_site(venda, request, _chave_interna_checkout(), None)
+    return registrar_checkout_publico(venda, request, _chave_interna_checkout())
 
 
 def _codigo_duplicado(conn, codigo: Optional[str], *, excluir_id: Optional[int] = None):
     if not codigo:
         return None
     sql = "SELECT id FROM produtos WHERE UPPER(TRIM(codigo_p))=? AND COALESCE(ativo,1)=1"
-    parametros: list[object] = [codigo]
+    parametros = [codigo]
     if excluir_id is not None:
         sql += " AND id<>?"
         parametros.append(excluir_id)
@@ -305,20 +304,12 @@ def criar_produto_completo(produto: ProdutoCompletoIn, sessao: dict = Depends(ex
         )
         produto_id = int(cur.lastrowid)
         depois = produto.model_dump()
-        depois["lucro"] = lucro
-        depois["sob_encomenda"] = bool(sob_encomenda)
-        depois["limite_encomenda"] = limite_encomenda
+        depois.update({"lucro": lucro, "sob_encomenda": bool(sob_encomenda), "limite_encomenda": limite_encomenda})
         registrar_auditoria(conn, "produto", produto_id, "criar", depois=depois)
         conn.commit()
-    return {
-        "ok": True,
-        "id": produto_id,
-        "status": "criado",
-        "lucro": lucro,
-        "sob_encomenda": bool(sob_encomenda),
-        "limite_encomenda": limite_encomenda,
-        "atualizado_em": agora,
-    }
+    return {"ok": True, "id": produto_id, "status": "criado", "lucro": lucro,
+            "sob_encomenda": bool(sob_encomenda), "limite_encomenda": limite_encomenda,
+            "atualizado_em": agora}
 
 
 @router.put("/produtos/{produto_id}")
@@ -348,20 +339,12 @@ def atualizar_produto_completo(produto_id: int, produto: ProdutoCompletoIn, sess
              produto.link_externo, produto.selo, sob_encomenda, limite_encomenda, agora, produto_id),
         )
         depois = produto.model_dump()
-        depois["lucro"] = lucro
-        depois["sob_encomenda"] = bool(sob_encomenda)
-        depois["limite_encomenda"] = limite_encomenda
+        depois.update({"lucro": lucro, "sob_encomenda": bool(sob_encomenda), "limite_encomenda": limite_encomenda})
         registrar_auditoria(conn, "produto", produto_id, "atualizar", antes=dict(existente), depois=depois)
         conn.commit()
-    return {
-        "ok": True,
-        "id": produto_id,
-        "status": "atualizado",
-        "lucro": lucro,
-        "sob_encomenda": bool(sob_encomenda),
-        "limite_encomenda": limite_encomenda,
-        "atualizado_em": agora,
-    }
+    return {"ok": True, "id": produto_id, "status": "atualizado", "lucro": lucro,
+            "sob_encomenda": bool(sob_encomenda), "limite_encomenda": limite_encomenda,
+            "atualizado_em": agora}
 
 
 @router.delete("/produtos/{produto_id}")
