@@ -75,6 +75,7 @@
     const codigo = item.codigo_p || item.codigo || String(item.id || "");
     const imagens = Array.isArray(item.imagens) ? item.imagens.map(fullUrl).filter(Boolean) : [];
     const imagemPrincipal = fullUrl(item.imagem_url || item.imagem || item.imageUrl || imagens[0] || "");
+    const limiteEncomenda = Number(item.limite_encomenda || 10);
     return {
       id: `api-${item.id}`,
       apiId: item.id,
@@ -90,6 +91,10 @@
       externalUrl: item.link_externo || item.externalUrl || "",
       tag: item.selo || item.tag || "",
       selo: item.selo || item.tag || "",
+      sobEncomenda: Boolean(item.sob_encomenda),
+      sob_encomenda: Boolean(item.sob_encomenda),
+      limiteEncomenda: Number.isInteger(limiteEncomenda) && limiteEncomenda > 0 ? limiteEncomenda : 10,
+      limite_encomenda: Number.isInteger(limiteEncomenda) && limiteEncomenda > 0 ? limiteEncomenda : 10,
       avaliacoesTotal: Number(item.avaliacoes_total || 0),
       avaliacoesMedia: Number(item.avaliacoes_media || 0),
     };
