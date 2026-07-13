@@ -19,6 +19,8 @@ from backend.audit import registrar_auditoria
 from backend.backup_routes import router as backup_router
 from backend.campaign_routes import router as campaign_router
 from backend.course_routes import router as course_router
+from backend.lms_routes import router as lms_router
+from backend.lms_admin_routes import router as lms_admin_router
 from backend.database import conectar, executar, listar, obter
 from backend.logging_config import configurar_logging, get_logger
 from backend.order_status_routes import expirar_pedidos_pendentes, router as order_status_router
@@ -202,6 +204,8 @@ app.include_router(course_router)
 app.include_router(aluno_router)
 app.include_router(review_router)
 app.include_router(campaign_router)
+app.include_router(lms_router)
+app.include_router(lms_admin_router)
 
 
 class ProdutoIn(BaseModel):
