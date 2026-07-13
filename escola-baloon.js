@@ -40,6 +40,10 @@
 
     const particulas = montarParticulas();
 
+    const brasa = document.createElement("div");
+    brasa.className = "escola-baloon-edge";
+    brasa.setAttribute("aria-hidden", "true");
+
     const emblema = document.createElement("div");
     emblema.className = "escola-baloon-emblem";
     emblema.setAttribute("aria-hidden", "true");
@@ -72,6 +76,7 @@
     corpo.appendChild(texto);
     corpo.appendChild(cta);
 
+    baloon.appendChild(brasa);
     baloon.appendChild(particulas);
     baloon.appendChild(fechar);
     baloon.appendChild(emblema);
