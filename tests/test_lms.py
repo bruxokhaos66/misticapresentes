@@ -305,6 +305,61 @@ def test_suspender_acesso_bloqueia_curso():
     assert aluno.get(f"/api/escola/cursos/{slug}").status_code == 200
 
 
+def test_max_tentativas_respeitado_mesmo_com_sessoes_pre_abertas():
+    """Regressão (M1): pré-abrir várias sessões não pode burlar max_tentativas.
+    O limite é reavaliado no envio, ponto autoritativo."""
+    slug = _slug()
+    ids = _curso_demo(slug)
+    # Reconfigura a avaliação do módulo 1 para 1 tentativa apenas.
+    r = client.put("/api/admin/escola/quizzes", json={"modulo_id": ids["m1"], "nota_minima": 70, "max_tentativas": 1, "embaralhar_perguntas": False, "embaralhar_opcoes": False}, headers=ADMIN)
+    assert r.status_code == 200
+    aluno, _, _ = _aluno_logado(slug)
+    _concluir_modulo1(aluno, ids)
+    # Pré-abre 3 sessões (todas passam pois ainda não há tentativa registrada).
+    sessoes = [aluno.get(f"/api/escola/quizzes/{ids['q1']}/iniciar").json() for _ in range(3)]
+    def enviar(sess):
+        respostas = [{"pergunta_id": p["id"], "opcao_id": p["opcoes"][1]["id"]} for p in sess["perguntas"]]
+        return aluno.post(f"/api/escola/quizzes/{ids['q1']}/enviar", json={"sessao_id": sess["sessao_id"], "respostas": respostas})
+    codes = [enviar(s).status_code for s in sessoes]
+    assert codes[0] == 200  # primeira conta
+    assert all(c == 429 for c in codes[1:])  # demais barradas pelo limite
+    tentativas = aluno.get(f"/api/escola/quizzes/{ids['q1']}/tentativas").json()
+    assert len(tentativas) == 1
+
+
+def test_reenvio_da_mesma_sessao_apos_sucesso_e_bloqueado():
+    """Regressão (M1): a mesma sessão consumida não pode ser reenviada."""
+    slug = _slug()
+    ids = _curso_demo(slug)
+    aluno, _, _ = _aluno_logado(slug)
+    _concluir_modulo1(aluno, ids)
+    sess = aluno.get(f"/api/escola/quizzes/{ids['q1']}/iniciar").json()
+    respostas = [{"pergunta_id": p["id"], "opcao_id": p["opcoes"][0]["id"]} for p in sess["perguntas"]]
+    body = {"sessao_id": sess["sessao_id"], "respostas": respostas}
+    assert aluno.post(f"/api/escola/quizzes/{ids['q1']}/enviar", json=body).status_code == 200
+    assert aluno.post(f"/api/escola/quizzes/{ids['q1']}/enviar", json=body).status_code == 409
+
+
+def test_suspensao_bloqueia_endpoint_legado_de_conteudo():
+    """Regressão (M2): aluno suspenso não acessa nem o conteúdo plano legado."""
+    from backend.database import conectar
+    from backend.aluno_auth import COOKIE_NOME, garantir_tabelas_alunos
+
+    tok = secrets.token_urlsafe(32)
+    with conectar() as conn:
+        garantir_tabelas_alunos(conn)
+        aid = int(conn.execute("INSERT INTO alunos (nome, email, criado_em) VALUES (?,?,?)", ("Susp", f"susp-{uuid.uuid4().hex[:8]}@ex.com", "2026-01-01 00:00:00")).lastrowid)
+        conn.execute("INSERT INTO alunos_sessoes (token, aluno_id, criada_em, expira_em) VALUES (?,?,?,?)", (tok, aid, "2026-01-01 00:00:00", "2099-01-01 00:00:00"))
+        conn.execute("INSERT OR IGNORE INTO alunos_cursos (aluno_id, slug, liberado_em) VALUES (?,?,?)", (aid, CATALOGO_PAGO, "2026-01-01 00:00:00"))
+    al = TestClient(main.app)
+    al.cookies.set(COOKIE_NOME, tok)
+    # Antes da suspensão: endpoint legado responde (não 403 por acesso).
+    assert al.get(f"/api/cursos/{CATALOGO_PAGO}/conteudo").status_code == 200
+    client.post("/api/admin/escola/alunos/suspender", json={"aluno_id": aid, "slug": CATALOGO_PAGO}, headers=ADMIN)
+    # Depois: bloqueado no legado também.
+    assert al.get(f"/api/cursos/{CATALOGO_PAGO}/conteudo").status_code == 403
+
+
 def test_liberacao_manual_de_modulo():
     slug = _slug()
     ids = _curso_demo(slug)

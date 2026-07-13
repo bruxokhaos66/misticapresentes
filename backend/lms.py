@@ -50,6 +50,12 @@ def garantir_tabelas_lms(conn) -> None:
     Segue o mesmo padrão dos demais ``garantir_tabela_*`` do projeto para
     conviver com o ``init_db`` das migrações sem exigir passo manual em deploy.
     """
+    # Garante as tabelas de aluno/matrícula (incl. coluna ``suspenso``) antes das
+    # tabelas do LMS: rotas administrativas que fazem JOIN em ``alunos_cursos``
+    # funcionam mesmo num banco recém-criado, sem depender da ordem de chamada.
+    from backend.aluno_auth import garantir_tabelas_alunos
+
+    garantir_tabelas_alunos(conn)
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS curso_config (

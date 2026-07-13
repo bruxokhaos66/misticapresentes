@@ -375,12 +375,32 @@ def enviar_quiz(quiz_id: int, payload: EnvioQuizIn, sessao: dict = Depends(sessa
         ).fetchone()
         if not ses:
             raise HTTPException(status_code=404, detail="Sessão de avaliação inválida. Inicie a avaliação novamente.")
-        if ses["consumida_em"]:
+
+        agora = _txt(_agora())
+        # Consumo ATÔMICO da sessão (uso único, à prova de reenvio e de duas
+        # requisições simultâneas): apenas um UPDATE consegue mudar consumida_em
+        # de NULL para agora — os demais afetam 0 linhas e são rejeitados. O
+        # write-lock do SQLite serializa as chamadas concorrentes.
+        claim = conn.execute(
+            "UPDATE quiz_sessoes SET consumida_em=? WHERE id=? AND consumida_em IS NULL",
+            (agora, payload.sessao_id),
+        )
+        if claim.rowcount == 0:
             raise HTTPException(status_code=409, detail="Esta tentativa já foi enviada.")
 
         quiz = conn.execute("SELECT * FROM curso_quizzes WHERE id=?", (quiz_id,)).fetchone()
         modulo = conn.execute("SELECT * FROM curso_modulos WHERE id=?", (quiz["modulo_id"],)).fetchone()
         slug = modulo["slug"]
+
+        # Limite de tentativas é autoritativo AQUI (não só no início): impede
+        # burlar o limite pré-abrindo várias sessões antes de enviar.
+        if quiz["max_tentativas"]:
+            feitas = conn.execute(
+                "SELECT COUNT(*) AS n FROM quiz_tentativas WHERE aluno_id=? AND quiz_id=?",
+                (aluno_id, quiz_id),
+            ).fetchone()["n"]
+            if int(feitas) >= int(quiz["max_tentativas"]):
+                raise HTTPException(status_code=429, detail="Você atingiu o limite de tentativas desta avaliação.")
 
         perguntas_ids = [int(x) for x in str(ses["perguntas"]).split(",") if x]
         respostas_por_pergunta = {int(r.pergunta_id): r.opcao_id for r in payload.respostas}
@@ -403,7 +423,6 @@ def enviar_quiz(quiz_id: int, payload: EnvioQuizIn, sessao: dict = Depends(sessa
         nota = round((acertos / total) * 100) if total else 0
         nota_minima = int(quiz["nota_minima"] or _nota_minima_modulo(conn, dict(modulo), slug))
         aprovado = nota >= nota_minima
-        agora = _txt(_agora())
 
         cur = conn.execute(
             """
@@ -419,7 +438,7 @@ def enviar_quiz(quiz_id: int, payload: EnvioQuizIn, sessao: dict = Depends(sessa
                 "INSERT INTO quiz_respostas (tentativa_id, pergunta_id, opcao_id, correta) VALUES (?,?,?,?)",
                 (tentativa_id, pid, opcao_id, ok),
             )
-        conn.execute("UPDATE quiz_sessoes SET consumida_em=? WHERE id=?", (agora, payload.sessao_id))
+        # (a sessão já foi consumida atomicamente no início desta transação)
 
         # Explicações só são reveladas DEPOIS de enviar (nunca antes da correção).
         explicacoes = {}

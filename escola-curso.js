@@ -10,6 +10,26 @@
 
   const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
+  // Sanitiza o HTML de conteúdo de aula (autorado no admin) antes de exibir.
+  // Usa um <template> inerte (scripts não executam, imagens não carregam na
+  // análise) e remove tags perigosas, handlers on* e URLs javascript:. Preserva
+  // texto rico (p, strong, listas, links/imagens seguros) sem dependências.
+  const TAGS_PROIBIDAS = ["SCRIPT", "IFRAME", "OBJECT", "EMBED", "STYLE", "LINK", "META", "FORM", "BASE", "SVG"];
+  function sanitizeHtml(html) {
+    const tpl = document.createElement("template");
+    tpl.innerHTML = String(html ?? "");
+    tpl.content.querySelectorAll("*").forEach(el => {
+      if (TAGS_PROIBIDAS.includes(el.tagName)) { el.remove(); return; }
+      [...el.attributes].forEach(attr => {
+        const nome = attr.name.toLowerCase();
+        const valor = attr.value.replace(/\s+/g, "").toLowerCase();
+        if (nome.startsWith("on")) el.removeAttribute(attr.name);
+        else if ((nome === "href" || nome === "src" || nome === "xlink:href") && (valor.startsWith("javascript:") || valor.startsWith("data:text/html"))) el.removeAttribute(attr.name);
+      });
+    });
+    return tpl.innerHTML;
+  }
+
   async function api(path, options = {}) {
     const res = await fetch(`${API}${path}`, {
       credentials: "include",
@@ -169,7 +189,7 @@
     }
     const material = aula.material_url
       ? `<a class="btn btn-ghost" href="${esc(normalizeUrl(aula.material_url))}" target="_blank" rel="noopener">📎 Material complementar</a>` : "";
-    const texto = aula.conteudo ? `<div class="plataforma-texto">${aula.conteudo}</div>` : "";
+    const texto = aula.conteudo ? `<div class="plataforma-texto">${sanitizeHtml(aula.conteudo)}</div>` : "";
 
     const flat = todasAulas().filter(a => a.moduloLiberado);
     const idx = flat.findIndex(a => a.id === aula.id);
