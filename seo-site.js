@@ -197,7 +197,7 @@
           "@type": "Offer",
           priceCurrency: "BRL",
           price: Number(product.price || 0).toFixed(2),
-          availability: Number(product.stock || 0) > 0 ? "https://schema.org/InStock" : "https://schema.org/PreOrder",
+          availability: (Number(product.stock || 0) > 0 && !(window.misticaEncomenda && window.misticaEncomenda.isSobEncomenda(product))) ? "https://schema.org/InStock" : "https://schema.org/PreOrder",
           url,
           seller: { "@id": `${baseUrl}/#loja` },
         },

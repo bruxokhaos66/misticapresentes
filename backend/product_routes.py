@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from backend.audit import registrar_auditoria
 from backend.api_security import validar_site_api_key as validar_chave_api
@@ -35,6 +35,25 @@ class ProdutoCompletoIn(BaseModel):
     imagens: list[str] = Field(default_factory=list)
     link_externo: Optional[str] = None
     selo: Optional[str] = None
+
+    @field_validator("link_externo")
+    @classmethod
+    def _validar_link_externo(cls, valor: Optional[str]) -> Optional[str]:
+        """Sanitiza o link do fornecedor guardado no produto.
+
+        Aceita exclusivamente URLs https://. Bloqueia http:// e protocolos
+        perigosos (javascript:, data:, file:, vbscript: e afins), além de URLs
+        relativas. Valor vazio/ausente é preservado para não quebrar produtos
+        antigos sem link.
+        """
+        if valor is None:
+            return None
+        texto = valor.strip()
+        if not texto:
+            return None
+        if not texto.lower().startswith("https://"):
+            raise ValueError("O link externo deve começar com https://.")
+        return texto
 
 
 def validar_site_api_key(chave_recebida: str | None):

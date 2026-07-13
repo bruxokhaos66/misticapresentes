@@ -127,6 +127,8 @@
 
     const badgeText = String(product.selo || product.tag || "");
     const bestSeller = /mais vendid/i.test(badgeText);
+    const t = window.misticaEncomenda || null;
+    const sob = Boolean(t && t.isSobEncomenda(product));
 
     const mainPhoto = images[0]
       ? `<img class="product-page-photo" id="productMainPhoto" src="${images[0]}" alt="${product.name}" loading="eager">`
@@ -148,7 +150,8 @@
           <h1>${product.name}</h1>
           <p>${product.description || "Produto especial selecionado pela Mística Presentes."}</p>
           <strong class="product-price">${money(product.price)}</strong>
-          <span class="stock-badge ${stock <= storeConfig.minStock ? "stock-low" : ""}">${stock > 0 ? `Estoque: ${stock}` : "Sob encomenda"}</span>
+          <span class="stock-badge ${!sob && stock <= storeConfig.minStock ? "stock-low" : ""}">${sob ? (t.ESTOQUE_NOTE) : (stock > 0 ? `Estoque: ${stock}` : "Sob encomenda")}</span>
+          ${sob ? `<span class="product-badge-encomenda" style="position:static;align-self:flex-start">${t.BADGE}</span>` : ""}
           <div class="product-page-buy">
             <input id="qty-${cartId}" class="product-page-qty" type="number" min="1" max="${Math.max(stock, 1)}" step="1" value="1" aria-label="Quantidade de ${product.name}" ${stock <= 0 ? "disabled" : ""}>
             <button class="btn" type="button" id="addProductToCart" ${stock <= 0 ? "disabled" : ""}>${stock > 0 ? "Adicionar ao carrinho" : "Sob encomenda"}</button>
@@ -159,7 +162,7 @@
             <a class="btn btn-ghost" href="#checkout-jump" id="goToCartFromProduct">Ir para o carrinho</a>
             <button class="btn btn-ghost" type="button" id="copyProductLink">Copiar link</button>
           </div>
-          <small class="privacy-note">Adicione ao carrinho e finalize com Pix ou WhatsApp. Confira disponibilidade e prazo de entrega antes de pagar.</small>
+          <small class="privacy-note">${sob ? "Produto adquirido especialmente para você. A disponibilidade é confirmada após o pagamento." : "Adicione ao carrinho e finalize com Pix ou WhatsApp. Confira disponibilidade e prazo de entrega antes de pagar."}</small>
         </div>
       </article>
     `;
@@ -210,6 +213,19 @@
         root.querySelectorAll(".product-page-thumb").forEach(b => b.classList.toggle("is-active", b === btn));
       });
     });
+
+    // Seção "Como funciona a encomenda": aparece apenas para produtos sob
+    // encomenda (categoria Achados Místicos ou selo Sob encomenda). Produtos de
+    // estoque próprio não recebem este aviso.
+    if (sob && t) {
+      const box = make("section", "encomenda-info");
+      box.appendChild(make("p", "encomenda-info-title", t.COMO_FUNCIONA_TITULO));
+      box.appendChild(make("p", "", t.COMO_FUNCIONA_TEXTO));
+      const prazo = make("span", "encomenda-prazo", `⏳ ${t.PRAZO_TEXTO}`);
+      box.appendChild(prazo);
+      box.appendChild(make("p", "encomenda-aviso", t.COMO_FUNCIONA_AVISO));
+      root.appendChild(box);
+    }
 
     root.appendChild(renderTrust());
     root.appendChild(renderPolicies());
