@@ -43,6 +43,9 @@
       checkoutButton.setAttribute("aria-disabled", blocked ? "true" : "false");
     }
     if (message) setSyncStatus(message, state === "ready");
+    window.dispatchEvent(new CustomEvent("mistica:catalog-state", {
+      detail: { state, message: message || "" },
+    }));
   }
 
   function apiHeaders(extra = {}) {
