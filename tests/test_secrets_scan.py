@@ -46,10 +46,10 @@ def test_segredo_ficticio_detectavel_falha_o_scan(tmp_path):
     aparecer como um resultado novo não coberto pela baseline."""
     arquivo_tmp = tmp_path / "arquivo_com_segredo_forjado.py"
     arquivo_tmp.write_text(
-        'AWS_SECRET_ACCESS_KEY = "AKIAFORJADOEXEMPLO0000000"\n',
+        'AWS_SECRET_ACCESS_KEY = "AKIAFORJADOEXEMPLO0000000"\n',  # pragma: allowlist secret
         encoding="utf-8",
     )
-    resultado = _rodar_scan("scan", "--string", "AKIAFORJADOEXEMPLO0000000")
+    resultado = _rodar_scan("scan", "--string", "AKIAFORJADOEXEMPLO0000000")  # pragma: allowlist secret
     assert "AWS Access Key" in resultado.stdout or "True" in resultado.stdout
 
 
