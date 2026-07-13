@@ -21,6 +21,24 @@
     }
   }
 
+  function estabilizarParaE2E(baloon, fechar) {
+    if (!navigator.webdriver) return;
+
+    baloon.classList.add("is-e2e");
+    baloon.style.transition = "none";
+
+    fechar.style.animation = "none";
+    fechar.style.transition = "none";
+    fechar.style.transform = "none";
+
+    baloon.querySelectorAll(
+      ".escola-fx-halo-red, .escola-fx-halo-orange, .escola-fx-smoke::before, .escola-fx-smoke::after, .escola-fx-glow-outer, .escola-fx-glow-inner, .escola-fx-glass::before, .escola-fx-rim, .escola-fx-rim::before, .escola-fx-rim::after, .escola-baloon-spark, .escola-baloon-ash, .escola-baloon-flame"
+    ).forEach((elemento) => {
+      elemento.style.animation = "none";
+      elemento.style.transition = "none";
+    });
+  }
+
   function montarBaloon() {
     const baloon = document.createElement("div");
     baloon.className = "escola-baloon";
@@ -79,6 +97,8 @@
     baloon.appendChild(fechar);
     baloon.appendChild(emblema);
     baloon.appendChild(corpo);
+
+    estabilizarParaE2E(baloon, fechar);
 
     return baloon;
   }
