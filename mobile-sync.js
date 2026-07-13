@@ -64,32 +64,60 @@
     return data;
   }
 
+  function escapeHtml(value) {
+    return String(value == null ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function catalogText(value, fallback = "") {
+    const normalized = String(value == null ? fallback : value)
+      .replace(/[\u0000-\u001F\u007F]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    return escapeHtml(normalized || fallback);
+  }
+
   function fullUrl(path) {
     const value = String(path || "").trim();
     if (!value) return "";
-    if (/^https?:\/\//i.test(value)) return value;
-    return `${API_BASE}${value.startsWith("/") ? "" : "/"}${value}`;
+    if (/^https:\/\//i.test(value)) return value;
+    if (value.startsWith("/")) return `${API_BASE}${value}`;
+    return "";
   }
 
   function normalizarProduto(item) {
-    const codigo = item.codigo_p || item.codigo || String(item.id || "");
+    const codigo = String(item.codigo_p || item.codigo || item.id || "").trim();
     const imagens = Array.isArray(item.imagens) ? item.imagens.map(fullUrl).filter(Boolean) : [];
     const imagemPrincipal = fullUrl(item.imagem_url || item.imagem || item.imageUrl || imagens[0] || "");
+    const limiteEncomenda = Number(item.limite_encomenda || 10);
+    const temRegraExplicita = Object.prototype.hasOwnProperty.call(item, "sob_encomenda");
+    const sobEncomenda = temRegraExplicita ? Boolean(item.sob_encomenda) : undefined;
+    const categoriaOriginal = item.categoria || "Produtos da loja";
     return {
       id: `api-${item.id}`,
       apiId: item.id,
       codigo,
-      name: item.nome || item.nome_p || "Produto sem nome",
-      category: item.categoria || "Produtos da loja",
-      description: item.descricao || (item.categoria ? `Categoria: ${item.categoria}` : "Produto sincronizado da loja."),
+      name: catalogText(item.nome || item.nome_p, "Produto sem nome"),
+      category: catalogText(categoriaOriginal, "Produtos da loja"),
+      description: catalogText(item.descricao || (item.categoria ? `Categoria: ${item.categoria}` : "Produto sincronizado da loja.")),
       price: Number(item.preco || item.valor || 0),
       stock: Number(item.quantidade || item.estoque || 0),
-      icon: item.icone || "✨",
+      icon: catalogText(item.icone || "✨", "✨"),
       imageUrl: imagemPrincipal,
       images: imagens.length ? imagens : (imagemPrincipal ? [imagemPrincipal] : []),
-      externalUrl: item.link_externo || item.externalUrl || "",
-      tag: item.selo || item.tag || "",
-      selo: item.selo || item.tag || "",
+      externalUrl: fullUrl(item.link_externo || item.externalUrl || ""),
+      tag: catalogText(item.selo || item.tag || ""),
+      selo: catalogText(item.selo || item.tag || ""),
+      ...(temRegraExplicita ? {
+        sobEncomenda,
+        sob_encomenda: sobEncomenda,
+      } : {}),
+      limiteEncomenda: Number.isInteger(limiteEncomenda) && limiteEncomenda > 0 ? limiteEncomenda : 10,
+      limite_encomenda: Number.isInteger(limiteEncomenda) && limiteEncomenda > 0 ? limiteEncomenda : 10,
       avaliacoesTotal: Number(item.avaliacoes_total || 0),
       avaliacoesMedia: Number(item.avaliacoes_media || 0),
     };
@@ -131,12 +159,20 @@
     }
   }
 
+  function produtoDoCarrinho(item) {
+    return products.find(candidate => candidate.id === item.id);
+  }
+
   function montarItensPedido(itens) {
     return itens.map(item => {
-      const produto = products.find(candidate => candidate.id === item.id);
+      const produto = produtoDoCarrinho(item);
       if (!produto?.apiId || !produto?.codigo) throw new Error("Um produto do carrinho não está mais disponível no catálogo oficial.");
       const quantidade = Number(item.qty || 0);
       if (!Number.isInteger(quantidade) || quantidade <= 0) throw new Error("Quantidade inválida no carrinho.");
+      if (window.misticaEncomenda?.isSobEncomenda(produto)) {
+        const limite = window.misticaEncomenda?.limiteDe(produto) || 10;
+        if (quantidade > limite) throw new Error(`Quantidade máxima sob encomenda para ${produto.name}: ${limite}.`);
+      }
       return {
         produto_id: produto.apiId,
         codigo_p: produto.codigo,
@@ -145,10 +181,30 @@
     });
   }
 
+  function confirmarCondicoesEncomenda(itensCarrinho) {
+    const produtosCarrinho = itensCarrinho.map(produtoDoCarrinho).filter(Boolean);
+    const flags = produtosCarrinho.map(produto => Boolean(window.misticaEncomenda?.isSobEncomenda(produto)));
+    const possuiEncomenda = flags.some(Boolean);
+    const possuiEstoque = flags.some(flag => !flag);
+
+    if (possuiEncomenda && possuiEstoque) {
+      throw new Error("Produtos disponíveis em estoque e produtos sob encomenda devem ser finalizados em pedidos separados.");
+    }
+    if (!possuiEncomenda) return false;
+
+    const aviso = window.misticaEncomenda?.CHECKOUT_AVISO || "Este pedido contém produto sob encomenda.";
+    const confirma = window.misticaEncomenda?.CHECKOUT_CONFIRMA || "Estou ciente das condições da encomenda.";
+    if (!window.confirm(`${aviso}\n\n${confirma}`)) {
+      throw new Error("Confirmação da encomenda cancelada.");
+    }
+    return true;
+  }
+
   async function criarPedidoNoServidor(itensCarrinho) {
     if (window.misticaCatalogState !== "ready") throw new Error("O catálogo oficial ainda não está disponível.");
     if (!Array.isArray(itensCarrinho) || !itensCarrinho.length) throw new Error("Carrinho vazio.");
 
+    const cienteSobEncomenda = confirmarCondicoesEncomenda(itensCarrinho);
     const dataIso = new Date().toISOString();
     const payload = {
       origem: "site",
@@ -161,6 +217,7 @@
       data_iso: dataIso,
       dia_operacional: dataIso.slice(0, 10),
       cupom: window.misticaCupomAtivo || null,
+      ciente_sob_encomenda: cienteSobEncomenda,
       itens: montarItensPedido(itensCarrinho),
     };
 
@@ -181,6 +238,7 @@
       expiraEm: resposta.expira_em || null,
       totalFinal: Number(resposta.total_final || 0),
       desconto: Number(resposta.desconto || 0),
+      sobEncomenda: Boolean(resposta.sob_encomenda),
     };
   }
 
