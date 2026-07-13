@@ -39,10 +39,7 @@
     });
 
     const particulas = montarParticulas();
-
-    const brasa = document.createElement("div");
-    brasa.className = "escola-baloon-edge";
-    brasa.setAttribute("aria-hidden", "true");
+    const camadasFx = montarCamadasFx();
 
     const emblema = document.createElement("div");
     emblema.className = "escola-baloon-emblem";
@@ -76,7 +73,7 @@
     corpo.appendChild(texto);
     corpo.appendChild(cta);
 
-    baloon.appendChild(brasa);
+    camadasFx.forEach((camada) => baloon.appendChild(camada));
     baloon.appendChild(particulas);
     baloon.appendChild(fechar);
     baloon.appendChild(emblema);
@@ -85,15 +82,26 @@
     return baloon;
   }
 
+  function montarCamadasFx() {
+    return ["escola-fx-halo-red", "escola-fx-halo-orange", "escola-fx-smoke", "escola-fx-glow-outer", "escola-fx-glow-inner", "escola-fx-glass", "escola-fx-rim"].map(
+      (nomeClasse) => {
+        const camada = document.createElement("div");
+        camada.className = nomeClasse;
+        camada.setAttribute("aria-hidden", "true");
+        return camada;
+      }
+    );
+  }
+
   function montarParticulas() {
     const container = document.createElement("div");
     container.className = "escola-baloon-particles";
     container.setAttribute("aria-hidden", "true");
 
-    for (let i = 0; i < 9; i += 1) {
+    for (let i = 0; i < 13; i += 1) {
       const spark = document.createElement("span");
       spark.className = "escola-baloon-spark";
-      const esquerda = 10 + Math.random() * 80;
+      const esquerda = i % 3 === 0 ? Math.random() * 12 + (i % 2 === 0 ? 0 : 82) : 10 + Math.random() * 80;
       const deriva = (Math.random() - 0.5) * 30;
       const duracao = 1.6 + Math.random() * 1.4;
       const atraso = Math.random() * 2.5;
