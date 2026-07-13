@@ -140,12 +140,20 @@
     }
   }
 
+  function produtoDoCarrinho(item) {
+    return products.find(candidate => candidate.id === item.id);
+  }
+
   function montarItensPedido(itens) {
     return itens.map(item => {
-      const produto = products.find(candidate => candidate.id === item.id);
+      const produto = produtoDoCarrinho(item);
       if (!produto?.apiId || !produto?.codigo) throw new Error("Um produto do carrinho não está mais disponível no catálogo oficial.");
       const quantidade = Number(item.qty || 0);
       if (!Number.isInteger(quantidade) || quantidade <= 0) throw new Error("Quantidade inválida no carrinho.");
+      if (window.misticaEncomenda?.isSobEncomenda(produto)) {
+        const limite = window.misticaEncomenda?.limiteDe(produto) || 10;
+        if (quantidade > limite) throw new Error(`Quantidade máxima sob encomenda para ${produto.name}: ${limite}.`);
+      }
       return {
         produto_id: produto.apiId,
         codigo_p: produto.codigo,
@@ -154,10 +162,30 @@
     });
   }
 
+  function confirmarCondicoesEncomenda(itensCarrinho) {
+    const produtosCarrinho = itensCarrinho.map(produtoDoCarrinho).filter(Boolean);
+    const flags = produtosCarrinho.map(produto => Boolean(window.misticaEncomenda?.isSobEncomenda(produto)));
+    const possuiEncomenda = flags.some(Boolean);
+    const possuiEstoque = flags.some(flag => !flag);
+
+    if (possuiEncomenda && possuiEstoque) {
+      throw new Error("Produtos disponíveis em estoque e produtos sob encomenda devem ser finalizados em pedidos separados.");
+    }
+    if (!possuiEncomenda) return false;
+
+    const aviso = window.misticaEncomenda?.CHECKOUT_AVISO || "Este pedido contém produto sob encomenda.";
+    const confirma = window.misticaEncomenda?.CHECKOUT_CONFIRMA || "Estou ciente das condições da encomenda.";
+    if (!window.confirm(`${aviso}\n\n${confirma}`)) {
+      throw new Error("Confirmação da encomenda cancelada.");
+    }
+    return true;
+  }
+
   async function criarPedidoNoServidor(itensCarrinho) {
     if (window.misticaCatalogState !== "ready") throw new Error("O catálogo oficial ainda não está disponível.");
     if (!Array.isArray(itensCarrinho) || !itensCarrinho.length) throw new Error("Carrinho vazio.");
 
+    const cienteSobEncomenda = confirmarCondicoesEncomenda(itensCarrinho);
     const dataIso = new Date().toISOString();
     const payload = {
       origem: "site",
@@ -170,6 +198,7 @@
       data_iso: dataIso,
       dia_operacional: dataIso.slice(0, 10),
       cupom: window.misticaCupomAtivo || null,
+      ciente_sob_encomenda: cienteSobEncomenda,
       itens: montarItensPedido(itensCarrinho),
     };
 
@@ -190,6 +219,7 @@
       expiraEm: resposta.expira_em || null,
       totalFinal: Number(resposta.total_final || 0),
       desconto: Number(resposta.desconto || 0),
+      sobEncomenda: Boolean(resposta.sob_encomenda),
     };
   }
 
