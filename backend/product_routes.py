@@ -41,18 +41,18 @@ class ProdutoCompletoIn(BaseModel):
     def _validar_link_externo(cls, valor: Optional[str]) -> Optional[str]:
         """Sanitiza o link do fornecedor guardado no produto.
 
-        Só aceita URLs http(s); protocolos perigosos (javascript:, data:, file:,
-        vbscript: e afins) são bloqueados. Valor vazio/ausente é preservado para
-        não quebrar produtos antigos sem link.
+        Aceita exclusivamente URLs https://. Bloqueia http:// e protocolos
+        perigosos (javascript:, data:, file:, vbscript: e afins), além de URLs
+        relativas. Valor vazio/ausente é preservado para não quebrar produtos
+        antigos sem link.
         """
         if valor is None:
             return None
         texto = valor.strip()
         if not texto:
             return None
-        inicio = texto.lower()
-        if not (inicio.startswith("https://") or inicio.startswith("http://")):
-            raise ValueError("O link externo deve começar com https:// (ou http://).")
+        if not texto.lower().startswith("https://"):
+            raise ValueError("O link externo deve começar com https://.")
         return texto
 
 
