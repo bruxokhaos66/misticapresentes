@@ -2,6 +2,10 @@
   if (window.__MISTICA_V2_COMMERCE__) return;
   window.__MISTICA_V2_COMMERCE__ = true;
 
+  const esc = (value) => (window.MisticaXSS || {}).html ? MisticaXSS.html(value) : String(value == null ? "" : value).replace(/[&<>"']/g, (ch) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[ch]));
+
   const intents = [
     { label: 'Todos', value: '' },
     { label: 'Proteção', value: 'proteção' },
@@ -183,8 +187,8 @@
       <div class="v2-bestseller-cards">
         ${bestSellers.slice(0, 6).map(product => `
           <a class="v2-bestseller-card" href="produto.html?id=${encodeURIComponent(product.id)}">
-            <span>${product.icon || '✨'}</span>
-            <strong>${product.name}</strong>
+            <span>${esc(product.icon || '✨')}</span>
+            <strong>${esc(product.name)}</strong>
             <small>${currency.format(Number(product.price || 0))}</small>
           </a>
         `).join('')}

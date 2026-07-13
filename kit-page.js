@@ -3,6 +3,10 @@
     return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   }
 
+  function esc(value) {
+    return (window.MisticaXSS || {}).html ? MisticaXSS.html(value) : String(value == null ? "" : value).replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+  }
+
   function availableQty(product) {
     try { return typeof getStock === "function" ? getStock(product.id) : Number(product.stock || 0); } catch { return Number(product.stock || 0); }
   }
@@ -29,7 +33,7 @@
 
   function chipsHtml(currentId) {
     return (window.misticaIntents || [])
-      .map(intent => `<a class="v2-chip${intent.id === currentId ? " active" : ""}" href="kit.html?intencao=${encodeURIComponent(intent.id)}">${intent.label}</a>`)
+      .map(intent => `<a class="v2-chip${intent.id === currentId ? " active" : ""}" href="kit.html?intencao=${encodeURIComponent(intent.id)}">${esc(intent.label)}</a>`)
       .join("");
   }
 
@@ -52,7 +56,7 @@
     const intent = intentFromQuery();
     if (!intent) return renderNotFound();
 
-    document.title = `Kit para ${intent.label} | Mística Presentes`;
+    document.title = `Kit para ${esc(intent.label)} | Mística Presentes`;
     const found = matchingProducts(intent);
     const grid = found.length
       ? `<div class="container product-grid">${found.map(productCardHtml).join("")}</div>`
@@ -61,8 +65,8 @@
     root.innerHTML = `
       <div class="container section-title centered">
         <p class="eyebrow">Kits por intenção</p>
-        <h2>Kit para ${intent.label}</h2>
-        <p>Produtos selecionados especialmente para ${intent.label.toLowerCase()}. Adicione ao carrinho e finalize pelo WhatsApp ou Pix.</p>
+        <h2>Kit para ${esc(intent.label)}</h2>
+        <p>Produtos selecionados especialmente para ${esc(intent.label.toLowerCase())}. Adicione ao carrinho e finalize pelo WhatsApp ou Pix.</p>
       </div>
       <div class="container isis-followup-chips">${chipsHtml(intent.id)}</div>
       ${grid}

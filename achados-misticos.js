@@ -19,14 +19,15 @@
   const stateEl = document.querySelector("[data-achados-state]");
   if (!grid || !stateEl) return;
 
-  const esc = (value) => String(value == null ? "" : value).replace(/[&<>"']/g, (ch) => ({
+  const esc = (value) => (window.MisticaXSS || {}).html ? MisticaXSS.html(value) : String(value == null ? "" : value).replace(/[&<>"']/g, (ch) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   }[ch]));
+  const safeUrl = (value) => (window.MisticaXSS || {}).url ? MisticaXSS.url(value) : String(value == null ? "" : value).trim();
 
   function fullUrl(path) {
     const value = String(path || "").trim();
     if (!value) return "";
-    if (value.startsWith("http://") || value.startsWith("https://")) return value;
+    if (value.startsWith("http://") || value.startsWith("https://")) return safeUrl(value);
     return `${API_BASE}${value.startsWith("/") ? "" : "/"}${value}`;
   }
 

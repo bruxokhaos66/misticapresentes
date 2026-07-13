@@ -50,8 +50,7 @@ window.misticaSiteConfig = {
     if (window.misticaCatalogState === "ready") return;
     const target = event.target?.closest?.("button, a");
     if (!target) return;
-    const onclick = target.getAttribute("onclick") || "";
-    if (target.matches("[data-generate-pix]") || onclick.includes("addToCart(")) {
+    if (target.matches("[data-generate-pix], [data-action-add]")) {
       event.preventDefault();
       event.stopImmediatePropagation();
       if (typeof window.setStatus === "function") {

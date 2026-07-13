@@ -101,8 +101,8 @@
           <p>${esc(product.description || 'Produto selecionado pela Mística Presentes.')}</p>
           <strong class="product-inspector-price">${currency.format(Number(product.price || 0))}</strong>
           <div class="product-inspector-actions">
-            <button class="btn" type="button" onclick="addToCart('${esc(product.id)}'); closeProductInspector();" ${available <= 0 ? 'disabled' : ''}>Adicionar ao carrinho</button>
-            <button class="btn btn-ghost" type="button" onclick="buyProductWhatsapp('${esc(product.id)}')">WhatsApp</button>
+            <button class="btn" type="button" data-action-add="${esc(product.id)}" ${available <= 0 ? 'disabled' : ''}>Adicionar ao carrinho</button>
+            <button class="btn btn-ghost" type="button" data-action-whatsapp="${esc(product.id)}">WhatsApp</button>
           </div>
           ${encomendaInfo}
           ${external}
@@ -117,7 +117,7 @@
     productGrid.innerHTML = products.map((product) => {
       const available = getStock(product.id);
       const disabled = available <= 0 ? 'disabled' : '';
-      const media = `<div class="product-media-wrap">${productMedia(product)}<button class="product-zoom-button" type="button" onclick="inspectProduct('${esc(product.id)}')" aria-label="Inspecionar ${esc(product.name)}">🔍</button></div>`;
+      const media = `<div class="product-media-wrap">${productMedia(product)}<button class="product-zoom-button" type="button" data-action-inspect="${esc(product.id)}" aria-label="Inspecionar ${esc(product.name)}">🔍</button></div>`;
       const bestSeller = typeof isBestSeller === 'function' && isBestSeller(product) ? `<span class="product-badge-best">${esc(typeof productBadgeText === 'function' ? productBadgeText(product) : product.selo)}</span>` : '';
       const rating = typeof socialProofHtml === 'function' ? socialProofHtml(product) : '';
       const sob = isSobEncomenda(product);
@@ -127,7 +127,7 @@
       const stockBadge = sob && t
         ? `<span class="stock-badge">${esc(t.ESTOQUE_NOTE)}</span>`
         : `<span class="stock-badge ${available <= storeConfig.minStock ? 'stock-low' : ''}">Estoque: ${available}</span>`;
-      return `<article class="product-card" data-category="${esc(product.category || '')}" data-best-seller="${typeof isBestSeller === 'function' ? isBestSeller(product) : false}">${bestSeller}${encomendaBadge}${media}<div><p class="eyebrow">${esc(product.category)}</p><h3>${esc(product.name)}</h3>${rating}<p>${esc(product.description)}</p>${encomendaNote}</div><strong class="product-price">${currency.format(product.price)}</strong>${stockBadge}<div class="qty-row"><input id="qty-${safeId(product.id)}" type="number" min="1" max="${available}" step="1" value="1" aria-label="Quantidade de ${esc(product.name)}" ${disabled} /><button class="btn" type="button" onclick="addToCart('${esc(product.id)}')" ${disabled}>Adicionar</button></div><button class="btn btn-ghost btn-full" type="button" onclick="buyProductWhatsapp('${esc(product.id)}')">Comprar pelo WhatsApp</button></article>`;
+      return `<article class="product-card" data-category="${esc(product.category || '')}" data-best-seller="${typeof isBestSeller === 'function' ? isBestSeller(product) : false}">${bestSeller}${encomendaBadge}${media}<div><p class="eyebrow">${esc(product.category)}</p><h3>${esc(product.name)}</h3>${rating}<p>${esc(product.description)}</p>${encomendaNote}</div><strong class="product-price">${currency.format(product.price)}</strong>${stockBadge}<div class="qty-row"><input id="qty-${safeId(product.id)}" type="number" min="1" max="${available}" step="1" value="1" aria-label="Quantidade de ${esc(product.name)}" ${disabled} /><button class="btn" type="button" data-action-add="${esc(product.id)}" ${disabled}>Adicionar</button></div><button class="btn btn-ghost btn-full" type="button" data-action-whatsapp="${esc(product.id)}">Comprar pelo WhatsApp</button></article>`;
     }).join('');
   }
 
@@ -137,5 +137,16 @@
       renderProducts = renderProductsWithInspector;
       renderProducts();
     }
+    // Delegação de eventos para ações do inspetor e cards. Complementa
+    // a delegação global de app.js (data-action-add / data-action-whatsapp).
+    document.addEventListener('click', (event) => {
+      const inspectBtn = event.target.closest('[data-action-inspect]');
+      if (inspectBtn) inspectProduct(inspectBtn.dataset.actionInspect);
+    });
+    // O botão "Adicionar" dentro do modal do inspetor fecha o modal após adicionar.
+    document.addEventListener('click', (event) => {
+      const addBtn = event.target.closest('.product-inspector-actions [data-action-add]');
+      if (addBtn) closeProductInspector();
+    }, true);
   });
 })();

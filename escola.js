@@ -128,13 +128,14 @@
   function normalizeUrl(url) {
     const value = text(url).trim();
     if (!value) return "";
-    if (value.startsWith("http")) return value;
     if (value.startsWith("/")) return `${COURSE_API_BASE}${value}`;
-    return value;
+    if (value.startsWith("http://") || value.startsWith("https://")) return value;
+    // Rejeitar javascript:, data:, vbscript: e outros protocolos perigosos
+    return "";
   }
 
   function escapeHtml(value) {
-    return String(value ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+    return (window.MisticaXSS || {}).html ? MisticaXSS.html(value) : String(value ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
   }
 
   function materiaisHtml(materiais) {
@@ -143,8 +144,9 @@
     }
     return materiais.map(item => {
       const url = normalizeUrl(item.url);
+      const safeHref = escapeHtml(url);
       return url
-        ? `<a class="escola-material-item" href="${url}" target="_blank" rel="noopener">📘 ${escapeHtml(item.titulo)}</a>`
+        ? `<a class="escola-material-item" href="${safeHref}" target="_blank" rel="noopener">📘 ${escapeHtml(item.titulo)}</a>`
         : `<div class="escola-material-item">📘 ${escapeHtml(item.titulo)}</div>`;
     }).join("");
   }
@@ -176,7 +178,7 @@
           const url = normalizeUrl(item.url);
           const feito = concluidos.has(item.id);
           const link = url
-            ? `<a class="escola-material-link" href="${url}" target="_blank" rel="noopener">📘 ${escapeHtml(item.titulo)}</a>`
+            ? `<a class="escola-material-link" href="${escapeHtml(url)}" target="_blank" rel="noopener">📘 ${escapeHtml(item.titulo)}</a>`
             : `<span class="escola-material-link">📘 ${escapeHtml(item.titulo)}</span>`;
           return `<li class="escola-material-row${feito ? " is-done" : ""}">
             <label class="escola-material-check"><input type="checkbox" data-material-id="${item.id}" ${feito ? "checked" : ""}><span>Concluí</span></label>
@@ -337,12 +339,12 @@
       ? `<button class="btn btn-full" type="button" data-action="ver">Acessar curso grátis</button>`
       : `<button class="btn btn-full" type="button" data-action="comprar">Comprar acesso</button>`;
     return `
-      <article class="escola-card" data-course-card="${curso.slug}">
+      <article class="escola-card" data-course-card="${escapeHtml(curso.slug)}">
         ${badge}
-        <div class="escola-card-icon" aria-hidden="true">${curso.icone}</div>
-        <div class="escola-card-tags">${curso.tags.map(tag => `<span>${tag}</span>`).join("")}</div>
-        <h3>${curso.titulo}</h3>
-        <p>${curso.resumo}</p>
+        <div class="escola-card-icon" aria-hidden="true">${escapeHtml(curso.icone)}</div>
+        <div class="escola-card-tags">${curso.tags.map(tag => `<span>${escapeHtml(tag)}</span>`).join("")}</div>
+        <h3>${escapeHtml(curso.titulo)}</h3>
+        <p>${escapeHtml(curso.resumo)}</p>
         ${price}
         <div class="escola-card-actions">
           ${primaryAction}
