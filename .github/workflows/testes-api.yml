@@ -47,13 +47,24 @@ jobs:
           retention-days: 3
 
       - name: Rodar suite completa
+        id: full_suite
         shell: bash
         run: |
           set +e
-          python -m pytest -q --tb=line --disable-warnings > pytest.log 2>&1
+          python -m pytest -q --tb=long --disable-warnings > pytest.log 2>&1
           status=$?
           if [ "$status" -ne 0 ]; then
             tail -n 60 pytest.log
-            exit "$status"
+          else
+            tail -n 20 pytest.log
           fi
-          tail -n 20 pytest.log
+          exit "$status"
+
+      - name: Publicar log completo da suíte em caso de falha
+        if: failure() && steps.full_suite.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-full-suite-log
+          path: pytest.log
+          if-no-files-found: error
+          retention-days: 3
