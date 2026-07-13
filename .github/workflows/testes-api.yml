@@ -27,16 +27,18 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
-      - name: Rodar testes
+      - name: Validar regras novas de encomenda
+        run: |
+          python -m pytest tests/test_product_preorder_rules.py -q --tb=short --disable-warnings
+
+      - name: Rodar suite completa
         shell: bash
         run: |
           set +e
-          python -m pytest -q --tb=short --disable-warnings > pytest.log 2>&1
+          python -m pytest -q --tb=line --disable-warnings > pytest.log 2>&1
           status=$?
           if [ "$status" -ne 0 ]; then
-            echo "::group::Resumo da falha do pytest"
-            tail -n 180 pytest.log
-            echo "::endgroup::"
+            tail -n 60 pytest.log
             exit "$status"
           fi
-          tail -n 40 pytest.log
+          tail -n 20 pytest.log
