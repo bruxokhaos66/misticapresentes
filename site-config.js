@@ -222,7 +222,7 @@ window.misticaSiteConfig = {
   };
 
   const iniciar = () => {
-    loadScript("misticaProductionGuardScript", "site-production-guard.js?v=20260713-checkout-estavel-2");
+    loadScript("misticaProductionGuardScript", "/site-production-guard.js?v=20260713-checkout-estavel-3");
     if (!adminRoute) return;
     if (!onAdminPage) {
       window.location.replace("admin.html");
