@@ -21,6 +21,7 @@ def codigo_unico(prefixo: str) -> str:
 
 def test_produto_sob_encomenda_e_limite_aparecem_no_catalogo_publico():
     codigo = codigo_unico("ENC")
+    codigo_normalizado = codigo.upper()
     response = client.post(
         "/api/produtos",
         headers=HEADERS,
@@ -41,9 +42,9 @@ def test_produto_sob_encomenda_e_limite_aparecem_no_catalogo_publico():
     assert criado["sob_encomenda"] is True
     assert criado["limite_encomenda"] == 7
 
-    catalogo = client.get("/api/produtos", params={"busca": codigo, "limite": 10})
+    catalogo = client.get("/api/produtos", params={"busca": codigo_normalizado, "limite": 10})
     assert catalogo.status_code == 200, catalogo.text
-    produto = next(item for item in catalogo.json() if item["codigo_p"] == codigo)
+    produto = next(item for item in catalogo.json() if item["codigo_p"] == codigo_normalizado)
     assert produto["sob_encomenda"] is True
     assert produto["limite_encomenda"] == 7
     assert produto["quantidade"] == 0
@@ -51,6 +52,7 @@ def test_produto_sob_encomenda_e_limite_aparecem_no_catalogo_publico():
 
 def test_produto_normal_tem_regra_explicita_desativada_por_padrao():
     codigo = codigo_unico("NORMAL")
+    codigo_normalizado = codigo.upper()
     response = client.post(
         "/api/produtos",
         headers=HEADERS,
@@ -64,8 +66,8 @@ def test_produto_normal_tem_regra_explicita_desativada_por_padrao():
     assert response.status_code == 200, response.text
     assert response.json()["sob_encomenda"] is False
 
-    catalogo = client.get("/api/produtos", params={"busca": codigo, "limite": 10})
-    produto = next(item for item in catalogo.json() if item["codigo_p"] == codigo)
+    catalogo = client.get("/api/produtos", params={"busca": codigo_normalizado, "limite": 10})
+    produto = next(item for item in catalogo.json() if item["codigo_p"] == codigo_normalizado)
     assert produto["sob_encomenda"] is False
     assert produto["limite_encomenda"] == 10
 
