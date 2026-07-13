@@ -11,7 +11,7 @@
   border-radius: 22px 22px 22px 4px;
   background: linear-gradient(160deg, rgba(120, 8, 4, 0.55), rgba(30, 2, 1, 0.72) 65%, rgba(90, 12, 3, 0.6));
   border: 1px solid rgba(255, 110, 60, 0.4);
-  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.4), 0 0 40px rgba(255, 70, 20, 0.28), inset 0 1px 0 rgba(255, 200, 160, 0.12);
+  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.4), 0 0 42px rgba(255, 90, 25, 0.4), inset 0 1px 0 rgba(255, 200, 160, 0.12);
   backdrop-filter: blur(16px) saturate(150%);
   -webkit-backdrop-filter: blur(16px) saturate(150%);
   color: #fff3ea;
@@ -30,16 +30,41 @@
   inset: -30%;
   z-index: -1;
   border-radius: inherit;
-  background: radial-gradient(circle at 25% 100%, rgba(255, 90, 20, 0.45), transparent 60%);
+  background: radial-gradient(circle at 25% 100%, rgba(255, 140, 30, 0.4), transparent 62%),
+    radial-gradient(circle at 75% 10%, rgba(255, 90, 20, 0.35), transparent 60%);
   filter: blur(18px);
-  animation: escolaHeatHaze 3.2s ease-in-out infinite;
+  pointer-events: none;
+  will-change: opacity, transform;
+  animation: escolaHeatHaze 3.6s ease-in-out infinite;
+}
+
+.escola-baloon-edge {
+  position: absolute;
+  inset: -3px;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  border: 1.5px solid rgba(255, 160, 70, 0.6);
+  box-shadow: 0 0 18px rgba(255, 110, 30, 0.55), 0 0 46px rgba(255, 150, 50, 0.35);
+  filter: blur(1.5px);
+  opacity: 0.7;
+  will-change: opacity;
+  animation: escolaEdgePulse 2.8s ease-in-out infinite;
 }
 
 .escola-baloon.is-visible {
   opacity: 1;
   transform: translateY(0) scale(1);
   pointer-events: auto;
-  animation: escolaBaloonFloat 4.5s ease-in-out infinite, escolaBaloonGlow 2.6s ease-in-out infinite;
+  animation: escolaBaloonIgnite 900ms cubic-bezier(0.34, 1.56, 0.64, 1) both,
+    escolaBaloonFloat 4.5s ease-in-out 900ms infinite;
+}
+
+@keyframes escolaBaloonIgnite {
+  0% { opacity: 0; transform: translateY(18px) scale(0.9); }
+  55% { opacity: 1; transform: translateY(-5px) scale(1.03); }
+  78% { transform: translateY(2px) scale(0.99); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @keyframes escolaBaloonFloat {
@@ -47,9 +72,9 @@
   50% { transform: translateY(-6px) scale(1); }
 }
 
-@keyframes escolaBaloonGlow {
-  0%, 100% { box-shadow: 0 20px 55px rgba(0, 0, 0, 0.4), 0 0 28px rgba(255, 70, 20, 0.24), inset 0 1px 0 rgba(255, 200, 160, 0.12); }
-  50% { box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4), 0 0 50px rgba(255, 110, 30, 0.5), inset 0 1px 0 rgba(255, 200, 160, 0.18); }
+@keyframes escolaEdgePulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
 }
 
 @keyframes escolaHeatHaze {
@@ -91,6 +116,7 @@
   animation-name: escolaSparkRise;
   animation-timing-function: ease-out;
   animation-iteration-count: infinite;
+  will-change: transform, opacity;
 }
 
 .escola-baloon-ash {
@@ -102,6 +128,7 @@
   animation-name: escolaAshRise;
   animation-timing-function: ease-out;
   animation-iteration-count: infinite;
+  will-change: transform, opacity;
 }
 
 @keyframes escolaSparkRise {
@@ -137,6 +164,7 @@
   border-radius: 50% 50% 50% 50% / 62% 62% 38% 38%;
   animation: escolaFlameFlicker 1.6s ease-in-out infinite;
   transform-origin: bottom center;
+  will-change: transform;
 }
 
 .escola-baloon-flame::after {
@@ -189,6 +217,7 @@
 }
 
 .escola-baloon-cta {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -201,6 +230,25 @@
   text-decoration: none;
   box-shadow: 0 8px 22px rgba(224, 33, 10, 0.5);
   border: 1px solid rgba(255, 190, 140, 0.35);
+  isolation: isolate;
+}
+
+.escola-baloon-cta::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  z-index: -1;
+  border-radius: inherit;
+  background: radial-gradient(circle, rgba(255, 150, 50, 0.55), transparent 70%);
+  filter: blur(6px);
+  pointer-events: none;
+  will-change: opacity;
+  animation: escolaCtaGlow 2.4s ease-in-out infinite;
+}
+
+@keyframes escolaCtaGlow {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
 }
 
 .escola-baloon-cta::before {
@@ -235,18 +283,43 @@
     right: 12px;
     max-width: none;
   }
+
+  .escola-baloon::before {
+    filter: blur(12px);
+  }
+
+  .escola-baloon-edge {
+    filter: blur(1px);
+    box-shadow: 0 0 12px rgba(255, 110, 30, 0.45), 0 0 28px rgba(255, 150, 50, 0.25);
+  }
+
+  .escola-baloon-spark:nth-child(n + 6) {
+    display: none;
+  }
+
+  .escola-baloon-ash {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .escola-baloon,
   .escola-baloon::before,
+  .escola-baloon-edge,
   .escola-baloon.is-visible,
   .escola-baloon-flame,
   .escola-baloon-spark,
-  .escola-baloon-ash {
+  .escola-baloon-ash,
+  .escola-baloon-cta::after {
     animation: none;
   }
   .escola-baloon {
     transition: opacity 0.5s ease;
+  }
+  .escola-baloon-edge {
+    opacity: 0.8;
+  }
+  .escola-baloon-cta::after {
+    opacity: 0.6;
   }
 }
