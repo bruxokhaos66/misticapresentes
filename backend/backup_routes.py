@@ -1,46 +1,54 @@
 from __future__ import annotations
 
 import os
-import secrets
-import shutil
 from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Header, HTTPException
 from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 
 from backend.api_security import validar_site_api_key as validar_chave_api
 from config import BACKUP_DIR, DB_PATH
+from database.backup import BackupInvalidoError, criar_backup_seguro
 
 router = APIRouter(prefix="/api", tags=["backup"])
+
+PREFIXO_BACKUP_MANUAL = "mistica_backup"
+PREFIXO_BACKUP_DOWNLOAD = "mistica_backup_download"
 
 
 def validar_site_api_key(chave_recebida: str | None):
     validar_chave_api(chave_recebida, "Configure MISTICA_SITE_API_KEY ou MISTICA_SYNC_KEY para permitir acesso ao backup.")
 
 
+def _remover_arquivo_temporario(caminho: str) -> None:
+    for candidato in (caminho, f"{caminho}.sha256"):
+        try:
+            os.remove(candidato)
+        except OSError:
+            pass
+
+
 @router.post("/backup/manual")
 def criar_backup_manual(x_mistica_api_key: str | None = Header(default=None)):
     validar_site_api_key(x_mistica_api_key)
-    origem = Path(DB_PATH)
-    destino_dir = Path(BACKUP_DIR)
-
-    if not origem.exists():
+    if not os.path.exists(DB_PATH):
         raise HTTPException(status_code=404, detail="Arquivo do banco de dados não encontrado")
 
     try:
-        destino_dir.mkdir(parents=True, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        destino = destino_dir / f"mistica_backup_{timestamp}.db"
-        shutil.copy2(origem, destino)
+        info = criar_backup_seguro(DB_PATH, BACKUP_DIR, PREFIXO_BACKUP_MANUAL)
+    except BackupInvalidoError as exc:
+        raise HTTPException(status_code=500, detail="O backup gerado falhou na validação de integridade.") from exc
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Falha ao criar backup: {exc}") from exc
+        raise HTTPException(status_code=500, detail="Falha ao criar backup.") from exc
 
     return {
         "status": "ok",
         "mensagem": "Backup manual criado com sucesso.",
-        "arquivo": str(destino),
-        "tamanho_bytes": destino.stat().st_size,
+        "arquivo": info["nome"],
+        "tamanho_bytes": info["tamanho_bytes"],
+        "checksum_sha256": info["checksum_sha256"],
         "data_hora": datetime.now().isoformat(timespec="seconds"),
     }
 
@@ -48,16 +56,18 @@ def criar_backup_manual(x_mistica_api_key: str | None = Header(default=None)):
 @router.get("/backup/status")
 def status_backup_manual(x_mistica_api_key: str | None = Header(default=None)):
     validar_site_api_key(x_mistica_api_key)
-    origem = Path(DB_PATH)
     destino_dir = Path(BACKUP_DIR)
     backups = []
 
     if destino_dir.exists():
-        arquivos = sorted(destino_dir.glob("mistica_backup_*.db"), key=lambda item: item.stat().st_mtime, reverse=True)
+        arquivos = sorted(
+            (p for p in destino_dir.glob(f"{PREFIXO_BACKUP_MANUAL}_*.db") if p.is_file()),
+            key=lambda item: item.stat().st_mtime,
+            reverse=True,
+        )
         for arquivo in arquivos[:10]:
             backups.append(
                 {
-                    "arquivo": str(arquivo),
                     "nome": arquivo.name,
                     "tamanho_bytes": arquivo.stat().st_size,
                     "modificado_em": datetime.fromtimestamp(arquivo.stat().st_mtime).isoformat(timespec="seconds"),
@@ -66,8 +76,10 @@ def status_backup_manual(x_mistica_api_key: str | None = Header(default=None)):
 
     return {
         "status": "ok",
-        "banco_existe": origem.exists(),
-        "backup_dir": str(destino_dir),
+        "banco_existe": os.path.exists(DB_PATH),
+        # Não revela o caminho absoluto do disco/servidor: apenas o nome do
+        # diretório de backups, suficiente para o painel administrativo.
+        "backup_dir": destino_dir.name,
         "backup_dir_existe": destino_dir.exists(),
         "ultimos_backups": backups,
         "data_hora": datetime.now().isoformat(timespec="seconds"),
@@ -77,18 +89,21 @@ def status_backup_manual(x_mistica_api_key: str | None = Header(default=None)):
 @router.get("/backup/download")
 def baixar_backup_atual(x_mistica_api_key: str | None = Header(default=None)):
     validar_site_api_key(x_mistica_api_key)
-    origem = Path(DB_PATH)
-    if not origem.exists():
+    if not os.path.exists(DB_PATH):
         raise HTTPException(status_code=404, detail="Arquivo do banco de dados não encontrado")
 
-    destino_dir = Path(BACKUP_DIR)
-    destino_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    copia = destino_dir / f"mistica_backup_download_{timestamp}.db"
-    shutil.copy2(origem, copia)
+    try:
+        info = criar_backup_seguro(DB_PATH, BACKUP_DIR, PREFIXO_BACKUP_DOWNLOAD)
+    except BackupInvalidoError as exc:
+        raise HTTPException(status_code=500, detail="O backup gerado falhou na validação de integridade.") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Falha ao criar backup.") from exc
 
+    # A cópia de download é efêmera: é removida do disco assim que a resposta
+    # termina de ser enviada, para não acumular arquivos temporários.
     return FileResponse(
-        path=copia,
+        path=info["caminho"],
         media_type="application/octet-stream",
-        filename=f"mistica_backup_{timestamp}.db",
+        filename=info["nome"],
+        background=BackgroundTask(_remover_arquivo_temporario, info["caminho"]),
     )
