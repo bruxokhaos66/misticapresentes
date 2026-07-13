@@ -2,6 +2,7 @@
   const config = window.misticaSiteConfig || {};
   const isProduction = config.serverMode === "production" || config.storageMode === "api_first" || config.usePublicDomainAccess === true;
   const API_BASE = String(config.apiBaseUrl || "https://api.misticaesotericos.com.br").replace(/\/$/, "");
+  const PUBLIC_CHECKOUT_PATH = "/api/checkout/pedidos";
   const SENSITIVE_LOCAL_KEYS = [
     "misticaClients",
     "misticaSales",
@@ -35,6 +36,17 @@
     SENSITIVE_LOCAL_KEYS.forEach(key => {
       try { localStorage.removeItem(key); } catch {}
     });
+  }
+
+  function installSensitiveStorageGuard() {
+    if (window.__misticaStorageGuardInstalled) return;
+    window.__misticaStorageGuardInstalled = true;
+    const blockedKeys = new Set(SENSITIVE_LOCAL_KEYS);
+    const originalSetItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function guardedSetItem(key, value) {
+      if (this === localStorage && blockedKeys.has(String(key))) return;
+      return originalSetItem.call(this, key, value);
+    };
   }
 
   function installSafeSaveState() {
@@ -119,7 +131,7 @@
     }
 
     if (typeof window.misticaCriarPedido !== "function") {
-      status("Não foi possível conectar ao servidor de pedidos. Tente novamente em instantes.");
+      status(`Não foi possível conectar ao servidor de pedidos (${PUBLIC_CHECKOUT_PATH}). Tente novamente em instantes.`);
       return;
     }
 
@@ -226,6 +238,7 @@
   }
 
   function install() {
+    installSensitiveStorageGuard();
     removeSensitiveLocalKeys();
     installSafeSaveState();
     installCaptureGuards();
@@ -243,6 +256,7 @@
   window.misticaProductionGuard = {
     enabled: true,
     apiBase: API_BASE,
+    checkoutPath: PUBLIC_CHECKOUT_PATH,
     checkout: guardedGeneratePix,
     scrubLocalData: removeSensitiveLocalKeys,
   };
