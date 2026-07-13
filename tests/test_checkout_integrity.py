@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 TEST_API_KEY = "test-api-key"
 os.environ.setdefault("MISTICA_SITE_API_KEY", TEST_API_KEY)
 os.environ.setdefault("MISTICA_SYNC_KEY", TEST_API_KEY)
+os.environ["MISTICA_PIX_KEY"] = os.environ.get("MISTICA_PIX_KEY") or "checkout-integrity@example.com"
 
 main = importlib.import_module("backend.main")
 client = TestClient(main.app)
@@ -53,7 +54,10 @@ def pedido(produto: dict, *, quantidade: int = 1, extras: dict | None = None):
     }
     if extras:
         payload.update(extras)
-    return client.post("/api/checkout/pedidos", json=payload)
+    # Cada cenário usa um IP próprio para não compartilhar a janela do rate limiter
+    # com outros testes da suíte que também exercitam o checkout público.
+    headers = {"X-Forwarded-For": f"198.51.100.{int(uuid.uuid4().hex[:2], 16) or 1}"}
+    return client.post("/api/checkout/pedidos", json=payload, headers=headers)
 
 
 def test_checkout_ignora_preco_subtotal_desconto_taxa_e_total_do_navegador():
