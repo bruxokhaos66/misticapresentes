@@ -24,6 +24,7 @@ def conn():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     c = sqlite3.connect(str(DB_PATH))
     c.row_factory = sqlite3.Row
+    c.execute("PRAGMA foreign_keys = ON")
     return c
 
 
