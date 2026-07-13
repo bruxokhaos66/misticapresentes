@@ -22,27 +22,17 @@ body {
   min-height: 100vh;
   color: var(--cream);
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  /* O padrão de pontos era antes um body::before fixo com z-index negativo;
+     essa camada extra e fixa obrigava o navegador a recompor a tela inteira
+     a cada scroll, causando flicker no Safari/WebKit. Incorporar o padrão
+     direto no background do body remove a camada fixa sem mudar a aparência
+     (alfa ajustado para equivaler à opacidade .34 aplicada antes). */
   background:
+    radial-gradient(circle, rgba(242,201,109,.15) 0 1px, transparent 1.3px) 0 0 / 90px 90px,
     radial-gradient(circle at 12% 18%, rgba(81,104,50,.26), transparent 34rem),
     radial-gradient(circle at 78% 18%, rgba(242,201,109,.16), transparent 31rem),
     radial-gradient(circle at 82% 72%, rgba(75,42,89,.24), transparent 34rem),
     linear-gradient(135deg, #040407 0%, #090b07 48%, #120918 100%);
-}
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  opacity: .34;
-  background-image: radial-gradient(circle, rgba(242,201,109,.45) 0 1px, transparent 1.3px);
-  background-size: 90px 90px;
-  /* position:fixed + z-index negativo faz o Safari/WebKit repintar essa
-     camada de forma instável durante o scroll (e às vezes na primeira
-     pintura da página), piscando visivelmente. Forçar uma camada de
-     composição própria via GPU resolve sem mudar a aparência. */
-  transform: translateZ(0);
-  will-change: transform;
 }
 a { color: inherit; text-decoration: none; }
 button, input, textarea { font: inherit; }

@@ -6,24 +6,21 @@
   --premium-card-strong: linear-gradient(145deg, rgba(240,197,106,.14), rgba(54,32,68,.18), rgba(83,107,55,.12));
 }
 
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
+/* Os brilhos extras eram antes um body::before fixo com z-index negativo;
+   essa camada extra e fixa obrigava o navegador a recompor a tela inteira
+   a cada scroll, causando flicker no Safari/WebKit (mesmo bug corrigido em
+   v2.css para a home/kit/escola; este arquivo cobre categoria, produto e
+   políticas). Sobrescrever o background do body direto remove a camada
+   fixa sem mudar a aparência. */
+body {
   background:
     radial-gradient(circle at 14% 16%, rgba(184,201,119,.15), transparent 24rem),
     radial-gradient(circle at 90% 8%, rgba(240,197,106,.12), transparent 22rem),
-    radial-gradient(circle at 62% 72%, rgba(54,32,68,.20), transparent 28rem);
-  /* position:fixed + z-index negativo faz o Safari/WebKit repintar essa
-     camada de forma instável durante o scroll (e às vezes na primeira
-     pintura da página), piscando visivelmente -- mesmo bug corrigido em
-     v2.css (body::before) para a home/kit/escola; este arquivo cobre as
-     páginas de categoria, produto e políticas. Forçar uma camada de
-     composição própria via GPU resolve sem mudar a aparência. */
-  transform: translateZ(0);
-  will-change: transform;
+    radial-gradient(circle at 62% 72%, rgba(54,32,68,.20), transparent 28rem),
+    radial-gradient(circle at 16% 4%, rgba(83, 107, 55, 0.34), transparent 24rem),
+    radial-gradient(circle at 86% 12%, rgba(240, 197, 106, 0.13), transparent 22rem),
+    radial-gradient(circle at 70% 58%, rgba(54, 32, 68, 0.32), transparent 30rem),
+    linear-gradient(135deg, #050507 0%, #0d120b 44%, #160f1d 100%);
 }
 
 .site-header {
