@@ -1,7 +1,8 @@
 import json
-import shutil
 from datetime import datetime
 from pathlib import Path
+
+from database.backup import criar_backup_seguro
 
 APP_DIR = Path.home() / "Documents" / "Mistica_Presentes_App"
 BACKUP_DIR = APP_DIR / "backups"
@@ -35,17 +36,22 @@ def encontrar_bancos():
 def criar_backup_local(motivo="manual"):
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
     bancos = encontrar_bancos()
-    agora = datetime.now().strftime("%Y%m%d_%H%M%S")
+    agora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     if not bancos:
-        dados = {"ok": False, "motivo": motivo, "erro": "Banco local nao encontrado", "data": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+        dados = {"ok": False, "motivo": motivo, "erro": "Banco local nao encontrado", "data": agora}
         salvar_status(dados)
         return dados
     arquivos = []
+    falhas = []
     for banco in bancos:
-        destino = BACKUP_DIR / f"{banco.stem}_{motivo}_{agora}.db"
-        shutil.copy2(banco, destino)
-        arquivos.append(str(destino))
-    dados = {"ok": True, "motivo": motivo, "arquivos": arquivos, "data": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+        try:
+            info = criar_backup_seguro(str(banco), str(BACKUP_DIR), f"{banco.stem}_{motivo}")
+            arquivos.append(info["caminho"])
+        except Exception:
+            falhas.append(banco.name)
+    dados = {"ok": bool(arquivos), "motivo": motivo, "arquivos": arquivos, "data": agora}
+    if falhas:
+        dados["erro"] = f"Falha ao copiar: {', '.join(falhas)}"
     salvar_status(dados)
     return dados
 
