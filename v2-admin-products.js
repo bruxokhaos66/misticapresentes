@@ -12,6 +12,12 @@
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
   }[ch]));
   const toNumber = (value) => Number(String(value || '0').replace(',', '.')) || 0;
+  const normalizar = (value) => String(value == null ? '' : value)
+    .normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const ehSobEncomenda = (categoria, selo) =>
+    normalizar(categoria) === 'achados misticos' || normalizar(selo) === 'sob encomenda';
+  const PRAZO_ENCOMENDA = (window.misticaEncomenda && window.misticaEncomenda.PRAZO_TEXTO)
+    || 'Prazo estimado de preparação: até 10 dias úteis, além do prazo de transporte.';
   const toInt = (value) => Math.max(0, Number.parseInt(String(value || '0'), 10) || 0);
   const normalizeUrl = (url) => {
     const value = String(url || '').trim();
@@ -160,6 +166,38 @@
     const form = panel.querySelector('#adminProductForm');
     const imageFile = panel.querySelector('#adminProductImageFile');
 
+    // Destaque de "produto sob encomenda" no painel: quando a categoria for
+    // Achados Místicos ou o selo for Sob encomenda, evidencia os campos internos
+    // (link do fornecedor, custo, preço, margem, estoque nominal, prazo). Não
+    // cria campos novos: usa os já existentes no formulário.
+    const categoryInput = panel.querySelector('#adminProductCategory');
+    const badgeInput = panel.querySelector('#adminProductBadge');
+    const priceInput = panel.querySelector('#adminProductPrice');
+    const costInput = panel.querySelector('#adminProductCost');
+    const encomendaNote = document.createElement('div');
+    encomendaNote.className = 'admin-encomenda-note';
+    encomendaNote.hidden = true;
+    form.insertBefore(encomendaNote, form.querySelector('.checkout-actions'));
+
+    const refreshEncomendaHint = () => {
+      const sob = ehSobEncomenda(categoryInput.value, badgeInput.value);
+      form.classList.toggle('is-encomenda', sob);
+      encomendaNote.hidden = !sob;
+      if (!sob) return;
+      const preco = toNumber(priceInput.value);
+      const custo = toNumber(costInput.value);
+      const margem = preco - custo;
+      const margemPct = preco > 0 ? Math.round((margem / preco) * 100) : 0;
+      encomendaNote.innerHTML = `
+        <strong>✦ Produto sob encomenda (Achados Místicos)</strong>
+        <span>Link do fornecedor, custo e estoque nominal ficam visíveis só aqui no painel — nunca aparecem para o cliente.</span>
+        <span>Margem estimada: ${esc(money.format(margem))} (${margemPct}%).</span>
+        <span>${esc(PRAZO_ENCOMENDA)}</span>`;
+    };
+    [categoryInput, badgeInput, priceInput, costInput].forEach((el) => {
+      if (el) el.addEventListener('input', refreshEncomendaHint);
+    });
+
     const setStatus = (message, ok = false) => {
       status.textContent = message;
       status.className = ok ? 'warning-box' : 'warning-box warning-danger';
@@ -172,6 +210,7 @@
       panel.querySelector('#adminProductMinStock').value = '3';
       panel.querySelector('#adminProductStock').value = '0';
       panel.querySelector('[data-save-product]').textContent = 'Salvar produto';
+      refreshEncomendaHint();
     };
 
     const readFormPayload = () => ({
@@ -274,6 +313,7 @@
       panel.querySelector('#adminProductImageUrl').value = normalizeUrl(product.imagem_url || '');
       panel.querySelector('#adminProductGallery').value = (product.imagens || []).map(normalizeUrl).join('\n');
       panel.querySelector('[data-save-product]').textContent = 'Atualizar produto';
+      refreshEncomendaHint();
       panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
 
