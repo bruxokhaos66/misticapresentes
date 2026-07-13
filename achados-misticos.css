@@ -1,0 +1,149 @@
+/*
+ * Página da categoria "Achados Místicos" (/achados-misticos/).
+ * Estilo xamânico premium: tons escuros, dourado e verde-musgo, sobre o tema
+ * do v2.css. Responsivo, sem rolagem horizontal, cards de altura equilibrada.
+ */
+
+.achados-page-body { min-height: 100vh; }
+
+.achados-breadcrumbs {
+  font-size: .84rem;
+  color: var(--muted, #b9b6ad);
+  margin-bottom: 14px;
+}
+.achados-breadcrumbs a { color: var(--gold-2, #f2c96d); text-decoration: none; }
+.achados-breadcrumbs a:hover { text-decoration: underline; }
+.achados-breadcrumbs span[aria-current] { color: var(--cream, #f4ecd8); }
+
+.achados-hero {
+  padding: 40px 0 8px;
+  text-align: center;
+}
+.achados-hero h1 {
+  font-family: Cinzel, serif;
+  font-size: clamp(1.9rem, 5vw, 3rem);
+  color: var(--gold-2, #f2c96d);
+  margin: 6px 0 12px;
+}
+.achados-hero .achados-lead {
+  max-width: 640px;
+  margin: 0 auto 16px;
+  color: var(--muted, #cbc6ba);
+  line-height: 1.6;
+  font-size: 1.02rem;
+}
+.achados-hero-notice {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  align-items: center;
+  max-width: 720px;
+  margin: 0 auto;
+}
+.achados-hero-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(242, 201, 109, .35);
+  background: rgba(242, 201, 109, .08);
+  color: #ffe7a3;
+  font-size: .86rem;
+  font-weight: 700;
+}
+.achados-hero-pill.moss {
+  border-color: rgba(189, 209, 122, .32);
+  background: rgba(189, 209, 122, .08);
+  color: #dff1a4;
+}
+
+.achados-section { padding: 22px 0 60px; }
+
+/* Grade responsiva de cards com altura equilibrada. */
+.achados-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 18px;
+}
+
+.achados-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(242, 201, 109, .2);
+  background: linear-gradient(180deg, rgba(255, 248, 230, .06), rgba(6, 6, 9, .55));
+  color: inherit;
+  text-decoration: none;
+  transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+.achados-card:hover,
+.achados-card:focus-visible {
+  transform: translateY(-4px);
+  border-color: rgba(242, 201, 109, .5);
+  box-shadow: 0 26px 70px rgba(0, 0, 0, .38), 0 0 30px rgba(242, 201, 109, .08);
+}
+.achados-card:focus-visible { outline: 2px solid var(--gold-2, #f2c96d); outline-offset: 3px; }
+
+.achados-card-media {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  border-radius: 14px;
+  overflow: hidden;
+  background: linear-gradient(145deg, rgba(242, 201, 109, .12), rgba(91, 123, 77, .12));
+  display: grid;
+  place-items: center;
+}
+.achados-card-media img { width: 100%; height: 100%; object-fit: cover; }
+.achados-card-fallback { font-size: 2.4rem; color: rgba(242, 201, 109, .7); }
+
+.achados-card-body { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.achados-card-body h3 { margin: 2px 0; font-family: Cinzel, serif; color: var(--cream, #f4ecd8); font-size: 1.06rem; }
+.achados-card .product-price { color: #ffe7a3; font-size: 1.15rem; }
+.achados-card .product-badge-encomenda { top: 12px; right: 12px; }
+.achados-card-cta {
+  text-align: center;
+  margin-top: 2px;
+}
+
+/* Estados: carregando / vazio / erro. */
+.achados-loading,
+.achados-empty,
+.achados-error {
+  text-align: center;
+  padding: 40px 20px;
+  border: 1px dashed rgba(242, 201, 109, .3);
+  border-radius: 20px;
+  background: rgba(6, 6, 9, .4);
+}
+.achados-empty h2,
+.achados-error h2 { font-family: Cinzel, serif; color: var(--gold-2, #f2c96d); margin: 6px 0 10px; }
+.achados-empty p,
+.achados-error p,
+.achados-loading p { color: var(--muted, #cbc6ba); max-width: 520px; margin: 0 auto 14px; line-height: 1.55; }
+.achados-empty .btn,
+.achados-error .btn { margin: 6px 6px 0; }
+
+.achados-spinner {
+  display: inline-block;
+  width: 34px;
+  height: 34px;
+  margin-bottom: 12px;
+  border: 3px solid rgba(242, 201, 109, .25);
+  border-top-color: var(--gold-2, #f2c96d);
+  border-radius: 50%;
+  animation: achados-spin .8s linear infinite;
+}
+@keyframes achados-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .achados-spinner { animation: none; } }
+
+.achados-back { margin-top: 30px; text-align: center; }
+
+@media (max-width: 520px) {
+  .achados-grid { grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 12px; }
+  .achados-card { padding: 12px; }
+}
