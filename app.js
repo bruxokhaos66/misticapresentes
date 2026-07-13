@@ -107,10 +107,27 @@ function socialProofHtml(product) {
 function productCardHtml(product) { const available = getStock(product.id); const disabled = available <= 0 ? "disabled" : ""; const media = product.imageUrl ? `<img class="product-photo" src="${product.imageUrl}" alt="${product.name}" loading="lazy">` : `<div class="product-image" aria-hidden="true">${product.icon}</div>`; const bestSeller = isBestSeller(product) ? `<span class="product-badge-best">${productBadgeText(product)}</span>` : ""; return `<article class="product-card" data-category="${product.category || ""}" data-best-seller="${isBestSeller(product)}">${bestSeller}${media}<div><p class="eyebrow">${product.category}</p><h3>${product.name}</h3>${socialProofHtml(product)}<p>${product.description}</p></div><strong class="product-price">${currency.format(product.price)}</strong><span class="stock-badge ${available <= storeConfig.minStock ? "stock-low" : ""}">Estoque: ${available}</span><div class="qty-row"><input id="qty-${safeId(product.id)}" type="number" min="1" max="${available}" step="1" value="1" aria-label="Quantidade de ${product.name}" ${disabled} /><button class="btn" type="button" onclick="addToCart('${product.id}')" ${disabled}>Adicionar</button></div><button class="btn btn-ghost btn-full" type="button" onclick="buyProductWhatsapp('${product.id}')">Comprar pelo WhatsApp</button></article>`; }
 function renderProducts() { if (!productGrid) return; productGrid.innerHTML = products.map(productCardHtml).join(""); }
 function validateQuantity(rawQty, productId) { const qty = Number.parseInt(rawQty, 10); const available = getStock(productId); const inCart = cart.find(item => item.id === productId)?.qty || 0; if (!Number.isInteger(qty) || qty < 1) return { ok: false, message: "Informe uma quantidade inteira maior que zero." }; if (qty + inCart > available) return { ok: false, message: `Estoque insuficiente. Disponível: ${Math.max(available - inCart, 0)}.` }; return { ok: true, qty }; }
-function addToCart(productId) { const product = products.find(item => item.id === productId); if (!product) return; const qtyInput = document.getElementById(`qty-${safeId(productId)}`); const validation = validateQuantity(qtyInput.value, productId); if (!validation.ok) return setStatus(validation.message); const existing = cart.find(item => item.id === productId); if (existing) existing.qty += validation.qty; else cart.push({ id: product.id, name: product.name, price: product.price, qty: validation.qty }); saveState(); renderCart(); renderProducts(); setStatus(`${product.name} adicionado ao carrinho.`); window.misticaTrack?.("add_to_cart", { currency: "BRL", value: product.price * validation.qty, items: [{ item_id: product.id, item_name: product.name, price: product.price, quantity: validation.qty }] }); }
+function addToCart(productId) { const product = products.find(item => item.id === productId); if (!product) return; const qtyInput = document.getElementById(`qty-${safeId(productId)}`); const validation = validateQuantity(qtyInput.value, productId); if (!validation.ok) return setStatus(validation.message); const existing = cart.find(item => item.id === productId); const sob = Boolean(window.misticaEncomenda && window.misticaEncomenda.isSobEncomenda(product)); if (existing) { existing.qty += validation.qty; existing.sob = sob; } else cart.push({ id: product.id, name: product.name, price: product.price, qty: validation.qty, sob }); saveState(); renderCart(); renderProducts(); setStatus(`${product.name} adicionado ao carrinho.`); window.misticaTrack?.("add_to_cart", { currency: "BRL", value: product.price * validation.qty, items: [{ item_id: product.id, item_name: product.name, price: product.price, quantity: validation.qty }] }); }
 function removeFromCart(productId) { cart = cart.filter(item => item.id !== productId); saveState(); renderCart(); renderProducts(); }
 function clearCart() { cart = []; window.misticaCupomAtivo = null; const cupomInput = document.getElementById("cartCoupon"); if (cupomInput) cupomInput.value = ""; const cupomStatus = document.getElementById("couponStatus"); if (cupomStatus) cupomStatus.hidden = true; pixPayloadInput.value = ""; setStatus("Carrinho limpo. Adicione produtos para gerar um novo Pix."); clearQrCanvas(); pararAcompanhamentoPedido(); const el = reservaStatusEl(); if (el) el.textContent = ""; saveState(); renderCart(); renderProducts(); }
-function renderCart() { updateCartCount(); renderCrossSell(); if (!cartList || !cartTotal) return; if (!cart.length) cartList.innerHTML = `<div class="cart-item"><span>Nenhum produto adicionado ainda.</span></div>`; else cartList.innerHTML = cart.map(item => `<div class="cart-item"><div><strong>${item.name}</strong><span>${item.qty}x ${currency.format(item.price)} = ${currency.format(item.price * item.qty)}</span></div><button class="cart-remove" type="button" onclick="removeFromCart('${item.id}')">Remover</button></div>`).join(""); cartTotal.textContent = currency.format(getTotal()); }
+// Identifica itens sob encomenda no carrinho. Prioriza o marcador salvo no
+// próprio item (definido no addToCart), com fallback para a regra central caso
+// o produto ainda esteja no catálogo carregado.
+function cartItemIsEncomenda(item) {
+  if (item && typeof item.sob === "boolean") return item.sob;
+  const product = products.find(p => p.id === item.id);
+  return Boolean(window.misticaEncomenda && window.misticaEncomenda.isSobEncomenda(product || item));
+}
+function cartHasEncomenda() { return cart.some(cartItemIsEncomenda); }
+function updateCheckoutEncomendaBox() {
+  const box = document.getElementById("encomendaCheckoutBox");
+  if (!box) return;
+  const show = cartHasEncomenda();
+  box.hidden = !show;
+  const check = document.getElementById("encomendaConfirm");
+  if (check && !show) check.checked = false;
+}
+function renderCart() { updateCartCount(); renderCrossSell(); updateCheckoutEncomendaBox(); if (!cartList || !cartTotal) return; if (!cart.length) cartList.innerHTML = `<div class="cart-item"><span>Nenhum produto adicionado ainda.</span></div>`; else cartList.innerHTML = cart.map(item => `<div class="cart-item"><div><strong>${item.name}</strong><span>${item.qty}x ${currency.format(item.price)} = ${currency.format(item.price * item.qty)}</span>${cartItemIsEncomenda(item) ? `<span class="cart-encomenda-tag">${(window.misticaEncomenda && window.misticaEncomenda.BADGE) || "Sob encomenda"}</span>` : ""}</div><button class="cart-remove" type="button" onclick="removeFromCart('${item.id}')">Remover</button></div>`).join(""); cartTotal.textContent = currency.format(getTotal()); }
 
 // Cross-sell no carrinho: sugere até 4 produtos disponíveis que ainda não
 // estão no carrinho, priorizando categorias diferentes das já escolhidas
@@ -214,6 +231,16 @@ async function generatePix() {
   const total = getTotal();
   if (!cart.length || total <= 0) return setStatus("Adicione pelo menos um produto ao carrinho antes de gerar o Pix.");
   if (!hasEnoughStockForCart()) return setStatus("Existe produto no carrinho acima do estoque disponível. Ajuste antes de gerar o Pix.");
+  // Só exige a confirmação quando há item sob encomenda; pedidos formados
+  // apenas por produtos em estoque seguem o fluxo normal, sem alteração.
+  if (cartHasEncomenda()) {
+    const check = document.getElementById("encomendaConfirm");
+    if (check && !check.checked) {
+      const box = document.getElementById("encomendaCheckoutBox");
+      if (box) box.hidden = false;
+      return setStatus("Confirme que está ciente do produto sob encomenda para continuar.");
+    }
+  }
   if (typeof window.misticaCriarPedido !== "function") return setStatus("Não foi possível conectar ao servidor para gerar o Pix. Tente novamente em instantes ou fale pelo WhatsApp.");
   window.misticaTrack?.("begin_checkout", { currency: "BRL", value: total, items: cart.map(item => ({ item_id: item.id, item_name: item.name, price: item.price, quantity: item.qty })) });
   pararAcompanhamentoPedido();

@@ -142,6 +142,16 @@
     if (!canSendToApi(items)) {
       return status("Venda bloqueada em produção: sincronize o catálogo pela API antes de baixar estoque.");
     }
+    // Confirmação obrigatória apenas quando houver produto sob encomenda no
+    // carrinho. Pedidos formados só por itens de estoque seguem sem alteração.
+    if (typeof window.cartHasEncomenda === "function" && window.cartHasEncomenda()) {
+      const check = document.getElementById("encomendaConfirm");
+      if (check && !check.checked) {
+        const box = document.getElementById("encomendaCheckoutBox");
+        if (box) box.hidden = false;
+        return status("Confirme que está ciente do produto sob encomenda para continuar.");
+      }
+    }
 
     if (pixPayloadInput) pixPayloadInput.value = "";
     status("Enviando pedido para o sistema e gerando o Pix. O estoque só será baixado após a confirmação do pagamento...");
