@@ -1,0 +1,118 @@
+/*
+ * Estilos da categoria "Achados Místicos" (produtos sob encomenda).
+ * Reaproveita variáveis e formas já usadas nos cards e selos existentes para
+ * manter a identidade visual (dourado, verde-musgo, tons escuros).
+ */
+
+/* Selo elegante no card, alinhado ao lado direito para não colidir com o
+   selo de "mais vendido" (que fica à esquerda). */
+.product-badge-encomenda {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: linear-gradient(135deg, rgba(90, 74, 30, .92), rgba(58, 62, 34, .92));
+  color: #ffe7a3;
+  border: 1px solid rgba(242, 201, 109, .5);
+  font-weight: 800;
+  font-size: .66rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  padding: 5px 10px;
+  border-radius: 999px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .28);
+}
+.product-badge-encomenda::before { content: "✦"; font-size: .7rem; line-height: 1; }
+
+/* Informação curta e discreta no card. */
+.product-encomenda-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 0;
+  color: #cbbf94;
+  font-size: .76rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.product-encomenda-note::before { content: "🕊"; font-size: .82rem; line-height: 1; }
+
+/* Selo discreto do item no carrinho. */
+.cart-encomenda-tag {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(242, 201, 109, .4);
+  background: rgba(242, 201, 109, .1);
+  color: #e7d29a;
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+
+/* Bloco "Como funciona a encomenda" na página do produto e no modal. */
+.encomenda-info {
+  margin: 16px 0;
+  padding: 16px 18px;
+  border: 1px solid rgba(242, 201, 109, .32);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(242, 201, 109, .08), rgba(58, 62, 34, .06));
+}
+.encomenda-info .encomenda-info-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  color: #ffe7a3;
+  font-family: Cinzel, serif;
+  font-size: 1.02rem;
+}
+.encomenda-info .encomenda-info-title::before { content: "✦"; color: #f2c96d; }
+.encomenda-info p { margin: 0 0 8px; color: #d8d2c0; line-height: 1.55; font-size: .92rem; }
+.encomenda-info p:last-child { margin-bottom: 0; }
+.encomenda-info .encomenda-prazo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(189, 209, 122, .1);
+  border: 1px solid rgba(189, 209, 122, .3);
+  color: #dff1a4;
+  font-size: .82rem;
+  font-weight: 800;
+}
+.encomenda-info .encomenda-aviso { color: #cbbf94; font-size: .86rem; }
+
+/* Aviso e confirmação no checkout. */
+.encomenda-checkout-box {
+  margin: 4px 0 14px;
+  padding: 14px 16px;
+  border: 1px solid rgba(242, 201, 109, .35);
+  border-radius: 14px;
+  background: rgba(242, 201, 109, .07);
+}
+.encomenda-checkout-box p { margin: 0 0 10px; color: #e9e3d1; line-height: 1.55; font-size: .9rem; }
+.encomenda-checkout-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: #f3ecd8;
+  font-size: .9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.encomenda-checkout-confirm input {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  margin-top: 1px;
+  accent-color: #f2c96d;
+  cursor: pointer;
+}
