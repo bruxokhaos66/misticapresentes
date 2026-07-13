@@ -268,6 +268,39 @@
   background: radial-gradient(circle, rgba(255, 203, 97, .18), rgba(255, 63, 5, .07) 56%, transparent 72%);
 }
 
+.escola-baloon-emblem::before,
+.escola-baloon-emblem::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  transform-origin: 50% 58%;
+}
+
+.escola-baloon-emblem::before {
+  inset: -7px;
+  z-index: -1;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(255, 241, 173, .34) 0 12%, rgba(255, 151, 24, .24) 34%, rgba(255, 52, 4, .11) 58%, transparent 74%);
+  opacity: .54;
+  transform: scale(.94);
+  animation: escolaCandleHalo 3.35s ease-in-out -.8s infinite;
+}
+
+.escola-baloon-emblem::after {
+  top: -12px;
+  left: -15px;
+  z-index: -2;
+  width: 108px;
+  height: 78px;
+  border-radius: 50%;
+  background:
+    radial-gradient(ellipse at 24% 47%, rgba(255, 212, 100, .22), rgba(255, 103, 13, .13) 34%, rgba(219, 28, 2, .06) 54%, transparent 72%);
+  opacity: .4;
+  transform: translate3d(-2px, 1px, 0) scale(.96);
+  animation: escolaCandleReflection 4.65s ease-in-out -1.7s infinite;
+}
+
 .escola-baloon-flame {
   position: absolute;
   left: 50%;
@@ -279,7 +312,8 @@
   filter: drop-shadow(0 0 6px rgba(255, 88, 8, .82));
   transform: translateX(-50%);
   transform-origin: bottom center;
-  animation: escolaFlame 1.45s ease-in-out infinite;
+  will-change: opacity, transform;
+  animation: escolaFlame 1.72s cubic-bezier(.42, 0, .58, 1) infinite;
 }
 
 .escola-baloon-flame::after {
@@ -293,6 +327,9 @@
   background: #fffde8;
   opacity: .94;
   transform: translateX(-50%);
+  transform-origin: bottom center;
+  will-change: opacity, transform;
+  animation: escolaFlameCore 2.08s ease-in-out -.46s infinite;
 }
 
 .escola-baloon-body {
@@ -489,9 +526,35 @@
 }
 
 @keyframes escolaFlame {
-  0%, 100% { transform: translateX(-50%) scaleY(1) rotate(-1deg); }
-  36% { transform: translateX(-52%) scaleY(1.08) rotate(-3deg); }
-  69% { transform: translateX(-48%) scaleY(.95) rotate(3deg); }
+  0%, 100% { opacity: .96; transform: translate3d(-50%, 0, 0) scaleX(1) scaleY(1) rotate(-1deg); }
+  13% { opacity: 1; transform: translate3d(-53%, 0, 0) scaleX(.94) scaleY(1.08) rotate(-3deg); }
+  31% { opacity: .93; transform: translate3d(-48%, 0, 0) scaleX(1.05) scaleY(.97) rotate(2deg); }
+  47% { opacity: .99; transform: translate3d(-52%, 0, 0) scaleX(.97) scaleY(1.11) rotate(-2deg); }
+  68% { opacity: .94; transform: translate3d(-47%, 0, 0) scaleX(1.04) scaleY(.95) rotate(3deg); }
+  84% { opacity: 1; transform: translate3d(-51%, 0, 0) scaleX(.96) scaleY(1.06) rotate(-1.5deg); }
+}
+
+@keyframes escolaFlameCore {
+  0%, 100% { opacity: .78; transform: translateX(-50%) scaleX(.92) scaleY(.9); }
+  24% { opacity: .98; transform: translateX(-52%) scaleX(1.03) scaleY(1.07); }
+  52% { opacity: .84; transform: translateX(-48%) scaleX(.96) scaleY(.95); }
+  77% { opacity: 1; transform: translateX(-51%) scaleX(1.01) scaleY(1.1); }
+}
+
+@keyframes escolaCandleHalo {
+  0%, 100% { opacity: .4; transform: scale(.92); }
+  19% { opacity: .62; transform: scale(1.02); }
+  43% { opacity: .49; transform: scale(.97); }
+  71% { opacity: .68; transform: scale(1.045); }
+  88% { opacity: .51; transform: scale(.98); }
+}
+
+@keyframes escolaCandleReflection {
+  0%, 100% { opacity: .28; transform: translate3d(-3px, 1px, 0) scale(.94); }
+  22% { opacity: .47; transform: translate3d(0, 0, 0) scale(1.015); }
+  49% { opacity: .35; transform: translate3d(-1px, 1px, 0) scale(.98); }
+  74% { opacity: .53; transform: translate3d(1px, -1px, 0) scale(1.035); }
+  91% { opacity: .38; transform: translate3d(-2px, 0, 0) scale(.97); }
 }
 
 @keyframes escolaCtaHalo {
@@ -532,7 +595,10 @@
   .escola-fx-rim::after,
   .escola-baloon-spark,
   .escola-baloon-ash,
+  .escola-baloon-emblem::before,
+  .escola-baloon-emblem::after,
   .escola-baloon-flame,
+  .escola-baloon-flame::after,
   .escola-baloon-cta::after {
     animation: none !important;
   }
@@ -543,6 +609,9 @@
   .escola-fx-halo-orange { opacity: .7; }
   .escola-fx-glow-outer { opacity: .58; }
   .escola-fx-rim { opacity: .8; }
+  .escola-baloon-emblem::before { opacity: .5; transform: none; }
+  .escola-baloon-emblem::after { opacity: .36; transform: none; }
+  .escola-baloon-flame::after { opacity: .94; transform: translateX(-50%); }
   .escola-baloon-cta::after { opacity: .4; transform: none; }
   .escola-baloon-particles,
   .escola-fx-smoke { display: none; }
