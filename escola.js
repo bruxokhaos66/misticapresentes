@@ -484,8 +484,8 @@
     if (!box) return;
     const aluno = await carregarAlunoAtual();
     box.innerHTML = aluno
-      ? `<span>Olá, ${aluno.nome}</span><button class="btn btn-ghost btn-small" type="button" data-escola-logout>Sair</button>`
-      : `<span>Já comprou algum curso? Faça login abrindo o curso e informando seu e-mail e senha.</span>`;
+      ? `<span>Olá, ${escapeHtml(aluno.nome)}</span><a class="btn btn-small" href="escola-curso.html">Ir para meus cursos</a><button class="btn btn-ghost btn-small" type="button" data-escola-logout>Sair</button>`
+      : `<span>Já comprou algum curso? <a href="escola-curso.html">Entre em “Meus cursos”</a> ou abra o curso abaixo para acessar.</span>`;
     box.querySelector("[data-escola-logout]")?.addEventListener("click", async () => {
       await logoutAluno();
       await atualizarBarraConta();

@@ -62,6 +62,14 @@ def garantir_tabelas_alunos(conn) -> None:
         )
         """
     )
+    # Coluna de suspensão de acesso (matrícula suspensa administrativamente).
+    # Criada aqui, no ponto central da matrícula, para que a suspensão valha
+    # também nos endpoints legados de conteúdo (aluno_tem_acesso), e não só na
+    # camada LMS. ALTER tolerante: ignora o erro de coluna já existente.
+    try:
+        conn.execute("ALTER TABLE alunos_cursos ADD COLUMN suspenso INTEGER NOT NULL DEFAULT 0")
+    except Exception:
+        pass
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS alunos_sessoes (
@@ -141,8 +149,11 @@ def conceder_acesso_curso(conn, *, aluno_id: int, slug: str) -> None:
 
 
 def aluno_tem_acesso(conn, *, aluno_id: int, slug: str) -> bool:
+    # Matrícula ativa = existe e não está suspensa. A suspensão vale aqui
+    # (endpoints legados) e na camada LMS, de forma consistente.
     linha = conn.execute(
-        "SELECT id FROM alunos_cursos WHERE aluno_id=? AND slug=?", (aluno_id, slug)
+        "SELECT id FROM alunos_cursos WHERE aluno_id=? AND slug=? AND COALESCE(suspenso,0)=0",
+        (aluno_id, slug),
     ).fetchone()
     return linha is not None
 
