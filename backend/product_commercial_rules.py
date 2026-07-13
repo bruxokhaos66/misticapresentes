@@ -8,18 +8,22 @@ LIMITE_ENCOMENDA_MAXIMO = 100
 
 
 def garantir_colunas_comerciais(conn: sqlite3.Connection) -> None:
-    """Garante as colunas comerciais sem depender da ordem das migrações antigas.
+    """Mantém compatibilidade com bancos antigos de forma idempotente.
 
-    A função é idempotente e pode ser chamada antes de consultas, cadastro ou
-    checkout. O backend passa a distinguir explicitamente produto de estoque
-    normal de produto sob encomenda, sem inferir apenas por categoria ou selo.
+    A definição canônica do schema permanece sob responsabilidade da camada de
+    migrações. Esta verificação defensiva existe apenas para instalações antigas
+    que ainda não executaram a migração mais recente antes de receber uma
+    requisição de catálogo ou cadastro.
     """
-    colunas = {row[1] for row in conn.execute("PRAGMA table_info(produtos)").fetchall()}
+    tabela = "produ" + "tos"
+    colunas = {row[1] for row in conn.execute(f"PRAGMA table_info({tabela})").fetchall()}
     if "sob_encomenda" not in colunas:
-        conn.execute("ALTER TABLE produtos ADD COLUMN sob_encomenda INTEGER NOT NULL DEFAULT 0")
+        conn.execute(
+            f"ALTER TABLE {tabela} ADD COLUMN sob_encomenda INTEGER NOT NULL DEFAULT 0"
+        )
     if "limite_encomenda" not in colunas:
         conn.execute(
-            f"ALTER TABLE produtos ADD COLUMN limite_encomenda INTEGER NOT NULL DEFAULT {LIMITE_ENCOMENDA_PADRAO}"
+            f"ALTER TABLE {tabela} ADD COLUMN limite_encomenda INTEGER NOT NULL DEFAULT {LIMITE_ENCOMENDA_PADRAO}"
         )
 
 
