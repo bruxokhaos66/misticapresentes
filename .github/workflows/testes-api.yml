@@ -28,5 +28,15 @@ jobs:
           python -m pip install -r requirements.txt
 
       - name: Rodar testes
+        shell: bash
         run: |
-          python -m pytest -q --tb=short --disable-warnings
+          set +e
+          python -m pytest -q --tb=short --disable-warnings > pytest.log 2>&1
+          status=$?
+          if [ "$status" -ne 0 ]; then
+            echo "::group::Resumo da falha do pytest"
+            tail -n 180 pytest.log
+            echo "::endgroup::"
+            exit "$status"
+          fi
+          tail -n 40 pytest.log
