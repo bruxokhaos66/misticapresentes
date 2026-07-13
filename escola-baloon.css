@@ -10,14 +10,11 @@
   gap: 14px;
   padding: 20px 22px;
   border-radius: 22px 22px 22px 4px;
-  background: radial-gradient(circle at 50% 120%, rgba(255, 60, 15, 0.5), transparent 60%),
-    radial-gradient(circle at 20% 0%, rgba(255, 90, 30, 0.28), transparent 55%),
-    linear-gradient(160deg, #5a0d05 0%, #3a0503 45%, #2a0402 100%);
-  border: 1.5px solid rgba(255, 200, 130, 0.55);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 42, 10, 0.55), 0 0 60px rgba(255, 122, 24, 0.4),
-    inset 0 1px 0 rgba(255, 220, 170, 0.18);
-  backdrop-filter: blur(16px) saturate(160%);
-  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  background: linear-gradient(145deg, rgba(45, 5, 2, 0.28), rgba(10, 2, 1, 0.18));
+  border: 1px solid rgba(255, 225, 150, 0.35);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 220, 170, 0.12);
+  backdrop-filter: blur(8px) saturate(120%);
+  -webkit-backdrop-filter: blur(8px) saturate(120%);
   color: #fff3ea;
   font-family: "Inter", system-ui, sans-serif;
   opacity: 0;
@@ -31,13 +28,12 @@
 .escola-baloon::before {
   content: "";
   position: absolute;
-  inset: -55%;
+  inset: -40%;
   z-index: -2;
   border-radius: inherit;
-  background: radial-gradient(circle at 30% 100%, rgba(255, 122, 24, 0.55), transparent 60%),
-    radial-gradient(circle at 75% 5%, rgba(255, 42, 10, 0.5), transparent 58%),
-    radial-gradient(circle at 50% 60%, rgba(139, 9, 4, 0.4), transparent 70%);
-  filter: blur(26px);
+  background: radial-gradient(circle at 30% 100%, rgba(255, 35, 5, 0.4), transparent 65%),
+    radial-gradient(circle at 75% 5%, rgba(255, 105, 20, 0.32), transparent 62%);
+  filter: blur(28px);
   pointer-events: none;
   will-change: opacity, transform;
   animation: escolaHeatHaze 2.2s ease-in-out infinite;
@@ -45,14 +41,14 @@
 
 .escola-baloon-heat {
   position: absolute;
-  inset: -18px;
+  inset: -14px;
   z-index: -1;
   border-radius: inherit;
   pointer-events: none;
   isolation: isolate;
-  background: radial-gradient(circle at 50% 105%, rgba(255, 42, 10, 0.55), transparent 65%),
-    radial-gradient(circle at 15% 20%, rgba(255, 209, 92, 0.25), transparent 55%);
-  filter: blur(20px);
+  background: transparent;
+  border: 10px solid rgba(255, 35, 5, 0.45);
+  filter: blur(16px);
   opacity: 0.85;
   will-change: opacity, transform;
   animation: escolaEdgePulse 2.1s ease-in-out infinite;
@@ -60,13 +56,12 @@
 
 .escola-baloon-edge {
   position: absolute;
-  inset: -6px;
+  inset: -3px;
   z-index: -1;
   border-radius: inherit;
   pointer-events: none;
-  border: 2px solid rgba(255, 122, 24, 0.85);
-  box-shadow: 0 0 16px rgba(255, 42, 10, 0.8), 0 0 34px rgba(255, 122, 24, 0.6), 0 0 58px rgba(255, 42, 10, 0.4);
-  filter: blur(1.5px);
+  border: 2px solid rgba(255, 105, 20, 0.85);
+  filter: blur(2px);
   opacity: 0.85;
   will-change: opacity;
   animation: escolaEdgePulse 2.2s ease-in-out infinite;
@@ -74,12 +69,11 @@
 
 .escola-baloon-edge-core {
   position: absolute;
-  inset: -1.5px;
+  inset: 0;
   z-index: 0;
   border-radius: inherit;
   pointer-events: none;
-  border: 1.5px solid rgba(255, 241, 184, 0.95);
-  box-shadow: 0 0 6px rgba(255, 241, 184, 0.9), 0 0 14px rgba(255, 209, 92, 0.8);
+  border: 1px solid rgba(255, 225, 150, 0.95);
   opacity: 0.9;
   will-change: opacity;
   animation: escolaEdgePulse 2.2s ease-in-out infinite;
@@ -230,8 +224,9 @@
   font-size: 12px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #ffb066;
+  color: #ffd15c;
   font-weight: 800;
+  text-shadow: 0 0 6px rgba(255, 209, 92, 0.4);
 }
 
 .escola-baloon-title {
@@ -240,14 +235,14 @@
   font-weight: 900;
   line-height: 1.25;
   color: #fff;
-  text-shadow: 0 1px 8px rgba(255, 90, 30, 0.35);
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.22), 0 0 14px rgba(255, 90, 20, 0.2);
 }
 
 .escola-baloon-text {
   margin: 0 0 12px;
   font-size: 14.5px;
   line-height: 1.45;
-  color: #ffe0cc;
+  color: #fff3ea;
 }
 
 .escola-baloon-cta {
@@ -329,8 +324,7 @@
   }
 
   .escola-baloon-edge {
-    filter: blur(1px);
-    box-shadow: 0 0 14px rgba(255, 42, 10, 0.6), 0 0 30px rgba(255, 122, 24, 0.45);
+    filter: blur(1.5px);
   }
 
   .escola-baloon-spark:nth-child(n + 6) {
