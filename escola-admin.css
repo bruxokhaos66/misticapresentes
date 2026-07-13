@@ -1,0 +1,62 @@
+/* Console administrativo da Escola Mística — usa os tokens de v2.css. */
+.escola-admin-main { padding: 2rem 0 4rem; }
+.escola-admin-page { color: var(--cream); }
+.escola-admin-header { display: flex; justify-content: space-between; align-items: center; }
+.escola-admin-header h1, .escola-admin-login h1 { font-family: Cinzel, serif; color: var(--gold-2); }
+.escola-admin-status { color: var(--muted); }
+
+.escola-admin-login { max-width: 420px; margin: 3rem auto; padding: 2rem; background: var(--panel); border: 1px solid var(--line); border-radius: 20px; }
+.escola-admin-login form { display: grid; gap: .7rem; margin-top: 1rem; }
+
+.escola-admin-picker { display: flex; gap: .8rem; align-items: flex-end; flex-wrap: wrap; margin: 1.2rem 0 1.6rem; }
+.escola-admin-picker label { display: grid; gap: .3rem; flex: 1; min-width: 260px; color: var(--muted); font-size: .88rem; }
+.escola-admin-picker code { color: var(--gold); }
+
+input, select, textarea {
+  padding: .6rem .8rem; border-radius: 12px; border: 1px solid var(--line);
+  background: rgba(0,0,0,.28); color: var(--cream); font: inherit; width: 100%;
+}
+textarea { min-height: 70px; resize: vertical; }
+
+.escola-admin-card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 1.3rem 1.4rem; margin-bottom: 1.4rem; }
+.escola-admin-card h2 { font-family: Cinzel, serif; color: var(--gold-2); margin-top: 0; font-size: 1.25rem; }
+.escola-admin-card-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+.escola-admin-form { display: grid; gap: .8rem; }
+.escola-admin-form label, .escola-admin-subform label { display: grid; gap: .3rem; color: var(--muted); font-size: .85rem; }
+.escola-admin-row { display: flex; gap: .8rem; flex-wrap: wrap; align-items: end; }
+.escola-admin-row > label { flex: 1; min-width: 120px; }
+.escola-admin-row > label.grow { flex: 3; }
+.escola-admin-check { flex-direction: row !important; align-items: center; gap: .4rem !important; }
+.escola-admin-check input { width: auto; }
+.escola-admin-empty { color: var(--muted); font-style: italic; }
+.escola-admin-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+
+.escola-admin-modulo { border: 1px solid var(--line); border-radius: 14px; margin-bottom: .7rem; overflow: hidden; }
+.escola-admin-modulo > summary { cursor: pointer; padding: .8rem 1rem; background: rgba(0,0,0,.2); display: flex; align-items: center; gap: .5rem; }
+.escola-admin-modulo summary em { color: var(--muted); }
+.escola-admin-count { color: var(--muted); font-size: .8rem; margin-left: auto; }
+.escola-admin-badge { width: 24px; height: 24px; border-radius: 50%; background: var(--panel-strong); color: var(--gold); display: inline-grid; place-items: center; font-weight: 700; font-size: .8rem; }
+.escola-admin-modulo-body { padding: 1rem; display: grid; gap: 1.2rem; }
+
+.escola-admin-subform { border: 1px dashed var(--line); border-radius: 12px; padding: .9rem; display: grid; gap: .7rem; margin-bottom: .8rem; background: rgba(0,0,0,.12); }
+.escola-admin-aulas h3, .escola-admin-quiz h3 { color: var(--gold); font-size: 1rem; margin: 0; }
+
+.escola-admin-perguntas { margin-top: 1rem; display: grid; gap: .7rem; }
+.escola-admin-pergunta { border-left: 3px solid var(--line); padding: .5rem .9rem; background: rgba(0,0,0,.15); border-radius: 0 10px 10px 0; }
+.escola-admin-pergunta ul { margin: .3rem 0; padding-left: 1.2rem; color: var(--muted); }
+.escola-admin-pergunta li.correta { color: var(--sage); }
+.escola-admin-pergunta em { color: var(--muted); font-size: .82rem; }
+
+.escola-admin-tabela { width: 100%; border-collapse: collapse; margin-top: .8rem; }
+.escola-admin-tabela th, .escola-admin-tabela td { text-align: left; padding: .55rem .5rem; border-bottom: 1px solid var(--line); font-size: .9rem; }
+.escola-admin-tabela th { color: var(--gold); }
+.escola-admin-aluno-acoes { display: flex; gap: .4rem; flex-wrap: wrap; }
+
+.escola-admin-toast { position: fixed; bottom: 1.2rem; left: 50%; transform: translateX(-50%); z-index: 90; padding: .7rem 1.2rem; border-radius: 12px; box-shadow: var(--shadow); }
+.escola-admin-toast.is-ok { background: var(--moss); color: #fff; }
+.escola-admin-toast.is-erro { background: #7a2f2f; color: #fff; }
+
+@media (max-width: 640px) {
+  .escola-admin-row { flex-direction: column; align-items: stretch; }
+  .escola-admin-tabela { display: block; overflow-x: auto; }
+}
