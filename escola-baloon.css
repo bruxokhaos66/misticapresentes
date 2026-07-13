@@ -466,12 +466,16 @@
 
 @keyframes escolaHaloRed {
   0%, 100% { opacity: .58; transform: scale(.99); }
+  23% { opacity: .68; transform: scale(1.005); }
   50% { opacity: .78; transform: scale(1.016); }
+  74% { opacity: .66; transform: scale(1.002); }
 }
 
 @keyframes escolaHaloOrange {
   0%, 100% { opacity: .64; transform: scale(.995); }
+  27% { opacity: .74; transform: scale(1.003); }
   48% { opacity: .88; transform: scale(1.013); }
+  69% { opacity: .72; transform: scale(1.001); }
 }
 
 @keyframes escolaGlassLight {
@@ -527,33 +531,51 @@
 
 @keyframes escolaFlame {
   0%, 100% { opacity: .96; transform: translate3d(-50%, 0, 0) scaleX(1) scaleY(1) rotate(-1deg); }
+  9% { opacity: .99; transform: translate3d(-54%, 0, 0) scaleX(.93) scaleY(1.05) rotate(-3.4deg); }
   13% { opacity: 1; transform: translate3d(-53%, 0, 0) scaleX(.94) scaleY(1.08) rotate(-3deg); }
+  27% { opacity: .95; transform: translate3d(-49%, 0, 0) scaleX(1.02) scaleY(1.01) rotate(1.2deg); }
   31% { opacity: .93; transform: translate3d(-48%, 0, 0) scaleX(1.05) scaleY(.97) rotate(2deg); }
+  39% { opacity: .97; transform: translate3d(-50%, 0, 0) scaleX(.99) scaleY(1.03) rotate(-.5deg); }
   47% { opacity: .99; transform: translate3d(-52%, 0, 0) scaleX(.97) scaleY(1.11) rotate(-2deg); }
+  58% { opacity: .96; transform: translate3d(-46%, 0, 0) scaleX(1.06) scaleY(.96) rotate(2.6deg); }
   68% { opacity: .94; transform: translate3d(-47%, 0, 0) scaleX(1.04) scaleY(.95) rotate(3deg); }
+  76% { opacity: .98; transform: translate3d(-51%, 0, 0) scaleX(.98) scaleY(1.04) rotate(-1deg); }
   84% { opacity: 1; transform: translate3d(-51%, 0, 0) scaleX(.96) scaleY(1.06) rotate(-1.5deg); }
+  93% { opacity: .97; transform: translate3d(-49%, 0, 0) scaleX(1.01) scaleY(1.02) rotate(.8deg); }
 }
 
 @keyframes escolaFlameCore {
   0%, 100% { opacity: .78; transform: translateX(-50%) scaleX(.92) scaleY(.9); }
+  18% { opacity: .87; transform: translateX(-51%) scaleX(.97) scaleY(1); }
   24% { opacity: .98; transform: translateX(-52%) scaleX(1.03) scaleY(1.07); }
+  41% { opacity: .89; transform: translateX(-49%) scaleX(.99) scaleY(1.02); }
   52% { opacity: .84; transform: translateX(-48%) scaleX(.96) scaleY(.95); }
+  65% { opacity: .93; transform: translateX(-50%) scaleX(1) scaleY(1.04); }
   77% { opacity: 1; transform: translateX(-51%) scaleX(1.01) scaleY(1.1); }
+  90% { opacity: .86; transform: translateX(-49%) scaleX(.95) scaleY(.97); }
 }
 
 @keyframes escolaCandleHalo {
   0%, 100% { opacity: .4; transform: scale(.92); }
+  15% { opacity: .53; transform: scale(.97); }
   19% { opacity: .62; transform: scale(1.02); }
+  34% { opacity: .46; transform: scale(.95); }
   43% { opacity: .49; transform: scale(.97); }
+  60% { opacity: .58; transform: scale(1.015); }
   71% { opacity: .68; transform: scale(1.045); }
+  80% { opacity: .59; transform: scale(1.01); }
   88% { opacity: .51; transform: scale(.98); }
 }
 
 @keyframes escolaCandleReflection {
   0%, 100% { opacity: .28; transform: translate3d(-3px, 1px, 0) scale(.94); }
+  16% { opacity: .38; transform: translate3d(-2px, 1px, 0) scale(.97); }
   22% { opacity: .47; transform: translate3d(0, 0, 0) scale(1.015); }
+  38% { opacity: .4; transform: translate3d(-1px, 0, 0) scale(1); }
   49% { opacity: .35; transform: translate3d(-1px, 1px, 0) scale(.98); }
+  62% { opacity: .45; transform: translate3d(0, -1px, 0) scale(1.02); }
   74% { opacity: .53; transform: translate3d(1px, -1px, 0) scale(1.035); }
+  83% { opacity: .44; transform: translate3d(0, 0, 0) scale(1.005); }
   91% { opacity: .38; transform: translate3d(-2px, 0, 0) scale(.97); }
 }
 
