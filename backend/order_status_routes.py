@@ -5,7 +5,7 @@ import secrets
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
@@ -13,7 +13,7 @@ from backend.audit import registrar_auditoria
 from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.database import conectar
 from backend.logging_config import get_logger
-from backend.panel_sessions import exigir_sessao_ou_chave_api
+from backend.panel_sessions import exigir_sessao_ou_chave_api, validar_sessao
 from backend.rate_limit import limitar_requisicoes
 
 logger = get_logger(__name__)
@@ -347,18 +347,45 @@ def _chave_api_valida(chave_recebida: str | None) -> bool:
     return bool(chave_recebida) and any(secrets.compare_digest(str(chave_recebida), chave) for chave in chaves_validas)
 
 
+def _acesso_admin_valido(mistica_painel_sessao: str | None, x_mistica_api_key: str | None) -> bool:
+    """Sessão administrativa do painel (cookie) ou X-Mistica-Api-Key válida
+    liberam o acesso ao pedido sem precisar do pix_txid."""
+    if validar_sessao(mistica_painel_sessao):
+        return True
+    return _chave_api_valida(x_mistica_api_key)
+
+
+ACESSO_NEGADO_PEDIDO = "Acesso negado. Informe o código do pedido (txid) para consultar este pedido."
+
+
+def _exigir_acesso_pedido(venda, txid: str | None, admin: bool):
+    """Só libera o acesso público (sem sessão/chave de API) a um pedido se o
+    pix_txid enviado bater com o do pedido. Quando o acesso é negado, a
+    resposta é sempre o mesmo 403 genérico — inclusive quando o pedido não
+    existe — para que o ID do pedido sozinho não sirva para varrer/enumerar
+    pedidos alheios (o 404 só é revelado a quem já provou ter acesso)."""
+    if admin:
+        if not venda:
+            raise HTTPException(status_code=404, detail="Pedido não encontrado")
+        return
+    if not venda or not venda["pix_txid"] or not txid or not secrets.compare_digest(str(txid), str(venda["pix_txid"])):
+        raise HTTPException(status_code=403, detail=ACESSO_NEGADO_PEDIDO)
+
+
 @router.get("/pedidos/{venda_id}/recibo")
 def recibo_pedido(
     venda_id: int,
     txid: str | None = None,
     x_mistica_api_key: str | None = Header(default=None),
+    mistica_painel_sessao: str | None = Cookie(default=None),
 ):
     """Recibo simples e imprimível do pedido, gerado a partir dos dados
     persistidos (nunca de dados locais do navegador). O id do pedido sozinho
     não dá acesso: é preciso o pix_txid do próprio pedido (devolvido apenas na
-    criação/no link de acompanhamento do cliente) ou a chave da API do painel
-    administrativo — sem isso, qualquer pessoa poderia varrer ids sequenciais
-    e coletar nome/telefone/itens de outros clientes."""
+    criação/no link de acompanhamento do cliente), a sessão administrativa do
+    painel ou a chave da API — sem isso, qualquer pessoa poderia varrer ids
+    sequenciais e coletar nome/telefone/itens de outros clientes."""
+    admin = _acesso_admin_valido(mistica_painel_sessao, x_mistica_api_key)
     with conectar() as conn:
         venda = conn.execute(
             """
@@ -369,11 +396,7 @@ def recibo_pedido(
             """,
             (venda_id,),
         ).fetchone()
-        if not venda:
-            raise HTTPException(status_code=404, detail="Pedido não encontrado")
-        if not _chave_api_valida(x_mistica_api_key):
-            if not venda["pix_txid"] or not txid or not secrets.compare_digest(str(txid), str(venda["pix_txid"])):
-                raise HTTPException(status_code=403, detail="Informe o código do pedido (txid) para ver o recibo.")
+        _exigir_acesso_pedido(venda, txid, admin)
         itens = conn.execute(
             "SELECT nome_p, quantidade, valor_unitario, valor_total FROM pedidos_itens WHERE pedido_id=? ORDER BY id ASC",
             (venda_id,),
@@ -417,11 +440,20 @@ td,th{{border-bottom:1px solid #ddd;padding:6px;text-align:left;font-size:13px}}
 
 
 @router.get("/pedidos/{venda_id}/status")
-def historico_status_pedido(venda_id: int):
+def historico_status_pedido(
+    venda_id: int,
+    txid: str | None = None,
+    x_mistica_api_key: str | None = Header(default=None),
+    mistica_painel_sessao: str | None = Cookie(default=None),
+):
+    """Acompanhamento público do pedido: exige o pix_txid do próprio pedido
+    (devolvido só na criação/no link do cliente) além do ID, para que IDs
+    sequenciais não sirvam para varrer o status e o histórico de pedidos
+    alheios. Sessão administrativa ou X-Mistica-Api-Key seguem liberadas."""
+    admin = _acesso_admin_valido(mistica_painel_sessao, x_mistica_api_key)
     with conectar() as conn:
-        venda = conn.execute("SELECT id, status, estoque_baixado, estoque_baixado_em FROM pedidos WHERE id=?", (venda_id,)).fetchone()
-        if not venda:
-            raise HTTPException(status_code=404, detail="Pedido não encontrado")
+        venda = conn.execute("SELECT id, status, estoque_baixado, estoque_baixado_em, pix_txid FROM pedidos WHERE id=?", (venda_id,)).fetchone()
+        _exigir_acesso_pedido(venda, txid, admin)
         historico = conn.execute(
             """
             SELECT id, venda_id, status, usuario, observacao, data_hora
