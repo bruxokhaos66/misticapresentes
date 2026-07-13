@@ -11,8 +11,7 @@
   padding: 20px 22px;
   border-radius: 22px 22px 22px 4px;
   background: linear-gradient(145deg, rgba(45, 5, 2, 0.28), rgba(10, 2, 1, 0.18));
-  border: 1px solid rgba(255, 225, 150, 0.35);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 220, 170, 0.12);
+  border: 1px solid rgba(255, 225, 150, 0.3);
   backdrop-filter: blur(8px) saturate(120%);
   -webkit-backdrop-filter: blur(8px) saturate(120%);
   color: #fff3ea;
@@ -25,58 +24,178 @@
   isolation: isolate;
 }
 
-.escola-baloon::before {
+/* ---------- Camadas de efeito (VFX), da mais externa para a mais interna ---------- */
+
+.escola-fx-halo-red {
+  position: absolute;
+  inset: -34px;
+  z-index: -8;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 70%, rgba(255, 42, 10, 0.5), transparent 68%);
+  filter: blur(22px);
+  opacity: 0.75;
+  transform: scale(1);
+  transform-origin: 50% 60%;
+  will-change: opacity, transform;
+  animation: escolaHaloRed 3.4s ease-in-out infinite;
+}
+
+.escola-fx-halo-orange {
+  position: absolute;
+  inset: -22px;
+  z-index: -7;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 30% 15%, rgba(255, 122, 24, 0.45), transparent 62%),
+    radial-gradient(ellipse at 80% 90%, rgba(255, 122, 24, 0.4), transparent 60%);
+  filter: blur(16px);
+  opacity: 0.7;
+  transform: scale(1);
+  transform-origin: 50% 50%;
+  will-change: opacity, transform;
+  animation: escolaHaloOrange 2.5s ease-in-out infinite;
+  animation-delay: -0.8s;
+}
+
+.escola-fx-smoke {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  bottom: 55%;
+  height: 90px;
+  z-index: -6;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.escola-fx-smoke::before,
+.escola-fx-smoke::after {
   content: "";
   position: absolute;
-  inset: -40%;
-  z-index: -2;
-  border-radius: inherit;
-  background: radial-gradient(circle at 30% 100%, rgba(255, 35, 5, 0.4), transparent 65%),
-    radial-gradient(circle at 75% 5%, rgba(255, 105, 20, 0.32), transparent 62%);
-  filter: blur(28px);
-  pointer-events: none;
+  bottom: 0;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(140, 90, 70, 0.28), rgba(90, 40, 25, 0.12) 60%, transparent 75%);
+  filter: blur(10px);
+  opacity: 0;
   will-change: opacity, transform;
-  animation: escolaHeatHaze 2.2s ease-in-out infinite;
 }
 
-.escola-baloon-heat {
-  position: absolute;
-  inset: -14px;
-  z-index: -1;
-  border-radius: inherit;
-  pointer-events: none;
-  isolation: isolate;
-  background: transparent;
-  border: 10px solid rgba(255, 35, 5, 0.45);
-  filter: blur(16px);
-  opacity: 0.85;
-  will-change: opacity, transform;
-  animation: escolaEdgePulse 2.1s ease-in-out infinite;
+.escola-fx-smoke::before {
+  left: 18%;
+  animation: escolaSmokeRise 6.4s ease-in infinite;
 }
 
-.escola-baloon-edge {
+.escola-fx-smoke::after {
+  left: 62%;
+  width: 36px;
+  height: 36px;
+  animation: escolaSmokeRise 7.8s ease-in infinite;
+  animation-delay: -3.1s;
+}
+
+.escola-fx-glow-outer {
   position: absolute;
-  inset: -3px;
-  z-index: -1;
+  inset: -10px;
+  z-index: -5;
   border-radius: inherit;
   pointer-events: none;
-  border: 2px solid rgba(255, 105, 20, 0.85);
-  filter: blur(2px);
-  opacity: 0.85;
+  box-shadow: 0 0 26px 4px rgba(255, 42, 10, 0.4);
+  opacity: 0.8;
   will-change: opacity;
-  animation: escolaEdgePulse 2.2s ease-in-out infinite;
+  animation: escolaGlowOuter 2.9s ease-in-out infinite;
 }
 
-.escola-baloon-edge-core {
+.escola-fx-glow-inner {
   position: absolute;
   inset: 0;
-  z-index: 0;
+  z-index: -4;
   border-radius: inherit;
   pointer-events: none;
-  border: 1px solid rgba(255, 225, 150, 0.95);
-  opacity: 0.9;
+  box-shadow: inset 0 0 24px 2px rgba(255, 122, 24, 0.5);
+  opacity: 0.75;
   will-change: opacity;
-  animation: escolaEdgePulse 2.2s ease-in-out infinite;
+  animation: escolaGlowInner 1.7s ease-in-out infinite;
+}
+
+.escola-fx-glass {
+  position: absolute;
+  inset: 0;
+  z-index: -3;
+  border-radius: inherit;
+  pointer-events: none;
+  overflow: hidden;
+  mix-blend-mode: screen;
+  opacity: 0.5;
+}
+
+.escola-fx-glass::before {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  background: linear-gradient(115deg, transparent 30%, rgba(255, 241, 184, 0.16) 47%, transparent 58%);
+  will-change: opacity;
+  animation: escolaGlassSheen 5.5s ease-in-out infinite;
+}
+
+.escola-fx-rim {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  border-radius: inherit;
+  pointer-events: none;
+  border: 1px solid rgba(255, 241, 184, 0.98);
+  box-shadow: 0 0 4px 0 rgba(255, 241, 184, 0.9);
+  opacity: 0.85;
+  will-change: opacity;
+  animation: escolaRimFlicker 1.15s ease-in-out infinite;
+}
+
+@keyframes escolaHaloRed {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.08); }
+}
+
+@keyframes escolaHaloOrange {
+  0%, 100% { opacity: 0.45; transform: scale(0.98); }
+  50% { opacity: 0.9; transform: scale(1.06); }
+}
+
+@keyframes escolaSmokeRise {
+  0% { opacity: 0; transform: translateY(0) scale(0.7); }
+  12% { opacity: 0.5; }
+  70% { opacity: 0.25; }
+  100% { opacity: 0; transform: translateY(-70px) scale(1.5); }
+}
+
+@keyframes escolaGlowOuter {
+  0%, 100% { opacity: 0.55; }
+  48% { opacity: 0.85; }
+  62% { opacity: 0.62; }
+  100% { opacity: 0.55; }
+}
+
+@keyframes escolaGlowInner {
+  0%, 100% { opacity: 0.55; }
+  30% { opacity: 0.85; }
+  55% { opacity: 0.65; }
+  80% { opacity: 0.95; }
+}
+
+@keyframes escolaGlassSheen {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.85; }
+}
+
+@keyframes escolaRimFlicker {
+  0%, 100% { opacity: 0.7; }
+  20% { opacity: 1; }
+  38% { opacity: 0.78; }
+  55% { opacity: 0.98; }
+  72% { opacity: 0.8; }
+  90% { opacity: 1; }
 }
 
 .escola-baloon.is-visible {
@@ -100,16 +219,6 @@
   50% { transform: translateY(-6px) scale(1); }
 }
 
-@keyframes escolaEdgePulse {
-  0%, 100% { opacity: 0.7; }
-  50% { opacity: 1; }
-}
-
-@keyframes escolaHeatHaze {
-  0%, 100% { opacity: 0.7; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.12); }
-}
-
 .escola-baloon::after {
   content: "";
   position: absolute;
@@ -117,7 +226,8 @@
   bottom: -9px;
   width: 18px;
   height: 18px;
-  background: rgba(40, 3, 1, 0.72);
+  z-index: -1;
+  background: rgba(40, 3, 1, 0.6);
   border-right: 1px solid rgba(255, 110, 60, 0.4);
   border-bottom: 1px solid rgba(255, 110, 60, 0.4);
   clip-path: polygon(0 0, 100% 0, 0 100%);
@@ -131,6 +241,7 @@
   height: 70px;
   overflow: visible;
   pointer-events: none;
+  z-index: 1;
 }
 
 .escola-baloon-spark {
@@ -179,6 +290,7 @@
   border-radius: 50%;
   background: radial-gradient(circle at 50% 65%, rgba(255, 130, 40, 0.35), rgba(255, 60, 10, 0.12) 65%, transparent 75%);
   box-shadow: 0 0 20px rgba(255, 90, 30, 0.45);
+  z-index: 1;
 }
 
 .escola-baloon-flame {
@@ -217,6 +329,8 @@
 .escola-baloon-body {
   flex: 1;
   min-width: 0;
+  position: relative;
+  z-index: 1;
 }
 
 .escola-baloon-eyebrow {
@@ -301,6 +415,7 @@
   line-height: 1;
   cursor: pointer;
   padding: 4px;
+  z-index: 1;
 }
 
 .escola-baloon-close:hover {
@@ -315,16 +430,18 @@
     max-width: none;
   }
 
-  .escola-baloon::before {
+  .escola-fx-halo-red {
+    inset: -22px;
     filter: blur(16px);
   }
 
-  .escola-baloon-heat {
-    filter: blur(14px);
+  .escola-fx-halo-orange {
+    inset: -14px;
+    filter: blur(12px);
   }
 
-  .escola-baloon-edge {
-    filter: blur(1.5px);
+  .escola-fx-smoke {
+    display: none;
   }
 
   .escola-baloon-spark:nth-child(n + 6) {
@@ -338,11 +455,20 @@
 
 @media (prefers-reduced-motion: reduce) {
   .escola-baloon,
-  .escola-baloon::before,
-  .escola-baloon-heat,
-  .escola-baloon-edge,
-  .escola-baloon-edge-core,
   .escola-baloon.is-visible,
+  .escola-baloon.is-visible .escola-fx-halo-red,
+  .escola-baloon.is-visible .escola-fx-halo-orange,
+  .escola-baloon.is-visible .escola-fx-glow-outer,
+  .escola-baloon.is-visible .escola-fx-glow-inner,
+  .escola-baloon.is-visible .escola-fx-rim,
+  .escola-fx-halo-red,
+  .escola-fx-halo-orange,
+  .escola-fx-glow-outer,
+  .escola-fx-glow-inner,
+  .escola-fx-rim,
+  .escola-fx-glass::before,
+  .escola-fx-smoke::before,
+  .escola-fx-smoke::after,
   .escola-baloon-flame,
   .escola-baloon-spark,
   .escola-baloon-ash,
@@ -352,14 +478,19 @@
   .escola-baloon {
     transition: opacity 0.5s ease;
   }
-  .escola-baloon-edge {
-    opacity: 0.85;
+  .escola-fx-halo-red,
+  .escola-fx-halo-orange,
+  .escola-fx-glow-outer {
+    opacity: 0.65;
   }
-  .escola-baloon-heat {
-    opacity: 0.85;
+  .escola-fx-glow-inner {
+    opacity: 0.55;
   }
-  .escola-baloon-edge-core {
+  .escola-fx-rim {
     opacity: 0.9;
+  }
+  .escola-fx-glass::before {
+    opacity: 0.6;
   }
   .escola-baloon-cta::after {
     opacity: 0.6;

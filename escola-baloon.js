@@ -39,18 +39,7 @@
     });
 
     const particulas = montarParticulas();
-
-    const calor = document.createElement("div");
-    calor.className = "escola-baloon-heat";
-    calor.setAttribute("aria-hidden", "true");
-
-    const brasa = document.createElement("div");
-    brasa.className = "escola-baloon-edge";
-    brasa.setAttribute("aria-hidden", "true");
-
-    const nucleo = document.createElement("div");
-    nucleo.className = "escola-baloon-edge-core";
-    nucleo.setAttribute("aria-hidden", "true");
+    const camadasFx = montarCamadasFx();
 
     const emblema = document.createElement("div");
     emblema.className = "escola-baloon-emblem";
@@ -84,15 +73,24 @@
     corpo.appendChild(texto);
     corpo.appendChild(cta);
 
-    baloon.appendChild(calor);
-    baloon.appendChild(brasa);
-    baloon.appendChild(nucleo);
+    camadasFx.forEach((camada) => baloon.appendChild(camada));
     baloon.appendChild(particulas);
     baloon.appendChild(fechar);
     baloon.appendChild(emblema);
     baloon.appendChild(corpo);
 
     return baloon;
+  }
+
+  function montarCamadasFx() {
+    return ["escola-fx-halo-red", "escola-fx-halo-orange", "escola-fx-smoke", "escola-fx-glow-outer", "escola-fx-glow-inner", "escola-fx-glass", "escola-fx-rim"].map(
+      (nomeClasse) => {
+        const camada = document.createElement("div");
+        camada.className = nomeClasse;
+        camada.setAttribute("aria-hidden", "true");
+        return camada;
+      }
+    );
   }
 
   function montarParticulas() {
