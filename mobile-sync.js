@@ -64,35 +64,54 @@
     return data;
   }
 
+  function escapeHtml(value) {
+    return String(value == null ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function catalogText(value, fallback = "") {
+    const normalized = String(value == null ? fallback : value)
+      .replace(/[\u0000-\u001F\u007F]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    return escapeHtml(normalized || fallback);
+  }
+
   function fullUrl(path) {
     const value = String(path || "").trim();
     if (!value) return "";
-    if (/^https?:\/\//i.test(value)) return value;
-    return `${API_BASE}${value.startsWith("/") ? "" : "/"}${value}`;
+    if (/^https:\/\//i.test(value)) return value;
+    if (value.startsWith("/")) return `${API_BASE}${value}`;
+    return "";
   }
 
   function normalizarProduto(item) {
-    const codigo = item.codigo_p || item.codigo || String(item.id || "");
+    const codigo = String(item.codigo_p || item.codigo || item.id || "").trim();
     const imagens = Array.isArray(item.imagens) ? item.imagens.map(fullUrl).filter(Boolean) : [];
     const imagemPrincipal = fullUrl(item.imagem_url || item.imagem || item.imageUrl || imagens[0] || "");
     const limiteEncomenda = Number(item.limite_encomenda || 10);
     const temRegraExplicita = Object.prototype.hasOwnProperty.call(item, "sob_encomenda");
     const sobEncomenda = temRegraExplicita ? Boolean(item.sob_encomenda) : undefined;
+    const categoriaOriginal = item.categoria || "Produtos da loja";
     return {
       id: `api-${item.id}`,
       apiId: item.id,
       codigo,
-      name: item.nome || item.nome_p || "Produto sem nome",
-      category: item.categoria || "Produtos da loja",
-      description: item.descricao || (item.categoria ? `Categoria: ${item.categoria}` : "Produto sincronizado da loja."),
+      name: catalogText(item.nome || item.nome_p, "Produto sem nome"),
+      category: catalogText(categoriaOriginal, "Produtos da loja"),
+      description: catalogText(item.descricao || (item.categoria ? `Categoria: ${item.categoria}` : "Produto sincronizado da loja.")),
       price: Number(item.preco || item.valor || 0),
       stock: Number(item.quantidade || item.estoque || 0),
-      icon: item.icone || "✨",
+      icon: catalogText(item.icone || "✨", "✨"),
       imageUrl: imagemPrincipal,
       images: imagens.length ? imagens : (imagemPrincipal ? [imagemPrincipal] : []),
-      externalUrl: item.link_externo || item.externalUrl || "",
-      tag: item.selo || item.tag || "",
-      selo: item.selo || item.tag || "",
+      externalUrl: fullUrl(item.link_externo || item.externalUrl || ""),
+      tag: catalogText(item.selo || item.tag || ""),
+      selo: catalogText(item.selo || item.tag || ""),
       ...(temRegraExplicita ? {
         sobEncomenda,
         sob_encomenda: sobEncomenda,
