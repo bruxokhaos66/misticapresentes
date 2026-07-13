@@ -200,6 +200,37 @@
     return true;
   }
 
+  // Idempotency-Key da tentativa de checkout atual. Fica só em memória
+  // (nunca em localStorage): reenviar a mesma tentativa (retry de rede,
+  // clique duplo) usa a mesma chave, então o backend devolve sempre o mesmo
+  // pedido em vez de criar um novo. Uma chave nova só é gerada quando o
+  // pedido é criado com sucesso, o carrinho muda/é limpo, ou o cliente inicia
+  // uma nova tentativa depois de um erro definitivo (ver app.js).
+  let idempotencyKeyAtual = null;
+
+  function gerarIdempotencyKey() {
+    if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+    const bytes = new Uint8Array(16);
+    if (window.crypto?.getRandomValues) {
+      window.crypto.getRandomValues(bytes);
+    } else {
+      for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+    }
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+
+  function idempotencyKeyDaTentativa() {
+    if (!idempotencyKeyAtual) idempotencyKeyAtual = gerarIdempotencyKey();
+    return idempotencyKeyAtual;
+  }
+
+  function reiniciarIdempotencyKey() {
+    idempotencyKeyAtual = null;
+  }
+
   async function criarPedidoNoServidor(itensCarrinho) {
     if (window.misticaCatalogState !== "ready") throw new Error("O catálogo oficial ainda não está disponível.");
     if (!Array.isArray(itensCarrinho) || !itensCarrinho.length) throw new Error("Carrinho vazio.");
@@ -223,12 +254,16 @@
 
     const resposta = await api("/api/checkout/pedidos", {
       method: "POST",
+      headers: { "Idempotency-Key": idempotencyKeyDaTentativa() },
       body: JSON.stringify(payload),
     });
 
     if (!resposta?.id || !resposta?.pix_copia_cola) {
       throw new Error("O servidor não retornou um Pix válido para este pedido.");
     }
+
+    // Pedido criado com sucesso: a próxima compra deve usar uma chave nova.
+    reiniciarIdempotencyKey();
 
     return {
       id: resposta.id,
@@ -242,8 +277,9 @@
     };
   }
 
-  async function consultarStatusPedido(pedidoId) {
-    const resposta = await api(`/api/pedidos/${encodeURIComponent(pedidoId)}/status`, { method: "GET" });
+  async function consultarStatusPedido(pedidoId, pixTxid) {
+    const query = pixTxid ? `?txid=${encodeURIComponent(pixTxid)}` : "";
+    const resposta = await api(`/api/pedidos/${encodeURIComponent(pedidoId)}/status${query}`, { method: "GET" });
     return {
       status: resposta.status_atual,
       estoqueBaixado: Boolean(resposta.estoque_baixado),
@@ -252,10 +288,12 @@
 
   window.misticaCriarPedido = criarPedidoNoServidor;
   window.misticaConsultarStatusPedido = consultarStatusPedido;
+  window.misticaResetIdempotencyKey = reiniciarIdempotencyKey;
   window.misticaMobileSync = {
     apiBase: API_BASE,
     syncNow: sincronizarAgora,
     sendSale: criarPedidoNoServidor,
+    resetIdempotencyKey: reiniciarIdempotencyKey,
   };
 
   setCatalogState("loading", "Carregando catálogo oficial...");
