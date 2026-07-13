@@ -118,6 +118,25 @@ def test_origem_e_destino_nao_podem_ser_o_mesmo_arquivo(tmp_path, monkeypatch):
     assert origem.exists()
 
 
+def test_snapshot_que_falha_no_integrity_check_levanta_backupinvalidoerror_e_e_removido(tmp_path, monkeypatch):
+    """Cobre o caminho em que a cópia via Connection.backup() é concluída com
+    sucesso, mas a validação pós-cópia (PRAGMA integrity_check) reprova o
+    resultado — cenário distinto de uma origem inválida (que falha antes,
+    durante a própria cópia)."""
+    origem = tmp_path / "origem.db"
+    _criar_banco_simples(origem).close()
+
+    monkeypatch.setattr(backup_mod, "_validar_snapshot", lambda caminho, origem_path=None: (False, "corrompido de propósito para o teste"))
+
+    with pytest.raises(BackupInvalidoError):
+        criar_backup_seguro(str(origem), str(tmp_path / "backups"), "teste")
+
+    # O arquivo que falhou na validação não pode sobrar no diretório de destino.
+    destino_dir = tmp_path / "backups"
+    if destino_dir.exists():
+        assert list(destino_dir.iterdir()) == []
+
+
 def test_falha_de_backup_nao_apaga_backups_antigos(tmp_path):
     destino_dir = tmp_path / "backups"
     destino_dir.mkdir()
@@ -163,6 +182,73 @@ def test_backup_recem_criado_nao_e_removido_pela_retencao(tmp_path, monkeypatch)
 
     assert caminho is not None
     assert os.path.exists(caminho)
+
+
+def test_retencao_ignora_nomes_parecidos_mas_invalidos(tmp_path, monkeypatch):
+    monkeypatch.setattr(backup_mod, "BACKUP_DIR", str(tmp_path))
+
+    parecidos_invalidos = [
+        "mistica_auto.db",  # falta o "_" depois de "auto"
+        "MISTICA_AUTO_teste.db",  # maiusculas: prefixo é sensível a caixa
+        "xmistica_auto_teste.db",  # prefixo não está no começo do nome
+        "mistica_automatico_teste.db",  # prefixo parecido, mas não é o mesmo
+    ]
+    tempo_antigo = time.time() - 40 * 24 * 3600
+    for nome in parecidos_invalidos:
+        caminho = tmp_path / nome
+        caminho.write_bytes(b"x")
+        os.utime(caminho, (tempo_antigo, tempo_antigo))
+
+    backup_mod.limpar_backups_antigos()
+
+    for nome in parecidos_invalidos:
+        assert (tmp_path / nome).exists(), f"{nome} nao deveria ter sido removido"
+
+
+def test_retencao_com_arquivo_corrompido_nao_impede_novo_backup(tmp_path, monkeypatch):
+    monkeypatch.setattr(backup_mod, "BACKUP_DIR", str(tmp_path))
+    monkeypatch.setattr(backup_mod, "DB_PATH", str(tmp_path / "origem.db"))
+    _criar_banco_simples(tmp_path / "origem.db").close()
+
+    corrompido = tmp_path / "mistica_auto_20200101_000000.db"
+    corrompido.write_text("isto nao e um banco sqlite valido")
+
+    caminho = backup_mod.realizar_backup()
+
+    assert caminho is not None
+    assert os.path.exists(caminho)
+
+
+def test_realizar_backup_quando_banco_nao_existe_nao_falha_e_nao_cria_arquivo(tmp_path, monkeypatch):
+    origem_inexistente = tmp_path / "nao_existe.db"
+    monkeypatch.setattr(backup_mod, "BACKUP_DIR", str(tmp_path / "backups"))
+    monkeypatch.setattr(backup_mod, "DB_PATH", str(origem_inexistente))
+
+    caminho = backup_mod.realizar_backup()
+
+    assert caminho is None
+    # Importante: a tentativa de backup não pode criar um banco vazio no
+    # lugar onde o banco ativo era esperado (sqlite3.connect cria arquivos
+    # novos silenciosamente se não houver essa checagem prévia).
+    assert not origem_inexistente.exists()
+
+
+def test_realizar_backup_com_destino_inacessivel_nao_falha(tmp_path, monkeypatch):
+    origem = tmp_path / "origem.db"
+    _criar_banco_simples(origem).close()
+
+    # Um arquivo comum no lugar onde deveria existir um diretório simula um
+    # destino inacessível de forma confiável (independente de permissões de
+    # SO, que não bloqueiam o usuário root do ambiente de teste).
+    destino_invalido = tmp_path / "nao_e_uma_pasta"
+    destino_invalido.write_text("isto e um arquivo, nao uma pasta")
+
+    monkeypatch.setattr(backup_mod, "BACKUP_DIR", str(destino_invalido))
+    monkeypatch.setattr(backup_mod, "DB_PATH", str(origem))
+
+    caminho = backup_mod.realizar_backup()
+
+    assert caminho is None  # não deve lançar exceção para o chamador
 
 
 def test_nomes_maliciosos_ou_traversal_sao_rejeitados(tmp_path):

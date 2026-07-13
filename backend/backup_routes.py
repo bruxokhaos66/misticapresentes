@@ -101,9 +101,21 @@ def baixar_backup_atual(x_mistica_api_key: str | None = Header(default=None)):
 
     # A cópia de download é efêmera: é removida do disco assim que a resposta
     # termina de ser enviada, para não acumular arquivos temporários.
+    #
+    # A remoção usa BackgroundTask, que o Starlette só executa depois que o
+    # corpo da resposta já foi totalmente enviado ao cliente (ver
+    # `Response.__call__`/`FileResponse.__call__`): o `await self.background()`
+    # só é alcançado após o laço de leitura e envio do arquivo terminar. O
+    # servidor ASGI usado aqui (uvicorn) não oferece a extensão
+    # `http.response.pathsend` (que delegaria o envio ao servidor de forma
+    # assíncrona e tornaria esse `background` prematuro); se isso mudar no
+    # futuro, o header abaixo continua permitindo detectar corrupção via
+    # checksum, mas o ideal é revalidar esta suposição antes de trocar de
+    # servidor ASGI.
     return FileResponse(
         path=info["caminho"],
         media_type="application/octet-stream",
         filename=info["nome"],
+        headers={"X-Backup-Checksum-Sha256": info["checksum_sha256"]},
         background=BackgroundTask(_remover_arquivo_temporario, info["caminho"]),
     )
