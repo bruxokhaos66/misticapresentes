@@ -22,28 +22,6 @@ window.misticaSiteConfig = {
   const productionMode = cfg.serverMode === "production" || cfg.storageMode === "api_first" || cfg.usePublicDomainAccess === true;
   if (!productionMode) return;
 
-  const sensitiveKeys = new Set([
-    "misticaClients",
-    "misticaSales",
-    "misticaStock",
-    "misticaSuppliers",
-    "misticaAutoBackup",
-    "misticaLastBackupAt",
-  ]);
-
-  sensitiveKeys.forEach(key => {
-    try { localStorage.removeItem(key); } catch {}
-  });
-
-  if (!window.__misticaStorageGuardInstalled) {
-    window.__misticaStorageGuardInstalled = true;
-    const originalSetItem = Storage.prototype.setItem;
-    Storage.prototype.setItem = function guardedSetItem(key, value) {
-      if (this === localStorage && sensitiveKeys.has(String(key))) return;
-      return originalSetItem.call(this, key, value);
-    };
-  }
-
   window.misticaCatalogState = "loading";
   document.documentElement.dataset.catalogState = "loading";
 
@@ -244,7 +222,7 @@ window.misticaSiteConfig = {
   };
 
   const iniciar = () => {
-    loadScript("misticaProductionGuardScript", "site-production-guard.js?v=20260713-checkout-estavel");
+    loadScript("misticaProductionGuardScript", "site-production-guard.js?v=20260713-checkout-estavel-2");
     if (!adminRoute) return;
     if (!onAdminPage) {
       window.location.replace("admin.html");
