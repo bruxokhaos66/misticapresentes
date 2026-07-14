@@ -96,6 +96,7 @@
 .aula-box-ciencia { border-left-color: #8fb4a0; }
 .aula-box-respeito { border-left-color: var(--moss); }
 .aula-box-refletir { border-left-color: #9a82b8; }
+.aula-box-historia { border-left-color: #7b9cc9; }
 .aula-glossario { display: grid; grid-template-columns: minmax(110px, 170px) 1fr; gap: .45rem .8rem; }
 .aula-glossario dt { color: var(--gold); font-weight: 700; }
 .aula-glossario dd { margin: 0; color: var(--muted); }
@@ -103,6 +104,29 @@
 .aula-imagem-placeholder { min-height: 210px; margin: 0 0 1.4rem; padding: 1.2rem; display: grid; place-items: center; text-align: center; border: 1px dashed rgba(242,201,109,.45); border-radius: 16px; color: var(--muted); background: radial-gradient(circle at 50% 25%, rgba(242,201,109,.14), transparent 35%), linear-gradient(150deg, #111b17, #090b0a); }
 .aula-imagem-placeholder > span { color: var(--gold); font-size: 2rem; }
 .aula-imagem-placeholder figcaption { max-width: 560px; font-size: .82rem; }
+
+/* --- Imagens reais de capa/ilustração (Módulo 2 em diante) --- */
+.aula-imagem { margin: 0 0 1.4rem; }
+.aula-imagem img { display: block; width: 100%; height: auto; aspect-ratio: 1200 / 630; object-fit: cover; border-radius: 16px; border: 1px solid var(--line); background: #05070a; }
+.aula-imagem-timeline img, .aula-imagem-mapa img { aspect-ratio: 1200 / 460; object-fit: contain; background: #030305; }
+.aula-imagem-mapa img { aspect-ratio: 1200 / 640; }
+.aula-imagem figcaption { margin-top: .5rem; font-size: .82rem; color: var(--muted); }
+.aula-imagem-credito { display: block; opacity: .75; font-size: .76rem; margin-top: .15rem; }
+
+/* --- Quadro comparativo (tabela) --- */
+.aula-tabela-wrap { overflow-x: auto; margin: 1.1rem 0 1.4rem; border: 1px solid var(--line); border-radius: 14px; }
+.aula-tabela { width: 100%; border-collapse: collapse; min-width: 640px; font-size: .88rem; }
+.aula-tabela caption { text-align: left; padding: .7rem .9rem; color: var(--gold); font-size: .82rem; background: rgba(0,0,0,.25); }
+.aula-tabela th, .aula-tabela td { padding: .65rem .8rem; border-top: 1px solid var(--line); text-align: left; vertical-align: top; color: var(--cream); }
+.aula-tabela thead th { background: rgba(240,197,106,.12); color: var(--gold-2); font-weight: 700; }
+.aula-tabela tbody th[scope="row"] { color: var(--gold); white-space: nowrap; }
+
+/* --- Atividade livre de revisão (sem backend, sem persistência) --- */
+.aula-revisao { display: grid; gap: .6rem; margin: 1rem 0 1.4rem; }
+.aula-revisao-item { border: 1px solid var(--line); border-radius: 12px; padding: .7rem .9rem; background: rgba(0,0,0,.18); }
+.aula-revisao-item summary { cursor: pointer; font-weight: 600; color: var(--muted-strong, var(--cream)); }
+.aula-revisao-item p { margin: .6rem 0 0; color: var(--muted); }
+.aula-referencias { font-size: .84rem; color: var(--muted); opacity: .9; }
 .plataforma-conteudo-material { margin: 1rem 0; }
 .plataforma-conteudo-actions { display: flex; gap: .6rem; flex-wrap: wrap; margin-top: 1.6rem; padding-top: 1.2rem; border-top: 1px solid var(--line); }
 .plataforma-conteudo-actions .btn { flex: 1; min-width: 130px; }

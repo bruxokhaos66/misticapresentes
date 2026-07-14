@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" role="img" aria-labelledby="a3Titulo a3Desc">
+  <title id="a3Titulo">Aula 3 — Como o xamanismo chegou ao mundo moderno</title>
+  <desc id="a3Desc">Ilustração abstrata combinando uma silhueta de floresta ancestral com contornos geométricos de uma cidade contemporânea, unidas por um caminho dourado.</desc>
+  <defs>
+    <linearGradient id="ceuA3" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0e1a14"/>
+      <stop offset="100%" stop-color="#07070b"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#ceuA3)"/>
+  <g fill="#0b120c">
+    <path d="M40,560 L90,410 L140,560 Z"/>
+    <path d="M160,560 L200,450 L240,560 Z"/>
+    <path d="M260,560 L310,400 L360,560 Z"/>
+  </g>
+  <g fill="#1a2233" opacity="0.9">
+    <rect x="820" y="360" width="60" height="200"/>
+    <rect x="900" y="300" width="70" height="260"/>
+    <rect x="990" y="400" width="55" height="160"/>
+    <rect x="1060" y="330" width="65" height="230"/>
+  </g>
+  <g fill="#f0c56a" opacity="0.7">
+    <rect x="840" y="390" width="8" height="8"/><rect x="860" y="420" width="8" height="8"/>
+    <rect x="920" y="340" width="8" height="8"/><rect x="940" y="380" width="8" height="8"/>
+    <rect x="1005" y="430" width="8" height="8"/><rect x="1080" y="370" width="8" height="8"/>
+  </g>
+  <path d="M120,560 Q450,480 700,470 Q900,460 1080,560" stroke="#f0c56a" stroke-width="3" fill="none" opacity="0.75" stroke-dasharray="2 14" stroke-linecap="round"/>
+  <text x="60" y="70" font-family="Georgia, 'Times New Roman', serif" font-size="30" fill="#efe1c5">Aula 3 · O xamanismo no mundo moderno</text>
+  <text x="60" y="590" font-family="Georgia, serif" font-size="17" fill="#d8cbb6">Da tradição comunitária às releituras urbanas contemporâneas.</text>
+</svg>
