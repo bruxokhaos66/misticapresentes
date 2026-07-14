@@ -65,11 +65,16 @@ def garantir_tabelas_lms(conn) -> None:
             imagem TEXT,
             nota_minima INTEGER NOT NULL DEFAULT 70,
             certificado INTEGER NOT NULL DEFAULT 1,
+            requer_matricula INTEGER NOT NULL DEFAULT 0,
             publicado INTEGER NOT NULL DEFAULT 1,
             atualizado_em TEXT
         )
         """
     )
+    try:
+        conn.execute("ALTER TABLE curso_config ADD COLUMN requer_matricula INTEGER NOT NULL DEFAULT 0")
+    except Exception:
+        pass
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS curso_modulos (
@@ -260,6 +265,12 @@ def aluno_matriculado(conn, *, aluno_id: int, slug: str) -> bool:
         (aluno_id, slug),
     ).fetchone()
     if not linha:
+        config = conn.execute(
+            "SELECT COALESCE(requer_matricula,0) AS requer_matricula FROM curso_config WHERE slug=?",
+            (slug,),
+        ).fetchone()
+        if config and int(config["requer_matricula"] or 0) == 1:
+            return False
         return not curso_e_pago(slug)
     return int(linha["suspenso"] or 0) == 0
 
