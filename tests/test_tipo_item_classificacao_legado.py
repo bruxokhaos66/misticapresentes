@@ -14,7 +14,6 @@ Cobrem especificamente:
 import importlib
 import os
 import sqlite3
-import tempfile
 import uuid
 
 from fastapi.testclient import TestClient
@@ -23,7 +22,6 @@ os.environ.setdefault("MISTICA_SITE_API_KEY", "test-api-key")
 os.environ.setdefault("MISTICA_SYNC_KEY", "test-api-key")
 os.environ.setdefault("MISTICA_PIX_KEY", "49999999999")
 
-import database.connection as db_connection  # noqa: E402
 import database.migrations as db_migrations  # noqa: E402
 from backend.database import conectar  # noqa: E402
 from backend.order_status_routes import (  # noqa: E402
@@ -70,59 +68,74 @@ def criar_produto(*, sob_encomenda: bool, quantidade: int, limite: int = 10) -> 
 # ---------------------------------------------------------------------------
 
 class BancoIsolado:
-    def __enter__(self):
-        fd, self.path = tempfile.mkstemp(suffix=".db")
-        os.close(fd)
-        os.remove(self.path)
-        self._original_db_path = db_connection.DB_PATH
-        db_connection.DB_PATH = self.path
-        db_migrations.init_db()
-        return self
+    """Opera sobre o MESMO banco compartilhado usado pelo resto da suíte via
+    conectar() — como qualquer outro teste deste repositório.
 
-    def __exit__(self, *exc):
-        db_connection.DB_PATH = self._original_db_path
-        try:
-            os.remove(self.path)
-        except OSError:
-            pass
-
-    def conn(self):
-        conn = sqlite3.connect(self.path)
-        conn.row_factory = sqlite3.Row
-        return conn
+    Uma versão anterior desta fixture criava um arquivo sqlite à parte e
+    trocava database.connection.DB_PATH para apontar para ele durante o
+    teste. Isso causou uma falha real em CI: backend/main.py mantém uma
+    tarefa periódica em background (spawnada pelo TestClient de QUALQUER
+    módulo de teste ainda "vivo" no mesmo processo pytest) que chama
+    backend.database.conectar(), e conectar() sempre roda
+    database.migrations.init_db() de novo antes de abrir a conexão —
+    init_db() usa database.connection.query_db() internamente, que lê
+    database.connection.DB_PATH a cada chamada. Enquanto esse global ficava
+    apontando para o arquivo temporário do teste, a tarefa periódica podia
+    dar seu próprio init_db() nesse MESMO arquivo ao mesmo tempo que o
+    teste, e as duas tentativas de bootstrap do usuário admin colidiam
+    (UNIQUE constraint failed: usuarios.login). Por isso esta fixture nunca
+    troca esse global: cada pedido/item usa um id novo (AUTOINCREMENT), e o
+    backfill filtra sempre por pedido_id, então não há risco de um teste
+    contaminar o outro operando no banco compartilhado."""
 
     def criar_pedido_legado(self, *, tipo_item: str = TIPO_ITEM_LEGADO_AMBIGUO) -> int:
         """Simula um pedido criado antes da coluna tipo_item existir: um
         pedido com um item cujo tipo_item está no valor padrão ambíguo (o
         estado real de um item legado depois do ALTER TABLE, antes de
-        qualquer backfill rodar)."""
-        conn = self.conn()
-        cur = conn.execute(
-            "INSERT INTO pedidos (cliente, status, total_final) VALUES (?,?,?)",
-            ("Cliente legado", "Aguardando pagamento", 29.9),
-        )
-        pedido_id = int(cur.lastrowid)
-        conn.execute(
-            "INSERT INTO pedidos_itens (pedido_id, codigo_p, nome_p, quantidade, tipo_item) VALUES (?,?,?,?,?)",
-            (pedido_id, "COD-LEGADO", "Produto legado", 1, tipo_item),
-        )
-        conn.commit()
-        conn.close()
+        qualquer backfill rodar) — sem passar por /api/vendas ou
+        /api/checkout/pedidos, então não existe nenhum evento audit_log
+        'criar'/'criar_sob_encomenda' associado a menos que o teste registre
+        um explicitamente."""
+        with conectar() as conn:
+            cur = conn.execute(
+                "INSERT INTO pedidos (cliente, status, total_final) VALUES (?,?,?)",
+                ("Cliente legado", "Aguardando pagamento", 29.9),
+            )
+            pedido_id = int(cur.lastrowid)
+            conn.execute(
+                "INSERT INTO pedidos_itens (pedido_id, codigo_p, nome_p, quantidade, tipo_item) VALUES (?,?,?,?,?)",
+                (pedido_id, "COD-LEGADO", "Produto legado", 1, tipo_item),
+            )
+            conn.commit()
         return pedido_id
 
     def registrar_audit(self, pedido_id: int, acao: str, dados_depois: str | None = "irrelevante"):
-        conn = self.conn()
-        conn.execute(
-            "INSERT INTO audit_log (entidade, entidade_id, acao, usuario, dados_depois, data_hora) VALUES (?,?,?,?,?,?)",
-            ("pedido", str(pedido_id), acao, "Sistema", dados_depois, "2020-01-01T00:00:00"),
-        )
-        conn.commit()
-        conn.close()
+        self.registrar_audits(pedido_id, [(acao, dados_depois)])
+
+    def registrar_audits(self, pedido_id: int, eventos: list[tuple[str, str | None]]):
+        """Grava um ou mais eventos audit_log('pedido', ...) para o mesmo
+        pedido numa única transação. Importante para simular evidência
+        conflitante (dois eventos para o mesmo pedido): o app tem uma tarefa
+        periódica em background (backend/main.py) que chama conectar() a
+        cada poucos segundos, e conectar() sempre roda init_db() de novo, que
+        por sua vez roda _backfill_tipo_item_pedidos_itens() no final. Se os
+        dois eventos fossem gravados em conexões/transações separadas,
+        existiria uma janela em que só um deles está visível — a tarefa
+        periódica poderia rodar o backfill nesse meio-tempo, resolver o item
+        prematuramente com evidência incompleta, e o teste passaria a
+        verificar um estado que não é mais o gravado pelo default do ALTER
+        TABLE (não seria mais um teste de conflito de verdade)."""
+        with conectar() as conn:
+            for acao, dados_depois in eventos:
+                conn.execute(
+                    "INSERT INTO audit_log (entidade, entidade_id, acao, usuario, dados_depois, data_hora) VALUES (?,?,?,?,?,?)",
+                    ("pedido", str(pedido_id), acao, "Sistema", dados_depois, "2020-01-01T00:00:00"),
+                )
+            conn.commit()
 
     def tipo_item_do_pedido(self, pedido_id: int) -> str:
-        conn = self.conn()
-        row = conn.execute("SELECT tipo_item FROM pedidos_itens WHERE pedido_id=?", (pedido_id,)).fetchone()
-        conn.close()
+        with conectar() as conn:
+            row = conn.execute("SELECT tipo_item FROM pedidos_itens WHERE pedido_id=?", (pedido_id,)).fetchone()
         return row["tipo_item"]
 
 
@@ -161,45 +174,49 @@ def test_novo_pedido_encomenda_recebe_classificacao_explicita_nunca_ambigua():
 
 
 def test_backfill_reclassifica_pedido_legado_com_evidencia_fisica():
-    with BancoIsolado() as banco:
-        pedido_id = banco.criar_pedido_legado()
-        banco.registrar_audit(pedido_id, "criar")
-        db_migrations._backfill_tipo_item_pedidos_itens()
-        assert banco.tipo_item_do_pedido(pedido_id) == TIPO_ITEM_FISICO
+    banco = BancoIsolado()
+    pedido_id = banco.criar_pedido_legado()
+    banco.registrar_audit(pedido_id, "criar")
+    db_migrations._backfill_tipo_item_pedidos_itens()
+    assert banco.tipo_item_do_pedido(pedido_id) == TIPO_ITEM_FISICO
 
 
 def test_backfill_reclassifica_pedido_legado_com_evidencia_de_encomenda():
-    with BancoIsolado() as banco:
-        pedido_id = banco.criar_pedido_legado()
-        banco.registrar_audit(pedido_id, "criar_sob_encomenda")
-        db_migrations._backfill_tipo_item_pedidos_itens()
-        assert banco.tipo_item_do_pedido(pedido_id) == TIPO_ITEM_SOB_ENCOMENDA
+    banco = BancoIsolado()
+    pedido_id = banco.criar_pedido_legado()
+    banco.registrar_audit(pedido_id, "criar_sob_encomenda")
+    db_migrations._backfill_tipo_item_pedidos_itens()
+    assert banco.tipo_item_do_pedido(pedido_id) == TIPO_ITEM_SOB_ENCOMENDA
 
 
-# 3. Banco legado sem audit_log (tabela ausente).
+# 3. Banco legado sem audit_log acessível (tabela ausente/corrompida —
+# simulado fazendo query_db falhar para qualquer consulta, sem tocar no
+# banco real compartilhado: ver docstring de BancoIsolado sobre por que não
+# trocamos DB_PATH global).
 
 
-def test_backfill_sem_tabela_audit_log_nao_quebra_e_mantem_ambiguo():
-    with BancoIsolado() as banco:
-        pedido_id = banco.criar_pedido_legado()
-        conn = banco.conn()
-        conn.execute("DROP TABLE audit_log")
-        conn.commit()
-        conn.close()
+def test_backfill_sem_audit_log_acessivel_nao_quebra_e_mantem_ambiguo(monkeypatch):
+    banco = BancoIsolado()
+    pedido_id = banco.criar_pedido_legado()
 
-        db_migrations._backfill_tipo_item_pedidos_itens()  # não deve lançar
+    def query_db_indisponivel(*_args, **_kwargs):
+        raise sqlite3.OperationalError("no such table: audit_log")
 
-        assert banco.tipo_item_do_pedido(pedido_id) == TIPO_ITEM_LEGADO_AMBIGUO
+    monkeypatch.setattr(db_migrations, "query_db", query_db_indisponivel)
+    db_migrations._backfill_tipo_item_pedidos_itens()  # não deve lançar
+    monkeypatch.undo()  # tipo_item_do_pedido() usa conectar(), que roda init_db() (e portanto query_db) de novo
+
+    assert banco.tipo_item_do_pedido(pedido_id) == TIPO_ITEM_LEGADO_AMBIGUO
 
 
-# 4. audit_log vazio.
+# 4. audit_log vazio (sem nenhum evento relacionado a este pedido).
 
 
 def test_backfill_com_audit_log_vazio_mantem_ambiguo():
-    with BancoIsolado() as banco:
-        pedido_id = banco.criar_pedido_legado()
-        db_migrations._backfill_tipo_item_pedidos_itens()
-        assert banco.tipo_item_do_pedido(pedido_id) == TIPO_ITEM_LEGADO_AMBIGUO
+    banco = BancoIsolado()
+    pedido_id = banco.criar_pedido_legado()
+    db_migrations._backfill_tipo_item_pedidos_itens()
+    assert banco.tipo_item_do_pedido(pedido_id) == TIPO_ITEM_LEGADO_AMBIGUO
 
 
 # 5. JSON inválido em dados_depois não afeta a decisão (o backfill nunca
@@ -207,16 +224,16 @@ def test_backfill_com_audit_log_vazio_mantem_ambiguo():
 
 
 def test_backfill_ignora_json_invalido_em_dados_depois():
-    with BancoIsolado() as banco:
-        pedido_id = banco.criar_pedido_legado()
-        banco.registrar_audit(pedido_id, "criar_sob_encomenda", dados_depois="{isso nao e json valido")
-        db_migrations._backfill_tipo_item_pedidos_itens()
-        assert banco.tipo_item_do_pedido(pedido_id) == TIPO_ITEM_SOB_ENCOMENDA
+    banco = BancoIsolado()
+    pedido_id = banco.criar_pedido_legado()
+    banco.registrar_audit(pedido_id, "criar_sob_encomenda", dados_depois="{isso nao e json valido")
+    db_migrations._backfill_tipo_item_pedidos_itens()
+    assert banco.tipo_item_do_pedido(pedido_id) == TIPO_ITEM_SOB_ENCOMENDA
 
-        pedido_id_2 = banco.criar_pedido_legado()
-        banco.registrar_audit(pedido_id_2, "criar_sob_encomenda", dados_depois=None)
-        db_migrations._backfill_tipo_item_pedidos_itens()
-        assert banco.tipo_item_do_pedido(pedido_id_2) == TIPO_ITEM_SOB_ENCOMENDA
+    pedido_id_2 = banco.criar_pedido_legado()
+    banco.registrar_audit(pedido_id_2, "criar_sob_encomenda", dados_depois=None)
+    db_migrations._backfill_tipo_item_pedidos_itens()
+    assert banco.tipo_item_do_pedido(pedido_id_2) == TIPO_ITEM_SOB_ENCOMENDA
 
 
 # 6. Informação conflitante: o mesmo pedido com evidência dos dois lados
@@ -224,44 +241,42 @@ def test_backfill_ignora_json_invalido_em_dados_depois():
 
 
 def test_backfill_com_evidencia_conflitante_permanece_ambiguo():
-    with BancoIsolado() as banco:
-        pedido_id = banco.criar_pedido_legado()
-        banco.registrar_audit(pedido_id, "criar")
-        banco.registrar_audit(pedido_id, "criar_sob_encomenda")
-        db_migrations._backfill_tipo_item_pedidos_itens()
-        assert banco.tipo_item_do_pedido(pedido_id) == TIPO_ITEM_LEGADO_AMBIGUO
+    banco = BancoIsolado()
+    pedido_id = banco.criar_pedido_legado()
+    banco.registrar_audits(pedido_id, [("criar", "irrelevante"), ("criar_sob_encomenda", "irrelevante")])
+    db_migrations._backfill_tipo_item_pedidos_itens()
+    assert banco.tipo_item_do_pedido(pedido_id) == TIPO_ITEM_LEGADO_AMBIGUO
 
 
-# 7. Migração/backfill executados duas vezes: idempotente.
+# 7. Backfill executado duas vezes seguidas: idempotente.
 
 
 def test_backfill_executado_duas_vezes_e_idempotente():
-    with BancoIsolado() as banco:
-        pedido_fisico = banco.criar_pedido_legado()
-        banco.registrar_audit(pedido_fisico, "criar")
-        pedido_encomenda = banco.criar_pedido_legado()
-        banco.registrar_audit(pedido_encomenda, "criar_sob_encomenda")
-        pedido_ambiguo = banco.criar_pedido_legado()
+    banco = BancoIsolado()
+    pedido_fisico = banco.criar_pedido_legado()
+    banco.registrar_audit(pedido_fisico, "criar")
+    pedido_encomenda = banco.criar_pedido_legado()
+    banco.registrar_audit(pedido_encomenda, "criar_sob_encomenda")
+    pedido_ambiguo = banco.criar_pedido_legado()
 
-        db_migrations._backfill_tipo_item_pedidos_itens()
-        primeira = {
-            pedido_fisico: banco.tipo_item_do_pedido(pedido_fisico),
-            pedido_encomenda: banco.tipo_item_do_pedido(pedido_encomenda),
-            pedido_ambiguo: banco.tipo_item_do_pedido(pedido_ambiguo),
-        }
+    db_migrations._backfill_tipo_item_pedidos_itens()
+    primeira = {
+        pedido_fisico: banco.tipo_item_do_pedido(pedido_fisico),
+        pedido_encomenda: banco.tipo_item_do_pedido(pedido_encomenda),
+        pedido_ambiguo: banco.tipo_item_do_pedido(pedido_ambiguo),
+    }
 
-        db_migrations.init_db()  # roda a migração inteira de novo, não só o backfill
-        db_migrations._backfill_tipo_item_pedidos_itens()
-        segunda = {
-            pedido_fisico: banco.tipo_item_do_pedido(pedido_fisico),
-            pedido_encomenda: banco.tipo_item_do_pedido(pedido_encomenda),
-            pedido_ambiguo: banco.tipo_item_do_pedido(pedido_ambiguo),
-        }
+    db_migrations._backfill_tipo_item_pedidos_itens()  # rodar de novo não deve mudar nada
+    segunda = {
+        pedido_fisico: banco.tipo_item_do_pedido(pedido_fisico),
+        pedido_encomenda: banco.tipo_item_do_pedido(pedido_encomenda),
+        pedido_ambiguo: banco.tipo_item_do_pedido(pedido_ambiguo),
+    }
 
-        assert primeira == segunda
-        assert primeira[pedido_fisico] == TIPO_ITEM_FISICO
-        assert primeira[pedido_encomenda] == TIPO_ITEM_SOB_ENCOMENDA
-        assert primeira[pedido_ambiguo] == TIPO_ITEM_LEGADO_AMBIGUO  # nunca "promovido" a físico
+    assert primeira == segunda
+    assert primeira[pedido_fisico] == TIPO_ITEM_FISICO
+    assert primeira[pedido_encomenda] == TIPO_ITEM_SOB_ENCOMENDA
+    assert primeira[pedido_ambiguo] == TIPO_ITEM_LEGADO_AMBIGUO  # nunca "promovido" a físico
 
 
 # 8. Nenhum item ambíguo é convertido silenciosamente em físico — e um
