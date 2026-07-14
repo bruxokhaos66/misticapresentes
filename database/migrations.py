@@ -477,12 +477,21 @@ def init_db():
     if not admin_res:
         senha_temp = "Mistica@" + secrets.token_hex(4)
         salt = secrets.token_hex(16)
-        query_db("INSERT INTO usuarios (nome, login, senha_hash, senha_salt, perfil, ativo) VALUES (?,?,?,?,?,?)", ("Administrador", "admin", hash_password_pbkdf2(senha_temp, salt.encode("utf-8")), salt, "adm", 1), commit=True)
         try:
-            with open(os.path.join(DOCS_PATH, "mistica_senha_admin_inicial.txt"), "w", encoding="utf-8") as f:
-                f.write("Login: admin\nSenha temporaria: " + senha_temp + "\nTroque esta senha no primeiro acesso.\n")
+            query_db("INSERT INTO usuarios (nome, login, senha_hash, senha_salt, perfil, ativo) VALUES (?,?,?,?,?,?)", ("Administrador", "admin", hash_password_pbkdf2(senha_temp, salt.encode("utf-8")), salt, "adm", 1), commit=True)
         except Exception as exc:
-            print(f"[DB init] Falha ao gravar senha admin temporaria: {exc}")
+            # Corrida entre conexões concorrentes chamando init_db() ao mesmo tempo
+            # (ex.: tarefa periódica de expiração de pedidos rodando durante outro
+            # init_db()): o SELECT acima não viu o admin ainda, mas outra conexão já
+            # o inseriu entre o SELECT e este INSERT. Não é erro: o admin existe.
+            if "unique" not in str(exc).lower():
+                raise
+        else:
+            try:
+                with open(os.path.join(DOCS_PATH, "mistica_senha_admin_inicial.txt"), "w", encoding="utf-8") as f:
+                    f.write("Login: admin\nSenha temporaria: " + senha_temp + "\nTroque esta senha no primeiro acesso.\n")
+            except Exception as exc:
+                print(f"[DB init] Falha ao gravar senha admin temporaria: {exc}")
     for c in ["Velas", "Incensos", "Cristais", "Óleos"]:
         try:
             query_db("INSERT INTO categorias (nome) VALUES (?)", (c,), commit=True)

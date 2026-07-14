@@ -402,6 +402,59 @@ def test_modulo_xamanismo_oficial_carrega_com_duas_aulas_e_dez_questoes():
         assert quiz["nota_minima"] == 70 and quiz["num_perguntas"] == 10 and total == 10
 
 
+def test_migration_reaplica_quando_versao_antiga_ja_marcada_sem_acesso_publico():
+    """Reproduz o bug de produção: uma implantação anterior (antes da correção
+    de acesso_publico/requer_matricula) já tinha marcado uma versão antiga da
+    migração como aplicada, com o curso gravado sem acesso_publico. A versão
+    atual precisa detectar que essa versão antiga é diferente da atual e
+    reaplicar o conteúdo, sem duplicar módulos/aulas, sem trocar IDs e sem
+    mexer em matrícula/progresso já existentes."""
+    from backend.database import conectar
+    from backend.lms_content_xamanismo import SLUG, VERSAO, instalar_conteudo_xamanismo
+
+    with conectar() as conn:
+        ids_antes = [
+            (r["id"], r["ordem"])
+            for r in conn.execute("SELECT id, ordem FROM curso_modulos WHERE slug=? ORDER BY ordem", (SLUG,)).fetchall()
+        ]
+        assert len(ids_antes) == 2  # pré-condição: conteúdo oficial já instalado no startup
+
+        # Regride o banco ao estado deixado pela versão antiga (pré-#316):
+        # curso com requer_matricula=1 e nenhum módulo com acesso_publico.
+        conn.execute("UPDATE curso_config SET requer_matricula=1 WHERE slug=?", (SLUG,))
+        conn.execute("UPDATE curso_modulos SET acesso_publico=0 WHERE slug=?", (SLUG,))
+        conn.execute("DELETE FROM lms_content_versions WHERE versao=?", (VERSAO,))
+        conn.execute(
+            "INSERT OR REPLACE INTO lms_content_versions (versao,aplicada_em) VALUES (?,?)",
+            ("xamanismo-modulo-1-v1", "2026-01-01 00:00:00"),
+        )
+
+    # Endpoint público falha exatamente como no relato: nenhum módulo público.
+    assert client.get(f"/api/escola/publico/cursos/{SLUG}").status_code == 404
+
+    with conectar() as conn:
+        houve_mudanca = instalar_conteudo_xamanismo(conn)
+    assert houve_mudanca is True
+
+    r = client.get(f"/api/escola/publico/cursos/{SLUG}")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["slug"] == SLUG
+    assert body["gratuito"] is True
+    assert any(m.get("aulas") for m in body["modulos"])
+
+    with conectar() as conn:
+        cfg = conn.execute("SELECT requer_matricula, publicado FROM curso_config WHERE slug=?", (SLUG,)).fetchone()
+        assert cfg["requer_matricula"] == 0 and cfg["publicado"] == 1
+        ids_depois = [
+            (r["id"], r["ordem"])
+            for r in conn.execute("SELECT id, ordem, acesso_publico FROM curso_modulos WHERE slug=? ORDER BY ordem", (SLUG,)).fetchall()
+        ]
+        assert ids_depois == ids_antes  # mesmos módulos, mesmos ids (nada recriado)
+        publicos = conn.execute("SELECT COUNT(*) AS n FROM curso_modulos WHERE slug=? AND acesso_publico=1", (SLUG,)).fetchone()["n"]
+        assert publicos == 2
+
+
 def test_xamanismo_e_gratuito_para_qualquer_aluno_logado_e_nao_revela_gabarito():
     """Curso gratuito: basta sessão de aluno, sem exigir matrícula manual
     (regra restaurada — ver aluno_matriculado em backend/lms.py). Suspensão
