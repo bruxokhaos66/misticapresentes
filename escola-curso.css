@@ -101,17 +101,30 @@
 .aula-glossario dt { color: var(--gold); font-weight: 700; }
 .aula-glossario dd { margin: 0; color: var(--muted); }
 .aula-aviso, .aula-cta { padding: .9rem 1rem; border-radius: 10px; background: rgba(84,102,59,.22); }
-.aula-imagem-placeholder { min-height: 210px; margin: 0 0 1.4rem; padding: 1.2rem; display: grid; place-items: center; text-align: center; border: 1px dashed rgba(242,201,109,.45); border-radius: 16px; color: var(--muted); background: radial-gradient(circle at 50% 25%, rgba(242,201,109,.14), transparent 35%), linear-gradient(150deg, #111b17, #090b0a); }
-.aula-imagem-placeholder > span { color: var(--gold); font-size: 2rem; }
-.aula-imagem-placeholder figcaption { max-width: 560px; font-size: .82rem; }
 
-/* --- Imagens reais de capa/ilustração (Módulo 2 em diante) --- */
-.aula-imagem { margin: 0 0 1.4rem; }
-.aula-imagem img { display: block; width: 100%; height: auto; aspect-ratio: 1200 / 630; object-fit: cover; border-radius: 16px; border: 1px solid var(--line); background: #05070a; }
+/* --- Capas e ilustrações de aula: moldura cinematográfica premium --- */
+.aula-imagem {
+  margin: 0 0 1.6rem; border-radius: 18px; overflow: hidden; position: relative;
+  border: 1px solid var(--line); background: #05070a;
+  box-shadow: 0 22px 50px rgba(0,0,0,.38), inset 0 0 0 1px rgba(242,201,109,.06);
+}
+.aula-imagem img { display: block; width: 100%; height: auto; aspect-ratio: 1200 / 630; object-fit: cover; }
 .aula-imagem-timeline img, .aula-imagem-mapa img { aspect-ratio: 1200 / 460; object-fit: contain; background: #030305; }
 .aula-imagem-mapa img { aspect-ratio: 1200 / 640; }
-.aula-imagem figcaption { margin-top: .5rem; font-size: .82rem; color: var(--muted); }
-.aula-imagem-credito { display: block; opacity: .75; font-size: .76rem; margin-top: .15rem; }
+.aula-imagem::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background: linear-gradient(180deg, rgba(0,0,0,0) 62%, rgba(4,4,6,.55) 100%);
+}
+.aula-imagem figcaption {
+  position: relative; margin: 0; padding: .85rem 1.1rem 1rem; font-size: .84rem; color: var(--cream);
+  background: linear-gradient(180deg, rgba(6,6,9,.05), rgba(6,6,9,.55));
+}
+.aula-imagem-credito { display: block; opacity: .68; font-size: .74rem; margin-top: .2rem; letter-spacing: .01em; }
+
+/* --- Divisor elegante entre seções de leitura --- */
+.aula-divisor { display: flex; align-items: center; gap: .8rem; margin: 2.1rem 0; color: var(--gold); opacity: .8; }
+.aula-divisor::before, .aula-divisor::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, transparent, var(--line) 50%, transparent); }
+.aula-divisor span { font-size: 1rem; }
 
 /* --- Quadro comparativo (tabela) --- */
 .aula-tabela-wrap { overflow-x: auto; margin: 1.1rem 0 1.4rem; border: 1px solid var(--line); border-radius: 14px; }
