@@ -227,6 +227,32 @@ def test_dois_cancelamentos_simultaneos_nao_duplicam_reposicao():
     assert estoque(produto["id"]) == 5
 
 
+def test_dois_cancelamentos_simultaneos_em_pedido_misto_nao_duplicam_reposicao():
+    fisico = criar_produto(quantidade=5)
+    encomenda = criar_produto(sob_encomenda=True, quantidade=0, limite=5)
+    pedido = montar_pedido_misto(fisico, encomenda, qtd_fisico=2, qtd_encomenda=1)
+    confirmacao = confirmar(pedido["id"], pedido["total_final"])
+    assert confirmacao.status_code == 200, confirmacao.text
+    assert estoque(fisico["id"]) == 3
+    barreira = threading.Barrier(2)
+
+    def enviar():
+        with TestClient(main.app) as thread_client:
+            barreira.wait(timeout=10)
+            return thread_client.delete(f"/api/pedidos/{pedido['id']}", headers={**HEADERS, "X-Forwarded-For": ip_unico()})
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futuros = [executor.submit(enviar) for _ in range(2)]
+        respostas = [f.result(timeout=20) for f in futuros]
+
+    for resposta in respostas:
+        assert resposta.status_code == 200, resposta.text
+    assert sum(1 for r in respostas if r.json()["estoque_reposto_agora"] is True) == 1
+    assert sum(1 for r in respostas if r.json()["ja_cancelado"] is True) == 1
+    assert estoque(fisico["id"]) == 5
+    assert estoque(encomenda["id"]) == 0  # nunca ganha saldo fictício, mesmo sob corrida
+
+
 # 4 — cancelamento concorrente com webhook exato
 
 
@@ -437,6 +463,41 @@ def test_pedido_entregue_nao_cancela_automaticamente():
     assert obter_pedido(pedido["id"])["status"] == "Entregue"
 
 
+def test_pedido_pronto_para_retirada_nao_cancela_automaticamente():
+    """'Pronto para retirada' é o estado deste sistema mais próximo de um
+    'Enviado'/handoff físico avançado — sem regra comercial explícita para
+    cancelamento automático nesse ponto, a rota genérica exige conciliação
+    administrativa (409) em vez de assumir que ainda é seguro devolver o
+    item ao estoque."""
+    produto = criar_produto(quantidade=5)
+    pedido = criar_pedido_pendente(produto)
+    with conectar() as conn:
+        conn.execute("UPDATE pedidos SET status='Pronto para retirada' WHERE id=?", (pedido["id"],))
+        conn.commit()
+
+    resposta = cancelar(pedido["id"])
+    assert resposta.status_code == 409, resposta.text
+    assert obter_pedido(pedido["id"])["status"] == "Pronto para retirada"
+    assert estoque(produto["id"]) == 4  # nada mudou
+
+
+def test_pedido_separando_pedido_continua_cancelavel():
+    """Diferente de 'Pronto para retirada'/'Entregue', 'Separando pedido' é
+    reversível operacionalmente: o estoque ainda não saiu fisicamente da
+    loja, então o cancelamento genérico continua permitido."""
+    produto = criar_produto(quantidade=5)
+    pedido = criar_pedido_pendente(produto)
+    with conectar() as conn:
+        conn.execute("UPDATE pedidos SET status='Separando pedido' WHERE id=?", (pedido["id"],))
+        conn.commit()
+
+    resposta = cancelar(pedido["id"])
+    assert resposta.status_code == 200, resposta.text
+    assert resposta.json()["estoque_reposto_agora"] is True
+    assert obter_pedido(pedido["id"])["status"] == "Cancelado"
+    assert estoque(produto["id"]) == 5
+
+
 # 13 — pedido já pago cancela com reposição (rastreabilidade financeira preservada)
 
 
@@ -457,6 +518,35 @@ def test_pedido_pago_cancela_e_preserva_rastreabilidade_financeira():
     pagamentos = client.get("/api/pagamentos", params={"venda_id": pedido["id"]}, headers=HEADERS).json()
     assert len(pagamentos) == 1
     assert pagamentos[0]["status"] == "Confirmado"
+
+    # Auditoria deixa explícito que o cancelamento ocorreu depois de um
+    # pagamento confirmado (nenhum estorno automático é criado — fora de
+    # escopo deste PR).
+    import json as _json
+
+    with conectar() as conn:
+        linha = conn.execute(
+            "SELECT dados_antes, dados_depois FROM audit_log WHERE entidade='pedido' AND entidade_id=? AND acao='cancelar' ORDER BY id DESC LIMIT 1",
+            (str(pedido["id"]),),
+        ).fetchone()
+    assert linha
+    assert _json.loads(linha["dados_antes"])["status"] == "Pagamento confirmado"
+    assert _json.loads(linha["dados_depois"])["cancelado_apos_pagamento"] is True
+
+
+def test_auditoria_nao_marca_cancelado_apos_pagamento_para_pedido_pendente():
+    import json as _json
+
+    produto = criar_produto(quantidade=5)
+    pedido = criar_pedido_pendente(produto)
+    cancelar(pedido["id"])
+
+    with conectar() as conn:
+        linha = conn.execute(
+            "SELECT dados_depois FROM audit_log WHERE entidade='pedido' AND entidade_id=? AND acao='cancelar' ORDER BY id DESC LIMIT 1",
+            (str(pedido["id"]),),
+        ).fetchone()
+    assert _json.loads(linha["dados_depois"])["cancelado_apos_pagamento"] is False
 
 
 # 14 — pagamento após cancelamento vira tardio

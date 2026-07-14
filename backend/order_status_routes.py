@@ -423,12 +423,25 @@ def repor_estoque_cancelamento(conn, venda_id: int, usuario: str, agora: str):
 # e as rotas equivalentes) nunca é aplicado silenciosamente — exigem
 # conciliação administrativa fora deste fluxo (ex.: processo de devolução,
 # fora do escopo deste PR). "Cancelado" não está aqui porque tem tratamento
-# próprio (idempotente, não bloqueado). Todos os outros status — incluindo
-# "Pagamento confirmado"/"Aguardando encomenda"/"Separando pedido"/"Pronto
-# para retirada" — continuam canceláveis: um pedido pago pode precisar ser
-# cancelado por um motivo administrativo, e a reposição por item preserva a
-# rastreabilidade financeira (o pagamento em si nunca é apagado).
-STATUS_CANCELAMENTO_BLOQUEADO = {"Concluído", "Entregue"}
+# próprio (idempotente, não bloqueado).
+#
+# Regra, status a status (este sistema não tem um status "Enviado" literal —
+# STATUS_PEDIDO tem só os listados em order_status_routes.py):
+# - Aguardando pagamento / Pagamento divergente: cancelável (nenhum estoque
+#   físico comprometido além da reserva, que é sempre reposta).
+# - Pagamento confirmado / Aguardando encomenda: cancelável — cancelamento de
+#   pedido pago é uma ação administrativa própria (ver docstring de
+#   cancelar_com_reposicao), não uma corrida com o pagamento em si.
+# - Separando pedido: cancelável — o estoque ainda não saiu fisicamente da
+#   loja, a separação é reversível operacionalmente.
+# - Pronto para retirada / Entregue: bloqueados. "Pronto para retirada" é o
+#   estado deste sistema mais próximo de um "Enviado"/handoff físico
+#   avançado — sem uma regra comercial explícita para cancelamento
+#   automático nesse ponto, a escolha conservadora é exigir conciliação
+#   administrativa (409) em vez de assumir que ainda é seguro devolver o
+#   item ao estoque sem confirmação humana de que ele não saiu fisicamente.
+# - Concluído: bloqueado (pedido já finalizado).
+STATUS_CANCELAMENTO_BLOQUEADO = {"Pronto para retirada", "Entregue", "Concluído"}
 
 
 def _sanitizar_motivo_cancelamento(observacao: str | None) -> str:
@@ -468,15 +481,20 @@ def cancelar_com_reposicao(conn, venda_id: int, usuario: str, observacao: str | 
         raise HTTPException(status_code=404, detail="Pedido não encontrado.")
     status_antes = str(venda["status"] or "")
 
+    # Os placeholders de STATUS_CANCELAMENTO_BLOQUEADO são gerados a partir
+    # do próprio set (nunca hardcoded em paralelo) para que a lista de
+    # status bloqueados nunca fique dessincronizada entre o guard em Python
+    # e o WHERE deste UPDATE.
+    placeholders_bloqueados = ",".join("?" for _ in STATUS_CANCELAMENTO_BLOQUEADO)
     claim = conn.execute(
-        """
+        f"""
         UPDATE pedidos
         SET status='Cancelado'
         WHERE id=?
           AND lower(COALESCE(status,'')) NOT LIKE 'cancel%'
-          AND COALESCE(status,'') NOT IN ('Concluído', 'Entregue')
+          AND COALESCE(status,'') NOT IN ({placeholders_bloqueados})
         """,
-        (venda_id,),
+        (venda_id, *STATUS_CANCELAMENTO_BLOQUEADO),
     )
     if claim.rowcount == 0:
         status_atual = conn.execute("SELECT status FROM pedidos WHERE id=?", (venda_id,)).fetchone()["status"]
@@ -490,6 +508,15 @@ def cancelar_com_reposicao(conn, venda_id: int, usuario: str, observacao: str | 
 
     estoque_reposto = repor_estoque_cancelamento(conn, venda_id, usuario, agora)
     motivo = _sanitizar_motivo_cancelamento(observacao) or "Cancelado"
+    # Cancelar um pedido que já tinha pagamento confirmado não apaga nem
+    # estorna o pagamento (fora de escopo — ver "fluxo de estorno
+    # financeiro" nas exclusões deste PR); fica só marcado aqui para que a
+    # auditoria explique por que um pedido "Cancelado" pode ter um
+    # pagamento "Confirmado" associado (consultável via GET /api/pagamentos)
+    # — o status por si só não distingue isso, e resolver essa ambiguidade
+    # de exibição/estorno automático é uma pendência de UX/financeiro fora
+    # do escopo deste PR.
+    cancelado_apos_pagamento = status_antes in STATUS_PEDIDO_CONCLUIDOS
     conn.execute(
         "INSERT INTO pedido_status_log (venda_id, status, usuario, observacao, data_hora) VALUES (?,?,?,?,?)",
         (venda_id, "Cancelado", usuario or "Admin", motivo, agora),
@@ -497,7 +524,12 @@ def cancelar_com_reposicao(conn, venda_id: int, usuario: str, observacao: str | 
     registrar_auditoria(
         conn, "pedido", venda_id, "cancelar", usuario,
         antes={"status": status_antes},
-        depois={"status": "Cancelado", "estoque_reposto": estoque_reposto, "motivo": motivo},
+        depois={
+            "status": "Cancelado",
+            "estoque_reposto": estoque_reposto,
+            "motivo": motivo,
+            "cancelado_apos_pagamento": cancelado_apos_pagamento,
+        },
     )
     return {"ok": True, "venda_id": venda_id, "status": "Cancelado", "estoque_reposto_agora": estoque_reposto, "ja_cancelado": False}
 
