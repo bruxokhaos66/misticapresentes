@@ -28,7 +28,7 @@ from backend.logging_config import configurar_logging, get_logger
 from backend.order_status_routes import expirar_pedidos_pendentes, router as order_status_router
 from backend.panel_sessions import exigir_sessao_ou_chave_api, validar_sessao
 from backend.payment_routes import router as payment_router
-from backend.api_security import ORIGENS_PERMITIDAS, validar_site_api_key as validar_chave_api
+from backend.api_security import APP_ENV, ORIGENS_PERMITIDAS, validar_site_api_key as validar_chave_api
 from backend.product_routes import router as product_router, validar_site_api_key
 from backend.review_routes import router as review_router
 from backend.upload_routes import CURSOS_DIR, router as upload_router
@@ -86,7 +86,7 @@ async def lifespan(app: FastAPI):
         extra={
             "evento": "startup_concluido",
             "versao": app.version,
-            "ambiente": os.environ.get("APP_ENV", "development"),
+            "ambiente": APP_ENV,
             "banco_ok": banco_acessivel(),
             "disco_ok": disco_diretorio_disponivel(),
             "duracao_ms": round(duracao_ms, 1),
