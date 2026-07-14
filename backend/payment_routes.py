@@ -18,9 +18,11 @@ from backend.idempotency import (
 )
 from backend.money import centavos
 from backend.order_status_routes import (
+    STATUS_PEDIDO_AGUARDANDO_ENCOMENDA,
     STATUS_PEDIDO_CONCLUIDOS,
     baixar_estoque_do_pedido,
     expirar_pedidos_pendentes,
+    pedido_tem_item_sob_encomenda,
 )
 from backend.panel_sessions import exigir_sessao_ou_chave_api
 from backend.rate_limit import limitar_requisicoes
@@ -47,11 +49,13 @@ CONCILIACAO_NAO_AVALIADA = "nao_avaliado"
 CONCILIACAO_TARDIO = "pagamento_tardio"
 
 # Únicos status de pedido em que uma confirmação financeira "pela primeira
-# vez" é aceita. 'Pagamento confirmado' é tratado à parte (ver
-# _classificar_conciliacao): reconfirmação/divergência ali já tinham
-# comportamento definido e testado antes deste PR e permanecem intactos.
+# vez" é aceita. 'Pagamento confirmado'/'Aguardando encomenda' são tratados à
+# parte (ver _classificar_conciliacao): reconfirmação/divergência ali já
+# tinham comportamento definido e testado antes deste PR e permanecem
+# intactos — 'Aguardando encomenda' (pedido só/parcialmente sob encomenda já
+# confirmado) segue exatamente a mesma regra de 'Pagamento confirmado'.
 STATUS_PEDIDO_ELEGIVEIS_CONFIRMACAO = {"Aguardando pagamento", "Pagamento divergente"}
-STATUS_PEDIDO_JA_CONFIRMADO = "Pagamento confirmado"
+STATUS_PEDIDO_JA_CONFIRMADO = {"Pagamento confirmado", STATUS_PEDIDO_AGUARDANDO_ENCOMENDA}
 
 limitar_registrar_pagamento = limitar_requisicoes("registrar_pagamento", limite=20, janela_segundos=60)
 limitar_webhook_pagamento = limitar_requisicoes("webhook_pagamento", limite=30, janela_segundos=60)
@@ -151,7 +155,7 @@ def _classificar_conciliacao(status_pedido_atual: str, valor_recebido, total_fin
       fica classificado como pagamento tardio para conciliação
       administrativa, com o valor sempre registrado."""
     conciliacao, motivo, recebido_f, esperado_f = _conciliar_valor(valor_recebido, total_final)
-    if status_pedido_atual in STATUS_PEDIDO_ELEGIVEIS_CONFIRMACAO or status_pedido_atual == STATUS_PEDIDO_JA_CONFIRMADO:
+    if status_pedido_atual in STATUS_PEDIDO_ELEGIVEIS_CONFIRMACAO or status_pedido_atual in STATUS_PEDIDO_JA_CONFIRMADO:
         return conciliacao, motivo, recebido_f, esperado_f
 
     detalhe = "o valor bate com o total do pedido" if conciliacao == CONCILIACAO_OK else (motivo or "o valor não bate com o total do pedido")
@@ -168,8 +172,22 @@ def _aplicar_resultado_confirmacao(conn, venda_id: int, status_pedido_atual: str
     pedidos.status nem em estoque — fica só no histórico e na auditoria."""
     if conciliacao == CONCILIACAO_OK:
         estoque_baixado_agora = baixar_estoque_do_pedido(conn, venda_id, usuario, agora, "Baixa automática ao confirmar pagamento")
-        conn.execute("UPDATE pedidos SET status='Pagamento confirmado' WHERE id=?", (venda_id,))
-        registrar_log_status(conn, venda_id, "Pagamento confirmado", usuario, "Pagamento confirmado: valor recebido bate com o total do pedido.")
+        # A conciliação financeira (acima) e a aplicação de estoque
+        # (baixar_estoque_do_pedido, já rodada) são as mesmas para qualquer
+        # pedido. O status final é que distingue: um pedido com pelo menos um
+        # item sob encomenda nunca pode virar "Pagamento confirmado" puro —
+        # isso sugeriria estar pronto para "Separando pedido" quando na
+        # verdade o produto ainda precisa ser comprado/reservado com o
+        # fornecedor. A classificação usada aqui é sempre a persistida em
+        # pedidos_itens.tipo_item, nunca o catálogo atual.
+        if pedido_tem_item_sob_encomenda(conn, venda_id):
+            status_final = STATUS_PEDIDO_AGUARDANDO_ENCOMENDA
+            observacao_status = "Pagamento confirmado: valor recebido bate com o total do pedido. Aguardando compra/separação da encomenda com o fornecedor."
+        else:
+            status_final = "Pagamento confirmado"
+            observacao_status = "Pagamento confirmado: valor recebido bate com o total do pedido."
+        conn.execute("UPDATE pedidos SET status=? WHERE id=?", (status_final, venda_id))
+        registrar_log_status(conn, venda_id, status_final, usuario, observacao_status)
         return estoque_baixado_agora
 
     observacao = (motivo or "Divergência de valor no pagamento.") + f" Recebido: R$ {valor_recebido:.2f} | Esperado: R$ {valor_esperado:.2f}."

@@ -62,6 +62,75 @@ def _migrar_pedidos_de_vendas():
     # migração acima), então continuam válidos sem nenhuma alteração aqui.
 
 
+def _backfill_tipo_item_pedidos_itens():
+    """Corrige, uma única vez por pedido, o valor padrão 'legado_ambiguo' que
+    o ALTER TABLE de pedidos_itens.tipo_item grava em itens criados antes
+    dessa coluna existir (ver init_db). Nunca promove um item ambíguo para
+    'fisico' por padrão nem por descarte de evidência — só reclassifica
+    quando há evidência estrutural inequívoca em audit_log, e nunca a partir
+    do estoque atual do produto (já pode ter mudado) ou de texto livre
+    (nome/categoria do produto).
+
+    A evidência usada é só entidade='pedido' + acao — nunca o conteúdo JSON
+    de dados_depois (que pode ter formato antigo, estar ausente ou ser
+    inválido; nenhuma dessas variações importa aqui):
+    - acao='criar_sob_encomenda': gravado só por
+      backend/preorder_checkout.py::registrar_checkout_publico, no mesmo
+      instante em que o pedido é criado. Esse caminho é o único que produz
+      itens sob encomenda, e sempre grava esse evento.
+    - acao='criar': gravado só por
+      backend/site_stock_routes.py::registrar_venda_site (o caminho de
+      pedido com estoque físico), também no instante da criação.
+
+    Um pedido cujo audit_log tenha as duas evidências ao mesmo tempo (nunca
+    deveria acontecer — cada pedido passa por exatamente um dos dois
+    caminhos de criação — mas pode ocorrer por dado corrompido/manipulado)
+    é tratado como conflito e permanece 'legado_ambiguo' em vez de escolher
+    um lado arbitrariamente. Pedidos sem nenhuma das duas evidências (ex.:
+    migrados de `vendas` antes de audit_log existir, ou audit_log ausente/
+    inacessível) também permanecem 'legado_ambiguo': ficam bloqueados para
+    conciliação administrativa na confirmação de pagamento (ver
+    backend/order_status_routes.py::baixar_estoque_do_pedido) em vez de
+    serem tratados como físicos silenciosamente.
+
+    Idempotente: o WHERE tipo_item='legado_ambiguo' faz rodar de novo não
+    reclassificar itens já resolvidos (nem os que permanecem ambíguos).
+
+    init_db() (e, portanto, esta função) roda a cada conectar() — em produção,
+    a cada requisição que abre uma conexão. Sem a saída antecipada abaixo,
+    isso escanearia audit_log inteiro (que cresce com toda a atividade do
+    sistema, não só criação de pedido) em toda requisição, mesmo quando não
+    há mais nenhum item 'legado_ambiguo' para resolver."""
+    try:
+        ha_pendente = query_db("SELECT 1 FROM pedidos_itens WHERE tipo_item='legado_ambiguo' LIMIT 1")
+        if not ha_pendente:
+            return
+        encomenda_ids = {
+            row[0]
+            for row in query_db("SELECT DISTINCT entidade_id FROM audit_log WHERE entidade='pedido' AND acao='criar_sob_encomenda'")
+            if row[0]
+        }
+        fisico_ids = {
+            row[0]
+            for row in query_db("SELECT DISTINCT entidade_id FROM audit_log WHERE entidade='pedido' AND acao='criar'")
+            if row[0]
+        }
+    except Exception:
+        return
+
+    conflito_ids = encomenda_ids & fisico_ids
+    for pedido_id in encomenda_ids - conflito_ids:
+        _exec_tolerante(
+            "UPDATE pedidos_itens SET tipo_item='sob_encomenda' WHERE pedido_id=? AND tipo_item='legado_ambiguo'",
+            (pedido_id,),
+        )
+    for pedido_id in fisico_ids - conflito_ids:
+        _exec_tolerante(
+            "UPDATE pedidos_itens SET tipo_item='fisico' WHERE pedido_id=? AND tipo_item='legado_ambiguo'",
+            (pedido_id,),
+        )
+
+
 def init_db():
     query_db("CREATE TABLE IF NOT EXISTS produtos (id INTEGER PRIMARY KEY, codigo_p TEXT, nome TEXT, preco REAL, quantidade INTEGER, categoria TEXT)", commit=True)
     query_db("CREATE TABLE IF NOT EXISTS categorias (id INTEGER PRIMARY KEY, nome TEXT UNIQUE)", commit=True)
@@ -338,6 +407,37 @@ def init_db():
     ]:
         _exec_tolerante(sql_idx)
     _migrar_pedidos_de_vendas()
+
+    # Classificação do item do pedido: 'fisico' (tem estoque físico, baixa e
+    # repõe normalmente), 'sob_encomenda' (estoque físico zero por definição —
+    # ver backend/preorder_checkout.py — nunca baixa nem repõe estoque físico,
+    # nunca gera movimentação fictícia) ou 'legado_ambiguo' (não sabemos qual
+    # dos dois é — ver abaixo). O CHECK trava qualquer outro valor no próprio
+    # banco, além da validação em Python (ver TIPOS_ITEM_VALIDOS em
+    # backend/order_status_routes.py). Persistida no próprio item no momento
+    # da criação do pedido (backend/preorder_checkout.py e
+    # backend/site_stock_routes.py — sempre calculada pelo servidor a partir
+    # do produto autoritativo, nunca aceita de um campo enviado pelo cliente)
+    # para que a confirmação de pagamento
+    # (backend/order_status_routes.py::baixar_estoque_do_pedido) nunca precise
+    # reconsultar produtos.sob_encomenda depois: o produto pode ter sido
+    # renomeado, inativado ou ter sua regra de encomenda alterada no catálogo
+    # sem que isso mude o que já foi vendido.
+    #
+    # Aditivo: pedidos_itens antigos (de antes desta coluna existir) recebem
+    # 'legado_ambiguo' pelo DEFAULT abaixo — nunca 'fisico'. Um item
+    # 'legado_ambiguo' nunca é tratado como físico nem como sob encomenda: a
+    # baixa de estoque na confirmação de pagamento bloqueia (409) esse item
+    # para conciliação administrativa em vez de adivinhar. _backfill_tipo_item_
+    # pedidos_itens (acima) promove para 'fisico'/'sob_encomenda' só quando há
+    # evidência estrutural inequívoca em audit_log (nunca o estoque atual do
+    # produto, nunca o nome/texto do produto); qualquer pedido sem essa
+    # evidência (ou com evidência conflitante) permanece 'legado_ambiguo'.
+    _exec_tolerante(
+        "ALTER TABLE pedidos_itens ADD COLUMN tipo_item TEXT NOT NULL DEFAULT 'legado_ambiguo' "
+        "CHECK(tipo_item IN ('fisico','sob_encomenda','legado_ambiguo'))"
+    )
+    _backfill_tipo_item_pedidos_itens()
 
     query_db(
         """
