@@ -17,7 +17,11 @@ from backend.idempotency import (
     reivindicar_chave_idempotente,
 )
 from backend.money import centavos
-from backend.order_status_routes import STATUS_PEDIDO_CONCLUIDOS, baixar_estoque_do_pedido
+from backend.order_status_routes import (
+    STATUS_PEDIDO_CONCLUIDOS,
+    baixar_estoque_do_pedido,
+    expirar_pedidos_pendentes,
+)
 from backend.panel_sessions import exigir_sessao_ou_chave_api
 from backend.rate_limit import limitar_requisicoes
 
@@ -33,6 +37,21 @@ CONCILIACAO_OK = "ok"
 CONCILIACAO_MENOR = "divergente_menor"
 CONCILIACAO_MAIOR = "divergente_maior"
 CONCILIACAO_NAO_AVALIADA = "nao_avaliado"
+# Pagamento (de qualquer valor) recebido depois que o pedido já saiu dos
+# status que aceitam confirmação financeira pela primeira vez — cancelado
+# (expiração também vira 'Cancelado' neste sistema, não há status
+# 'Expirado' separado) ou já avançado além de 'Pagamento confirmado'
+# (Separando pedido, Pronto para retirada, Entregue, Concluído). Nunca
+# reabre o pedido, nunca baixa/repõe estoque; fica só registrado para
+# conciliação administrativa.
+CONCILIACAO_TARDIO = "pagamento_tardio"
+
+# Únicos status de pedido em que uma confirmação financeira "pela primeira
+# vez" é aceita. 'Pagamento confirmado' é tratado à parte (ver
+# _classificar_conciliacao): reconfirmação/divergência ali já tinham
+# comportamento definido e testado antes deste PR e permanecem intactos.
+STATUS_PEDIDO_ELEGIVEIS_CONFIRMACAO = {"Aguardando pagamento", "Pagamento divergente"}
+STATUS_PEDIDO_JA_CONFIRMADO = "Pagamento confirmado"
 
 limitar_registrar_pagamento = limitar_requisicoes("registrar_pagamento", limite=20, janela_segundos=60)
 limitar_webhook_pagamento = limitar_requisicoes("webhook_pagamento", limite=30, janela_segundos=60)
@@ -93,12 +112,42 @@ def _conciliar_valor(valor_recebido, total_final) -> tuple[str, Optional[str], f
     return CONCILIACAO_MAIOR, motivo, float(recebido_dec), float(esperado_dec)
 
 
+def _classificar_conciliacao(status_pedido_atual: str, valor_recebido, total_final) -> tuple[str, Optional[str], float, float]:
+    """Primeiro decide se o pedido ainda está em um status que aceita
+    confirmação financeira; só then compara o valor recebido com o total
+    autoritativo. Esta é a revalidação de status "dentro da mesma
+    transação" exigida antes de qualquer confirmação — o chamador já deve
+    ter rodado expirar_pedidos_pendentes(conn, agora) nesta mesma conexão
+    logo antes, para que o status lido aqui reflita o prazo autoritativo mesmo
+    que o worker periódico (backend/main.py) ainda não tenha rodado.
+
+    - Aguardando pagamento / Pagamento divergente: aceitam confirmação pela
+      primeira vez (comportamento já existente do PR #311).
+    - Pagamento confirmado: reconfirmação (exata, idempotente) ou divergência
+      sobre um pedido já pago — comportamento já existente do PR #311,
+      preservado sem alteração.
+    - Qualquer outro status (Cancelado — inclui pedidos expirados, que viram
+      Cancelado neste sistema — ou já avançado além da confirmação:
+      Separando pedido, Pronto para retirada, Entregue, Concluído): o
+      pagamento nunca confirma, nunca reabre, nunca baixa/repõe estoque;
+      fica classificado como pagamento tardio para conciliação
+      administrativa, com o valor sempre registrado."""
+    conciliacao, motivo, recebido_f, esperado_f = _conciliar_valor(valor_recebido, total_final)
+    if status_pedido_atual in STATUS_PEDIDO_ELEGIVEIS_CONFIRMACAO or status_pedido_atual == STATUS_PEDIDO_JA_CONFIRMADO:
+        return conciliacao, motivo, recebido_f, esperado_f
+
+    detalhe = "o valor bate com o total do pedido" if conciliacao == CONCILIACAO_OK else (motivo or "o valor não bate com o total do pedido")
+    motivo_tardio = f"Pagamento tardio: pedido já está '{status_pedido_atual or 'desconhecido'}'. {detalhe}"
+    return CONCILIACAO_TARDIO, motivo_tardio, recebido_f, esperado_f
+
+
 def _aplicar_resultado_confirmacao(conn, venda_id: int, status_pedido_atual: str, conciliacao: str, motivo: Optional[str], usuario: str, agora: str, valor_recebido: float, valor_esperado: float) -> bool:
-    """Aplica ao pedido o resultado da conciliação. Só confirma e baixa
-    estoque quando a conciliação é exata; divergência nunca altera o pedido
-    para pago e nunca baixa estoque. Se o pedido já avançou para um status
-    posterior à confirmação (ex.: já foi separado/entregue), a divergência é
-    apenas registrada no histórico sem regredir o status atual."""
+    """Aplica ao pedido o resultado da conciliação (já classificado por
+    _classificar_conciliacao, que filtrou pedidos em status terminal
+    incompatível para CONCILIACAO_TARDIO). Só confirma e baixa estoque
+    quando a conciliação é exata; divergência nunca altera o pedido para
+    pago e nunca baixa estoque. Pagamento tardio nunca toca em
+    pedidos.status nem em estoque — fica só no histórico e na auditoria."""
     if conciliacao == CONCILIACAO_OK:
         estoque_baixado_agora = baixar_estoque_do_pedido(conn, venda_id, usuario, agora, "Baixa automática ao confirmar pagamento")
         conn.execute("UPDATE pedidos SET status='Pagamento confirmado' WHERE id=?", (venda_id,))
@@ -106,6 +155,9 @@ def _aplicar_resultado_confirmacao(conn, venda_id: int, status_pedido_atual: str
         return estoque_baixado_agora
 
     observacao = (motivo or "Divergência de valor no pagamento.") + f" Recebido: R$ {valor_recebido:.2f} | Esperado: R$ {valor_esperado:.2f}."
+    if conciliacao == CONCILIACAO_TARDIO:
+        registrar_log_status(conn, venda_id, "Pagamento tardio registrado para conciliação", usuario, observacao)
+        return False
     if status_pedido_atual not in STATUS_PEDIDO_CONCLUIDOS:
         conn.execute("UPDATE pedidos SET status='Pagamento divergente' WHERE id=?", (venda_id,))
         registrar_log_status(conn, venda_id, "Pagamento divergente", usuario, observacao)
@@ -150,6 +202,15 @@ def registrar_pagamento(
     agora = datetime.now().isoformat(timespec="seconds")
     try:
         with conectar() as conn:
+            # Revalida o prazo de expiração ANTES de ler o status do pedido,
+            # na mesma transação da confirmação: se o prazo já passou mas o
+            # worker periódico (backend/main.py) ainda não rodou, este
+            # pedido é cancelado agora mesmo (reivindicação atômica, já
+            # segura sob concorrência — ver expirar_pedidos_pendentes) antes
+            # de decidirmos se o pagamento confirma. A confirmação nunca
+            # depende exclusivamente da tarefa periódica.
+            expirar_pedidos_pendentes(conn, agora)
+
             venda = conn.execute("SELECT id, total_final, status FROM pedidos WHERE id=?", (payload.venda_id,)).fetchone()
             if not venda:
                 raise HTTPException(status_code=404, detail="Pedido não encontrado")
@@ -161,7 +222,7 @@ def registrar_pagamento(
             status_gravado_pagamento = status_informado
 
             if status_informado == "Confirmado":
-                conciliacao, motivo, valor_recebido_f, valor_esperado_f = _conciliar_valor(payload.valor, venda["total_final"])
+                conciliacao, motivo, valor_recebido_f, valor_esperado_f = _classificar_conciliacao(str(venda["status"] or ""), payload.valor, venda["total_final"])
                 if conciliacao != CONCILIACAO_OK:
                     # Nunca gravamos "Confirmado" no registro de pagamento quando o
                     # valor diverge: o que de fato aconteceu é que o pedido segue
@@ -208,6 +269,7 @@ def registrar_pagamento(
                     "valor": valor_recebido_f,
                     "status_informado": status_informado,
                     "status_conciliacao": conciliacao,
+                    "status_pedido_no_momento": str(venda["status"] or ""),
                 },
             )
 
@@ -339,6 +401,7 @@ def atualizar_status_pagamento(pagamento_id: int, payload: PagamentoStatusIn, x_
     if status not in STATUS_PAGAMENTO:
         raise HTTPException(status_code=400, detail="Status de pagamento inválido")
 
+    agora = datetime.now().isoformat(timespec="seconds")
     with conectar() as conn:
         pagamento = conn.execute("SELECT id, venda_id, valor FROM pagamentos WHERE id=?", (pagamento_id,)).fetchone()
         if not pagamento:
@@ -349,16 +412,20 @@ def atualizar_status_pagamento(pagamento_id: int, payload: PagamentoStatusIn, x_
         status_gravado = status
         valor_esperado_f: Optional[float] = None
         venda = None
-        agora = datetime.now().isoformat(timespec="seconds")
 
         if status == "Confirmado":
+            # Mesma revalidação de prazo que a rota principal (ver
+            # registrar_pagamento): a rota manual segue exatamente a mesma
+            # regra, nunca depende só da tarefa periódica.
+            expirar_pedidos_pendentes(conn, agora)
             venda = conn.execute("SELECT id, total_final, status FROM pedidos WHERE id=?", (pagamento["venda_id"],)).fetchone()
             if not venda:
                 raise HTTPException(status_code=404, detail="Pedido não encontrado")
             # Reconcilia o valor já registrado neste pagamento (nunca aceito de
             # novo do corpo desta requisição, que só troca o status) contra o
-            # total autoritativo do pedido.
-            conciliacao, motivo, valor_recebido_f, valor_esperado_f = _conciliar_valor(pagamento["valor"], venda["total_final"])
+            # total autoritativo do pedido, e o status atual do pedido (nunca
+            # confirma/reabre um pedido em status terminal incompatível).
+            conciliacao, motivo, valor_recebido_f, valor_esperado_f = _classificar_conciliacao(str(venda["status"] or ""), pagamento["valor"], venda["total_final"])
             if conciliacao != CONCILIACAO_OK:
                 status_gravado = "Aguardando"
 
@@ -366,7 +433,18 @@ def atualizar_status_pagamento(pagamento_id: int, payload: PagamentoStatusIn, x_
             "UPDATE pagamentos SET status=?, observacao=?, status_conciliacao=?, motivo_divergencia=?, valor_esperado=COALESCE(?, valor_esperado) WHERE id=?",
             (status_gravado, payload.observacao or "", conciliacao, motivo, valor_esperado_f, pagamento_id),
         )
-        registrar_auditoria(conn, "pagamento", pagamento_id, "atualizar_status", payload.usuario, depois={"status_informado": status, "status_conciliacao": conciliacao})
+        registrar_auditoria(
+            conn,
+            "pagamento",
+            pagamento_id,
+            "atualizar_status",
+            payload.usuario,
+            depois={
+                "status_informado": status,
+                "status_conciliacao": conciliacao,
+                "status_pedido_no_momento": str(venda["status"] or "") if venda else None,
+            },
+        )
 
         estoque_baixado_agora = False
         if status == "Confirmado":
