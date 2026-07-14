@@ -1,5 +1,9 @@
-const CUSTOM_PRODUCTS_KEY = "misticaCustomProducts";
-let customProducts = loadStorage(CUSTOM_PRODUCTS_KEY, []);
+// Produtos cadastrados pelo painel local nunca são persistidos no
+// navegador (preço, estoque e link externo são dados comerciais): existem
+// só em memória durante a sessão da página. O cadastro real acontece pela
+// API autenticada (ver site-production-guard.js, que bloqueia este
+// formulário no site público).
+let customProducts = [];
 let catalogFilters = { search: "", category: "todos", sort: "destaques" };
 
 function isMisticaAdminMode() {
@@ -294,7 +298,6 @@ function mountProductAdmin() {
     customProducts.unshift(product);
     products.unshift(product);
     stock[product.id] = product.stock;
-    localStorage.setItem(CUSTOM_PRODUCTS_KEY, JSON.stringify(customProducts));
     saveState();
     renderAll();
     renderProductAdminList();

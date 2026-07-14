@@ -3,19 +3,12 @@
   const isProduction = config.serverMode === "production" || config.storageMode === "api_first" || config.usePublicDomainAccess === true;
   const API_BASE = String(config.apiBaseUrl || "https://api.misticaesotericos.com.br").replace(/\/$/, "");
   const PUBLIC_CHECKOUT_PATH = "/api/checkout/pedidos";
-  const SENSITIVE_LOCAL_KEYS = [
-    "misticaClients",
-    "misticaSales",
-    "misticaStock",
-    "misticaSuppliers",
-    "misticaAutoBackup",
-    "misticaLastBackupAt",
-  ];
 
   if (!isProduction) return;
 
   let checkoutRunning = false;
   let guardInstalled = false;
+  let pendingOrderId = null;
 
   function qs(selector) {
     return document.querySelector(selector);
@@ -32,30 +25,13 @@
     }
   }
 
+  // A limpeza de chaves proibidas e a persistência do carrinho mínimo já são
+  // responsabilidade estrutural de window.misticaSecureStorage (site-config.js,
+  // carregado antes de qualquer script comercial). Este guard não repete
+  // essa lógica nem sobrescreve localStorage.setItem/saveState — ele só
+  // aciona a limpeza como reforço defensivo em pontos específicos do fluxo.
   function removeSensitiveLocalKeys() {
-    SENSITIVE_LOCAL_KEYS.forEach(key => {
-      try { localStorage.removeItem(key); } catch {}
-    });
-  }
-
-  function installSensitiveStorageGuard() {
-    if (window.__misticaStorageGuardInstalled) return;
-    window.__misticaStorageGuardInstalled = true;
-    const blockedKeys = new Set(SENSITIVE_LOCAL_KEYS);
-    const originalSetItem = Storage.prototype.setItem;
-    Storage.prototype.setItem = function guardedSetItem(key, value) {
-      if (this === localStorage && blockedKeys.has(String(key))) return;
-      return originalSetItem.call(this, key, value);
-    };
-  }
-
-  function installSafeSaveState() {
-    if (window.__misticaSafeSaveStateInstalled || typeof saveState !== "function") return;
-    window.__misticaSafeSaveStateInstalled = true;
-    saveState = function safeProductionSaveState() {
-      try { localStorage.setItem("misticaCart", JSON.stringify(Array.isArray(cart) ? cart : [])); } catch {}
-      removeSensitiveLocalKeys();
-    };
+    if (window.misticaSecureStorage) window.misticaSecureStorage.removeForbiddenKeys();
   }
 
   function currentCart() {
@@ -73,10 +49,12 @@
     });
   }
 
+  // O id do pedido pendente fica só em memória (não em localStorage): serve
+  // apenas para acompanhamento na sessão atual da aba (ver
+  // iniciarAcompanhamentoPedido em app.js, que já usa o objeto `pedido` em
+  // memória, não esta variável).
   function persistPendingOrder(order) {
-    try {
-      localStorage.setItem("misticaPendingOrderId", String(order.id));
-    } catch {}
+    pendingOrderId = order?.id ?? null;
   }
 
   function setCheckoutButtonBusy(busy) {
@@ -238,15 +216,12 @@
   }
 
   function install() {
-    installSensitiveStorageGuard();
     removeSensitiveLocalKeys();
-    installSafeSaveState();
     installCaptureGuards();
     try {
       if (Array.isArray(clients)) clients = [];
       if (Array.isArray(sales)) sales = [];
       if (Array.isArray(suppliers)) suppliers = [];
-      if (typeof saveState === "function") saveState();
     } catch {}
   }
 
@@ -259,5 +234,6 @@
     checkoutPath: PUBLIC_CHECKOUT_PATH,
     checkout: guardedGeneratePix,
     scrubLocalData: removeSensitiveLocalKeys,
+    get pendingOrderId() { return pendingOrderId; },
   };
 })();

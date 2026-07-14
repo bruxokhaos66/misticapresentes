@@ -133,13 +133,18 @@
       map[product.id] = product.stock;
       return map;
     }, {});
-    if (typeof renderAll === "function") renderAll();
+    // Sempre que o catálogo oficial muda, o carrinho é reconstruído a
+    // partir dele: produtos removidos/inativos saem, preço e estoque são
+    // atualizados. window.misticaReconcileCart já chama renderAll().
+    if (typeof window.misticaReconcileCart === "function") window.misticaReconcileCart();
+    else if (typeof renderAll === "function") renderAll();
   }
 
   function clearCatalog() {
     if (typeof products !== "undefined" && Array.isArray(products)) products.splice(0, products.length);
     if (typeof stock !== "undefined") stock = {};
-    if (typeof renderAll === "function") renderAll();
+    if (typeof window.misticaReconcileCart === "function") window.misticaReconcileCart();
+    else if (typeof renderAll === "function") renderAll();
   }
 
   async function sincronizarAgora() {
