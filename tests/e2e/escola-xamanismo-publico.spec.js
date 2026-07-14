@@ -48,23 +48,49 @@ const arvorePublica = {
     },
     {
       id: 2,
-      titulo: "Módulo 2 — Origens e Caminhos",
-      descricao: "Próxima etapa da jornada.",
+      titulo: "Módulo 2 — As Origens e os Caminhos do Xamanismo",
+      descricao: "As origens históricas do termo, tradições rituais comparáveis em diferentes regiões e o caminho do xamanismo até o mundo contemporâneo.",
       ordem: 1,
       publico: true,
       bloqueado: false,
       aulas: [
         {
           id: 13,
-          titulo: "Em breve: origens históricas e diversidade",
-          descricao: null,
+          titulo: "A origem da palavra “xamã”",
+          descricao: "De onde vem esse nome tão repetido.",
           tipo: "texto",
-          conteudo: "<h2>Parte 3 pública</h2><p>Conteúdo em preparação.</p>",
+          conteudo: "<h2>A origem da palavra “xamã”</h2><p>Aula 1 do Módulo 2.</p>",
           video_url: null,
           capa_url: null,
           material_url: null,
           ordem: 0,
-          duracao_min: 1,
+          duracao_min: 13,
+          obrigatoria: true,
+        },
+        {
+          id: 14,
+          titulo: "Tradições semelhantes em diferentes regiões",
+          descricao: "Cantos, tambores e sonhos aparecem em muitos povos.",
+          tipo: "texto",
+          conteudo: "<h2>Tradições semelhantes em diferentes regiões</h2><p>Aula 2 do Módulo 2.</p>",
+          video_url: null,
+          capa_url: null,
+          material_url: null,
+          ordem: 1,
+          duracao_min: 14,
+          obrigatoria: true,
+        },
+        {
+          id: 15,
+          titulo: "Como o xamanismo chegou ao mundo moderno",
+          descricao: "De relatos de viajantes a um fenômeno urbano global.",
+          tipo: "texto",
+          conteudo: "<h2>Como o xamanismo chegou ao mundo moderno</h2><p>Aula 3 do Módulo 2.</p>",
+          video_url: null,
+          capa_url: null,
+          material_url: null,
+          ordem: 2,
+          duracao_min: 15,
           obrigatoria: true,
         },
       ],
@@ -114,7 +140,7 @@ test.describe("Acesso público ao curso de Xamanismo (visitante anônimo)", () =
     expect(erros).toEqual([]);
   });
 
-  test("visitante abre o curso sem login e navega pelas 3 partes gratuitas", async ({ page }) => {
+  test("visitante abre o curso sem login e navega pelas 5 aulas gratuitas (Módulo 1 + Módulo 2)", async ({ page }) => {
     const erros = [];
     const chamadasArvorePublica = [];
     page.on("console", msg => { if (msg.type() === "error" && !ehDiagnosticoDeRecurso(msg.text())) erros.push(msg.text()); });
@@ -131,12 +157,16 @@ test.describe("Acesso público ao curso de Xamanismo (visitante anônimo)", () =
     await expect(page.locator(".plataforma-login")).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "O que é o Xamanismo?", level: 1 })).toBeVisible();
 
-    // Navega pelas 3 partes públicas usando "Próxima →" (funciona em qualquer
+    // Navega pelas 5 aulas públicas usando "Próxima →" (funciona em qualquer
     // viewport, sem depender de abrir o drawer de módulos no mobile).
     await page.locator("[data-next]").click();
     await expect(page.getByRole("heading", { name: "Por que o Xamanismo ainda existe?", level: 1 })).toBeVisible();
     await page.locator("[data-next]").click();
-    await expect(page.getByRole("heading", { name: "Em breve: origens históricas e diversidade", level: 1 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "A origem da palavra “xamã”", level: 1 })).toBeVisible();
+    await page.locator("[data-next]").click();
+    await expect(page.getByRole("heading", { name: "Tradições semelhantes em diferentes regiões", level: 1 })).toBeVisible();
+    await page.locator("[data-next]").click();
+    await expect(page.getByRole("heading", { name: "Como o xamanismo chegou ao mundo moderno", level: 1 })).toBeVisible();
 
     // No mobile a lista de módulos vive num drawer fechado por padrão; no
     // desktop já está visível na barra lateral. Abre o drawer só quando ele
