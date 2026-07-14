@@ -22,11 +22,32 @@ client.__enter__()  # garante que o evento de startup (migrações) rode antes d
 PROTECTED_HEADERS = {"X-Mistica-Api-Key": TEST_API_KEY}
 
 
-def test_health_online():
+def test_health_online_minimo_e_seguro():
     response = client.get("/api/health")
     assert response.status_code == 200
     data = response.json()
-    assert data == {"status": "online", "app": "Mística Presentes"}
+    # Resposta mínima e fixa: nenhum campo além destes quatro.
+    assert set(data.keys()) == {"status", "service", "version", "database"}
+    assert data["status"] == "ok"
+    assert data["service"] == "mistica-api"
+    assert data["version"] == main.app.version
+    assert data["database"] == "available"
+
+
+def test_health_com_banco_indisponivel_retorna_503(monkeypatch):
+    monkeypatch.setattr(main, "banco_acessivel", lambda: False)
+    response = client.get("/api/health")
+    assert response.status_code == 503
+    data = response.json()
+    assert data["status"] == "error"
+    assert data["database"] == "unavailable"
+
+
+def test_health_com_disco_indisponivel_retorna_503(monkeypatch):
+    monkeypatch.setattr(main, "disco_diretorio_disponivel", lambda: False)
+    response = client.get("/api/health")
+    assert response.status_code == 503
+    assert response.json()["status"] == "error"
 
 
 def test_health_head_sem_autenticacao_e_sem_corpo():
@@ -41,15 +62,74 @@ def test_health_nao_expoe_informacoes_internas():
     corpo = response.text
     assert "mistica_gestao_v20.db" not in corpo
     assert "/opt/render" not in corpo
-    for chave_proibida in ("database", "db_path", "server_url", "api_url", "domain", "secret", "token", "key"):
+    assert "/data" not in corpo
+    assert "/home" not in corpo
+    assert "documents" not in corpo.lower()
+    for chave_proibida in ("db_path", "server_url", "api_url", "domain", "secret", "token", "cookie", "traceback", "python", "sqlite", "fastapi", "uvicorn", "uptime", "ambiente"):
         assert chave_proibida not in corpo.lower()
 
 
-def test_version_online():
+def test_health_nao_escreve_no_banco_nem_deixa_arquivo_temporario(tmp_path, monkeypatch):
+    import database.connection as connection
+
+    caminho = str(tmp_path / "health_check.db")
+    monkeypatch.setattr(connection, "DB_PATH", caminho)
+    monkeypatch.setattr("backend.database.DB_PATH", caminho)
+    monkeypatch.setattr("backend.infra_diagnostics.DB_PATH", caminho)
+    from database.migrations import init_db as _init_db
+
+    _init_db()
+    antes = connection.query_db("SELECT COUNT(*) FROM produtos")
+
+    for _ in range(5):
+        client.get("/api/health")
+
+    depois = connection.query_db("SELECT COUNT(*) FROM produtos")
+    assert antes == depois
+    # A checagem de disco do health público não cria arquivo temporário
+    # (os únicos arquivos aceitáveis são o próprio banco e os auxiliares de
+    # WAL/SHM que o SQLite cria ao conectar, nunca ".mistica_health_*").
+    arquivos = [p.name for p in tmp_path.iterdir()]
+    assert not any(nome.startswith(".mistica_health_") for nome in arquivos)
+
+
+def test_version_com_variavel_configurada(monkeypatch):
+    monkeypatch.setenv("MISTICA_BUILD_ID", "abc1234")
+    monkeypatch.setenv("MISTICA_BUILD_DATE", "2026-07-13")
+    response = client.get("/api/version")
+    data = response.json()
+    assert data["build"] == "abc1234"
+    assert data["release_date"] == "2026-07-13"
+
+
+def test_version_sem_variavel_usa_fallback_seguro(monkeypatch):
+    monkeypatch.delenv("MISTICA_BUILD_ID", raising=False)
+    monkeypatch.delenv("RENDER_GIT_COMMIT", raising=False)
+    monkeypatch.delenv("MISTICA_BUILD_DATE", raising=False)
     response = client.get("/api/version")
     assert response.status_code == 200
     data = response.json()
-    assert data == {"app": "Mística Presentes", "version": main.app.version}
+    assert set(data.keys()) == {"app", "version", "build", "release_date"}
+    assert data["app"] == "Mística Presentes"
+    assert data["version"] == main.app.version
+    assert data["build"] == "unknown"
+    assert data["release_date"] is None
+
+
+def test_version_sanitiza_build_id_com_caracteres_inesperados(monkeypatch):
+    monkeypatch.setenv("MISTICA_BUILD_ID", "refs/heads/main; rm -rf /")
+    response = client.get("/api/version")
+    data = response.json()
+    assert "/" not in data["build"]
+    assert " " not in data["build"]
+    assert ";" not in data["build"]
+
+
+def test_version_nao_expoe_informacoes_internas():
+    response = client.get("/api/version")
+    corpo = response.text
+    for chave_proibida in ("db_path", "secret", "token", "traceback", "/opt/render", "/data", "/home", "branch", "refs/heads", "ambiente"):
+        assert chave_proibida not in corpo.lower()
 
 
 def test_version_head_sem_autenticacao_e_sem_corpo():
@@ -78,6 +158,57 @@ def test_diagnostico_sistema_responde():
     assert data["status"] in ["ok", "verificar"]
     assert "banco" in data
     assert "tabelas" in data
+    assert data["banco"]["acessivel"] is True
+    assert data["disco"]["acessivel"] is True
+    assert data["disco"]["escrita_ok"] is True
+    assert data["disco"]["escrita_motivo"] == "ok"
+    assert data["disco"]["classificacao"] in ("saudavel", "atencao", "critico")
+    assert data["disco"]["espaco_total_bytes"] > 0
+    assert data["disco"]["espaco_livre_bytes"] >= 0
+    assert data["disco"]["espaco_livre_percentual"] is not None
+    assert data["teve_erro"] is False
+
+
+def test_diagnostico_sistema_nao_expoe_caminho_absoluto():
+    response = client.get("/api/diagnostico/sistema", headers=PROTECTED_HEADERS)
+    corpo = response.text
+    assert "caminho" not in corpo.lower()
+    assert "mistica_gestao_v20.db" not in corpo
+    assert "/opt/render" not in corpo
+    assert "/home" not in corpo
+    assert "traceback" not in corpo.lower()
+
+
+def test_diagnostico_sistema_exige_chave_valida():
+    response = client.get("/api/diagnostico/sistema")
+    assert response.status_code in (401, 403)
+    # Sem chave válida, nenhuma checagem de banco/disco roda: a resposta é
+    # só o erro de autenticação, sem dados de diagnóstico.
+    corpo = response.text.lower()
+    for chave_diagnostico in ("tabelas", "espaco_livre", "escrita_ok", "classificacao"):
+        assert chave_diagnostico not in corpo
+
+    response_chave_errada = client.get("/api/diagnostico/sistema", headers={"X-Mistica-Api-Key": "chave-errada"})
+    assert response_chave_errada.status_code in (401, 403)
+
+
+def test_diagnostico_sistema_nao_deixa_arquivo_temporario_apos_chamadas(tmp_path, monkeypatch):
+    import database.connection as connection
+
+    caminho = str(tmp_path / "diag.db")
+    monkeypatch.setattr(connection, "DB_PATH", caminho)
+    monkeypatch.setattr("backend.database.DB_PATH", caminho)
+    monkeypatch.setattr("backend.infra_diagnostics.DB_PATH", caminho)
+    from database.migrations import init_db as _init_db
+
+    _init_db()
+
+    for _ in range(3):
+        response = client.get("/api/diagnostico/sistema", headers=PROTECTED_HEADERS)
+        assert response.status_code == 200
+
+    arquivos = [p.name for p in tmp_path.iterdir()]
+    assert not any(nome.startswith(".mistica_health_") for nome in arquivos)
 
 
 def test_backup_status_responde():

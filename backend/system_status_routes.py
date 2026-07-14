@@ -9,7 +9,11 @@ from fastapi import APIRouter, Header, HTTPException
 
 from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.database import conectar
+from backend.infra_diagnostics import banco_acessivel, diagnostico_disco_completo
+from backend.logging_config import get_logger
 from config import API_URL, DB_PATH, OFFICIAL_DOMAIN, SERVER_URL
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["status-sistema"])
 
@@ -59,27 +63,49 @@ def status_publico():
 
 @router.get("/diagnostico/sistema")
 def status_sistema(x_mistica_api_key: str | None = Header(default=None)):
+    # A autenticação é a primeira coisa verificada: nenhuma checagem de
+    # banco/disco roda antes disso, e sem chave válida o chamador só recebe
+    # o erro genérico de autenticação (nunca dados de diagnóstico).
     validar_site_api_key(x_mistica_api_key)
+
     db_path = Path(DB_PATH)
     tabelas = []
-    erros = []
+    teve_erro = False
 
     try:
         with conectar() as conn:
             for tabela in TABELAS_PRINCIPAIS:
-                total = contar_registros(conn, tabela)
-                tabelas.append({"nome": tabela, "existe": total is not None, "registros": total if total is not None else 0})
-    except Exception as exc:
-        erros.append(str(exc))
+                try:
+                    total = contar_registros(conn, tabela)
+                    tabelas.append({"nome": tabela, "existe": total is not None, "registros": total if total is not None else 0})
+                except Exception:
+                    # O detalhe da exceção (que pode incluir texto de erro do
+                    # SQLite) só vai para o log interno; a resposta ao
+                    # cliente nunca inclui stack trace ou mensagem crua.
+                    logger.exception("falha ao contar registros de tabela no diagnostico", extra={"tabela": tabela})
+                    teve_erro = True
+    except Exception:
+        logger.exception("falha ao conectar ao banco no diagnostico")
+        teve_erro = True
+
+    disco = diagnostico_disco_completo()
 
     return {
-        "status": "ok" if not erros else "verificar",
+        "status": "ok" if (not teve_erro and disco["acessivel"] and disco["classificacao"] != "critico") else "verificar",
         "app": "Mística Presentes",
         "dominio": OFFICIAL_DOMAIN,
         "server_url": SERVER_URL,
         "api_url": API_URL,
-        "banco": {"caminho": str(db_path), "arquivo_existe": db_path.exists(), "pasta_existe": db_path.parent.exists()},
+        # Nunca o caminho absoluto -- só booleanos que confirmam se o
+        # arquivo/pasta existem, úteis para o painel sem revelar estrutura
+        # de disco do servidor.
+        "banco": {
+            "acessivel": banco_acessivel(),
+            "arquivo_existe": db_path.exists(),
+            "pasta_existe": db_path.parent.exists(),
+        },
+        "disco": disco,
         "tabelas": tabelas,
-        "erros": erros,
+        "teve_erro": teve_erro,
         "data_hora": datetime.now().isoformat(timespec="seconds"),
     }
