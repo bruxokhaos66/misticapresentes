@@ -25,6 +25,7 @@ router = APIRouter(prefix="/api", tags=["pedidos-status"])
 
 STATUS_PEDIDO = {
     "Aguardando pagamento",
+    "Pagamento divergente",
     "Pagamento confirmado",
     "Separando pedido",
     "Pronto para retirada",
@@ -34,6 +35,19 @@ STATUS_PEDIDO = {
 }
 
 STATUS_BAIXA_ESTOQUE = {"Pagamento confirmado", "Separando pedido"}
+
+# Status a partir dos quais o pedido já avançou além da confirmação de
+# pagamento. Uma divergência de valor detectada nesse ponto (ex.: um segundo
+# pagamento incompleto registrado por engano) não deve regredir o status do
+# pedido de volta para "Pagamento divergente" — apenas fica registrada no
+# histórico para conciliação administrativa.
+STATUS_PEDIDO_CONCLUIDOS = {
+    "Pagamento confirmado",
+    "Separando pedido",
+    "Pronto para retirada",
+    "Entregue",
+    "Concluído",
+}
 
 STATUS_ALIASES = {"Pago": "Pagamento confirmado", "Em separação": "Separando pedido"}
 
@@ -64,21 +78,27 @@ def validar_site_api_key(chave_recebida: str | None):
 
 
 def expirar_pedidos_pendentes(conn, agora: str | None = None):
-    """Cancela automaticamente pedidos 'Aguardando pagamento' cujo prazo (expira_em)
-    já passou e cujo pagamento nunca foi confirmado, devolvendo ao estoque a
-    reserva feita na criação do pedido (ver site_stock_routes.py).
+    """Cancela automaticamente pedidos cujo prazo (expira_em) já passou e cujo
+    pagamento nunca foi confirmado com o valor correto, devolvendo ao estoque
+    a reserva feita na criação do pedido (ver site_stock_routes.py).
+
+    Cobre tanto 'Aguardando pagamento' quanto 'Pagamento divergente': um
+    pagamento com valor incorreto (ver backend/payment_routes.py) não é
+    tratado como pago, então a reserva de estoque não pode ficar presa para
+    sempre só porque o pedido saiu de 'Aguardando pagamento' — ele continua
+    expirando no mesmo prazo se ninguém resolver a divergência a tempo.
 
     Roda periodicamente em cada worker (ver backend/main.py), então mais de um
     processo pode disputar o mesmo pedido vencido ao mesmo tempo. O UPDATE
     abaixo só processa o pedido se conseguir reivindicá-lo (WHERE status ainda
-    'Aguardando pagamento'); o SQLite serializa escritores, então um worker que
+    é um dos dois acima); o SQLite serializa escritores, então um worker que
     perder a disputa vê rowcount 0 e pula o pedido, evitando repor estoque em
     dobro."""
     agora = agora or datetime.now().isoformat(timespec="seconds")
     expirados = conn.execute(
         """
         SELECT id FROM pedidos
-        WHERE COALESCE(status,'') = 'Aguardando pagamento'
+        WHERE COALESCE(status,'') IN ('Aguardando pagamento', 'Pagamento divergente')
           AND expira_em IS NOT NULL
           AND expira_em < ?
         """,
@@ -87,7 +107,7 @@ def expirar_pedidos_pendentes(conn, agora: str | None = None):
     total_expirados = 0
     for venda in expirados:
         claim = conn.execute(
-            "UPDATE pedidos SET status='Cancelado' WHERE id=? AND status='Aguardando pagamento'",
+            "UPDATE pedidos SET status='Cancelado' WHERE id=? AND status IN ('Aguardando pagamento', 'Pagamento divergente')",
             (venda["id"],),
         )
         if claim.rowcount == 0:
