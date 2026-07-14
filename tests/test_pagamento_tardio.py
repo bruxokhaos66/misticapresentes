@@ -631,3 +631,155 @@ def test_novo_valor_de_conciliacao_e_compativel_com_banco_existente(tmp_path, mo
 
     # Rodar a migração de novo (idempotente) não falha nem apaga o dado.
     init_db()
+
+
+# ---------------------------------------------------------------------------
+# Revisão adicional — auditoria e rastreabilidade de pagamentos tardios
+# ---------------------------------------------------------------------------
+
+
+def buscar_auditoria(entidade_id: int, acao: str | None = None) -> list[dict]:
+    import backend.database as backend_database
+
+    with backend_database.conectar() as conn:
+        linhas = conn.execute(
+            "SELECT * FROM audit_log WHERE entidade='pagamento' AND entidade_id=? ORDER BY id ASC",
+            (str(entidade_id),),
+        ).fetchall()
+    registros = [dict(linha) for linha in linhas]
+    if acao:
+        registros = [r for r in registros if r["acao"] == acao]
+    return registros
+
+
+def test_auditoria_registra_motivo_e_identificador_mascarado_sem_expor_segredo():
+    contexto = criar_pedido_pendente(preco=31.0, quantidade=1)
+    pedido = contexto["pedido"]
+    txid_real = pedido["pix_txid"]
+    cancelar_manualmente(pedido["id"])
+
+    resposta = post_webhook({"txid": txid_real, "valor": pedido["total_final"], "status": "Confirmado"})
+    assert resposta.status_code == 200
+    pagamento_id = resposta.json()["id"]
+
+    registros = buscar_auditoria(pagamento_id, acao="registrar")
+    assert len(registros) == 1
+    dados = registros[0]
+    import json as jsonlib
+
+    depois = jsonlib.loads(dados["dados_depois"])
+    assert depois["status_conciliacao"] == "pagamento_tardio"
+    assert depois["motivo"]  # motivo da não confirmação presente
+    assert "Cancelado" in depois["motivo"]
+    assert depois["status_pedido_no_momento"] == "Cancelado"
+
+    # Identificador presente, mas mascarado — nunca o txid completo em claro.
+    assert depois["identificador_evento"] is not None
+    assert depois["identificador_evento"] != txid_real
+    assert txid_real not in jsonlib.dumps(dados)
+
+    # Segredos nunca aparecem em nenhum campo do registro de auditoria.
+    assert WEBHOOK_SECRET not in jsonlib.dumps(dados)
+    assert TEST_API_KEY not in jsonlib.dumps(dados)
+
+
+def test_horario_origem_e_decisao_ficam_registrados_no_pagamento():
+    contexto = criar_pedido_pendente(preco=24.0, quantidade=1)
+    pedido = contexto["pedido"]
+    cancelar_manualmente(pedido["id"])
+
+    antes = datetime.now()
+    resposta = post_webhook({"txid": pedido["pix_txid"], "valor": pedido["total_final"], "status": "Confirmado"})
+    assert resposta.status_code == 200
+    pagamento_id = resposta.json()["id"]
+
+    pagamentos = client.get("/api/pagamentos", params={"venda_id": pedido["id"]}, headers=HEADERS).json()
+    registrado = next(p for p in pagamentos if p["id"] == pagamento_id)
+
+    # Horário do recebimento.
+    horario_registrado = datetime.fromisoformat(registrado["data_hora"])
+    assert abs((horario_registrado - antes).total_seconds()) < 30
+    # Origem (webhook, não confirmação manual).
+    assert registrado["forma"] == "Pix automático"
+    assert registrado["usuario"] == "Webhook Pix"
+    # Classificação e decisão.
+    assert registrado["status_conciliacao"] == "pagamento_tardio"
+    assert registrado["status"] != "Confirmado"
+    # Motivo da não confirmação.
+    assert registrado["motivo_divergencia"]
+
+
+def test_webhook_repetido_nao_gera_ruido_de_auditoria_mas_evento_original_e_rastreavel():
+    """Reenvios do MESMO evento (mesmo txid) são idempotentes: a segunda (e
+    demais) chamadas retornam a resposta já salva sem reprocessar — por
+    construção, elas não alteram nenhum estado e não geram um novo registro
+    em pagamentos/audit_log/pedido_status_log. O evento ORIGINAL continua
+    plenamente rastreável (uma linha em pagamentos com data_hora, forma,
+    usuario, status_conciliacao e motivo; uma linha correspondente em
+    audit_log; uma linha em pedido_status_log) — o que se perde é apenas o
+    registro de "quantas vezes o provedor reenviou o mesmo evento", que não
+    corresponde a nenhuma mudança de estado real e por isso não precisa de
+    uma linha própria (mesmo padrão já usado por toda a idempotência do
+    sistema, ver backend/idempotency.py)."""
+    contexto = criar_pedido_pendente(preco=41.0, quantidade=1)
+    pedido = contexto["pedido"]
+    cancelar_manualmente(pedido["id"])
+
+    payload = {"txid": pedido["pix_txid"], "valor": pedido["total_final"], "status": "Confirmado"}
+    primeira = post_webhook(payload)
+    segunda = post_webhook(payload)
+    terceira = post_webhook(payload)
+
+    assert primeira.status_code == segunda.status_code == terceira.status_code == 200
+    pagamento_id = primeira.json()["id"]
+    assert segunda.json()["id"] == pagamento_id
+    assert terceira.json()["id"] == pagamento_id
+
+    pagamentos = client.get("/api/pagamentos", params={"venda_id": pedido["id"]}, headers=HEADERS).json()
+    assert len(pagamentos) == 1  # uma única linha, o evento original
+
+    registros_auditoria = buscar_auditoria(pagamento_id, acao="registrar")
+    assert len(registros_auditoria) == 1  # sem ruído dos reenvios idempotentes
+
+    historico = client.get(f"/api/pedidos/{pedido['id']}/status", params={"txid": pedido["pix_txid"]}).json()
+    entradas_tardias = [h for h in historico["historico"] if h["status"] == "Pagamento tardio registrado para conciliação"]
+    assert len(entradas_tardias) == 1
+
+    # A chave de idempotência em si preserva o identificador do evento
+    # original, permitindo correlacionar qualquer reenvio ao mesmo evento.
+    import backend.database as backend_database
+
+    with backend_database.conectar() as conn:
+        chave = conn.execute(
+            "SELECT chave, status FROM idempotency_keys WHERE escopo='registrar_pagamento' AND chave=?",
+            (f"webhook_pix:{pedido['pix_txid']}",),
+        ).fetchone()
+    assert chave is not None
+    assert chave["status"] == "concluido"
+
+
+def test_txids_diferentes_para_o_mesmo_pedido_permanecem_todos_rastreaveis():
+    """Diferente de reenvios do MESMO evento, eventos genuinamente distintos
+    (txids diferentes) sobre o mesmo pedido cancelado geram, cada um, sua
+    própria linha em pagamentos e seu próprio registro de auditoria — a
+    sequência completa é reconstruível."""
+    contexto = criar_pedido_pendente(preco=29.0, quantidade=1)
+    pedido = contexto["pedido"]
+    cancelar_manualmente(pedido["id"])
+
+    txid_a = f"TARDIO-RASTREIO-A-{uuid.uuid4().hex[:8]}"
+    txid_b = f"TARDIO-RASTREIO-B-{uuid.uuid4().hex[:8]}"
+    resposta_a = post_webhook({"txid": txid_a, "venda_id": pedido["id"], "valor": pedido["total_final"], "status": "Confirmado"})
+    resposta_b = post_webhook({"txid": txid_b, "venda_id": pedido["id"], "valor": pedido["total_final"], "status": "Confirmado"})
+
+    assert resposta_a.status_code == 200
+    assert resposta_b.status_code == 200
+    assert resposta_a.json()["id"] != resposta_b.json()["id"]
+
+    pagamentos = client.get("/api/pagamentos", params={"venda_id": pedido["id"]}, headers=HEADERS).json()
+    assert len(pagamentos) == 2
+    assert {p["status_conciliacao"] for p in pagamentos} == {"pagamento_tardio"}
+
+    for pagamento_id in (resposta_a.json()["id"], resposta_b.json()["id"]):
+        registros = buscar_auditoria(pagamento_id, acao="registrar")
+        assert len(registros) == 1

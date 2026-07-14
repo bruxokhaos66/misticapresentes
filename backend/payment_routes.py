@@ -69,6 +69,11 @@ class PagamentoIn(BaseModel):
     comprovante: Optional[str] = None
     observacao: Optional[str] = None
     usuario: str = "Admin"
+    # Identificador do evento de origem (ex.: txid enviado pelo webhook Pix),
+    # usado só para auditoria — nunca persistido em texto puro em audit_log
+    # (ver _mascarar_identificador), e não confundir com `comprovante`
+    # (identificação do comprovante mostrada ao operador no painel).
+    identificador_evento: Optional[str] = None
 
 
 class PagamentoStatusIn(BaseModel):
@@ -89,6 +94,19 @@ def registrar_log_status(conn, venda_id: int, status: str, usuario: str, observa
         """,
         (venda_id, status, usuario or "Admin", observacao or "", datetime.now().isoformat(timespec="seconds")),
     )
+
+
+def _mascarar_identificador(valor: Optional[str]) -> Optional[str]:
+    """Mascara um identificador de evento externo (ex.: txid) antes de
+    gravar em audit_log: mantém só as pontas, o suficiente para conciliar
+    manualmente contra o provedor sem expor o identificador completo em um
+    log de leitura mais ampla que a tabela de pagamentos em si."""
+    texto = str(valor or "").strip()
+    if not texto:
+        return None
+    if len(texto) <= 8:
+        return texto[:2] + "…"
+    return f"{texto[:4]}…{texto[-4:]}"
 
 
 def _conciliar_valor(valor_recebido, total_final) -> tuple[str, Optional[str], float, float]:
@@ -270,6 +288,8 @@ def registrar_pagamento(
                     "status_informado": status_informado,
                     "status_conciliacao": conciliacao,
                     "status_pedido_no_momento": str(venda["status"] or ""),
+                    "motivo": motivo,
+                    "identificador_evento": _mascarar_identificador(payload.identificador_evento),
                 },
             )
 
@@ -352,6 +372,7 @@ def confirmar_pagamento_webhook(
             comprovante=payload.comprovante,
             observacao="Confirmado automaticamente via webhook Pix",
             usuario="Webhook Pix",
+            identificador_evento=payload.txid,
         ),
         x_mistica_api_key=chave_interna,
         idempotency_key=f"webhook_pix:{payload.txid or venda_id}",
@@ -443,6 +464,7 @@ def atualizar_status_pagamento(pagamento_id: int, payload: PagamentoStatusIn, x_
                 "status_informado": status,
                 "status_conciliacao": conciliacao,
                 "status_pedido_no_momento": str(venda["status"] or "") if venda else None,
+                "motivo": motivo,
             },
         )
 
