@@ -15,11 +15,10 @@ def _normalizar_ambiente(valor_bruto: str) -> str:
     ambiente = valor_bruto.strip().lower()
     if ambiente in _AMBIENTES_VALIDOS:
         return ambiente
-    if ambiente:
-        logging.getLogger(__name__).warning(
-            "APP_ENV com valor nao reconhecido; usando fallback seguro 'development'",
-            extra={"evento": "app_env_invalido", "tamanho_valor_bruto": len(valor_bruto)},
-        )
+    logging.getLogger(__name__).warning(
+        "APP_ENV com valor nao reconhecido; usando fallback seguro 'development'",
+        extra={"evento": "app_env_invalido", "tamanho_valor_bruto": len(valor_bruto)},
+    )
     return "development"
 
 
