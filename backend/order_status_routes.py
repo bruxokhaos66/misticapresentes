@@ -62,6 +62,34 @@ def normalizar_status(status: str) -> str:
     return status
 
 
+def bloquear_avanco_financeiro_sem_conciliacao(conn, venda_id: int, status_destino: str):
+    """'Pagamento confirmado' (e a baixa de estoque que dele depende) só pode
+    ser produzido pela conciliação de valor em backend/payment_routes.py
+    (POST /api/pagamentos ou o webhook Pix, que comparam o valor recebido com
+    pedidos.total_final antes de confirmar). As rotas genéricas de status de
+    pedido (esta e a duplicata em order_api_guard_inner_routes.py) aceitam
+    "Pagamento confirmado" como um valor válido de STATUS_PEDIDO para fins de
+    consulta/histórico, mas nunca podem ser o caminho que produz esse estado —
+    senão qualquer chamada com a chave de API confirmaria um pedido sem
+    nenhum valor ter sido validado. Pelo mesmo motivo, "Separando pedido" (que
+    também baixa estoque, ver STATUS_BAIXA_ESTOQUE) só é aceito depois que o
+    pedido já estiver de fato confirmado."""
+    if status_destino not in STATUS_BAIXA_ESTOQUE:
+        return
+    if status_destino == "Pagamento confirmado":
+        raise HTTPException(
+            status_code=409,
+            detail="Pagamento confirmado só pode ser definido via POST /api/pagamentos, com o valor recebido conciliado contra o total do pedido.",
+        )
+    venda = conn.execute("SELECT status FROM pedidos WHERE id=?", (venda_id,)).fetchone()
+    status_atual = str(venda["status"] or "") if venda else ""
+    if status_atual not in STATUS_PEDIDO_CONCLUIDOS:
+        raise HTTPException(
+            status_code=409,
+            detail="Só é possível avançar para 'Separando pedido' depois que o pagamento for confirmado via POST /api/pagamentos.",
+        )
+
+
 class PedidoStatusIn(BaseModel):
     status: str = Field(min_length=1)
     usuario: str = "Admin"
@@ -509,6 +537,8 @@ def atualizar_status_pedido(venda_id: int, payload: PedidoStatusIn, x_mistica_ap
             retorno = cancelar_com_reposicao(conn, venda_id, payload.usuario or "Admin", payload.observacao, agora)
             conn.commit()
             return {**retorno, "data_hora": agora}
+
+        bloquear_avanco_financeiro_sem_conciliacao(conn, venda_id, status)
 
         if status in STATUS_BAIXA_ESTOQUE:
             estoque_baixado_agora = baixar_estoque_do_pedido(conn, venda_id, payload.usuario or "Admin", agora)

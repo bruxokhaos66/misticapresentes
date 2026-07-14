@@ -11,6 +11,7 @@ from backend.database import conectar
 from backend.order_status_routes import (
     validar_site_api_key,
     baixar_estoque_do_pedido,
+    bloquear_avanco_financeiro_sem_conciliacao,
     buscar_produto_para_baixa,
     cancelar_com_reposicao,
     normalizar_status,
@@ -51,6 +52,9 @@ def alterar_status(venda_id: int, payload: StatusPayload, chave: str | None):
             retorno = cancelar_com_reposicao(conn, venda_id, payload.usuario, payload.observacao, agora)
             conn.commit()
             return {**retorno, "data_hora": agora}
+
+        bloquear_avanco_financeiro_sem_conciliacao(conn, venda_id, status)
+
         baixou = False
         if status in STATUS_BAIXA_ESTOQUE:
             baixou = baixar_estoque_do_pedido(conn, venda_id, payload.usuario or "Site/API", agora)
