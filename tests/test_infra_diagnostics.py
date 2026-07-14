@@ -8,8 +8,10 @@ Nunca toca no disco real além de arquivos temporários criados pelo próprio
 teste (tmp_path).
 """
 
+import ast
 import os
 import shutil
+import warnings
 
 import backend.database as backend_database
 import backend.infra_diagnostics as infra_diagnostics
@@ -159,6 +161,77 @@ def test_escrita_disco_segura_falha_remocao_nao_deixa_arquivo_ilegivel(monkeypat
     sucesso, motivo = infra_diagnostics.escrita_disco_segura()
     assert sucesso is False
     assert motivo == "falha_remocao"
+
+
+def test_escrita_disco_segura_falha_remocao_nao_mascara_erro_principal(monkeypatch, tmp_path):
+    """Se a escrita já falhou (ex.: sem espaço) e a limpeza também falha, o
+    motivo relatado precisa continuar sendo o erro original -- nunca
+    'falha_remocao' sobrepondo um erro mais informativo."""
+    pasta = tmp_path / "sub"
+    pasta.mkdir()
+    monkeypatch.setattr(infra_diagnostics, "DB_PATH", str(pasta / "diag.db"))
+
+    class _ArquivoFalsoSemEspaco:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def write(self, dado):
+            raise OSError(28, "No space left on device (simulado)")
+
+    def _fdopen_sem_espaco(fd, modo):
+        os.close(fd)
+        return _ArquivoFalsoSemEspaco()
+
+    monkeypatch.setattr(os, "fdopen", _fdopen_sem_espaco)
+
+    from pathlib import Path
+
+    original_unlink = Path.unlink
+
+    def _falha_unlink(self, *args, **kwargs):
+        if self.name.startswith(".mistica_health_"):
+            raise OSError("falha ao remover (simulado)")
+        return original_unlink(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", _falha_unlink)
+
+    sucesso, motivo = infra_diagnostics.escrita_disco_segura()
+    assert sucesso is False
+    assert motivo == "sem_espaco"
+
+
+def test_infra_diagnostics_sem_return_dentro_de_finally():
+    """Checagem estática (item da homologação): nenhuma função do módulo
+    pode ter 'return' dentro de um bloco 'finally' -- é esse padrão que
+    mascara o resultado principal quando a limpeza também falha."""
+    caminho = infra_diagnostics.__file__
+    with open(caminho, encoding="utf-8") as f:
+        codigo = f.read()
+    arvore = ast.parse(codigo, filename=caminho)
+    ocorrencias = []
+    for no in ast.walk(arvore):
+        if isinstance(no, ast.Try):
+            for bloco in no.finalbody:
+                for sub in ast.walk(bloco):
+                    if isinstance(sub, ast.Return):
+                        ocorrencias.append(sub.lineno)
+    assert not ocorrencias, f"'return' dentro de 'finally' em {caminho}: linhas {ocorrencias}"
+
+
+def test_infra_diagnostics_compila_sem_syntaxwarning():
+    """Com warnings habilitados (equivalente a 'python -W error'), compilar
+    o módulo não deve produzir SyntaxWarning."""
+    caminho = infra_diagnostics.__file__
+    with open(caminho, encoding="utf-8") as f:
+        codigo = f.read()
+    with warnings.catch_warnings(record=True) as capturados:
+        warnings.simplefilter("always")
+        compile(codigo, caminho, "exec")
+    avisos_sintaxe = [w for w in capturados if issubclass(w.category, SyntaxWarning)]
+    assert not avisos_sintaxe, avisos_sintaxe
 
 
 def test_escrita_disco_segura_nao_segue_symlink_para_fora(monkeypatch, tmp_path):

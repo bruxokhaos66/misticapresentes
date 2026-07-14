@@ -87,32 +87,36 @@ def escrita_disco_segura() -> tuple[bool, str]:
         return False, "falha_criacao"
 
     tmp_path = Path(tmp_nome)
+    resultado: tuple[bool, str] = (True, "ok")
     try:
         # Defesa contra symlink/traversal: o arquivo criado precisa mesmo
         # estar dentro da pasta esperada, nunca redirecionado para fora.
         if pasta_resolvida not in tmp_path.resolve().parents:
             os.close(fd)
-            tmp_path.unlink(missing_ok=True)
-            return False, "caminho_inesperado"
-
-        try:
-            with os.fdopen(fd, "wb") as f:
-                f.write(b"healthcheck")
-        except OSError as exc:
-            if getattr(exc, "errno", None) == 28:
-                return False, "sem_espaco"
-            if getattr(exc, "errno", None) == 30:
-                return False, "somente_leitura"
-            return False, "falha_criacao"
+            resultado = (False, "caminho_inesperado")
+        else:
+            try:
+                with os.fdopen(fd, "wb") as f:
+                    f.write(b"healthcheck")
+            except OSError as exc:
+                if getattr(exc, "errno", None) == 28:
+                    resultado = (False, "sem_espaco")
+                elif getattr(exc, "errno", None) == 30:
+                    resultado = (False, "somente_leitura")
+                else:
+                    resultado = (False, "falha_criacao")
     finally:
         # A remoção é tentada mesmo se a escrita falhou, para nunca deixar
-        # arquivo de teste para trás.
+        # arquivo de teste para trás. Uma falha aqui só vira o resultado se
+        # nada mais já tiver falhado antes -- para não mascarar o erro
+        # original (ex.: sem_espaco) com um motivo de limpeza secundário.
         try:
             tmp_path.unlink(missing_ok=True)
         except OSError:
-            return False, "falha_remocao"
+            if resultado[0]:
+                resultado = (False, "falha_remocao")
 
-    return True, "ok"
+    return resultado
 
 
 def espaco_disco_bytes() -> dict[str, int] | None:
