@@ -367,6 +367,7 @@
 
 .escola-baloon-close {
   position: absolute;
+  z-index: 7;
   top: 8px;
   right: 10px;
   padding: 5px;
@@ -475,7 +476,7 @@
   .escola-baloon-emblem { width: 42px; height: 42px; }
   .escola-fx-halo-red { inset: -12px; }
   .escola-fx-halo-orange { inset: -7px; }
-  .escola-fx-smoke { display: none; }
+  .escola-fx-smoke { visibility: hidden; }
   .escola-baloon-spark:nth-child(n + 7),
   .escola-baloon-ash { display: none; }
 }
