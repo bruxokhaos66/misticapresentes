@@ -163,6 +163,28 @@ def _classificar_conciliacao(status_pedido_atual: str, valor_recebido, total_fin
     return CONCILIACAO_TARDIO, motivo_tardio, recebido_f, esperado_f
 
 
+def _tentar_transicao_status(conn, venda_id: int, status_esperado: str, status_novo: str) -> bool:
+    """Transição atômica de pedidos.status: só aplica se o status ainda for
+    exatamente status_esperado (o valor lido no início desta requisição,
+    antes da conciliação) no momento em que este UPDATE de fato executa.
+    Cobre a corrida entre a confirmação de pagamento e qualquer outra
+    escrita concorrente de status — cancelamento manual
+    (order_status_routes.py::cancelar_com_reposicao), expiração, ou outra
+    confirmação: se o pedido mudou de status entre a leitura original e
+    agora, rowcount é 0 e quem chamou nunca sobrescreve um estado que já
+    mudou por outro motivo (nunca reabre um pedido cancelado)."""
+    cur = conn.execute(
+        "UPDATE pedidos SET status=? WHERE id=? AND status=?",
+        (status_novo, venda_id, status_esperado),
+    )
+    return cur.rowcount > 0
+
+
+def _status_atual(conn, venda_id: int) -> str:
+    venda = conn.execute("SELECT status FROM pedidos WHERE id=?", (venda_id,)).fetchone()
+    return str(venda["status"] or "") if venda else "desconhecido"
+
+
 def _aplicar_resultado_confirmacao(conn, venda_id: int, status_pedido_atual: str, conciliacao: str, motivo: Optional[str], usuario: str, agora: str, valor_recebido: float, valor_esperado: float) -> bool:
     """Aplica ao pedido o resultado da conciliação (já classificado por
     _classificar_conciliacao, que filtrou pedidos em status terminal
@@ -171,22 +193,33 @@ def _aplicar_resultado_confirmacao(conn, venda_id: int, status_pedido_atual: str
     pago e nunca baixa estoque. Pagamento tardio nunca toca em
     pedidos.status nem em estoque — fica só no histórico e na auditoria."""
     if conciliacao == CONCILIACAO_OK:
-        estoque_baixado_agora = baixar_estoque_do_pedido(conn, venda_id, usuario, agora, "Baixa automática ao confirmar pagamento")
-        # A conciliação financeira (acima) e a aplicação de estoque
-        # (baixar_estoque_do_pedido, já rodada) são as mesmas para qualquer
-        # pedido. O status final é que distingue: um pedido com pelo menos um
-        # item sob encomenda nunca pode virar "Pagamento confirmado" puro —
-        # isso sugeriria estar pronto para "Separando pedido" quando na
-        # verdade o produto ainda precisa ser comprado/reservado com o
-        # fornecedor. A classificação usada aqui é sempre a persistida em
-        # pedidos_itens.tipo_item, nunca o catálogo atual.
+        # A conciliação financeira (acima) e o status final que ela produz
+        # são decididos aqui; o status final é que distingue: um pedido com
+        # pelo menos um item sob encomenda nunca pode virar "Pagamento
+        # confirmado" puro — isso sugeriria estar pronto para "Separando
+        # pedido" quando na verdade o produto ainda precisa ser comprado/
+        # reservado com o fornecedor. A classificação usada aqui é sempre a
+        # persistida em pedidos_itens.tipo_item, nunca o catálogo atual.
         if pedido_tem_item_sob_encomenda(conn, venda_id):
             status_final = STATUS_PEDIDO_AGUARDANDO_ENCOMENDA
             observacao_status = "Pagamento confirmado: valor recebido bate com o total do pedido. Aguardando compra/separação da encomenda com o fornecedor."
         else:
             status_final = "Pagamento confirmado"
             observacao_status = "Pagamento confirmado: valor recebido bate com o total do pedido."
-        conn.execute("UPDATE pedidos SET status=? WHERE id=?", (status_final, venda_id))
+        # Reivindica a transição de status ANTES de tocar em estoque: se
+        # perder a corrida (o pedido já mudou de status_pedido_atual para
+        # outra coisa — ex.: um cancelamento concorrente venceu — desde a
+        # leitura original), a baixa de estoque nunca é sequer tentada.
+        if not _tentar_transicao_status(conn, venda_id, status_pedido_atual, status_final):
+            status_real = _status_atual(conn, venda_id)
+            registrar_log_status(
+                conn, venda_id, "Pagamento tardio registrado para conciliação", usuario,
+                f"Valor recebido bate com o total do pedido, mas o pedido já havia mudado para "
+                f"'{status_real}' antes desta confirmação ser aplicada (corrida concorrente detectada); "
+                "não reaplicado automaticamente, requer conciliação administrativa.",
+            )
+            return False
+        estoque_baixado_agora = baixar_estoque_do_pedido(conn, venda_id, usuario, agora, "Baixa automática ao confirmar pagamento")
         registrar_log_status(conn, venda_id, status_final, usuario, observacao_status)
         return estoque_baixado_agora
 
@@ -195,8 +228,13 @@ def _aplicar_resultado_confirmacao(conn, venda_id: int, status_pedido_atual: str
         registrar_log_status(conn, venda_id, "Pagamento tardio registrado para conciliação", usuario, observacao)
         return False
     if status_pedido_atual not in STATUS_PEDIDO_CONCLUIDOS:
-        conn.execute("UPDATE pedidos SET status='Pagamento divergente' WHERE id=?", (venda_id,))
-        registrar_log_status(conn, venda_id, "Pagamento divergente", usuario, observacao)
+        if _tentar_transicao_status(conn, venda_id, status_pedido_atual, "Pagamento divergente"):
+            registrar_log_status(conn, venda_id, "Pagamento divergente", usuario, observacao)
+        else:
+            # O pedido mudou de status por outro motivo concorrente (ex.:
+            # cancelamento) entre a leitura original e agora — a divergência
+            # fica só registrada, sem regredir esse outro estado.
+            registrar_log_status(conn, venda_id, "Divergência de pagamento registrada", usuario, observacao)
     else:
         registrar_log_status(conn, venda_id, "Divergência de pagamento registrada", usuario, observacao)
     return False

@@ -360,12 +360,32 @@ def baixar_estoque_do_pedido(conn, venda_id: int, usuario: str, agora: str, moti
 
 
 def repor_estoque_cancelamento(conn, venda_id: int, usuario: str, agora: str):
-    venda = conn.execute("SELECT id, estoque_baixado, estoque_reposto_cancelamento FROM pedidos WHERE id=?", (venda_id,)).fetchone()
+    """Repõe o estoque físico baixado de um pedido cancelado, uma única vez.
+
+    Reivindicação atômica: a checagem (o pedido teve baixa física e ainda
+    não foi reposto) e a escrita (marca reposto=1) acontecem no mesmo
+    UPDATE, com guarda no próprio WHERE — não um SELECT seguido de um
+    UPDATE incondicional. Duas chamadas concorrentes para o mesmo pedido
+    (dois cancelamentos simultâneos, cancelamento x expiração, retry da
+    mesma requisição) nunca conseguem, juntas, repor o mesmo pedido duas
+    vezes: só uma reivindica (rowcount==1); a outra vê rowcount==0 e não
+    faz nada."""
+    venda = conn.execute("SELECT id FROM pedidos WHERE id=?", (venda_id,)).fetchone()
     if not venda:
         raise HTTPException(status_code=404, detail="Pedido não encontrado.")
-    if int(venda["estoque_baixado"] or 0) != 1:
-        return False
-    if int(venda["estoque_reposto_cancelamento"] or 0) == 1:
+
+    claim = conn.execute(
+        """
+        UPDATE pedidos
+        SET estoque_reposto_cancelamento=1, estoque_reposto_em=?
+        WHERE id=? AND estoque_baixado=1 AND COALESCE(estoque_reposto_cancelamento,0)=0
+        """,
+        (agora, venda_id),
+    )
+    if claim.rowcount == 0:
+        # Ou o pedido nunca teve baixa física (nada a repor, ex.: só sob
+        # encomenda), ou outra chamada concorrente já reivindicou a
+        # reposição — nos dois casos, não repor de novo.
         return False
 
     itens = conn.execute("SELECT id, codigo_p, nome_p, quantidade, tipo_item FROM pedidos_itens WHERE pedido_id=? ORDER BY id ASC", (venda_id,)).fetchall()
@@ -374,14 +394,16 @@ def repor_estoque_cancelamento(conn, venda_id: int, usuario: str, agora: str):
         quantidade = int(item["quantidade"] or 0)
         if quantidade <= 0:
             continue
-        if _tipo_item_normalizado(item) == TIPO_ITEM_SOB_ENCOMENDA:
-            # Sob encomenda nunca teve estoque físico baixado (ver
-            # baixar_estoque_do_pedido): repor criaria saldo positivo
-            # fictício. Itens com classificação ausente/desconhecida também
-            # não são repostos aqui pelo mesmo motivo — nunca assumimos
-            # "físico" por padrão para um dado ambíguo.
-            continue
-        if _tipo_item_normalizado(item) not in TIPOS_ITEM_VALIDOS:
+        if _tipo_item_normalizado(item) != TIPO_ITEM_FISICO:
+            # sob_encomenda nunca teve estoque físico baixado (repor criaria
+            # saldo positivo fictício). legado_ambiguo (não deveria coexistir
+            # com estoque_baixado=1 depois do PR #313, já que
+            # baixar_estoque_do_pedido bloqueia antes de chegar lá — mantido
+            # defensivo aqui) também não é reposto: nunca assumimos "físico"
+            # por padrão para um dado ambíguo. Pular aqui (em vez de
+            # levantar) é deliberado: expirar_pedidos_pendentes processa
+            # vários pedidos numa única transação, e uma exceção no meio
+            # desfaria a expiração de todos os outros pedidos do lote.
             continue
         produto = buscar_produto_para_baixa(conn, item)
         if not produto:
@@ -389,7 +411,6 @@ def repor_estoque_cancelamento(conn, venda_id: int, usuario: str, agora: str):
         conn.execute("UPDATE produtos SET quantidade = quantidade + ? WHERE id=?", (quantidade, produto["id"]))
         total += quantidade
 
-    conn.execute("UPDATE pedidos SET estoque_reposto_cancelamento=1, estoque_reposto_em=? WHERE id=?", (agora, venda_id))
     conn.execute(
         "INSERT INTO pedido_status_log (venda_id, status, usuario, observacao, data_hora) VALUES (?,?,?,?,?)",
         (venda_id, "Estoque reposto", usuario or "Admin", f"Reposição automática: {total} item(ns)", agora),
@@ -398,19 +419,119 @@ def repor_estoque_cancelamento(conn, venda_id: int, usuario: str, agora: str):
     return total > 0
 
 
+# Estados a partir dos quais o cancelamento genérico (DELETE /api/pedidos/{id}
+# e as rotas equivalentes) nunca é aplicado silenciosamente — exigem
+# conciliação administrativa fora deste fluxo (ex.: processo de devolução,
+# fora do escopo deste PR). "Cancelado" não está aqui porque tem tratamento
+# próprio (idempotente, não bloqueado).
+#
+# Regra, status a status (este sistema não tem um status "Enviado" literal —
+# STATUS_PEDIDO tem só os listados em order_status_routes.py):
+# - Aguardando pagamento / Pagamento divergente: cancelável (nenhum estoque
+#   físico comprometido além da reserva, que é sempre reposta).
+# - Pagamento confirmado / Aguardando encomenda: cancelável — cancelamento de
+#   pedido pago é uma ação administrativa própria (ver docstring de
+#   cancelar_com_reposicao), não uma corrida com o pagamento em si.
+# - Separando pedido: cancelável — o estoque ainda não saiu fisicamente da
+#   loja, a separação é reversível operacionalmente.
+# - Pronto para retirada / Entregue: bloqueados. "Pronto para retirada" é o
+#   estado deste sistema mais próximo de um "Enviado"/handoff físico
+#   avançado — sem uma regra comercial explícita para cancelamento
+#   automático nesse ponto, a escolha conservadora é exigir conciliação
+#   administrativa (409) em vez de assumir que ainda é seguro devolver o
+#   item ao estoque sem confirmação humana de que ele não saiu fisicamente.
+# - Concluído: bloqueado (pedido já finalizado).
+STATUS_CANCELAMENTO_BLOQUEADO = {"Pronto para retirada", "Entregue", "Concluído"}
+
+
+def _sanitizar_motivo_cancelamento(observacao: str | None) -> str:
+    """Nunca aceita motivo arbitrário sem limite: trunca e remove
+    caracteres de controle antes de gravar em histórico/auditoria."""
+    texto = str(observacao or "").strip()
+    texto = "".join(ch for ch in texto if ch == " " or (ord(ch) >= 32 and ch != "\x7f"))
+    return texto[:280]
+
+
 def cancelar_com_reposicao(conn, venda_id: int, usuario: str, observacao: str | None, agora: str):
+    """Cancela o pedido de forma atômica e idempotente.
+
+    A leitura do estado atual, a decisão de cancelar e a escrita do novo
+    status acontecem dentro de um único UPDATE com guarda no WHERE — nunca
+    um SELECT seguido de um UPDATE incondicional. Isso torna a operação
+    determinística sob concorrência: duas chamadas de cancelamento
+    simultâneas, ou um cancelamento correndo contra uma confirmação de
+    pagamento/expiração concorrente, nunca decidem com base no mesmo
+    estado "antigo" lido por outra — só uma reivindica a transição
+    (rowcount==1); a(s) outra(s) veem rowcount==0 e reagem ao estado JÁ
+    ATUAL (resposta idempotente se o pedido já está cancelado; 409 se está
+    num status que bloqueia cancelamento por esta rota).
+
+    A prioridade de cancelamento sobre uma confirmação de pagamento
+    simultânea é deliberada: uma ação explícita de cancelar (administrativa
+    ou do cliente) tem precedência sobre um webhook de pagamento assíncrono
+    chegando no mesmo instante (ver backend/payment_routes.py::
+    _aplicar_resultado_confirmacao, que usa uma reivindicação própria e
+    desiste — nunca reabre — se o pedido já mudou de status). Se o
+    pagamento venceu a corrida antes do cancelamento ser solicitado,
+    cancelar o pedido já confirmado continua sendo uma ação administrativa
+    válida e separada, com a mesma reposição de estoque de qualquer outro
+    cancelamento pós-pagamento."""
     venda = conn.execute("SELECT id, status FROM pedidos WHERE id=?", (venda_id,)).fetchone()
     if not venda:
         raise HTTPException(status_code=404, detail="Pedido não encontrado.")
-    ja_cancelado = str(venda["status"] or "").lower().startswith("cancel")
-    estoque_reposto = False if ja_cancelado else repor_estoque_cancelamento(conn, venda_id, usuario, agora)
-    conn.execute("UPDATE pedidos SET status='Cancelado' WHERE id=?", (venda_id,))
+    status_antes = str(venda["status"] or "")
+
+    # Os placeholders de STATUS_CANCELAMENTO_BLOQUEADO são gerados a partir
+    # do próprio set (nunca hardcoded em paralelo) para que a lista de
+    # status bloqueados nunca fique dessincronizada entre o guard em Python
+    # e o WHERE deste UPDATE.
+    placeholders_bloqueados = ",".join("?" for _ in STATUS_CANCELAMENTO_BLOQUEADO)
+    claim = conn.execute(
+        f"""
+        UPDATE pedidos
+        SET status='Cancelado'
+        WHERE id=?
+          AND lower(COALESCE(status,'')) NOT LIKE 'cancel%'
+          AND COALESCE(status,'') NOT IN ({placeholders_bloqueados})
+        """,
+        (venda_id, *STATUS_CANCELAMENTO_BLOQUEADO),
+    )
+    if claim.rowcount == 0:
+        status_atual = conn.execute("SELECT status FROM pedidos WHERE id=?", (venda_id,)).fetchone()["status"]
+        status_atual = str(status_atual or "")
+        if status_atual.lower().startswith("cancel"):
+            return {"ok": True, "venda_id": venda_id, "status": "Cancelado", "estoque_reposto_agora": False, "ja_cancelado": True}
+        raise HTTPException(
+            status_code=409,
+            detail=f"Pedido em '{status_atual}' não pode ser cancelado por esta rota; requer conciliação administrativa.",
+        )
+
+    estoque_reposto = repor_estoque_cancelamento(conn, venda_id, usuario, agora)
+    motivo = _sanitizar_motivo_cancelamento(observacao) or "Cancelado"
+    # Cancelar um pedido que já tinha pagamento confirmado não apaga nem
+    # estorna o pagamento (fora de escopo — ver "fluxo de estorno
+    # financeiro" nas exclusões deste PR); fica só marcado aqui para que a
+    # auditoria explique por que um pedido "Cancelado" pode ter um
+    # pagamento "Confirmado" associado (consultável via GET /api/pagamentos)
+    # — o status por si só não distingue isso, e resolver essa ambiguidade
+    # de exibição/estorno automático é uma pendência de UX/financeiro fora
+    # do escopo deste PR.
+    cancelado_apos_pagamento = status_antes in STATUS_PEDIDO_CONCLUIDOS
     conn.execute(
         "INSERT INTO pedido_status_log (venda_id, status, usuario, observacao, data_hora) VALUES (?,?,?,?,?)",
-        (venda_id, "Cancelado", usuario or "Admin", observacao or ("Cancelado" if not ja_cancelado else "Já estava cancelado; estoque não reposto novamente"), agora),
+        (venda_id, "Cancelado", usuario or "Admin", motivo, agora),
     )
-    registrar_auditoria(conn, "pedido", venda_id, "cancelar", usuario, antes={"status": venda["status"]}, depois={"status": "Cancelado", "estoque_reposto": estoque_reposto})
-    return {"ok": True, "venda_id": venda_id, "status": "Cancelado", "estoque_reposto_agora": estoque_reposto, "ja_cancelado": ja_cancelado}
+    registrar_auditoria(
+        conn, "pedido", venda_id, "cancelar", usuario,
+        antes={"status": status_antes},
+        depois={
+            "status": "Cancelado",
+            "estoque_reposto": estoque_reposto,
+            "motivo": motivo,
+            "cancelado_apos_pagamento": cancelado_apos_pagamento,
+        },
+    )
+    return {"ok": True, "venda_id": venda_id, "status": "Cancelado", "estoque_reposto_agora": estoque_reposto, "ja_cancelado": False}
 
 
 @router.get("/pedidos")
