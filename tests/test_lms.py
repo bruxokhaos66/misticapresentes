@@ -402,9 +402,12 @@ def test_modulo_xamanismo_oficial_carrega_com_duas_aulas_e_dez_questoes():
         assert quiz["nota_minima"] == 70 and quiz["num_perguntas"] == 10 and total == 10
 
 
-def test_xamanismo_exige_matricula_ativa_e_nao_revela_gabarito():
+def test_xamanismo_e_gratuito_para_qualquer_aluno_logado_e_nao_revela_gabarito():
+    """Curso gratuito: basta sessão de aluno, sem exigir matrícula manual
+    (regra restaurada — ver aluno_matriculado em backend/lms.py). Suspensão
+    administrativa continua bloqueando o acesso normalmente."""
     aluno_sem, _, _ = _aluno_logado()
-    assert aluno_sem.get(f"/api/escola/cursos/{XAMANISMO}").status_code == 403
+    assert aluno_sem.get(f"/api/escola/cursos/{XAMANISMO}").status_code == 200
 
     aluno, aid, _ = _aluno_logado(XAMANISMO)
     arvore = aluno.get(f"/api/escola/cursos/{XAMANISMO}")
@@ -429,6 +432,155 @@ def test_xamanismo_exige_matricula_ativa_e_nao_revela_gabarito():
         headers=ADMIN,
     ).status_code == 200
     assert aluno.get(f"/api/escola/cursos/{XAMANISMO}").status_code == 403
+
+
+def _criar_modulo_publico(slug, titulo, ordem):
+    r = client.post(
+        "/api/admin/escola/modulos",
+        json={"slug": slug, "titulo": titulo, "ordem": ordem, "publicado": True, "acesso_publico": True},
+        headers=ADMIN,
+    )
+    assert r.status_code == 200, r.text
+    return r.json()["id"]
+
+
+def _curso_parcialmente_publico(slug):
+    """Curso com 1 módulo público (com aula + material) e 1 módulo pago
+    (com aula obrigatória e avaliação), imitando a regra partes 1-3 grátis /
+    parte 4+ paga do xamanismo-introducao."""
+    client.put(
+        f"/api/admin/escola/cursos/{slug}",
+        json={"titulo": "Curso Misto", "descricao": "d", "nota_minima": 70, "certificado": True, "publicado": True},
+        headers=ADMIN,
+    )
+    m_pub = _criar_modulo_publico(slug, "Módulo público", 0)
+    a_pub = _criar_aula(m_pub, "Aula pública", 0)
+    m_pago = _criar_modulo(slug, "Módulo pago", 1)  # acesso_publico=False por padrão
+    a_pago = _criar_aula(m_pago, "Aula paga", 0)
+    q_pago = _criar_quiz(m_pago)
+    _criar_pergunta(q_pago, "Pergunta paga?")
+    return {"m_pub": m_pub, "a_pub": a_pub, "m_pago": m_pago, "a_pago": a_pago, "q_pago": q_pago}
+
+
+# --- Acesso público (visitante anônimo, sem login/matrícula) --------------
+
+def test_publico_xamanismo_acessivel_sem_sessao():
+    r = client.get(f"/api/escola/publico/cursos/{XAMANISMO}")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["gratuito"] is True
+    assert any(m.get("aulas") for m in body["modulos"])
+
+
+def test_publico_entrega_apenas_modulos_marcados_e_bloqueia_o_resto():
+    slug = _slug()
+    ids = _curso_parcialmente_publico(slug)
+    r = client.get(f"/api/escola/publico/cursos/{slug}")
+    assert r.status_code == 200
+    mods = {m["titulo"]: m for m in r.json()["modulos"]}
+
+    publico = mods["Módulo público"]
+    assert publico["bloqueado"] is False
+    assert len(publico["aulas"]) == 1
+    assert publico["aulas"][0]["conteudo"] == "c"
+
+    pago = mods["Módulo pago"]
+    assert pago["bloqueado"] is True
+    assert set(pago.keys()) == {"id", "titulo", "ordem", "publico", "bloqueado"}
+    assert "aulas" not in pago
+    assert "quiz" not in pago
+    assert "conteudo" not in pago
+
+
+def test_publico_nunca_inclui_avaliacao_nem_gabarito():
+    slug = _slug()
+    _curso_parcialmente_publico(slug)
+    r = client.get(f"/api/escola/publico/cursos/{slug}").json()
+    corpo_bruto = str(r)
+    assert "quiz" not in corpo_bruto
+    assert "correta" not in corpo_bruto
+    assert "Pergunta paga?" not in corpo_bruto
+
+
+def test_url_direta_para_aula_paga_e_bloqueada_anonimamente():
+    slug = _slug()
+    ids = _curso_parcialmente_publico(slug)
+    # Sem sessão: nem a aula pública nem a paga aceitam marcar progresso.
+    assert client.post(f"/api/escola/aulas/{ids['a_pago']}/progresso", json={"status": "concluida"}).status_code == 401
+    assert client.get(f"/api/escola/quizzes/{ids['q_pago']}/iniciar").status_code == 401
+    assert client.get(f"/api/escola/cursos/{slug}").status_code == 401
+
+
+def test_publico_nao_cria_matricula_nem_aluno():
+    from backend.database import conectar
+
+    slug = _slug()
+    _curso_parcialmente_publico(slug)
+    with conectar() as conn:
+        alunos_antes = conn.execute("SELECT COUNT(*) AS n FROM alunos").fetchone()["n"]
+        matriculas_antes = conn.execute("SELECT COUNT(*) AS n FROM alunos_cursos WHERE slug=?", (slug,)).fetchone()["n"]
+    for _ in range(3):
+        assert client.get(f"/api/escola/publico/cursos/{slug}").status_code == 200
+    with conectar() as conn:
+        alunos_depois = conn.execute("SELECT COUNT(*) AS n FROM alunos").fetchone()["n"]
+        matriculas_depois = conn.execute("SELECT COUNT(*) AS n FROM alunos_cursos WHERE slug=?", (slug,)).fetchone()["n"]
+    assert alunos_depois == alunos_antes
+    assert matriculas_depois == matriculas_antes == 0
+
+
+def test_curso_sem_nenhum_modulo_publico_nao_aparece_no_endpoint_publico():
+    """Garante que o marcador é opt-in: um curso comum (sem acesso_publico em
+    nenhum módulo) não vaza nada pelo endpoint público."""
+    slug = _slug()
+    _curso_demo(slug)  # nenhum módulo criado aqui é público
+    assert client.get(f"/api/escola/publico/cursos/{slug}").status_code == 404
+
+
+def test_modulo_criado_sem_especificar_acesso_publico_e_privado_por_padrao():
+    slug = _slug()
+    client.put(f"/api/admin/escola/cursos/{slug}", json={"titulo": "T", "publicado": True}, headers=ADMIN)
+    mid = _criar_modulo(slug, "Módulo", 0)
+    with conectar_db() as conn:
+        row = conn.execute("SELECT acesso_publico FROM curso_modulos WHERE id=?", (mid,)).fetchone()
+    assert int(row["acesso_publico"] or 0) == 0
+
+
+def conectar_db():
+    from backend.database import conectar
+
+    return conectar()
+
+
+def test_editar_acesso_publico_exige_sessao_administrativa():
+    slug = _slug()
+    mid = _criar_modulo(slug, "Módulo", 0)
+    payload = {"slug": slug, "titulo": "Módulo", "ordem": 0, "publicado": True, "acesso_publico": True}
+    # Sem credenciais de admin: não consegue tornar o módulo público.
+    assert client.put(f"/api/admin/escola/modulos/{mid}", json=payload).status_code in (401, 403)
+    with conectar_db() as conn:
+        row = conn.execute("SELECT acesso_publico FROM curso_modulos WHERE id=?", (mid,)).fetchone()
+    assert int(row["acesso_publico"] or 0) == 0
+
+
+def test_migration_acesso_publico_e_idempotente():
+    from backend.database import conectar
+    from backend.lms import garantir_tabelas_lms
+
+    with conectar() as conn:
+        garantir_tabelas_lms(conn)
+        garantir_tabelas_lms(conn)
+        garantir_tabelas_lms(conn)
+        cols = [r["name"] for r in conn.execute("PRAGMA table_info(curso_modulos)").fetchall()]
+    assert cols.count("acesso_publico") == 1
+
+
+def test_outro_curso_pago_do_catalogo_nao_e_afetado_pela_mudanca():
+    """CATALOGO_PAGO nunca foi tocado pela liberação do xamanismo: aluno sem
+    matrícula continua sem acesso, e o endpoint público não expõe nada dele
+    (nenhum módulo seu foi marcado acesso_publico)."""
+    aluno_sem, _, _ = _aluno_logado()
+    assert aluno_sem.get(f"/api/escola/cursos/{CATALOGO_PAGO}").status_code == 403
+    assert client.get(f"/api/escola/publico/cursos/{CATALOGO_PAGO}").status_code == 404
 
 
 def test_xamanismo_reprova_abaixo_de_70_e_aprova_com_70_desbloqueando_modulo_2():
