@@ -13,7 +13,7 @@ from backend.idempotency import (
     liberar_chave_idempotente,
     reivindicar_chave_idempotente,
 )
-from backend.order_status_routes import MINUTOS_EXPIRACAO_PEDIDO_PENDENTE
+from backend.order_status_routes import MINUTOS_EXPIRACAO_PEDIDO_PENDENTE, TIPO_ITEM_SOB_ENCOMENDA
 from backend.pix import gerar_pix_do_pedido
 from backend.product_commercial_rules import garantir_colunas_comerciais
 from backend.site_stock_routes import (
@@ -177,8 +177,8 @@ def registrar_checkout_publico(
                 conn.execute(
                     """
                     INSERT INTO pedidos_itens
-                    (pedido_id, codigo_p, nome_p, quantidade, custo_unitario, valor_unitario, valor_total)
-                    VALUES (?,?,?,?,?,?,?)
+                    (pedido_id, codigo_p, nome_p, quantidade, custo_unitario, valor_unitario, valor_total, tipo_item)
+                    VALUES (?,?,?,?,?,?,?,?)
                     """,
                     (
                         pedido_id,
@@ -188,6 +188,7 @@ def registrar_checkout_publico(
                         float(custo),
                         float(preco),
                         float(total_item),
+                        TIPO_ITEM_SOB_ENCOMENDA,
                     ),
                 )
 

@@ -20,7 +20,7 @@ from backend.idempotency import (
     reivindicar_chave_idempotente,
 )
 from backend.logging_config import get_logger
-from backend.order_status_routes import MINUTOS_EXPIRACAO_PEDIDO_PENDENTE, STATUS_PEDIDO
+from backend.order_status_routes import MINUTOS_EXPIRACAO_PEDIDO_PENDENTE, STATUS_PEDIDO, TIPO_ITEM_FISICO
 from backend.panel_sessions import exigir_sessao_ou_chave_api
 from backend.pix import gerar_pix_do_pedido
 from backend.rate_limit import _client_ip, limitar_requisicoes
@@ -386,8 +386,8 @@ def registrar_venda_site(
                 conn.execute(
                     """
                     INSERT INTO pedidos_itens
-                    (pedido_id, codigo_p, nome_p, quantidade, custo_unitario, valor_unitario, valor_total)
-                    VALUES (?,?,?,?,?,?,?)
+                    (pedido_id, codigo_p, nome_p, quantidade, custo_unitario, valor_unitario, valor_total, tipo_item)
+                    VALUES (?,?,?,?,?,?,?,?)
                     """,
                     (
                         venda_id,
@@ -397,6 +397,7 @@ def registrar_venda_site(
                         calculado["custo_unitario"],
                         calculado["valor_unitario"],
                         calculado["valor_total"],
+                        TIPO_ITEM_FISICO,
                     ),
                 )
 

@@ -62,6 +62,30 @@ def _migrar_pedidos_de_vendas():
     # migração acima), então continuam válidos sem nenhuma alteração aqui.
 
 
+def _backfill_tipo_item_pedidos_itens():
+    """Corrige, uma única vez por pedido, o valor padrão 'fisico' que o ALTER
+    TABLE de pedidos_itens.tipo_item grava em itens criados antes dessa coluna
+    existir. Fonte confiável: audit_log('pedido', 'criar_sob_encomenda'),
+    gravado por backend/preorder_checkout.py no mesmo instante em que o pedido
+    foi criado — nunca o estoque atual do produto (já pode ter mudado) nem o
+    nome/texto do produto. Idempotente: o WHERE tipo_item='fisico' faz rodar
+    de novo não ter efeito depois da primeira correção."""
+    try:
+        pedidos_encomenda = query_db(
+            "SELECT DISTINCT entidade_id FROM audit_log WHERE entidade='pedido' AND acao='criar_sob_encomenda'"
+        )
+    except Exception:
+        return
+    for row in pedidos_encomenda:
+        pedido_id = row[0]
+        if not pedido_id:
+            continue
+        _exec_tolerante(
+            "UPDATE pedidos_itens SET tipo_item='sob_encomenda' WHERE pedido_id=? AND tipo_item='fisico'",
+            (pedido_id,),
+        )
+
+
 def init_db():
     query_db("CREATE TABLE IF NOT EXISTS produtos (id INTEGER PRIMARY KEY, codigo_p TEXT, nome TEXT, preco REAL, quantidade INTEGER, categoria TEXT)", commit=True)
     query_db("CREATE TABLE IF NOT EXISTS categorias (id INTEGER PRIMARY KEY, nome TEXT UNIQUE)", commit=True)
@@ -338,6 +362,32 @@ def init_db():
     ]:
         _exec_tolerante(sql_idx)
     _migrar_pedidos_de_vendas()
+
+    # Classificação do item do pedido: 'fisico' (tem estoque físico, baixa e
+    # repõe normalmente) ou 'sob_encomenda' (estoque físico zero por
+    # definição — ver backend/preorder_checkout.py — nunca baixa nem repõe
+    # estoque físico, nunca gera movimentação fictícia). Persistida no
+    # próprio item no momento da criação do pedido (backend/preorder_checkout.py
+    # e backend/site_stock_routes.py) para que a confirmação de pagamento
+    # (backend/order_status_routes.py::baixar_estoque_do_pedido) nunca precise
+    # reconsultar produtos.sob_encomenda depois: o produto pode ter sido
+    # renomeado, inativado ou ter sua regra de encomenda alterada no catálogo
+    # sem que isso mude o que já foi vendido.
+    #
+    # Aditivo: pedidos_itens antigos (de antes desta coluna existir) recebem
+    # 'fisico' pelo DEFAULT abaixo. Isso é seguro porque, antes desta correção,
+    # o único caminho de criação de pedido que gera itens sob encomenda
+    # (backend/preorder_checkout.py) sempre registra um evento
+    # audit_log('pedido', 'criar_sob_encomenda') no mesmo instante da criação
+    # — o backfill abaixo usa esse registro (nunca o estoque atual do produto,
+    # que já pode ter mudado, nem o nome do produto) para corrigir os pedidos
+    # que de fato eram sob encomenda. Um pedido cujo audit_log não permita essa
+    # reconciliação (ex.: tabela ausente num banco muito antigo) permanece
+    # 'fisico' e, se isso estiver errado, a baixa de estoque na confirmação
+    # falha alto (não confirma silenciosamente) em vez de baixar/repor estoque
+    # incorretamente — fica sinalizado para conciliação administrativa.
+    _exec_tolerante("ALTER TABLE pedidos_itens ADD COLUMN tipo_item TEXT NOT NULL DEFAULT 'fisico'")
+    _backfill_tipo_item_pedidos_itens()
 
     query_db(
         """

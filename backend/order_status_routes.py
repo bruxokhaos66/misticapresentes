@@ -23,10 +23,24 @@ limitar_cancelar_pedido = limitar_requisicoes("cancelar_pedido", limite=20, jane
 
 router = APIRouter(prefix="/api", tags=["pedidos-status"])
 
+# Classificação persistida de cada item do pedido (pedidos_itens.tipo_item —
+# ver database/migrations.py). Decidida no momento da criação do pedido e
+# nunca mais reavaliada contra o catálogo depois: um produto sob encomenda tem
+# estoque físico zero por definição, então a confirmação de pagamento nunca
+# pode tentar baixar/repor estoque físico de um item classificado como
+# TIPO_ITEM_SOB_ENCOMENDA, nem tratar como físico um item cuja classificação
+# não seja reconhecida (ver baixar_estoque_do_pedido).
+TIPO_ITEM_FISICO = "fisico"
+TIPO_ITEM_SOB_ENCOMENDA = "sob_encomenda"
+TIPOS_ITEM_VALIDOS = {TIPO_ITEM_FISICO, TIPO_ITEM_SOB_ENCOMENDA}
+
+STATUS_PEDIDO_AGUARDANDO_ENCOMENDA = "Aguardando encomenda"
+
 STATUS_PEDIDO = {
     "Aguardando pagamento",
     "Pagamento divergente",
     "Pagamento confirmado",
+    STATUS_PEDIDO_AGUARDANDO_ENCOMENDA,
     "Separando pedido",
     "Pronto para retirada",
     "Entregue",
@@ -43,6 +57,7 @@ STATUS_BAIXA_ESTOQUE = {"Pagamento confirmado", "Separando pedido"}
 # histórico para conciliação administrativa.
 STATUS_PEDIDO_CONCLUIDOS = {
     "Pagamento confirmado",
+    STATUS_PEDIDO_AGUARDANDO_ENCOMENDA,
     "Separando pedido",
     "Pronto para retirada",
     "Entregue",
@@ -63,17 +78,23 @@ def normalizar_status(status: str) -> str:
 
 
 def bloquear_avanco_financeiro_sem_conciliacao(conn, venda_id: int, status_destino: str):
-    """'Pagamento confirmado' (e a baixa de estoque que dele depende) só pode
-    ser produzido pela conciliação de valor em backend/payment_routes.py
-    (POST /api/pagamentos ou o webhook Pix, que comparam o valor recebido com
-    pedidos.total_final antes de confirmar). As rotas genéricas de status de
-    pedido (esta e a duplicata em order_api_guard_inner_routes.py) aceitam
-    "Pagamento confirmado" como um valor válido de STATUS_PEDIDO para fins de
-    consulta/histórico, mas nunca podem ser o caminho que produz esse estado —
-    senão qualquer chamada com a chave de API confirmaria um pedido sem
-    nenhum valor ter sido validado. Pelo mesmo motivo, "Separando pedido" (que
-    também baixa estoque, ver STATUS_BAIXA_ESTOQUE) só é aceito depois que o
-    pedido já estiver de fato confirmado."""
+    """'Pagamento confirmado'/'Aguardando encomenda' (e a baixa de estoque que
+    dela depende) só podem ser produzidos pela conciliação de valor em
+    backend/payment_routes.py (POST /api/pagamentos ou o webhook Pix, que
+    comparam o valor recebido com pedidos.total_final antes de confirmar). As
+    rotas genéricas de status de pedido (esta e a duplicata em
+    order_api_guard_inner_routes.py) aceitam esses dois valores como válidos
+    de STATUS_PEDIDO para fins de consulta/histórico, mas nunca podem ser o
+    caminho que produz esse estado — senão qualquer chamada com a chave de
+    API confirmaria um pedido sem nenhum valor ter sido validado. Pelo mesmo
+    motivo, "Separando pedido" (que também baixa estoque, ver
+    STATUS_BAIXA_ESTOQUE) só é aceito depois que o pedido já estiver de fato
+    confirmado."""
+    if status_destino == STATUS_PEDIDO_AGUARDANDO_ENCOMENDA:
+        raise HTTPException(
+            status_code=409,
+            detail="Aguardando encomenda só pode ser definido via POST /api/pagamentos, com o valor recebido conciliado contra o total do pedido.",
+        )
     if status_destino not in STATUS_BAIXA_ESTOQUE:
         return
     if status_destino == "Pagamento confirmado":
@@ -157,7 +178,7 @@ def expirar_pedidos_pendentes(conn, agora: str | None = None):
 def venda_para_pedido(conn, venda):
     itens = conn.execute(
         """
-        SELECT id, pedido_id AS venda_id, codigo_p, nome_p, quantidade, custo_unitario, valor_unitario, valor_total
+        SELECT id, pedido_id AS venda_id, codigo_p, nome_p, quantidade, custo_unitario, valor_unitario, valor_total, tipo_item
         FROM pedidos_itens
         WHERE pedido_id=?
         ORDER BY id ASC
@@ -210,7 +231,35 @@ def buscar_produto_para_baixa(conn, item):
     return None
 
 
-def baixar_estoque_do_pedido(conn, venda_id: int, usuario: str, agora: str, motivo: str = "Baixa automática ao confirmar/separar pedido"):
+def _tipo_item_normalizado(item) -> str:
+    """Lê pedidos_itens.tipo_item sem assumir nada: só os dois valores
+    conhecidos (TIPO_ITEM_FISICO/TIPO_ITEM_SOB_ENCOMENDA) são aceitos. Um
+    valor vazio/nulo ou desconhecido (dado corrompido, coluna alterada por
+    fora do fluxo normal) não é tratado como física por padrão — ver
+    baixar_estoque_do_pedido/repor_estoque_cancelamento, que bloqueiam em vez
+    de adivinhar."""
+    return str(item["tipo_item"] or "").strip()
+
+
+def pedido_tem_item_sob_encomenda(conn, venda_id: int) -> bool:
+    """Usado para decidir, na confirmação de pagamento, se o pedido deve ir
+    para STATUS_PEDIDO_AGUARDANDO_ENCOMENDA em vez de 'Pagamento confirmado'
+    — lê sempre a classificação persistida no item, nunca o catálogo atual."""
+    row = conn.execute(
+        "SELECT 1 FROM pedidos_itens WHERE pedido_id=? AND tipo_item=? LIMIT 1",
+        (venda_id, TIPO_ITEM_SOB_ENCOMENDA),
+    ).fetchone()
+    return row is not None
+
+
+def baixar_estoque_do_pedido(conn, venda_id: int, usuario: str, agora: str, motivo: str = "Baixa automática ao confirmar/separar pedido") -> bool:
+    """Processa a baixa de estoque físico do pedido uma única vez (guarda de
+    idempotência: pedidos.estoque_baixado). Itens sob encomenda (ver
+    TIPO_ITEM_SOB_ENCOMENDA) nunca decrementam produtos.quantidade nem geram
+    movimentação de saída — não têm estoque físico por definição. Retorna
+    True somente se estoque físico foi de fato decrementado nesta chamada
+    (usado por quem chama para saber se "baixou estoque agora", distinto do
+    booleano interno de "baixa já processada")."""
     venda = conn.execute("SELECT id, estoque_baixado FROM pedidos WHERE id=?", (venda_id,)).fetchone()
     if not venda:
         raise HTTPException(status_code=404, detail="Pedido não encontrado")
@@ -219,7 +268,7 @@ def baixar_estoque_do_pedido(conn, venda_id: int, usuario: str, agora: str, moti
 
     itens = conn.execute(
         """
-        SELECT id, codigo_p, nome_p, quantidade
+        SELECT id, codigo_p, nome_p, quantidade, tipo_item
         FROM pedidos_itens
         WHERE pedido_id=?
         ORDER BY id ASC
@@ -229,10 +278,29 @@ def baixar_estoque_do_pedido(conn, venda_id: int, usuario: str, agora: str, moti
     if not itens:
         return False
 
+    itens_fisicos_baixados = 0
     for item in itens:
         quantidade = int(item["quantidade"] or 0)
         if quantidade <= 0:
             continue
+        tipo_item = _tipo_item_normalizado(item)
+        if tipo_item == TIPO_ITEM_SOB_ENCOMENDA:
+            # Sob encomenda: nenhuma baixa física, nenhuma movimentação de
+            # saída fictícia. O item continua rastreável em pedidos_itens.
+            continue
+        if tipo_item not in TIPOS_ITEM_VALIDOS:
+            # Classificação ausente/corrompida: nunca assumimos "físico" por
+            # padrão (isso reintroduziria o bug original para itens que na
+            # verdade eram sob encomenda). Fica bloqueado para conciliação
+            # administrativa em vez de confirmar/baixar estoque silenciosamente.
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Item '{item['nome_p'] or item['codigo_p']}' do pedido #{venda_id} está sem "
+                    "classificação de estoque confiável (pedido legado ambíguo); requer conciliação "
+                    "administrativa antes de aplicar a baixa de estoque."
+                ),
+            )
         produto = buscar_produto_para_baixa(conn, item)
         if not produto:
             raise HTTPException(status_code=404, detail=f"Produto não encontrado para baixa: {item['nome_p'] or item['codigo_p']}")
@@ -248,17 +316,36 @@ def baixar_estoque_do_pedido(conn, venda_id: int, usuario: str, agora: str, moti
             atual = conn.execute("SELECT quantidade FROM produtos WHERE id=?", (produto["id"],)).fetchone()
             disponivel = int(atual["quantidade"] or 0) if atual else 0
             raise HTTPException(status_code=409, detail=f"Estoque insuficiente para {produto['nome']}. Disponível: {disponivel}")
+        itens_fisicos_baixados += 1
 
+    # Marca a baixa como processada (idempotência) mesmo quando o pedido é só
+    # sob encomenda e nenhum item físico foi decrementado: chamar de novo não
+    # teria nada a fazer, mas o registro de log/auditoria abaixo não pode ser
+    # duplicado numa reconfirmação. O booleano de retorno (não esta coluna) é
+    # quem informa com precisão se estoque físico baixou nesta chamada.
     conn.execute("UPDATE pedidos SET estoque_baixado=1, estoque_baixado_em=? WHERE id=?", (agora, venda_id))
+    if itens_fisicos_baixados:
+        status_log = "Estoque baixado"
+        observacao = motivo if itens_fisicos_baixados == len(itens) else f"{motivo} (parcial: {itens_fisicos_baixados} de {len(itens)} item(ns) exigiam baixa física; o restante é sob encomenda)"
+    else:
+        status_log = "Pedido aguarda encomenda"
+        observacao = f"{motivo} — nenhum item físico: pedido é somente sob encomenda, aguarda compra/separação com o fornecedor."
     conn.execute(
         """
         INSERT INTO pedido_status_log (venda_id, status, usuario, observacao, data_hora)
         VALUES (?,?,?,?,?)
         """,
-        (venda_id, "Estoque baixado", usuario or "Admin", motivo, agora),
+        (venda_id, status_log, usuario or "Admin", observacao, agora),
     )
-    registrar_auditoria(conn, "estoque", venda_id, "baixa_pedido", usuario, depois={"motivo": motivo, "itens": len(itens)})
-    return True
+    registrar_auditoria(
+        conn,
+        "estoque",
+        venda_id,
+        "baixa_pedido",
+        usuario,
+        depois={"motivo": motivo, "itens": len(itens), "itens_fisicos_baixados": itens_fisicos_baixados},
+    )
+    return itens_fisicos_baixados > 0
 
 
 def repor_estoque_cancelamento(conn, venda_id: int, usuario: str, agora: str):
@@ -270,11 +357,20 @@ def repor_estoque_cancelamento(conn, venda_id: int, usuario: str, agora: str):
     if int(venda["estoque_reposto_cancelamento"] or 0) == 1:
         return False
 
-    itens = conn.execute("SELECT id, codigo_p, nome_p, quantidade FROM pedidos_itens WHERE pedido_id=? ORDER BY id ASC", (venda_id,)).fetchall()
+    itens = conn.execute("SELECT id, codigo_p, nome_p, quantidade, tipo_item FROM pedidos_itens WHERE pedido_id=? ORDER BY id ASC", (venda_id,)).fetchall()
     total = 0
     for item in itens:
         quantidade = int(item["quantidade"] or 0)
         if quantidade <= 0:
+            continue
+        if _tipo_item_normalizado(item) == TIPO_ITEM_SOB_ENCOMENDA:
+            # Sob encomenda nunca teve estoque físico baixado (ver
+            # baixar_estoque_do_pedido): repor criaria saldo positivo
+            # fictício. Itens com classificação ausente/desconhecida também
+            # não são repostos aqui pelo mesmo motivo — nunca assumimos
+            # "físico" por padrão para um dado ambíguo.
+            continue
+        if _tipo_item_normalizado(item) not in TIPOS_ITEM_VALIDOS:
             continue
         produto = buscar_produto_para_baixa(conn, item)
         if not produto:
