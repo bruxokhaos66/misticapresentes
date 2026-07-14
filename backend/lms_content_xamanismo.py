@@ -11,7 +11,14 @@ from __future__ import annotations
 from datetime import datetime
 
 SLUG = "xamanismo-introducao"
-VERSAO = "xamanismo-modulo-1-v1"
+# v1 foi implantada em produção antes da correção de acesso_publico/requer_matricula
+# (PR #316). Como a instalação só roda quando `VERSAO` ainda não consta em
+# lms_content_versions, bancos que já tinham v1 registrada nunca receberiam o
+# UPDATE que libera o curso — o endpoint público continuava 404 mesmo com o
+# código corrigido. v2 força a reaplicação uma única vez nesses bancos; a
+# instalação em si continua idempotente (UPSERT/UPDATE), preservando IDs,
+# matrículas, progresso e tentativas de quiz já existentes.
+VERSAO = "xamanismo-modulo-1-v2"
 
 
 def _agora() -> str:
