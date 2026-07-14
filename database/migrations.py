@@ -224,6 +224,16 @@ def init_db():
         """,
         commit=True,
     )
+    # Conciliação de valor: o backend é a única fonte de verdade do total do
+    # pedido (pedidos.total_final). Estas colunas registram, para cada
+    # pagamento recebido, o valor esperado no momento da conciliação e o
+    # resultado da comparação (ok/divergente), para que um valor recebido
+    # incorreto nunca confirme o pedido silenciosamente e a divergência fique
+    # auditável em vez de descartada. Aditivo, com default seguro, não apaga
+    # dados de bancos já existentes.
+    _exec_tolerante("ALTER TABLE pagamentos ADD COLUMN valor_esperado REAL")
+    _exec_tolerante("ALTER TABLE pagamentos ADD COLUMN status_conciliacao TEXT NOT NULL DEFAULT 'nao_avaliado'")
+    _exec_tolerante("ALTER TABLE pagamentos ADD COLUMN motivo_divergencia TEXT")
 
     # Auditoria unificada de mutações (quem mudou o quê, quando), complementar
     # aos históricos específicos já existentes (movimentacao_estoque,

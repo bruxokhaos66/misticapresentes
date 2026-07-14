@@ -72,15 +72,19 @@ def test_confirmacao_repetida_nao_baixa_estoque_duas_vezes():
     assert estoque(produto["id"]) == 1
     assert pedido["estoque_baixado"] is True
 
+    # A confirmação de pagamento só pode ser produzida por POST /api/pagamentos
+    # (conciliação de valor contra pedidos.total_final) — ver
+    # backend/order_status_routes.py::bloquear_avanco_financeiro_sem_conciliacao,
+    # que bloqueia "Pagamento confirmado" na rota genérica de status.
     primeira = client.post(
-        f"/api/pedidos/{pedido['id']}/status",
+        "/api/pagamentos",
         headers=HEADERS,
-        json={"status": "Pagamento confirmado", "usuario": "Teste"},
+        json={"venda_id": pedido["id"], "valor": pedido["total_final"], "status": "Confirmado", "usuario": "Teste"},
     )
     segunda = client.post(
-        f"/api/pedidos/{pedido['id']}/status",
+        "/api/pagamentos",
         headers=HEADERS,
-        json={"status": "Pagamento confirmado", "usuario": "Teste"},
+        json={"venda_id": pedido["id"], "valor": pedido["total_final"], "status": "Confirmado", "usuario": "Teste"},
     )
 
     assert primeira.status_code == 200, primeira.text
@@ -88,6 +92,48 @@ def test_confirmacao_repetida_nao_baixa_estoque_duas_vezes():
     assert primeira.json()["estoque_baixado_agora"] is False
     assert segunda.json()["estoque_baixado_agora"] is False
     assert estoque(produto["id"]) == 1
+
+
+def test_rota_generica_de_status_nao_confirma_pagamento_sem_conciliacao():
+    """Regressão da falha encontrada na revisão: POST /api/pedidos/{id}/status
+    não pode mais ser um caminho paralelo para produzir 'Pagamento confirmado'
+    sem passar pela conciliação de valor em POST /api/pagamentos."""
+    produto = criar_produto(quantidade=2)
+    pedido = criar_pedido(produto)
+
+    resposta = client.post(
+        f"/api/pedidos/{pedido['id']}/status",
+        headers=HEADERS,
+        json={"status": "Pagamento confirmado", "usuario": "Teste"},
+    )
+    assert resposta.status_code == 409, resposta.text
+
+    pedido_apos = client.get(f"/api/pedidos/{pedido['id']}", headers=HEADERS).json()
+    assert pedido_apos["status"] == "Aguardando pagamento"
+
+    resposta_separando = client.post(
+        f"/api/pedidos/{pedido['id']}/status",
+        headers=HEADERS,
+        json={"status": "Separando pedido", "usuario": "Teste"},
+    )
+    assert resposta_separando.status_code == 409, resposta_separando.text
+
+    # Depois de confirmar corretamente via /api/pagamentos, a progressão
+    # logística continua funcionando normalmente pela rota genérica.
+    confirmacao = client.post(
+        "/api/pagamentos",
+        headers=HEADERS,
+        json={"venda_id": pedido["id"], "valor": pedido["total_final"], "status": "Confirmado", "usuario": "Teste"},
+    )
+    assert confirmacao.status_code == 200, confirmacao.text
+
+    resposta_separando_apos = client.post(
+        f"/api/pedidos/{pedido['id']}/status",
+        headers=HEADERS,
+        json={"status": "Separando pedido", "usuario": "Teste"},
+    )
+    assert resposta_separando_apos.status_code == 200, resposta_separando_apos.text
+    assert client.get(f"/api/pedidos/{pedido['id']}", headers=HEADERS).json()["status"] == "Separando pedido"
 
 
 def test_expiracao_repetida_repoe_reserva_uma_unica_vez():

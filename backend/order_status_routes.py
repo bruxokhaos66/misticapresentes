@@ -25,6 +25,7 @@ router = APIRouter(prefix="/api", tags=["pedidos-status"])
 
 STATUS_PEDIDO = {
     "Aguardando pagamento",
+    "Pagamento divergente",
     "Pagamento confirmado",
     "Separando pedido",
     "Pronto para retirada",
@@ -34,6 +35,19 @@ STATUS_PEDIDO = {
 }
 
 STATUS_BAIXA_ESTOQUE = {"Pagamento confirmado", "Separando pedido"}
+
+# Status a partir dos quais o pedido já avançou além da confirmação de
+# pagamento. Uma divergência de valor detectada nesse ponto (ex.: um segundo
+# pagamento incompleto registrado por engano) não deve regredir o status do
+# pedido de volta para "Pagamento divergente" — apenas fica registrada no
+# histórico para conciliação administrativa.
+STATUS_PEDIDO_CONCLUIDOS = {
+    "Pagamento confirmado",
+    "Separando pedido",
+    "Pronto para retirada",
+    "Entregue",
+    "Concluído",
+}
 
 STATUS_ALIASES = {"Pago": "Pagamento confirmado", "Em separação": "Separando pedido"}
 
@@ -46,6 +60,34 @@ def normalizar_status(status: str) -> str:
     if status not in STATUS_PEDIDO:
         raise HTTPException(status_code=400, detail="Status de pedido inválido.")
     return status
+
+
+def bloquear_avanco_financeiro_sem_conciliacao(conn, venda_id: int, status_destino: str):
+    """'Pagamento confirmado' (e a baixa de estoque que dele depende) só pode
+    ser produzido pela conciliação de valor em backend/payment_routes.py
+    (POST /api/pagamentos ou o webhook Pix, que comparam o valor recebido com
+    pedidos.total_final antes de confirmar). As rotas genéricas de status de
+    pedido (esta e a duplicata em order_api_guard_inner_routes.py) aceitam
+    "Pagamento confirmado" como um valor válido de STATUS_PEDIDO para fins de
+    consulta/histórico, mas nunca podem ser o caminho que produz esse estado —
+    senão qualquer chamada com a chave de API confirmaria um pedido sem
+    nenhum valor ter sido validado. Pelo mesmo motivo, "Separando pedido" (que
+    também baixa estoque, ver STATUS_BAIXA_ESTOQUE) só é aceito depois que o
+    pedido já estiver de fato confirmado."""
+    if status_destino not in STATUS_BAIXA_ESTOQUE:
+        return
+    if status_destino == "Pagamento confirmado":
+        raise HTTPException(
+            status_code=409,
+            detail="Pagamento confirmado só pode ser definido via POST /api/pagamentos, com o valor recebido conciliado contra o total do pedido.",
+        )
+    venda = conn.execute("SELECT status FROM pedidos WHERE id=?", (venda_id,)).fetchone()
+    status_atual = str(venda["status"] or "") if venda else ""
+    if status_atual not in STATUS_PEDIDO_CONCLUIDOS:
+        raise HTTPException(
+            status_code=409,
+            detail="Só é possível avançar para 'Separando pedido' depois que o pagamento for confirmado via POST /api/pagamentos.",
+        )
 
 
 class PedidoStatusIn(BaseModel):
@@ -64,21 +106,27 @@ def validar_site_api_key(chave_recebida: str | None):
 
 
 def expirar_pedidos_pendentes(conn, agora: str | None = None):
-    """Cancela automaticamente pedidos 'Aguardando pagamento' cujo prazo (expira_em)
-    já passou e cujo pagamento nunca foi confirmado, devolvendo ao estoque a
-    reserva feita na criação do pedido (ver site_stock_routes.py).
+    """Cancela automaticamente pedidos cujo prazo (expira_em) já passou e cujo
+    pagamento nunca foi confirmado com o valor correto, devolvendo ao estoque
+    a reserva feita na criação do pedido (ver site_stock_routes.py).
+
+    Cobre tanto 'Aguardando pagamento' quanto 'Pagamento divergente': um
+    pagamento com valor incorreto (ver backend/payment_routes.py) não é
+    tratado como pago, então a reserva de estoque não pode ficar presa para
+    sempre só porque o pedido saiu de 'Aguardando pagamento' — ele continua
+    expirando no mesmo prazo se ninguém resolver a divergência a tempo.
 
     Roda periodicamente em cada worker (ver backend/main.py), então mais de um
     processo pode disputar o mesmo pedido vencido ao mesmo tempo. O UPDATE
     abaixo só processa o pedido se conseguir reivindicá-lo (WHERE status ainda
-    'Aguardando pagamento'); o SQLite serializa escritores, então um worker que
+    é um dos dois acima); o SQLite serializa escritores, então um worker que
     perder a disputa vê rowcount 0 e pula o pedido, evitando repor estoque em
     dobro."""
     agora = agora or datetime.now().isoformat(timespec="seconds")
     expirados = conn.execute(
         """
         SELECT id FROM pedidos
-        WHERE COALESCE(status,'') = 'Aguardando pagamento'
+        WHERE COALESCE(status,'') IN ('Aguardando pagamento', 'Pagamento divergente')
           AND expira_em IS NOT NULL
           AND expira_em < ?
         """,
@@ -87,7 +135,7 @@ def expirar_pedidos_pendentes(conn, agora: str | None = None):
     total_expirados = 0
     for venda in expirados:
         claim = conn.execute(
-            "UPDATE pedidos SET status='Cancelado' WHERE id=? AND status='Aguardando pagamento'",
+            "UPDATE pedidos SET status='Cancelado' WHERE id=? AND status IN ('Aguardando pagamento', 'Pagamento divergente')",
             (venda["id"],),
         )
         if claim.rowcount == 0:
@@ -489,6 +537,8 @@ def atualizar_status_pedido(venda_id: int, payload: PedidoStatusIn, x_mistica_ap
             retorno = cancelar_com_reposicao(conn, venda_id, payload.usuario or "Admin", payload.observacao, agora)
             conn.commit()
             return {**retorno, "data_hora": agora}
+
+        bloquear_avanco_financeiro_sem_conciliacao(conn, venda_id, status)
 
         if status in STATUS_BAIXA_ESTOQUE:
             estoque_baixado_agora = baixar_estoque_do_pedido(conn, venda_id, payload.usuario or "Admin", agora)
