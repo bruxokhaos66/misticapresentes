@@ -1,32 +1,59 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" role="img" aria-labelledby="a2Titulo a2Desc">
-  <title id="a2Titulo">Aula 2 — Tradições semelhantes em diferentes regiões</title>
-  <desc id="a2Desc">Ilustração abstrata de um globo estilizado com pontos luminosos em diferentes regiões, simbolizando práticas rituais distintas ao redor do mundo, sem símbolos de povos específicos.</desc>
+  <title id="a2Titulo">Tradições semelhantes em diferentes regiões</title>
+  <desc id="a2Desc">Ilustração cinematográfica de um globo estilizado em tons de verde-musgo e preto, envolto por um halo dourado suave, com pontos de luz independentes distribuídos por diferentes continentes, sem linhas de conexão, bandeiras ou símbolos de povos específicos.</desc>
   <defs>
-    <radialGradient id="globoA2" cx="50%" cy="45%" r="60%">
-      <stop offset="0%" stop-color="#1a2a1e"/>
-      <stop offset="100%" stop-color="#07070b"/>
+    <radialGradient id="fundoTrad" cx="50%" cy="46%" r="75%">
+      <stop offset="0%" stop-color="#0e140d"/>
+      <stop offset="100%" stop-color="#030305"/>
     </radialGradient>
+    <radialGradient id="haloTrad" cx="50%" cy="48%" r="42%">
+      <stop offset="0%" stop-color="#f2c96d" stop-opacity="0"/>
+      <stop offset="82%" stop-color="#f2c96d" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#f2c96d" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="globoTrad" cx="38%" cy="34%" r="72%">
+      <stop offset="0%" stop-color="#3a4d2a"/>
+      <stop offset="45%" stop-color="#1a2a1e"/>
+      <stop offset="100%" stop-color="#050806"/>
+    </radialGradient>
+    <radialGradient id="brilhoGlobo" cx="38%" cy="30%" r="55%">
+      <stop offset="0%" stop-color="#f2c96d" stop-opacity="0.22"/>
+      <stop offset="60%" stop-color="#f2c96d" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#f2c96d" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="brilhoPonto" x="-200%" y="-200%" width="500%" height="500%">
+      <feGaussianBlur stdDeviation="7" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <clipPath id="recorteGlobo">
+      <circle cx="600" cy="320" r="225"/>
+    </clipPath>
   </defs>
-  <rect width="1200" height="630" fill="#030305"/>
-  <g fill="#f0c56a" opacity="0.6">
-    <circle cx="90" cy="80" r="1.3"/><circle cx="220" cy="130" r="1.6"/><circle cx="1000" cy="90" r="1.4"/>
-    <circle cx="1120" cy="150" r="1.2"/><circle cx="150" cy="500" r="1.3"/><circle cx="1080" cy="520" r="1.5"/>
+  <rect width="1200" height="630" fill="url(#fundoTrad)"/>
+  <g fill="#f7ecc9" opacity="0.5">
+    <circle cx="90" cy="80" r="1.2"/><circle cx="220" cy="130" r="1.5"/><circle cx="1000" cy="90" r="1.3"/>
+    <circle cx="1120" cy="150" r="1.1"/><circle cx="150" cy="500" r="1.2"/><circle cx="1080" cy="520" r="1.4"/>
+    <circle cx="60" cy="300" r="1"/><circle cx="1140" cy="330" r="1.1"/>
   </g>
-  <circle cx="600" cy="320" r="230" fill="url(#globoA2)" stroke="#536b37" stroke-width="2"/>
-  <g stroke="#536b37" stroke-width="1" fill="none" opacity="0.55">
-    <ellipse cx="600" cy="320" rx="230" ry="90"/>
-    <ellipse cx="600" cy="320" rx="230" ry="150"/>
-    <line x1="370" y1="320" x2="830" y2="320"/>
-    <line x1="600" y1="90" x2="600" y2="550"/>
+  <circle cx="600" cy="320" r="290" fill="url(#haloTrad)"/>
+  <circle cx="600" cy="320" r="225" fill="url(#globoTrad)" stroke="#536b37" stroke-width="1.5" stroke-opacity="0.6"/>
+  <g stroke="#536b37" stroke-width="1" fill="none" opacity="0.4">
+    <ellipse cx="600" cy="320" rx="225" ry="88"/>
+    <ellipse cx="600" cy="320" rx="225" ry="146"/>
+    <path d="M375,320 A225,225 0 0 1 825,320"/>
+    <path d="M600,95 A225,225 0 0 1 600,545"/>
   </g>
-  <g fill="#f0c56a">
-    <circle cx="470" cy="250" r="7"/>
-    <circle cx="520" cy="410" r="7"/>
-    <circle cx="700" cy="230" r="7"/>
-    <circle cx="760" cy="380" r="7"/>
-    <circle cx="600" cy="200" r="7"/>
-    <circle cx="640" cy="440" r="7"/>
+  <circle cx="600" cy="320" r="225" fill="url(#brilhoGlobo)" clip-path="url(#recorteGlobo)"/>
+  <g filter="url(#brilhoPonto)">
+    <circle cx="470" cy="250" r="4.5" fill="#f2c96d"/>
+    <circle cx="520" cy="410" r="4.5" fill="#f2c96d"/>
+    <circle cx="700" cy="230" r="4.5" fill="#f2c96d"/>
+    <circle cx="760" cy="380" r="4.5" fill="#f2c96d"/>
+    <circle cx="600" cy="195" r="4.5" fill="#f2c96d"/>
+    <circle cx="640" cy="440" r="4.5" fill="#f2c96d"/>
+    <circle cx="540" cy="330" r="4.5" fill="#f2c96d"/>
   </g>
-  <text x="60" y="70" font-family="Georgia, 'Times New Roman', serif" font-size="30" fill="#efe1c5">Aula 2 · Tradições em diferentes regiões</text>
-  <text x="60" y="590" font-family="Georgia, serif" font-size="17" fill="#d8cbb6">Semelhança não é identidade — cada ponto representa um contexto cultural próprio.</text>
 </svg>

@@ -32,7 +32,7 @@ orçamento de geração ou fotografia licenciada, cada arquivo pode ser trocado
 | Item | Local | Problema encontrado | Ação |
 |---|---|---|---|
 | Capa da Aula 1 e Aula 2 (Módulo 1) | `backend/lms_content_xamanismo.py`, `PLACEHOLDER_CAPA` | **Placeholder textual visível ao aluno**: "Placeholder de capa", "Imagem de capa em preparação", "Crédito: acervo próprio/licença a definir" — exatamente o tipo de texto técnico que nunca deveria aparecer para quem está estudando. | **Corrigido.** Substituído por duas capas SVG exclusivas (`modulo-1-aula-1-capa.svg`, `modulo-1-aula-2-capa.svg`), sem texto de sistema, com `alt` e legenda editorial. |
-| Capa do Módulo 2 e das 3 aulas | `assets/escola/xamanismo/*.svg` | Ilustrações já existentes e coerentes com a identidade visual, mas em estilo de infográfico plano — abaixo do padrão "cinematográfico" desejado para as capas de aula (mapa e linha do tempo continuam corretos como infográfico). | Mantidas como versão de produção atual; prompts de upgrade fotográfico preparados abaixo (itens 3.3 a 3.6). |
+| Capa do Módulo 2 e das 3 aulas | `assets/escola/xamanismo/*.svg` | Ilustrações já existentes e coerentes com a identidade visual, mas em estilo de infográfico plano — abaixo do padrão "cinematográfico" desejado para as capas de aula (mapa e linha do tempo continuam corretos como infográfico). | **Corrigido** (atualização de modernização visual). As 3 capas de aula do Módulo 2 (`aula-origem-termo-xama.svg`, `aula-tradicoes-regioes.svg`, `aula-xamanismo-moderno.svg`) foram redesenhadas no mesmo padrão cinematográfico multi-camada do Módulo 1: gradientes em várias camadas, profundidade/névoa, sem texto embutido na imagem (o título já existe no `figcaption`). `modulo-2-capa.svg` não é referenciada em nenhuma aula hoje (fica reservada para uso futuro no catálogo) e não foi alterada nesta atualização. Prompts fotográficos de upgrade seguem preparados abaixo (itens 3.3 a 3.6) para substituição 1:1 quando houver plano pago de geração de imagem ou banco licenciado — Higgsfield está disponível na sessão mas exige plano pago, testado e confirmado nesta atualização. |
 | `mapa-tradicoes.svg` / `linha-tempo-xamanismo.svg` | idem | Nenhum — são intencionalmente esquemáticos (o próprio conteúdo da aula pede um mapa "não geográfico" e uma linha do tempo, não uma fotografia). | Mantidos como estão; não devem virar fotografia. |
 | Dimensões/layout shift | todas as `<img>` do curso | Nenhum problema: todas já declaram `width`/`height` e `loading="lazy"`. | Mantido; novo CSS reforça moldura sem alterar as dimensões. |
 | Alt text / legenda / crédito | todas as `<img>` do curso | Nenhum problema estrutural; texto do `alt` já descritivo. | Mantido; padronizado via helper `_capa()` único para os dois módulos. |
@@ -46,6 +46,31 @@ orçamento de geração ou fotografia licenciada, cada arquivo pode ser trocado
 - `assets/escola/xamanismo/modulo-1-aula-2-capa.svg` — capa exclusiva da Aula 2 ("Por que o Xamanismo ainda existe?").
 - `backend/lms_content_xamanismo.py` — placeholder textual removido; nova migração idempotente `instalar_capas_modulo1_xamanismo` (versão `xamanismo-modulo-1-capas-v1`) para levar a correção também aos bancos já instalados, via `UPDATE` (preserva id da aula e progresso do aluno).
 - `escola-curso.css` — moldura cinematográfica para `.aula-imagem` (vinheta inferior sutil, sombra, borda), remoção do CSS morto de placeholder, novo componente `.aula-divisor` para separar seções de texto longas sem precisar de mais imagens.
+
+## 2a. Atualização de modernização visual (Módulo 2)
+
+Escopo: elevar as 3 capas de aula do Módulo 2 ao mesmo padrão cinematográfico do
+Módulo 1, sem alterar arquitetura, API, banco ou nomes de arquivo (nenhuma
+mudança em `backend/lms_content_xamanismo.py` foi necessária — os três
+arquivos SVG foram substituídos no mesmo caminho).
+
+- `assets/escola/xamanismo/aula-origem-termo-xama.svg` — reescrita como taiga
+  siberiana em múltiplas camadas de silhueta com névoa e sol baixo dourado,
+  sem título embutido na imagem (era um infográfico plano com texto SVG fixo).
+- `assets/escola/xamanismo/aula-tradicoes-regioes.svg` — globo reescrito com
+  halo atmosférico, brilho suave clipado à esfera (`clipPath`) e pontos com
+  `feGaussianBlur` para bloom, sem texto embutido.
+- `assets/escola/xamanismo/aula-xamanismo-moderno.svg` — composição dividida
+  floresta/biblioteca com camadas de profundidade, estantes desfocadas
+  (`feGaussianBlur`) sob luz quente e caminho dourado pontilhado com brilho
+  sutil, sem texto embutido.
+- Tentativa de geração fotográfica via Higgsfield (`soul_location`, prompts já
+  documentados na seção 3) confirmada bloqueada: `Requires basic plan or
+  higher` na conta conectada. Os prompts continuam válidos para substituição
+  1:1 futura assim que houver plano pago ou banco licenciado.
+- `modulo-2-capa.svg` não é usado em nenhuma aula atualmente e não foi
+  alterado; `mapa-tradicoes.svg` e `linha-tempo-xamanismo.svg` permanecem
+  esquemáticos, como já determinado nesta auditoria.
 
 ## 3. Prompts cinematográficos para produção futura
 
