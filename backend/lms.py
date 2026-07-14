@@ -90,6 +90,13 @@ def garantir_tabelas_lms(conn) -> None:
         """
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_curso_modulos_slug ON curso_modulos(slug, ordem)")
+    # Marcador explícito de acesso público (sem login, sem matrícula). Default
+    # 0: um módulo só fica acessível anonimamente quando um admin autenticado
+    # marcar isso de propósito — nunca por omissão ou erro de painel.
+    try:
+        conn.execute("ALTER TABLE curso_modulos ADD COLUMN acesso_publico INTEGER NOT NULL DEFAULT 0")
+    except Exception:
+        pass
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS curso_aulas (
@@ -376,3 +383,90 @@ def modulo_liberado(conn, *, aluno_id: int, modulo_id: int) -> bool:
         if item["modulo"]["id"] == modulo_id:
             return item["liberado"]
     return False
+
+
+# ---------------------------------------------------------------------------
+# Acesso público (visitante anônimo, sem login/matrícula) — somente leitura
+# ---------------------------------------------------------------------------
+
+def modulo_e_publico(modulo: dict) -> bool:
+    return bool(modulo.get("acesso_publico"))
+
+
+def arvore_publica_curso(conn, slug: str) -> Optional[dict]:
+    """Árvore segura para visitante anônimo: só entrega aulas dos módulos
+    marcados explicitamente como públicos no banco (nunca por dedução do
+    frontend). Módulos pagos aparecem só como metadados bloqueados — sem
+    conteúdo, sem mídia, sem avaliação, sem gabarito."""
+    cfg = obter_config_curso(conn, slug)
+    if not int(cfg.get("publicado", 1) or 0):
+        return None
+
+    modulos = [
+        dict(m)
+        for m in conn.execute(
+            "SELECT * FROM curso_modulos WHERE slug=? AND publicado=1 ORDER BY ordem, id",
+            (slug,),
+        ).fetchall()
+    ]
+    if not modulos:
+        return None
+
+    modulos_out = []
+    algum_publico = False
+    for mod in modulos:
+        publico = modulo_e_publico(mod)
+        if publico:
+            algum_publico = True
+            aulas = [
+                {
+                    "id": a["id"],
+                    "titulo": a["titulo"],
+                    "descricao": a["descricao"],
+                    "tipo": a["tipo"],
+                    "conteudo": a["conteudo"],
+                    "video_url": a["video_url"],
+                    "capa_url": a["capa_url"],
+                    "material_url": a["material_url"],
+                    "ordem": a["ordem"],
+                    "duracao_min": a["duracao_min"],
+                    "obrigatoria": bool(a["obrigatoria"]),
+                }
+                for a in conn.execute(
+                    "SELECT * FROM curso_aulas WHERE modulo_id=? AND publicado=1 ORDER BY ordem, id",
+                    (mod["id"],),
+                ).fetchall()
+            ]
+            modulos_out.append(
+                {
+                    "id": mod["id"],
+                    "titulo": mod["titulo"],
+                    "descricao": mod["descricao"],
+                    "ordem": mod["ordem"],
+                    "publico": True,
+                    "bloqueado": False,
+                    "aulas": aulas,
+                }
+            )
+        else:
+            modulos_out.append(
+                {
+                    "id": mod["id"],
+                    "titulo": mod["titulo"],
+                    "ordem": mod["ordem"],
+                    "publico": False,
+                    "bloqueado": True,
+                }
+            )
+
+    if not algum_publico:
+        return None
+
+    return {
+        "slug": slug,
+        "titulo": cfg.get("titulo") or slug.replace("-", " ").title(),
+        "descricao": cfg.get("descricao"),
+        "imagem": cfg.get("imagem"),
+        "gratuito": True,
+        "modulos": modulos_out,
+    }
