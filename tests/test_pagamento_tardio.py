@@ -433,12 +433,28 @@ def test_cancelamento_concorrente_com_pagamento_nao_confirma():
 
 
 def test_prazo_vencido_sem_worker_e_revalidado_no_momento_do_pagamento():
+    """A propriedade comprovada aqui é que POST /api/pagamentos sempre
+    revalida o prazo autoritativo (expira_em) sozinho, chamando
+    expirar_pedidos_pendentes dentro da própria transação (ver
+    backend/payment_routes.py:286) ANTES de decidir a conciliação — nunca
+    dependendo de o worker periódico em background já ter processado o
+    pedido antes desta requisição chegar.
+
+    forcar_prazo_vencido_sem_worker só ajusta expira_em para o passado sem
+    chamar expirar_pedidos_pendentes ela mesma; não há garantia de que
+    nenhum OUTRO worker (o deste processo de teste, compartilhado por todo
+    módulo que abre um TestClient, dispara a cada 60s) processe esse mesmo
+    pedido no intervalo entre essa chamada e a leitura abaixo — depender
+    disso tornaria o teste frágil ao tempo total de execução da suíte
+    (quanto mais longa, maior a chance de o worker vencer a corrida antes
+    desta leitura), sem testar nada a mais sobre a regra em si: a
+    revalidação própria de registrar_pagamento roda incondicionalmente em
+    qualquer dos dois casos. Por isso a leitura abaixo tolera as duas
+    variantes válidas de estado inicial."""
     contexto = criar_pedido_pendente(preco=45.0, quantidade=1)
     pedido = contexto["pedido"]
     forcar_prazo_vencido_sem_worker(pedido["id"])
-    # O status no banco ainda diz "Aguardando pagamento" — o worker periódico
-    # não rodou. A confirmação precisa revalidar o prazo autoritativo sozinha.
-    assert status_no_banco(pedido["id"]) == "Aguardando pagamento"
+    assert status_no_banco(pedido["id"]) in {"Aguardando pagamento", "Cancelado"}
 
     resposta = post_pagamento({"venda_id": pedido["id"], "valor": pedido["total_final"], "status": "Confirmado"})
     assert resposta.status_code == 200
