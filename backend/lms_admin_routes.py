@@ -123,6 +123,9 @@ class ModuloIn(BaseModel):
     ordem: int = 0
     nota_minima: Optional[int] = Field(default=None, ge=0, le=100)
     publicado: bool = True
+    # Acesso público (sem login/matrícula). Default False: exige ação explícita
+    # de um admin autenticado para abrir um módulo ao visitante anônimo.
+    acesso_publico: bool = False
 
 
 @router.post("/modulos")
@@ -130,7 +133,7 @@ def criar_modulo(payload: ModuloIn, sessao: dict = Depends(exigir_admin)):
     with conectar() as conn:
         garantir_tabelas_lms(conn)
         cur = conn.execute(
-            "INSERT INTO curso_modulos (slug, titulo, descricao, ordem, nota_minima, publicado, criado_em) VALUES (?,?,?,?,?,?,?)",
+            "INSERT INTO curso_modulos (slug, titulo, descricao, ordem, nota_minima, publicado, acesso_publico, criado_em) VALUES (?,?,?,?,?,?,?,?)",
             (
                 payload.slug.strip(),
                 payload.titulo.strip(),
@@ -138,6 +141,7 @@ def criar_modulo(payload: ModuloIn, sessao: dict = Depends(exigir_admin)):
                 int(payload.ordem),
                 payload.nota_minima,
                 1 if payload.publicado else 0,
+                1 if payload.acesso_publico else 0,
                 _agora(),
             ),
         )
@@ -154,13 +158,14 @@ def editar_modulo(modulo_id: int, payload: ModuloIn, sessao: dict = Depends(exig
         if not existente:
             raise HTTPException(status_code=404, detail="Módulo não encontrado.")
         conn.execute(
-            "UPDATE curso_modulos SET titulo=?, descricao=?, ordem=?, nota_minima=?, publicado=? WHERE id=?",
+            "UPDATE curso_modulos SET titulo=?, descricao=?, ordem=?, nota_minima=?, publicado=?, acesso_publico=? WHERE id=?",
             (
                 payload.titulo.strip(),
                 payload.descricao,
                 int(payload.ordem),
                 payload.nota_minima,
                 1 if payload.publicado else 0,
+                1 if payload.acesso_publico else 0,
                 modulo_id,
             ),
         )

@@ -40,6 +40,21 @@
     return { ok: res.ok, status: res.status, body };
   }
 
+  // ---- Progresso efêmero do visitante anônimo ----------------------------
+  // Nunca é enviado ao backend nem persistido em localStorage: existe só em
+  // sessionStorage (some ao fechar a aba) para dar feedback visual de leitura
+  // sem criar matrícula, conta ou progresso permanente no servidor.
+  const CHAVE_PROGRESSO_ANONIMO = "plataforma_progresso_anonimo";
+  function lerProgressoAnonimo() {
+    try { return JSON.parse(sessionStorage.getItem(CHAVE_PROGRESSO_ANONIMO) || "{}"); }
+    catch { return {}; }
+  }
+  function marcarProgressoAnonimo(aulaId) {
+    const mapa = lerProgressoAnonimo();
+    mapa[aulaId] = "concluida";
+    try { sessionStorage.setItem(CHAVE_PROGRESSO_ANONIMO, JSON.stringify(mapa)); } catch { /* sessionStorage indisponível: segue só em memória */ }
+  }
+
   function normalizeUrl(url) {
     const v = String(url || "").trim();
     if (!v) return "";
@@ -49,7 +64,11 @@
   }
 
   // ---- Login ------------------------------------------------------------
-  function renderLogin(mensagem) {
+  // Só é chamado quando o visitante interage com algo protegido (conteúdo
+  // pago, progresso, avaliação ou certificado) — nunca para as partes
+  // públicas do curso. Preserva o destino: o slug segue na URL e, ao voltar
+  // ou logar, o mesmo curso é recarregado.
+  function renderLogin(mensagem, permitirVoltar) {
     shell.innerHTML = `
       <div class="plataforma-login">
         <h1>Entrar na Escola Mística</h1>
@@ -60,6 +79,7 @@
           <button class="btn" type="submit">Entrar</button>
         </form>
         <p class="plataforma-status" data-status>${mensagem ? esc(mensagem) : ""}</p>
+        ${permitirVoltar ? `<button class="btn btn-ghost" type="button" data-voltar-publico>Voltar ao conteúdo gratuito</button>` : ""}
       </div>`;
     const form = shell.querySelector("[data-login-form]");
     const status = shell.querySelector("[data-status]");
@@ -73,6 +93,7 @@
       if (!r.ok) { status.textContent = r.body.detail || "E-mail ou senha inválidos."; return; }
       boot();
     });
+    shell.querySelector("[data-voltar-publico]")?.addEventListener("click", () => carregarCursoPublico());
   }
 
   // ---- Lista "Meus cursos" ---------------------------------------------
@@ -104,6 +125,10 @@
   // ---- Player do curso --------------------------------------------------
   let curso = null;
   let aulaAtiva = null; // { moduloId, aulaId }
+  // Visitante sem sessão: só as partes marcadas como públicas no backend
+  // (acesso_publico) chegam com conteúdo; módulos pagos vêm só como metadados
+  // bloqueados. Nenhuma matrícula, conta ou progresso é criado neste modo.
+  let modoAnonimo = false;
 
   function todasAulas() {
     return curso.modulos.flatMap(m => m.aulas.map(a => ({ ...a, moduloId: m.id, moduloLiberado: m.liberado })));
@@ -121,10 +146,38 @@
 
   async function carregarCurso() {
     const r = await api(`/api/escola/cursos/${encodeURIComponent(slug)}`);
-    if (r.status === 401) return renderLogin();
+    // Sem sessão: nunca mostra tela de login para as partes públicas — cai
+    // direto para a árvore anônima (só o backend decide o que é público).
+    if (r.status === 401) return carregarCursoPublico();
     if (r.status === 403) { shell.innerHTML = `<div class="plataforma-vazio"><h1>Acesso não liberado</h1><p>${esc(r.body.detail || "Você ainda não tem acesso a este curso.")}</p><a class="btn" href="escola.html">Voltar ao catálogo</a></div>`; return; }
     if (!r.ok) { shell.innerHTML = `<div class="plataforma-vazio"><p>Não foi possível carregar o curso agora.</p></div>`; return; }
+    modoAnonimo = false;
     curso = r.body;
+    if (!curso.modulos.length) { shell.innerHTML = `<div class="plataforma-vazio"><h1>${esc(curso.titulo)}</h1><p>Conteúdo em preparação. Volte em breve.</p></div>`; return; }
+    if (!aulaAtiva) selecionarPrimeiraPendente();
+    renderPlayer();
+  }
+
+  async function carregarCursoPublico() {
+    const r = await api(`/api/escola/publico/cursos/${encodeURIComponent(slug)}`);
+    if (!r.ok) {
+      shell.innerHTML = `<div class="plataforma-vazio"><h1>Curso não disponível</h1><p>${esc(r.body.detail || "Este curso não tem conteúdo público no momento.")}</p><a class="btn" href="escola.html">Voltar ao catálogo</a></div>`;
+      return;
+    }
+    modoAnonimo = true;
+    const progressoLocal = lerProgressoAnonimo();
+    curso = {
+      ...r.body,
+      certificado: false,
+      progresso: { total_aulas: 0, aulas_concluidas: 0, percentual: 0, concluido: false },
+      modulos: r.body.modulos.map(m => ({
+        ...m,
+        liberado: !m.bloqueado,
+        concluido: false,
+        quiz: null,
+        aulas: (m.aulas || []).map(a => ({ ...a, status: progressoLocal[a.id] === "concluida" ? "concluida" : "nao_iniciada", percentual: 0 })),
+      })),
+    };
     if (!curso.modulos.length) { shell.innerHTML = `<div class="plataforma-vazio"><h1>${esc(curso.titulo)}</h1><p>Conteúdo em preparação. Volte em breve.</p></div>`; return; }
     if (!aulaAtiva) selecionarPrimeiraPendente();
     renderPlayer();
@@ -143,8 +196,13 @@
       </div>
       <nav class="plataforma-modulos">
         ${curso.modulos.map((m, i) => {
+          const bloqueadoPago = modoAnonimo && m.bloqueado;
           const cls = m.concluido ? "is-done" : m.liberado ? "is-open" : "is-locked";
-          const badge = m.concluido ? "Concluído" : !m.liberado ? "🔒 Bloqueado" : "Em andamento";
+          const badge = m.concluido ? "Concluído" : bloqueadoPago ? "🔒 Conteúdo pago" : !m.liberado ? "🔒 Bloqueado" : "Em andamento";
+          const bloqueio = bloqueadoPago
+            ? `<p class="plataforma-modulo-bloqueado">Continue sua jornada assinando o plano completo.</p>
+               <button type="button" class="btn btn-small" data-login-cta>Entrar / assinar para continuar</button>`
+            : `<p class="plataforma-modulo-bloqueado">Conclua o módulo anterior para liberar.</p>`;
           return `<div class="plataforma-modulo ${cls}">
             <div class="plataforma-modulo-head"><span class="plataforma-modulo-num">${i + 1}</span><div><strong>${esc(m.titulo)}</strong><small>${badge}</small></div></div>
             ${m.liberado ? `<ul class="plataforma-aulas">
@@ -156,11 +214,12 @@
               ${m.quiz ? `<li><button type="button" class="plataforma-quiz-link ${m.quiz.disponivel ? "" : "is-locked"} ${m.quiz.aprovado ? "is-done" : ""}" data-quiz="${m.quiz.id}" ${m.quiz.disponivel ? "" : "disabled"}>
                 <span class="plataforma-aula-status">${m.quiz.aprovado ? "✓" : "★"}</span>
                 <span class="plataforma-aula-titulo">${esc(m.quiz.titulo)}${m.quiz.maior_nota != null ? ` — melhor nota ${m.quiz.maior_nota}%` : ""}</span></button></li>` : ""}
-            </ul>` : `<p class="plataforma-modulo-bloqueado">Conclua o módulo anterior para liberar.</p>`}
+            </ul>` : bloqueio}
           </div>`;
         }).join("")}
       </nav>
-      ${curso.progresso.concluido && curso.certificado ? `<a class="btn btn-full" href="${API}/api/cursos/${encodeURIComponent(slug)}/certificado" target="_blank" rel="noopener">Emitir certificado 🎓</a>` : ""}
+      ${modoAnonimo ? `<button type="button" class="btn btn-full" data-login-cta>Entrar para salvar progresso e emitir certificado</button>` : ""}
+      ${!modoAnonimo && curso.progresso.concluido && curso.certificado ? `<a class="btn btn-full" href="${API}/api/cursos/${encodeURIComponent(slug)}/certificado" target="_blank" rel="noopener">Emitir certificado 🎓</a>` : ""}
     </aside>`;
   }
 
@@ -177,7 +236,15 @@
     const found = aulaPorId(aulaAtiva.aulaId);
     if (!found) return `<div class="plataforma-conteudo-vazio">Aula não encontrada.</div>`;
     const { aula, modulo } = found;
-    if (!modulo.liberado) return `<div class="plataforma-conteudo-vazio">🔒 Este módulo ainda está bloqueado.</div>`;
+    if (!modulo.liberado) {
+      if (modoAnonimo && modulo.bloqueado) {
+        return `<div class="plataforma-conteudo-vazio">
+          <p>🔒 Este conteúdo faz parte do plano pago da Escola Mística.</p>
+          <button type="button" class="btn" data-login-cta>Entrar / assinar para continuar</button>
+        </div>`;
+      }
+      return `<div class="plataforma-conteudo-vazio">🔒 Este módulo ainda está bloqueado.</div>`;
+    }
 
     let midia = "";
     if (aula.video_url) {
@@ -233,6 +300,13 @@
     bindSidebar();
   }
 
+  // Único ponto em que o visitante anônimo é levado ao login: ele clicou em
+  // algo protegido (módulo pago, progresso, certificado) — nunca acontece só
+  // por navegar pelas partes públicas.
+  function pedirLoginParaRecursoProtegido() {
+    renderLogin("Entre para continuar: essa parte do curso é exclusiva de quem tem plano ativo.", true);
+  }
+
   function bindSidebar() {
     shell.querySelectorAll("[data-aula]").forEach(btn => {
       if (btn.classList.contains("plataforma-quiz-link")) return;
@@ -245,6 +319,9 @@
     shell.querySelectorAll("[data-quiz]").forEach(btn => {
       btn.addEventListener("click", () => { if (!btn.disabled) abrirQuiz(Number(btn.dataset.quiz)); });
     });
+    shell.querySelectorAll("[data-login-cta]").forEach(btn => {
+      btn.addEventListener("click", pedirLoginParaRecursoProtegido);
+    });
   }
 
   function bindConteudo() {
@@ -252,6 +329,7 @@
     if (!box) return;
     box.querySelector("[data-prev]")?.addEventListener("click", () => navegar(-1));
     box.querySelector("[data-next]")?.addEventListener("click", () => navegar(1));
+    box.querySelector("[data-login-cta]")?.addEventListener("click", pedirLoginParaRecursoProtegido);
     box.querySelector("[data-concluir]")?.addEventListener("click", async e => {
       const btn = e.currentTarget;
       const aulaId = Number(btn.dataset.aula);
@@ -259,6 +337,15 @@
       // Para vídeo, enviamos 100% ao marcar manualmente (o aluno declara que assistiu).
       const percentual = tipo === "video" ? 100 : 100;
       btn.disabled = true;
+      if (modoAnonimo) {
+        // Visitante sem sessão: marcação é só visual (sessionStorage), nunca
+        // grava progresso no servidor nem exige conta.
+        marcarProgressoAnonimo(aulaId);
+        const found = aulaPorId(aulaId);
+        if (found) found.aula.status = "concluida";
+        refreshConteudo();
+        return;
+      }
       const r = await api(`/api/escola/aulas/${aulaId}/progresso`, { method: "POST", body: JSON.stringify({ status: "concluida", percentual }) });
       if (r.ok) await carregarCurso(); else btn.disabled = false;
     });

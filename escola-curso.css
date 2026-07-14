@@ -58,6 +58,8 @@
 .plataforma-modulo-head strong { display: block; font-size: .98rem; }
 .plataforma-modulo-head small { color: var(--muted); font-size: .78rem; }
 .plataforma-modulo-bloqueado { color: var(--muted); font-size: .82rem; margin: .5rem 0 0; }
+.plataforma-modulo [data-login-cta] { margin-top: .5rem; }
+.plataforma-conteudo-vazio [data-login-cta] { margin-top: 1rem; }
 .plataforma-aulas { list-style: none; margin: .6rem 0 0; padding: 0; display: grid; gap: .25rem; }
 .plataforma-aula-link, .plataforma-quiz-link {
   width: 100%; text-align: left; display: flex; gap: .55rem; align-items: center;

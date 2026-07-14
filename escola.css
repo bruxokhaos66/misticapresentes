@@ -57,6 +57,7 @@ body.escola-page{
 .escola-card-price small{color:rgba(255,246,225,.72)}
 .escola-card-actions{display:flex;flex-direction:column;gap:8px}
 .escola-card-toggle{margin-top:0}
+.escola-card-note{margin:0;font-size:.74rem;color:rgba(231,215,183,.75);text-align:center}
 
 .escola-detail{margin-top:14px;padding-top:14px;border-top:1px dashed rgba(242,201,109,.3);display:grid;gap:12px}
 .escola-detail[hidden]{display:none}

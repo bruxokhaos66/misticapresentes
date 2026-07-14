@@ -150,15 +150,15 @@ def instalar_conteudo_xamanismo(conn) -> bool:
         VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(slug) DO UPDATE SET titulo=excluded.titulo,
         descricao=excluded.descricao,nota_minima=excluded.nota_minima,certificado=excluded.certificado,
         requer_matricula=excluded.requer_matricula,publicado=excluded.publicado,atualizado_em=excluded.atualizado_em""",
-        (SLUG, "Introdução ao Xamanismo — As Origens da Sabedoria Ancestral", "Curso introdutório sobre história, diversidade cultural, espiritualidade e leitura crítica do xamanismo.", 70, 0, 1, 1, agora),
+        (SLUG, "Introdução ao Xamanismo — As Origens da Sabedoria Ancestral", "Curso introdutório sobre história, diversidade cultural, espiritualidade e leitura crítica do xamanismo.", 70, 0, 0, 1, agora),
     )
     existente = conn.execute("SELECT id FROM curso_modulos WHERE slug=? AND ordem=0", (SLUG,)).fetchone()
     if existente:
         modulo_id = int(existente["id"])
-        conn.execute("UPDATE curso_modulos SET titulo=?,descricao=?,nota_minima=70,publicado=1 WHERE id=?", ("Módulo 1 — O Chamado do Xamanismo", "Fundamentos históricos, diversidade cultural e permanência das tradições.", modulo_id))
+        conn.execute("UPDATE curso_modulos SET titulo=?,descricao=?,nota_minima=70,publicado=1,acesso_publico=1 WHERE id=?", ("Módulo 1 — O Chamado do Xamanismo", "Fundamentos históricos, diversidade cultural e permanência das tradições.", modulo_id))
         conn.execute("DELETE FROM curso_aulas WHERE modulo_id=? AND NOT EXISTS (SELECT 1 FROM aluno_aula_progresso p WHERE p.aula_id=curso_aulas.id)", (modulo_id,))
     else:
-        modulo_id = int(conn.execute("INSERT INTO curso_modulos (slug,titulo,descricao,ordem,nota_minima,publicado,criado_em) VALUES (?,?,?,?,?,?,?)", (SLUG, "Módulo 1 — O Chamado do Xamanismo", "Fundamentos históricos, diversidade cultural e permanência das tradições.", 0, 70, 1, agora)).lastrowid)
+        modulo_id = int(conn.execute("INSERT INTO curso_modulos (slug,titulo,descricao,ordem,nota_minima,publicado,acesso_publico,criado_em) VALUES (?,?,?,?,?,?,?,?)", (SLUG, "Módulo 1 — O Chamado do Xamanismo", "Fundamentos históricos, diversidade cultural e permanência das tradições.", 0, 70, 1, 1, agora)).lastrowid)
 
     aulas = [
         ("O que é o Xamanismo?", "Um primeiro mapa para compreender um termo amplo sem apagar a diversidade cultural.", AULA_1, 0, 12),
@@ -188,8 +188,11 @@ def instalar_conteudo_xamanismo(conn) -> bool:
                 conn.execute("INSERT INTO quiz_opcoes (pergunta_id,texto,correta,ordem) VALUES (?,?,?,?)", (pid, texto, 1 if pos == correta else 0, pos))
 
     # Destino real da progressão: fica bloqueado até as duas aulas e a avaliação.
-    if not conn.execute("SELECT 1 FROM curso_modulos WHERE slug=? AND ordem=1", (SLUG,)).fetchone():
-        m2 = int(conn.execute("INSERT INTO curso_modulos (slug,titulo,descricao,ordem,nota_minima,publicado,criado_em) VALUES (?,?,?,?,?,?,?)", (SLUG, "Módulo 2 — Origens e Caminhos", "Próxima etapa da jornada, em preparação editorial.", 1, 70, 1, agora)).lastrowid)
+    m2_existente = conn.execute("SELECT id FROM curso_modulos WHERE slug=? AND ordem=1", (SLUG,)).fetchone()
+    if m2_existente:
+        conn.execute("UPDATE curso_modulos SET acesso_publico=1 WHERE id=?", (int(m2_existente["id"]),))
+    else:
+        m2 = int(conn.execute("INSERT INTO curso_modulos (slug,titulo,descricao,ordem,nota_minima,publicado,acesso_publico,criado_em) VALUES (?,?,?,?,?,?,?,?)", (SLUG, "Módulo 2 — Origens e Caminhos", "Próxima etapa da jornada, em preparação editorial.", 1, 70, 1, 1, agora)).lastrowid)
         conn.execute("""INSERT INTO curso_aulas (modulo_id,titulo,descricao,tipo,conteudo,ordem,duracao_min,obrigatoria,publicado,criado_em)
             VALUES (?,?,?,?,?,?,?,?,?,?)""", (m2, "Em breve: origens históricas e diversidade", "Conteúdo do próximo módulo em preparação.", "texto", "<h2>Sua próxima etapa foi liberada</h2><p>Em breve, este espaço receberá as origens históricas do xamanismo, sua presença em diferentes regiões e a diversidade das tradições dos povos originários.</p>", 0, 1, 1, 1, agora))
 

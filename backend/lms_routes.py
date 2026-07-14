@@ -28,6 +28,7 @@ from backend.lms import (
     _aulas_obrigatorias_concluidas,
     _melhor_tentativa,
     _quiz_do_modulo,
+    arvore_publica_curso,
     estado_progressao,
     garantir_acesso,
     garantir_tabelas_lms,
@@ -80,6 +81,22 @@ def _serializar_aula(row: dict, progresso: dict | None, incluir_conteudo: bool) 
             }
         )
     return base
+
+
+@router.get("/publico/cursos/{slug}")
+def arvore_publica(slug: str):
+    """Árvore do curso para visitante anônimo (sem sessão, sem matrícula).
+
+    Só entrega o que estiver explicitamente marcado como público no banco
+    (``curso_modulos.acesso_publico``); módulos pagos voltam apenas como
+    metadados bloqueados (id/título/ordem), sem conteúdo, mídia, avaliação ou
+    gabarito. Nenhuma conta, matrícula ou progresso é criado aqui."""
+    with conectar() as conn:
+        garantir_tabelas_lms(conn)
+        dados = arvore_publica_curso(conn, slug)
+    if not dados:
+        raise HTTPException(status_code=404, detail="Curso não encontrado ou sem conteúdo público.")
+    return dados
 
 
 @router.get("/cursos/{slug}")
