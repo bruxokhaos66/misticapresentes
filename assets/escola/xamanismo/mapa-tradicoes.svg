@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" width="1200" height="640" role="img" aria-labelledby="mapaTitulo mapaDesc">
+  <title id="mapaTitulo">Mapa esquemático: a Sibéria e outras regiões com tradições rituais comparáveis</title>
+  <desc id="mapaDesc">Mapa-múndi estilizado e não geograficamente exato. Destaca a Sibéria e a Ásia Central como origem histórica do termo "xamã" e marca, com pontos independentes (sem setas de conexão entre eles), outras regiões onde pesquisadores descrevem práticas rituais comparáveis: Américas, regiões árticas, partes da África e da Oceania. Os pontos não indicam uma origem única ou migração cultural comum.</desc>
+  <rect width="1200" height="640" fill="#07070b"/>
+  <rect x="40" y="40" width="1120" height="480" rx="18" fill="#0b1220" stroke="#536b37" stroke-width="1.5"/>
+  <!-- massas de terra estilizadas, não geograficamente precisas -->
+  <g fill="#152238" stroke="#233549" stroke-width="1">
+    <path d="M120,180 Q220,130 340,160 Q420,120 520,150 Q600,110 700,140 Q820,120 940,160 Q1040,140 1100,200 Q1080,260 980,270 Q900,320 780,300 Q680,340 580,310 Q480,350 380,320 Q280,340 200,290 Q140,250 120,180 Z"/>
+    <path d="M180,340 Q260,330 300,380 Q320,440 280,470 Q220,480 190,430 Q160,390 180,340 Z"/>
+    <path d="M760,360 Q840,350 880,400 Q900,450 850,470 Q790,460 770,410 Q750,380 760,360 Z"/>
+    <path d="M980,340 Q1040,335 1060,370 Q1050,400 1000,395 Q975,370 980,340 Z"/>
+  </g>
+  <!-- Sibéria / Ásia Central destacada -->
+  <path d="M560,140 Q660,110 760,140 Q820,150 840,190 Q760,210 660,190 Q590,190 560,140 Z" fill="#f0c56a" opacity="0.28" stroke="#f0c56a" stroke-width="2"/>
+  <text x="600" y="115" font-family="Georgia, serif" font-size="19" fill="#ffd987">Sibéria e Ásia Central</text>
+  <text x="600" y="138" font-family="Georgia, serif" font-size="13" fill="#d8cbb6">origem histórica documentada do termo “xamã”</text>
+  <!-- pontos independentes, sem linhas de conexão entre si -->
+  <g>
+    <circle cx="230" cy="400" r="9" fill="#efe1c5"/>
+    <text x="245" y="405" font-family="Georgia, serif" font-size="14" fill="#efe1c5">América do Norte</text>
+    <circle cx="270" cy="450" r="9" fill="#efe1c5"/>
+    <text x="285" y="455" font-family="Georgia, serif" font-size="14" fill="#efe1c5">América do Sul</text>
+    <circle cx="580" cy="200" r="9" fill="#efe1c5"/>
+    <text x="595" y="205" font-family="Georgia, serif" font-size="14" fill="#efe1c5">Regiões árticas</text>
+    <circle cx="600" cy="360" r="9" fill="#efe1c5"/>
+    <text x="615" y="365" font-family="Georgia, serif" font-size="14" fill="#efe1c5">Partes da África</text>
+    <circle cx="1010" cy="380" r="9" fill="#efe1c5"/>
+    <text x="850" y="385" font-family="Georgia, serif" font-size="14" fill="#efe1c5">Oceania</text>
+  </g>
+  <text x="70" y="560" font-family="Georgia, serif" font-size="15" fill="#d8cbb6">Mapa esquemático e não geográfico. Cada ponto indica uma região com tradições rituais próprias,</text>
+  <text x="70" y="582" font-family="Georgia, serif" font-size="15" fill="#d8cbb6">estudadas e comparadas pela antropologia — sem indicar uma origem comum ou migração única.</text>
+</svg>

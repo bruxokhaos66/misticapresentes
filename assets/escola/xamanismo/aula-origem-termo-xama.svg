@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" role="img" aria-labelledby="a1Titulo a1Desc">
+  <title id="a1Titulo">Aula 1 — A origem da palavra “xamã”</title>
+  <desc id="a1Desc">Ilustração abstrata de uma taiga siberiana nevada ao entardecer, com abetos escuros e um céu em tons de azul profundo e dourado, sem representar pessoas.</desc>
+  <defs>
+    <linearGradient id="ceuA1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0b1220"/>
+      <stop offset="60%" stop-color="#152238"/>
+      <stop offset="100%" stop-color="#2a2416"/>
+    </linearGradient>
+    <linearGradient id="solA1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f0c56a" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#f0c56a" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#ceuA1)"/>
+  <circle cx="600" cy="430" r="150" fill="url(#solA1)"/>
+  <circle cx="600" cy="430" r="70" fill="#ffd987" opacity="0.85"/>
+  <g fill="#0e1a14">
+    <path d="M60,560 L100,420 L140,560 Z"/>
+    <path d="M140,560 L100,460 L60,560 Z" opacity="0.6"/>
+    <path d="M200,560 L250,380 L300,560 Z"/>
+    <path d="M300,560 L250,430 L200,560 Z" opacity="0.6"/>
+    <path d="M360,560 L400,440 L440,560 Z"/>
+    <path d="M820,560 L870,400 L920,560 Z"/>
+    <path d="M960,560 L1005,430 L1050,560 Z"/>
+    <path d="M1080,560 L1130,410 L1180,560 Z"/>
+    <path d="M1180,560 L1130,450 L1080,560 Z" opacity="0.6"/>
+  </g>
+  <rect x="0" y="540" width="1200" height="90" fill="#050a08"/>
+  <g stroke="#d8cbb6" stroke-width="2" opacity="0.75" stroke-linecap="round">
+    <path d="M470,560 q40,-70 0,-140"/>
+    <path d="M470,420 l-16,-18 M470,420 l16,-18"/>
+    <path d="M470,480 l-14,-16 M470,480 l14,-16"/>
+    <path d="M730,560 q-40,-70 0,-140"/>
+    <path d="M730,420 l-16,-18 M730,420 l16,-18"/>
+    <path d="M730,480 l-14,-16 M730,480 l14,-16"/>
+  </g>
+  <text x="60" y="70" font-family="Georgia, 'Times New Roman', serif" font-size="30" fill="#efe1c5">Aula 1 · A origem da palavra “xamã”</text>
+</svg>
