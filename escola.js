@@ -18,7 +18,10 @@
       tipo: "gratuito",
       preco: 0,
       tags: ["Xamanismo", "Iniciante"],
-      resumo: "Fundamentos do xamanismo: história, práticas, símbolos e como essa sabedoria ancestral se conecta com o dia a dia."
+      resumo: "Fundamentos do xamanismo: história, práticas, símbolos e como essa sabedoria ancestral se conecta com o dia a dia.",
+      // Este curso usa a plataforma de estudo (LMS) em escola-curso.html: as
+      // partes introdutórias abrem direto, sem login/cadastro/matrícula.
+      lms: true
     },
     {
       slug: "rape-uso-tradicao",
@@ -329,10 +332,27 @@
   }
 
   function cardHtml(curso) {
-    const badge = curso.tipo === "gratuito" ? `<span class="escola-badge gratuito">Grátis</span>` : `<span class="escola-badge pago">Pago</span>`;
+    const badge = curso.tipo === "gratuito" ? `<span class="escola-badge gratuito">Gratuito</span>` : `<span class="escola-badge pago">Pago</span>`;
     const price = curso.tipo === "gratuito"
       ? `<div class="escola-card-price"><strong>Grátis</strong><small>acesso imediato</small></div>`
       : `<div class="escola-card-price"><strong>${currency.format(curso.preco)}</strong><small>acesso após confirmação do Pix</small></div>`;
+    if (curso.lms) {
+      // Curso com plataforma de estudo própria (LMS): o botão leva direto para
+      // escola-curso.html, sem exigir login para as partes introdutórias.
+      return `
+        <article class="escola-card" data-course-card="${curso.slug}">
+          ${badge}
+          <div class="escola-card-icon" aria-hidden="true">${curso.icone}</div>
+          <div class="escola-card-tags">${curso.tags.map(tag => `<span>${tag}</span>`).join("")}</div>
+          <h3>${curso.titulo}</h3>
+          <p>${curso.resumo}</p>
+          ${price}
+          <div class="escola-card-actions">
+            <a class="btn btn-full" href="escola-curso.html?curso=${encodeURIComponent(curso.slug)}">Começar agora</a>
+          </div>
+          <p class="escola-card-note">As partes introdutórias não exigem cadastro nem login.</p>
+        </article>`;
+    }
     const primaryAction = curso.tipo === "gratuito"
       ? `<button class="btn btn-full" type="button" data-action="ver">Acessar curso grátis</button>`
       : `<button class="btn btn-full" type="button" data-action="comprar">Comprar acesso</button>`;
@@ -356,6 +376,7 @@
   }
 
   function setupCard(article, curso) {
+    if (curso.lms) return; // botão já é um link direto; nada para vincular aqui.
     const detail = article.querySelector("[data-detail]");
     const materialsBox = article.querySelector("[data-materials]");
     let materiaisLoaded = false;
