@@ -1,0 +1,158 @@
+const { test, expect } = require("@playwright/test");
+
+// Simula a árvore pública real (mesmo formato devolvido por
+// GET /api/escola/publico/cursos/xamanismo-introducao): 2 módulos públicos
+// com as 3 aulas (partes 1-3) e 1 módulo pago só com metadados bloqueados.
+const arvorePublica = {
+  slug: "xamanismo-introducao",
+  titulo: "Introdução ao Xamanismo — As Origens da Sabedoria Ancestral",
+  descricao: "Curso introdutório sobre história, diversidade cultural, espiritualidade e leitura crítica do xamanismo.",
+  imagem: null,
+  gratuito: true,
+  modulos: [
+    {
+      id: 1,
+      titulo: "Módulo 1 — O Chamado do Xamanismo",
+      descricao: "Fundamentos históricos, diversidade cultural e permanência das tradições.",
+      ordem: 0,
+      publico: true,
+      bloqueado: false,
+      aulas: [
+        {
+          id: 11,
+          titulo: "O que é o Xamanismo?",
+          descricao: "Um primeiro mapa para compreender um termo amplo.",
+          tipo: "texto",
+          conteudo: "<h2>O que é o Xamanismo?</h2><p>Parte 1 pública.</p>",
+          video_url: null,
+          capa_url: null,
+          material_url: null,
+          ordem: 0,
+          duracao_min: 12,
+          obrigatoria: true,
+        },
+        {
+          id: 12,
+          titulo: "Por que o Xamanismo ainda existe?",
+          descricao: "Tradições vivas e responsabilidade no presente.",
+          tipo: "texto",
+          conteudo: "<h2>Tradições vivas</h2><p>Parte 2 pública.</p>",
+          video_url: null,
+          capa_url: null,
+          material_url: null,
+          ordem: 1,
+          duracao_min: 12,
+          obrigatoria: true,
+        },
+      ],
+    },
+    {
+      id: 2,
+      titulo: "Módulo 2 — Origens e Caminhos",
+      descricao: "Próxima etapa da jornada.",
+      ordem: 1,
+      publico: true,
+      bloqueado: false,
+      aulas: [
+        {
+          id: 13,
+          titulo: "Em breve: origens históricas e diversidade",
+          descricao: null,
+          tipo: "texto",
+          conteudo: "<h2>Parte 3 pública</h2><p>Conteúdo em preparação.</p>",
+          video_url: null,
+          capa_url: null,
+          material_url: null,
+          ordem: 0,
+          duracao_min: 1,
+          obrigatoria: true,
+        },
+      ],
+    },
+    {
+      id: 3,
+      titulo: "Módulo 3 — Conteúdo premium (futuro)",
+      ordem: 2,
+      publico: false,
+      bloqueado: true,
+    },
+  ],
+};
+
+async function mockApiAnonima(page) {
+  await page.route("**/api/alunos/me", route => route.fulfill({ status: 401, contentType: "application/json", body: "{}" }));
+  await page.route("**/api/escola/cursos/xamanismo-introducao", route =>
+    route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ detail: "Faça login para continuar." }) })
+  );
+  await page.route("**/api/escola/publico/cursos/xamanismo-introducao", route =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(arvorePublica) })
+  );
+}
+
+// "Failed to load resource" é o diagnóstico automático do Chromium para toda
+// resposta HTTP não-2xx (inclui o 401 esperado do fallback anônimo real e a
+// fonte do Google Fonts, bloqueada por falta de rede externa neste sandbox de
+// CI) — não é um erro de JavaScript da aplicação. `pageerror` (exceções reais
+// não tratadas) continua verificado à parte, sem filtro.
+const ehDiagnosticoDeRecurso = texto => /Failed to load resource/i.test(texto);
+
+test.describe("Acesso público ao curso de Xamanismo (visitante anônimo)", () => {
+  test("escola.html mostra o curso gratuito, sem card duplicado", async ({ page }) => {
+    const erros = [];
+    page.on("console", msg => { if (msg.type() === "error" && !ehDiagnosticoDeRecurso(msg.text())) erros.push(msg.text()); });
+    page.on("pageerror", erro => erros.push(erro.message));
+    await mockApiAnonima(page);
+
+    await page.goto("/escola.html");
+    const cards = page.locator('[data-course-card="xamanismo-introducao"]');
+    await expect(cards).toHaveCount(1); // não duplica o card
+    await expect(cards.locator(".escola-badge.gratuito")).toHaveText("Gratuito");
+    await expect(cards.getByRole("link", { name: "Começar agora" })).toHaveAttribute(
+      "href",
+      "escola-curso.html?curso=xamanismo-introducao"
+    );
+    expect(erros).toEqual([]);
+  });
+
+  test("visitante abre o curso sem login e navega pelas 3 partes gratuitas", async ({ page }) => {
+    const erros = [];
+    const chamadasArvorePublica = [];
+    page.on("console", msg => { if (msg.type() === "error" && !ehDiagnosticoDeRecurso(msg.text())) erros.push(msg.text()); });
+    page.on("pageerror", erro => erros.push(erro.message));
+    await mockApiAnonima(page);
+    await page.route("**/api/escola/publico/cursos/xamanismo-introducao", route => {
+      chamadasArvorePublica.push(1);
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(arvorePublica) });
+    });
+
+    await page.goto("/escola-curso.html?curso=xamanismo-introducao");
+
+    // Não é redirecionado para tela de login nas partes públicas.
+    await expect(page.locator(".plataforma-login")).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "O que é o Xamanismo?", level: 1 })).toBeVisible();
+
+    // Navega pelas 3 partes públicas usando "Próxima →" (funciona em qualquer
+    // viewport, sem depender de abrir o drawer de módulos no mobile).
+    await page.locator("[data-next]").click();
+    await expect(page.getByRole("heading", { name: "Por que o Xamanismo ainda existe?", level: 1 })).toBeVisible();
+    await page.locator("[data-next]").click();
+    await expect(page.getByRole("heading", { name: "Em breve: origens históricas e diversidade", level: 1 })).toBeVisible();
+
+    // No mobile a lista de módulos vive num drawer fechado por padrão; no
+    // desktop já está visível na barra lateral. Abre o drawer só quando ele
+    // existe (botão "☰ Módulos" visível) para ver o módulo futuro bloqueado.
+    const abrirModulos = page.locator("[data-drawer-toggle]");
+    if (await abrirModulos.isVisible()) await abrirModulos.click();
+    await expect(page.getByText("Módulo 3 — Conteúdo premium (futuro)")).toBeVisible();
+    await expect(page.getByText("🔒 Conteúdo pago")).toBeVisible();
+
+    // Clicar no recurso protegido só agora pede login (CTA).
+    await page.locator("[data-login-cta]").first().click();
+    await expect(page.locator(".plataforma-login")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Entrar na Escola Mística" })).toBeVisible();
+
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+    expect(erros).toEqual([]);
+    expect(chamadasArvorePublica.length).toBeLessThanOrEqual(2); // sem loop de requisições
+  });
+});
