@@ -439,22 +439,39 @@ def test_produto_alterado_apos_criacao_nao_muda_classificacao_do_item():
 
 
 def test_pedido_legado_ambiguo_nao_confirma_silenciosamente():
+    """Monta o pedido diretamente no banco (não via /api/vendas), para que
+    não exista audit_log('pedido','criar') associado — do contrário,
+    init_db() (que roda a cada conectar()) reclassificaria o item de volta
+    para 'fisico' a partir dessa evidência antes mesmo da confirmação
+    (comportamento correto do backfill, coberto em
+    tests/test_tipo_item_classificacao_legado.py). Aqui o objetivo é o caso
+    sem nenhuma evidência: o valor 'legado_ambiguo' gravado pelo próprio
+    ALTER TABLE (ver database/migrations.py) para um item legado real."""
     produto = criar_produto(sob_encomenda=False, quantidade=5)
-    pedido = criar_pedido_fisico(produto, quantidade=1)
-    # Simula um item legado cuja classificação nunca foi corretamente
-    # migrada/backfillada (dado corrompido/ambíguo).
     with conectar() as conn:
-        conn.execute("UPDATE pedidos SET estoque_baixado=0 WHERE id=?", (pedido["id"],))
-        conn.execute("UPDATE pedidos_itens SET tipo_item='' WHERE pedido_id=?", (pedido["id"],))
+        cur = conn.execute(
+            "INSERT INTO pedidos (cliente, status, total_final, estoque_baixado) VALUES (?,?,?,0)",
+            ("Cliente legado ambíguo", "Aguardando pagamento", produto["preco"]),
+        )
+        pedido_id = int(cur.lastrowid)
+        conn.execute(
+            "INSERT INTO pedidos_itens (pedido_id, codigo_p, nome_p, quantidade, valor_unitario, valor_total) VALUES (?,?,?,?,?,?)",
+            (pedido_id, produto["codigo_p"], produto["nome"], 1, produto["preco"], produto["preco"]),
+        )
         conn.commit()
 
-    resposta = confirmar(pedido["id"], pedido["total_final"])
+    pedido = client.get(f"/api/pedidos/{pedido_id}", headers=HEADERS).json()
+    with conectar() as conn:
+        tipo = conn.execute("SELECT tipo_item FROM pedidos_itens WHERE pedido_id=?", (pedido_id,)).fetchone()["tipo_item"]
+    assert tipo == "legado_ambiguo"  # o DEFAULT do ALTER TABLE, sem nenhuma evidência para resolver
+
+    resposta = confirmar(pedido_id, pedido["total_final"])
     assert resposta.status_code == 409, resposta.text
     assert "conciliação administrativa" in resposta.json()["detail"].lower()
 
-    pedido_apos = client.get(f"/api/pedidos/{pedido['id']}", headers=HEADERS).json()
+    pedido_apos = client.get(f"/api/pedidos/{pedido_id}", headers=HEADERS).json()
     assert pedido_apos["status"] == "Aguardando pagamento"  # não confirma silenciosamente
-    assert estoque(produto["id"]) == 4  # nem baixa nem repõe: fica exatamente como estava (reserva original)
+    assert estoque(produto["id"]) == 5  # nem baixa nem repõe: nunca foi tocado
 
 
 # 15 — rollback em falha intermediária (carrinho misto: item físico sem estoque no meio do loop)

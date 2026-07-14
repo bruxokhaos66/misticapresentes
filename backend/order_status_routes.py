@@ -24,14 +24,24 @@ limitar_cancelar_pedido = limitar_requisicoes("cancelar_pedido", limite=20, jane
 router = APIRouter(prefix="/api", tags=["pedidos-status"])
 
 # Classificação persistida de cada item do pedido (pedidos_itens.tipo_item —
-# ver database/migrations.py). Decidida no momento da criação do pedido e
-# nunca mais reavaliada contra o catálogo depois: um produto sob encomenda tem
+# ver database/migrations.py, coluna com CHECK travando estes três valores).
+# Calculada pelo servidor a partir do produto autoritativo no momento da
+# criação do pedido (nunca aceita de um campo enviado pelo cliente) e nunca
+# mais reavaliada contra o catálogo depois: um produto sob encomenda tem
 # estoque físico zero por definição, então a confirmação de pagamento nunca
-# pode tentar baixar/repor estoque físico de um item classificado como
-# TIPO_ITEM_SOB_ENCOMENDA, nem tratar como físico um item cuja classificação
-# não seja reconhecida (ver baixar_estoque_do_pedido).
+# pode tentar baixar/repor estoque físico de um item TIPO_ITEM_SOB_ENCOMENDA.
+#
+# TIPO_ITEM_LEGADO_AMBIGUO é o valor padrão para itens de pedidos criados
+# antes desta coluna existir cuja classificação real não pôde ser
+# reconstruída com evidência confiável (ver
+# database/migrations.py::_backfill_tipo_item_pedidos_itens). Nunca é tratado
+# como físico nem como sob encomenda — bloqueia a baixa de estoque para
+# conciliação administrativa (ver baixar_estoque_do_pedido), do mesmo jeito
+# que qualquer outro valor não reconhecido (dado corrompido/editado por fora
+# do fluxo normal).
 TIPO_ITEM_FISICO = "fisico"
 TIPO_ITEM_SOB_ENCOMENDA = "sob_encomenda"
+TIPO_ITEM_LEGADO_AMBIGUO = "legado_ambiguo"
 TIPOS_ITEM_VALIDOS = {TIPO_ITEM_FISICO, TIPO_ITEM_SOB_ENCOMENDA}
 
 STATUS_PEDIDO_AGUARDANDO_ENCOMENDA = "Aguardando encomenda"
@@ -232,13 +242,14 @@ def buscar_produto_para_baixa(conn, item):
 
 
 def _tipo_item_normalizado(item) -> str:
-    """Lê pedidos_itens.tipo_item sem assumir nada: só os dois valores
-    conhecidos (TIPO_ITEM_FISICO/TIPO_ITEM_SOB_ENCOMENDA) são aceitos. Um
-    valor vazio/nulo ou desconhecido (dado corrompido, coluna alterada por
-    fora do fluxo normal) não é tratado como física por padrão — ver
-    baixar_estoque_do_pedido/repor_estoque_cancelamento, que bloqueiam em vez
-    de adivinhar."""
-    return str(item["tipo_item"] or "").strip()
+    """Lê pedidos_itens.tipo_item sem assumir nada: normaliza só
+    maiúsculas/minúsculas e espaços (nunca localização/tradução de texto) e
+    devolve como está — quem chama decide o que fazer com um valor fora de
+    TIPOS_ITEM_VALIDOS (TIPO_ITEM_LEGADO_AMBIGUO ou qualquer outro dado
+    corrompido/editado por fora do fluxo normal). Nunca tratado como físico
+    por padrão — ver baixar_estoque_do_pedido/repor_estoque_cancelamento, que
+    bloqueiam em vez de adivinhar."""
+    return str(item["tipo_item"] or "").strip().lower()
 
 
 def pedido_tem_item_sob_encomenda(conn, venda_id: int) -> bool:
