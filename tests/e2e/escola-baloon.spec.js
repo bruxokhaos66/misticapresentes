@@ -65,6 +65,7 @@ test("camadas permanecem filhas do card e limitadas ao halo", async ({ page }) =
         return {
           selector,
           directChild: element.parentElement === root,
+          display: style.display,
           pointerEvents: style.pointerEvents,
           x: rect.x,
           y: rect.y,
@@ -87,6 +88,13 @@ test("camadas permanecem filhas do card e limitadas ao halo", async ({ page }) =
   for (const layer of audit.layers) {
     expect(layer.directChild).toBe(true);
     expect(layer.pointerEvents).toBe("none");
+
+    if (layer.display === "none") {
+      expect(audit.viewport.width).toBeLessThanOrEqual(560);
+      expect(layer.selector).toBe(".escola-fx-smoke");
+      continue;
+    }
+
     expect(layer.x).toBeGreaterThanOrEqual(layer.rootLeft - 50);
     expect(layer.y).toBeGreaterThanOrEqual(layer.rootTop - 70);
     expect(layer.right).toBeLessThanOrEqual(layer.rootRight + 50);
@@ -147,6 +155,7 @@ test("entrada, scroll, resize e fechamento não piscam nem alteram geometria", a
 
 test("20 ciclos não deixam observers, listeners ou camadas órfãs", async ({ page }) => {
   test.setTimeout(120_000);
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.addInitScript(() => {
     window.__escolaAudit = { observers: 0, resizeListeners: 0 };
     const NativeObserver = window.MutationObserver;
@@ -181,7 +190,27 @@ test("20 ciclos não deixam observers, listeners ou camadas órfãs", async ({ p
   const initialCard = page.locator(COMPONENT);
   await initialCard.waitFor({ state: "attached" });
   await initialCard.evaluate((element) => element.classList.add("is-visible"));
-  await initialCard.getByRole("button", { name: "Fechar aviso da Escola Mística" }).click();
+
+  const cta = initialCard.getByRole("link", { name: "Ver cursos" });
+  await cta.evaluate((element) => {
+    window.__escolaCtaClicked = false;
+    element.addEventListener("click", (event) => {
+      event.preventDefault();
+      window.__escolaCtaClicked = true;
+    }, { once: true });
+  });
+  await cta.click();
+  expect(await page.evaluate(() => window.__escolaCtaClicked)).toBe(true);
+
+  const initialClose = initialCard.getByRole("button", { name: "Fechar aviso da Escola Mística" });
+  const closeSize = await initialClose.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return { width: rect.width, height: rect.height, zIndex: Number(getComputedStyle(element).zIndex) };
+  });
+  expect(closeSize.width).toBeGreaterThanOrEqual(36);
+  expect(closeSize.height).toBeGreaterThanOrEqual(36);
+  expect(closeSize.zIndex).toBeGreaterThanOrEqual(10);
+  await initialClose.click();
   await expect(initialCard).toHaveCount(0, { timeout: 1_000 });
   const baseline = await page.evaluate(() => ({ ...window.__escolaAudit }));
 

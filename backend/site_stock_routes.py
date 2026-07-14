@@ -14,9 +14,13 @@ from pydantic import BaseModel, Field
 from backend.audit import registrar_auditoria
 from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.database import conectar, listar
-from backend.idempotency import resposta_idempotente_existente, salvar_resposta_idempotente
+from backend.idempotency import (
+    concluir_chave_idempotente,
+    liberar_chave_idempotente,
+    reivindicar_chave_idempotente,
+)
 from backend.logging_config import get_logger
-from backend.order_status_routes import MINUTOS_EXPIRACAO_PEDIDO_PENDENTE, STATUS_PEDIDO
+from backend.order_status_routes import MINUTOS_EXPIRACAO_PEDIDO_PENDENTE, STATUS_PEDIDO, TIPO_ITEM_FISICO
 from backend.panel_sessions import exigir_sessao_ou_chave_api
 from backend.pix import gerar_pix_do_pedido
 from backend.rate_limit import _client_ip, limitar_requisicoes
@@ -269,6 +273,29 @@ def limpar_links_playlist(links: list[str]) -> list[str]:
     return limpos
 
 
+def payload_idempotencia_venda(venda: VendaSiteIn) -> dict:
+    """Retrato canônico do que define um pedido para fins de idempotência:
+    apenas o carrinho e o cliente, nunca subtotal/desconto/total (o servidor
+    já ignora esses valores vindos do navegador e recalcula tudo)."""
+    itens = sorted(
+        (
+            {
+                "produto_id": item.produto_id,
+                "codigo_p": (item.codigo_p or "").strip().upper(),
+                "quantidade": item.quantidade,
+            }
+            for item in venda.itens
+        ),
+        key=lambda item: (item["produto_id"] or 0, item["codigo_p"]),
+    )
+    return {
+        "cliente": venda.cliente,
+        "telefone": venda.telefone,
+        "cupom": str(venda.cupom or "").strip().upper(),
+        "itens": itens,
+    }
+
+
 @router.post("/vendas", dependencies=[Depends(limitar_criacao_venda)])
 def registrar_venda_site(
     venda: VendaSiteIn,
@@ -278,8 +305,9 @@ def registrar_venda_site(
 ):
     validar_site_api_key(x_mistica_api_key)
 
-    with conectar() as conn_check:
-        resposta_existente = resposta_idempotente_existente(conn_check, "criar_pedido", idempotency_key)
+    resposta_existente = reivindicar_chave_idempotente(
+        conectar, "criar_pedido", idempotency_key, payload_idempotencia_venda(venda)
+    )
     if resposta_existente is not None:
         return resposta_existente
 
@@ -358,8 +386,8 @@ def registrar_venda_site(
                 conn.execute(
                     """
                     INSERT INTO pedidos_itens
-                    (pedido_id, codigo_p, nome_p, quantidade, custo_unitario, valor_unitario, valor_total)
-                    VALUES (?,?,?,?,?,?,?)
+                    (pedido_id, codigo_p, nome_p, quantidade, custo_unitario, valor_unitario, valor_total, tipo_item)
+                    VALUES (?,?,?,?,?,?,?,?)
                     """,
                     (
                         venda_id,
@@ -369,6 +397,7 @@ def registrar_venda_site(
                         calculado["custo_unitario"],
                         calculado["valor_unitario"],
                         calculado["valor_total"],
+                        TIPO_ITEM_FISICO,
                     ),
                 )
 
@@ -418,10 +447,11 @@ def registrar_venda_site(
                 "pix_copia_cola": pix["copia_cola"] if pix else None,
             }
             registrar_auditoria(conn, "pedido", venda_id, "criar", venda.vendedor, depois={"total_final": total_final, "itens": len(itens_calculados), "status": venda.status})
-            salvar_resposta_idempotente(conn, "criar_pedido", idempotency_key, resposta)
+            concluir_chave_idempotente(conn, "criar_pedido", idempotency_key, resposta)
             conn.commit()
         except Exception:
             conn.rollback()
+            liberar_chave_idempotente(conectar, "criar_pedido", idempotency_key)
             raise
 
     return resposta

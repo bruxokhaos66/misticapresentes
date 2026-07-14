@@ -39,11 +39,24 @@ PUT /api/pagamentos/{pagamento_id}/status
 
 ## Integração com pedidos
 
-Quando um pagamento é registrado como `Confirmado`:
+Quando um pagamento é registrado como `Confirmado`, o backend compara o
+`valor` recebido com `pedidos.total_final` (em centavos, via `Decimal`,
+nunca `float ==`) antes de decidir o que fazer:
 
-1. A venda recebe status `Pagamento confirmado`.
-2. Um registro é criado no histórico do pedido.
+1. **Valor exato:** a venda recebe status `Pagamento confirmado`, o estoque é
+   baixado uma única vez, e um registro é criado no histórico do pedido.
+2. **Valor menor ou maior que o total:** o pedido **não** é confirmado nem
+   tem o estoque baixado. Ele fica com status `Pagamento divergente`
+   (a menos que já tenha avançado além da confirmação, caso em que só a
+   divergência é registrada no histórico) e o pagamento fica marcado com
+   `status_conciliacao` (`divergente_menor`/`divergente_maior`) e
+   `motivo_divergencia` para conciliação administrativa posterior.
 3. O Admin recarrega os pedidos da API.
+
+Um pedido `Pagamento divergente` continua sujeito à expiração automática
+(mesmo prazo de `Aguardando pagamento`): se ninguém resolver a divergência a
+tempo, o pedido é cancelado e o estoque reservado é devolvido, exatamente
+como já acontecia para pedidos nunca pagos.
 
 ## Admin
 

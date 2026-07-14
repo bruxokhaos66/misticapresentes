@@ -19,6 +19,60 @@ window.misticaSiteConfig = {
 
 (() => {
   const cfg = window.misticaSiteConfig || {};
+  const productionMode = cfg.serverMode === "production" || cfg.storageMode === "api_first" || cfg.usePublicDomainAccess === true;
+  if (!productionMode) return;
+
+  window.misticaCatalogState = "loading";
+  document.documentElement.dataset.catalogState = "loading";
+
+  function updateCatalogUi(state) {
+    const grid = document.querySelector("[data-product-grid]");
+    const pixButton = document.querySelector("[data-generate-pix]");
+    const blocked = state !== "ready";
+
+    if (pixButton) {
+      pixButton.disabled = blocked;
+      pixButton.setAttribute("aria-disabled", blocked ? "true" : "false");
+    }
+
+    if (!grid || state === "ready") return;
+    grid.replaceChildren();
+    const notice = document.createElement("div");
+    notice.className = "warning-box";
+    notice.setAttribute("role", "status");
+    notice.textContent = state === "error"
+      ? "Catálogo indisponível no momento. As compras estão temporariamente bloqueadas."
+      : "Carregando catálogo oficial da Mística...";
+    grid.appendChild(notice);
+  }
+
+  document.addEventListener("click", event => {
+    if (window.misticaCatalogState === "ready") return;
+    const target = event.target?.closest?.("button, a");
+    if (!target) return;
+    const onclick = target.getAttribute("onclick") || "";
+    if (target.matches("[data-generate-pix]") || onclick.includes("addToCart(")) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (typeof window.setStatus === "function") {
+        window.setStatus("Compra temporariamente indisponível até o catálogo oficial carregar.");
+      }
+    }
+  }, true);
+
+  window.addEventListener("mistica:catalog-state", event => {
+    updateCatalogUi(event.detail?.state || window.misticaCatalogState || "error");
+  });
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => updateCatalogUi(window.misticaCatalogState), { once: true });
+  } else {
+    updateCatalogUi(window.misticaCatalogState);
+  }
+})();
+
+(() => {
+  const cfg = window.misticaSiteConfig || {};
   const API_BASE = String(cfg.apiBaseUrl || "https://api.misticaesotericos.com.br").replace(/\/$/, "");
   const productionMode = cfg.serverMode === "production" || cfg.storageMode === "api_first" || cfg.usePublicDomainAccess === true;
   if (!productionMode) return;
@@ -74,11 +128,6 @@ window.misticaSiteConfig = {
       adminContent.removeAttribute("hidden");
       adminContent.style.display = "block";
     }
-    // Só um indício de UI para saber se vale a pena perguntar ao servidor na
-    // próxima visita (ver restaurarSessao). A autorização real é sempre via
-    // cookie HttpOnly revalidado em /api/auth/me; guardar o objeto de sessão
-    // (nome, perfil, permissões) no sessionStorage seria só superfície extra
-    // de furto via XSS, sem uso funcional.
     try { sessionStorage.setItem("misticaAdminUnlocked", "true"); } catch {}
   }
 
@@ -165,9 +214,6 @@ window.misticaSiteConfig = {
   };
 
   const carregarPainelAdmin = () => {
-    // v2-admin-products, v2-courses e campaign-admin só existem para o
-    // painel embutido em #admin: carregados aqui, sob demanda, em vez de
-    // irem para o bundle de todo visitante público.
     loadStyle("misticaAdminProductsStyle", "v2-admin-products.css?v=20260708-admin-products");
     loadStyle("misticaCoursesStyle", "v2-courses.css?v=20260710-cursos");
     loadScript("misticaAdminProductsScript", "v2-admin-products.js?v=20260708-admin-products");
@@ -176,12 +222,9 @@ window.misticaSiteConfig = {
   };
 
   const iniciar = () => {
-    loadScript("misticaProductionGuardScript", "site-production-guard.js?v=20260710-no-browser-secret");
+    loadScript("misticaProductionGuardScript", "/site-production-guard.js?v=20260713-checkout-estavel-3");
     if (!adminRoute) return;
     if (!onAdminPage) {
-      // O painel administrativo não faz parte do bundle público: rotas
-      // antigas para #admin/?admin=mistica são encaminhadas para a página
-      // separada, que carrega o HTML/CSS/JS do admin sob demanda.
       window.location.replace("admin.html");
       return;
     }

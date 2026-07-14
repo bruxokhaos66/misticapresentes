@@ -5,7 +5,7 @@ import secrets
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
@@ -13,7 +13,7 @@ from backend.audit import registrar_auditoria
 from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.database import conectar
 from backend.logging_config import get_logger
-from backend.panel_sessions import exigir_sessao_ou_chave_api
+from backend.panel_sessions import exigir_sessao_ou_chave_api, validar_sessao
 from backend.rate_limit import limitar_requisicoes
 
 logger = get_logger(__name__)
@@ -23,9 +23,34 @@ limitar_cancelar_pedido = limitar_requisicoes("cancelar_pedido", limite=20, jane
 
 router = APIRouter(prefix="/api", tags=["pedidos-status"])
 
+# Classificação persistida de cada item do pedido (pedidos_itens.tipo_item —
+# ver database/migrations.py, coluna com CHECK travando estes três valores).
+# Calculada pelo servidor a partir do produto autoritativo no momento da
+# criação do pedido (nunca aceita de um campo enviado pelo cliente) e nunca
+# mais reavaliada contra o catálogo depois: um produto sob encomenda tem
+# estoque físico zero por definição, então a confirmação de pagamento nunca
+# pode tentar baixar/repor estoque físico de um item TIPO_ITEM_SOB_ENCOMENDA.
+#
+# TIPO_ITEM_LEGADO_AMBIGUO é o valor padrão para itens de pedidos criados
+# antes desta coluna existir cuja classificação real não pôde ser
+# reconstruída com evidência confiável (ver
+# database/migrations.py::_backfill_tipo_item_pedidos_itens). Nunca é tratado
+# como físico nem como sob encomenda — bloqueia a baixa de estoque para
+# conciliação administrativa (ver baixar_estoque_do_pedido), do mesmo jeito
+# que qualquer outro valor não reconhecido (dado corrompido/editado por fora
+# do fluxo normal).
+TIPO_ITEM_FISICO = "fisico"
+TIPO_ITEM_SOB_ENCOMENDA = "sob_encomenda"
+TIPO_ITEM_LEGADO_AMBIGUO = "legado_ambiguo"
+TIPOS_ITEM_VALIDOS = {TIPO_ITEM_FISICO, TIPO_ITEM_SOB_ENCOMENDA}
+
+STATUS_PEDIDO_AGUARDANDO_ENCOMENDA = "Aguardando encomenda"
+
 STATUS_PEDIDO = {
     "Aguardando pagamento",
+    "Pagamento divergente",
     "Pagamento confirmado",
+    STATUS_PEDIDO_AGUARDANDO_ENCOMENDA,
     "Separando pedido",
     "Pronto para retirada",
     "Entregue",
@@ -34,6 +59,20 @@ STATUS_PEDIDO = {
 }
 
 STATUS_BAIXA_ESTOQUE = {"Pagamento confirmado", "Separando pedido"}
+
+# Status a partir dos quais o pedido já avançou além da confirmação de
+# pagamento. Uma divergência de valor detectada nesse ponto (ex.: um segundo
+# pagamento incompleto registrado por engano) não deve regredir o status do
+# pedido de volta para "Pagamento divergente" — apenas fica registrada no
+# histórico para conciliação administrativa.
+STATUS_PEDIDO_CONCLUIDOS = {
+    "Pagamento confirmado",
+    STATUS_PEDIDO_AGUARDANDO_ENCOMENDA,
+    "Separando pedido",
+    "Pronto para retirada",
+    "Entregue",
+    "Concluído",
+}
 
 STATUS_ALIASES = {"Pago": "Pagamento confirmado", "Em separação": "Separando pedido"}
 
@@ -46,6 +85,40 @@ def normalizar_status(status: str) -> str:
     if status not in STATUS_PEDIDO:
         raise HTTPException(status_code=400, detail="Status de pedido inválido.")
     return status
+
+
+def bloquear_avanco_financeiro_sem_conciliacao(conn, venda_id: int, status_destino: str):
+    """'Pagamento confirmado'/'Aguardando encomenda' (e a baixa de estoque que
+    dela depende) só podem ser produzidos pela conciliação de valor em
+    backend/payment_routes.py (POST /api/pagamentos ou o webhook Pix, que
+    comparam o valor recebido com pedidos.total_final antes de confirmar). As
+    rotas genéricas de status de pedido (esta e a duplicata em
+    order_api_guard_inner_routes.py) aceitam esses dois valores como válidos
+    de STATUS_PEDIDO para fins de consulta/histórico, mas nunca podem ser o
+    caminho que produz esse estado — senão qualquer chamada com a chave de
+    API confirmaria um pedido sem nenhum valor ter sido validado. Pelo mesmo
+    motivo, "Separando pedido" (que também baixa estoque, ver
+    STATUS_BAIXA_ESTOQUE) só é aceito depois que o pedido já estiver de fato
+    confirmado."""
+    if status_destino == STATUS_PEDIDO_AGUARDANDO_ENCOMENDA:
+        raise HTTPException(
+            status_code=409,
+            detail="Aguardando encomenda só pode ser definido via POST /api/pagamentos, com o valor recebido conciliado contra o total do pedido.",
+        )
+    if status_destino not in STATUS_BAIXA_ESTOQUE:
+        return
+    if status_destino == "Pagamento confirmado":
+        raise HTTPException(
+            status_code=409,
+            detail="Pagamento confirmado só pode ser definido via POST /api/pagamentos, com o valor recebido conciliado contra o total do pedido.",
+        )
+    venda = conn.execute("SELECT status FROM pedidos WHERE id=?", (venda_id,)).fetchone()
+    status_atual = str(venda["status"] or "") if venda else ""
+    if status_atual not in STATUS_PEDIDO_CONCLUIDOS:
+        raise HTTPException(
+            status_code=409,
+            detail="Só é possível avançar para 'Separando pedido' depois que o pagamento for confirmado via POST /api/pagamentos.",
+        )
 
 
 class PedidoStatusIn(BaseModel):
@@ -64,21 +137,27 @@ def validar_site_api_key(chave_recebida: str | None):
 
 
 def expirar_pedidos_pendentes(conn, agora: str | None = None):
-    """Cancela automaticamente pedidos 'Aguardando pagamento' cujo prazo (expira_em)
-    já passou e cujo pagamento nunca foi confirmado, devolvendo ao estoque a
-    reserva feita na criação do pedido (ver site_stock_routes.py).
+    """Cancela automaticamente pedidos cujo prazo (expira_em) já passou e cujo
+    pagamento nunca foi confirmado com o valor correto, devolvendo ao estoque
+    a reserva feita na criação do pedido (ver site_stock_routes.py).
+
+    Cobre tanto 'Aguardando pagamento' quanto 'Pagamento divergente': um
+    pagamento com valor incorreto (ver backend/payment_routes.py) não é
+    tratado como pago, então a reserva de estoque não pode ficar presa para
+    sempre só porque o pedido saiu de 'Aguardando pagamento' — ele continua
+    expirando no mesmo prazo se ninguém resolver a divergência a tempo.
 
     Roda periodicamente em cada worker (ver backend/main.py), então mais de um
     processo pode disputar o mesmo pedido vencido ao mesmo tempo. O UPDATE
     abaixo só processa o pedido se conseguir reivindicá-lo (WHERE status ainda
-    'Aguardando pagamento'); o SQLite serializa escritores, então um worker que
+    é um dos dois acima); o SQLite serializa escritores, então um worker que
     perder a disputa vê rowcount 0 e pula o pedido, evitando repor estoque em
     dobro."""
     agora = agora or datetime.now().isoformat(timespec="seconds")
     expirados = conn.execute(
         """
         SELECT id FROM pedidos
-        WHERE COALESCE(status,'') = 'Aguardando pagamento'
+        WHERE COALESCE(status,'') IN ('Aguardando pagamento', 'Pagamento divergente')
           AND expira_em IS NOT NULL
           AND expira_em < ?
         """,
@@ -87,7 +166,7 @@ def expirar_pedidos_pendentes(conn, agora: str | None = None):
     total_expirados = 0
     for venda in expirados:
         claim = conn.execute(
-            "UPDATE pedidos SET status='Cancelado' WHERE id=? AND status='Aguardando pagamento'",
+            "UPDATE pedidos SET status='Cancelado' WHERE id=? AND status IN ('Aguardando pagamento', 'Pagamento divergente')",
             (venda["id"],),
         )
         if claim.rowcount == 0:
@@ -109,7 +188,7 @@ def expirar_pedidos_pendentes(conn, agora: str | None = None):
 def venda_para_pedido(conn, venda):
     itens = conn.execute(
         """
-        SELECT id, pedido_id AS venda_id, codigo_p, nome_p, quantidade, custo_unitario, valor_unitario, valor_total
+        SELECT id, pedido_id AS venda_id, codigo_p, nome_p, quantidade, custo_unitario, valor_unitario, valor_total, tipo_item
         FROM pedidos_itens
         WHERE pedido_id=?
         ORDER BY id ASC
@@ -162,7 +241,36 @@ def buscar_produto_para_baixa(conn, item):
     return None
 
 
-def baixar_estoque_do_pedido(conn, venda_id: int, usuario: str, agora: str, motivo: str = "Baixa automática ao confirmar/separar pedido"):
+def _tipo_item_normalizado(item) -> str:
+    """Lê pedidos_itens.tipo_item sem assumir nada: normaliza só
+    maiúsculas/minúsculas e espaços (nunca localização/tradução de texto) e
+    devolve como está — quem chama decide o que fazer com um valor fora de
+    TIPOS_ITEM_VALIDOS (TIPO_ITEM_LEGADO_AMBIGUO ou qualquer outro dado
+    corrompido/editado por fora do fluxo normal). Nunca tratado como físico
+    por padrão — ver baixar_estoque_do_pedido/repor_estoque_cancelamento, que
+    bloqueiam em vez de adivinhar."""
+    return str(item["tipo_item"] or "").strip().lower()
+
+
+def pedido_tem_item_sob_encomenda(conn, venda_id: int) -> bool:
+    """Usado para decidir, na confirmação de pagamento, se o pedido deve ir
+    para STATUS_PEDIDO_AGUARDANDO_ENCOMENDA em vez de 'Pagamento confirmado'
+    — lê sempre a classificação persistida no item, nunca o catálogo atual."""
+    row = conn.execute(
+        "SELECT 1 FROM pedidos_itens WHERE pedido_id=? AND tipo_item=? LIMIT 1",
+        (venda_id, TIPO_ITEM_SOB_ENCOMENDA),
+    ).fetchone()
+    return row is not None
+
+
+def baixar_estoque_do_pedido(conn, venda_id: int, usuario: str, agora: str, motivo: str = "Baixa automática ao confirmar/separar pedido") -> bool:
+    """Processa a baixa de estoque físico do pedido uma única vez (guarda de
+    idempotência: pedidos.estoque_baixado). Itens sob encomenda (ver
+    TIPO_ITEM_SOB_ENCOMENDA) nunca decrementam produtos.quantidade nem geram
+    movimentação de saída — não têm estoque físico por definição. Retorna
+    True somente se estoque físico foi de fato decrementado nesta chamada
+    (usado por quem chama para saber se "baixou estoque agora", distinto do
+    booleano interno de "baixa já processada")."""
     venda = conn.execute("SELECT id, estoque_baixado FROM pedidos WHERE id=?", (venda_id,)).fetchone()
     if not venda:
         raise HTTPException(status_code=404, detail="Pedido não encontrado")
@@ -171,7 +279,7 @@ def baixar_estoque_do_pedido(conn, venda_id: int, usuario: str, agora: str, moti
 
     itens = conn.execute(
         """
-        SELECT id, codigo_p, nome_p, quantidade
+        SELECT id, codigo_p, nome_p, quantidade, tipo_item
         FROM pedidos_itens
         WHERE pedido_id=?
         ORDER BY id ASC
@@ -181,10 +289,29 @@ def baixar_estoque_do_pedido(conn, venda_id: int, usuario: str, agora: str, moti
     if not itens:
         return False
 
+    itens_fisicos_baixados = 0
     for item in itens:
         quantidade = int(item["quantidade"] or 0)
         if quantidade <= 0:
             continue
+        tipo_item = _tipo_item_normalizado(item)
+        if tipo_item == TIPO_ITEM_SOB_ENCOMENDA:
+            # Sob encomenda: nenhuma baixa física, nenhuma movimentação de
+            # saída fictícia. O item continua rastreável em pedidos_itens.
+            continue
+        if tipo_item not in TIPOS_ITEM_VALIDOS:
+            # Classificação ausente/corrompida: nunca assumimos "físico" por
+            # padrão (isso reintroduziria o bug original para itens que na
+            # verdade eram sob encomenda). Fica bloqueado para conciliação
+            # administrativa em vez de confirmar/baixar estoque silenciosamente.
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Item '{item['nome_p'] or item['codigo_p']}' do pedido #{venda_id} está sem "
+                    "classificação de estoque confiável (pedido legado ambíguo); requer conciliação "
+                    "administrativa antes de aplicar a baixa de estoque."
+                ),
+            )
         produto = buscar_produto_para_baixa(conn, item)
         if not produto:
             raise HTTPException(status_code=404, detail=f"Produto não encontrado para baixa: {item['nome_p'] or item['codigo_p']}")
@@ -200,17 +327,36 @@ def baixar_estoque_do_pedido(conn, venda_id: int, usuario: str, agora: str, moti
             atual = conn.execute("SELECT quantidade FROM produtos WHERE id=?", (produto["id"],)).fetchone()
             disponivel = int(atual["quantidade"] or 0) if atual else 0
             raise HTTPException(status_code=409, detail=f"Estoque insuficiente para {produto['nome']}. Disponível: {disponivel}")
+        itens_fisicos_baixados += 1
 
+    # Marca a baixa como processada (idempotência) mesmo quando o pedido é só
+    # sob encomenda e nenhum item físico foi decrementado: chamar de novo não
+    # teria nada a fazer, mas o registro de log/auditoria abaixo não pode ser
+    # duplicado numa reconfirmação. O booleano de retorno (não esta coluna) é
+    # quem informa com precisão se estoque físico baixou nesta chamada.
     conn.execute("UPDATE pedidos SET estoque_baixado=1, estoque_baixado_em=? WHERE id=?", (agora, venda_id))
+    if itens_fisicos_baixados:
+        status_log = "Estoque baixado"
+        observacao = motivo if itens_fisicos_baixados == len(itens) else f"{motivo} (parcial: {itens_fisicos_baixados} de {len(itens)} item(ns) exigiam baixa física; o restante é sob encomenda)"
+    else:
+        status_log = "Pedido aguarda encomenda"
+        observacao = f"{motivo} — nenhum item físico: pedido é somente sob encomenda, aguarda compra/separação com o fornecedor."
     conn.execute(
         """
         INSERT INTO pedido_status_log (venda_id, status, usuario, observacao, data_hora)
         VALUES (?,?,?,?,?)
         """,
-        (venda_id, "Estoque baixado", usuario or "Admin", motivo, agora),
+        (venda_id, status_log, usuario or "Admin", observacao, agora),
     )
-    registrar_auditoria(conn, "estoque", venda_id, "baixa_pedido", usuario, depois={"motivo": motivo, "itens": len(itens)})
-    return True
+    registrar_auditoria(
+        conn,
+        "estoque",
+        venda_id,
+        "baixa_pedido",
+        usuario,
+        depois={"motivo": motivo, "itens": len(itens), "itens_fisicos_baixados": itens_fisicos_baixados},
+    )
+    return itens_fisicos_baixados > 0
 
 
 def repor_estoque_cancelamento(conn, venda_id: int, usuario: str, agora: str):
@@ -222,11 +368,20 @@ def repor_estoque_cancelamento(conn, venda_id: int, usuario: str, agora: str):
     if int(venda["estoque_reposto_cancelamento"] or 0) == 1:
         return False
 
-    itens = conn.execute("SELECT id, codigo_p, nome_p, quantidade FROM pedidos_itens WHERE pedido_id=? ORDER BY id ASC", (venda_id,)).fetchall()
+    itens = conn.execute("SELECT id, codigo_p, nome_p, quantidade, tipo_item FROM pedidos_itens WHERE pedido_id=? ORDER BY id ASC", (venda_id,)).fetchall()
     total = 0
     for item in itens:
         quantidade = int(item["quantidade"] or 0)
         if quantidade <= 0:
+            continue
+        if _tipo_item_normalizado(item) == TIPO_ITEM_SOB_ENCOMENDA:
+            # Sob encomenda nunca teve estoque físico baixado (ver
+            # baixar_estoque_do_pedido): repor criaria saldo positivo
+            # fictício. Itens com classificação ausente/desconhecida também
+            # não são repostos aqui pelo mesmo motivo — nunca assumimos
+            # "físico" por padrão para um dado ambíguo.
+            continue
+        if _tipo_item_normalizado(item) not in TIPOS_ITEM_VALIDOS:
             continue
         produto = buscar_produto_para_baixa(conn, item)
         if not produto:
@@ -347,18 +502,45 @@ def _chave_api_valida(chave_recebida: str | None) -> bool:
     return bool(chave_recebida) and any(secrets.compare_digest(str(chave_recebida), chave) for chave in chaves_validas)
 
 
+def _acesso_admin_valido(mistica_painel_sessao: str | None, x_mistica_api_key: str | None) -> bool:
+    """Sessão administrativa do painel (cookie) ou X-Mistica-Api-Key válida
+    liberam o acesso ao pedido sem precisar do pix_txid."""
+    if validar_sessao(mistica_painel_sessao):
+        return True
+    return _chave_api_valida(x_mistica_api_key)
+
+
+ACESSO_NEGADO_PEDIDO = "Acesso negado. Informe o código do pedido (txid) para consultar este pedido."
+
+
+def _exigir_acesso_pedido(venda, txid: str | None, admin: bool):
+    """Só libera o acesso público (sem sessão/chave de API) a um pedido se o
+    pix_txid enviado bater com o do pedido. Quando o acesso é negado, a
+    resposta é sempre o mesmo 403 genérico — inclusive quando o pedido não
+    existe — para que o ID do pedido sozinho não sirva para varrer/enumerar
+    pedidos alheios (o 404 só é revelado a quem já provou ter acesso)."""
+    if admin:
+        if not venda:
+            raise HTTPException(status_code=404, detail="Pedido não encontrado")
+        return
+    if not venda or not venda["pix_txid"] or not txid or not secrets.compare_digest(str(txid), str(venda["pix_txid"])):
+        raise HTTPException(status_code=403, detail=ACESSO_NEGADO_PEDIDO)
+
+
 @router.get("/pedidos/{venda_id}/recibo")
 def recibo_pedido(
     venda_id: int,
     txid: str | None = None,
     x_mistica_api_key: str | None = Header(default=None),
+    mistica_painel_sessao: str | None = Cookie(default=None),
 ):
     """Recibo simples e imprimível do pedido, gerado a partir dos dados
     persistidos (nunca de dados locais do navegador). O id do pedido sozinho
     não dá acesso: é preciso o pix_txid do próprio pedido (devolvido apenas na
-    criação/no link de acompanhamento do cliente) ou a chave da API do painel
-    administrativo — sem isso, qualquer pessoa poderia varrer ids sequenciais
-    e coletar nome/telefone/itens de outros clientes."""
+    criação/no link de acompanhamento do cliente), a sessão administrativa do
+    painel ou a chave da API — sem isso, qualquer pessoa poderia varrer ids
+    sequenciais e coletar nome/telefone/itens de outros clientes."""
+    admin = _acesso_admin_valido(mistica_painel_sessao, x_mistica_api_key)
     with conectar() as conn:
         venda = conn.execute(
             """
@@ -369,11 +551,7 @@ def recibo_pedido(
             """,
             (venda_id,),
         ).fetchone()
-        if not venda:
-            raise HTTPException(status_code=404, detail="Pedido não encontrado")
-        if not _chave_api_valida(x_mistica_api_key):
-            if not venda["pix_txid"] or not txid or not secrets.compare_digest(str(txid), str(venda["pix_txid"])):
-                raise HTTPException(status_code=403, detail="Informe o código do pedido (txid) para ver o recibo.")
+        _exigir_acesso_pedido(venda, txid, admin)
         itens = conn.execute(
             "SELECT nome_p, quantidade, valor_unitario, valor_total FROM pedidos_itens WHERE pedido_id=? ORDER BY id ASC",
             (venda_id,),
@@ -417,11 +595,20 @@ td,th{{border-bottom:1px solid #ddd;padding:6px;text-align:left;font-size:13px}}
 
 
 @router.get("/pedidos/{venda_id}/status")
-def historico_status_pedido(venda_id: int):
+def historico_status_pedido(
+    venda_id: int,
+    txid: str | None = None,
+    x_mistica_api_key: str | None = Header(default=None),
+    mistica_painel_sessao: str | None = Cookie(default=None),
+):
+    """Acompanhamento público do pedido: exige o pix_txid do próprio pedido
+    (devolvido só na criação/no link do cliente) além do ID, para que IDs
+    sequenciais não sirvam para varrer o status e o histórico de pedidos
+    alheios. Sessão administrativa ou X-Mistica-Api-Key seguem liberadas."""
+    admin = _acesso_admin_valido(mistica_painel_sessao, x_mistica_api_key)
     with conectar() as conn:
-        venda = conn.execute("SELECT id, status, estoque_baixado, estoque_baixado_em FROM pedidos WHERE id=?", (venda_id,)).fetchone()
-        if not venda:
-            raise HTTPException(status_code=404, detail="Pedido não encontrado")
+        venda = conn.execute("SELECT id, status, estoque_baixado, estoque_baixado_em, pix_txid FROM pedidos WHERE id=?", (venda_id,)).fetchone()
+        _exigir_acesso_pedido(venda, txid, admin)
         historico = conn.execute(
             """
             SELECT id, venda_id, status, usuario, observacao, data_hora
@@ -457,6 +644,8 @@ def atualizar_status_pedido(venda_id: int, payload: PedidoStatusIn, x_mistica_ap
             retorno = cancelar_com_reposicao(conn, venda_id, payload.usuario or "Admin", payload.observacao, agora)
             conn.commit()
             return {**retorno, "data_hora": agora}
+
+        bloquear_avanco_financeiro_sem_conciliacao(conn, venda_id, status)
 
         if status in STATUS_BAIXA_ESTOQUE:
             estoque_baixado_agora = baixar_estoque_do_pedido(conn, venda_id, payload.usuario or "Admin", agora)

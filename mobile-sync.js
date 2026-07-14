@@ -1,27 +1,10 @@
 (() => {
   const config = window.misticaSiteConfig || {};
-  const API_BASE = (config.apiBaseUrl || "https://api.misticaesotericos.com.br").replace(/\/$/, "");
-  const SYNC_INTERVAL_MS = 5000;
-  const STATUS_RAPIDOS = [
-    "Aguardando pagamento",
-    "Pago",
-    "Em separação",
-    "Pronto para retirada",
-    "Entregue",
-    "Cancelado",
-  ];
+  const API_BASE = String(config.apiBaseUrl || "https://api.misticaesotericos.com.br").replace(/\/$/, "");
+  const SYNC_INTERVAL_MS = 15000;
 
   let syncRunning = false;
-  let lastSyncAt = null;
-
-  function carregarPainelAuth() {
-    if (document.getElementById("painelAuthScript")) return;
-    const script = document.createElement("script");
-    script.id = "painelAuthScript";
-    script.src = "painel-auth.js";
-    script.defer = true;
-    document.head.appendChild(script);
-  }
+  window.misticaCatalogState = "loading";
 
   function statusEl() {
     let el = document.getElementById("mobileSyncStatus");
@@ -37,19 +20,32 @@
       el.style.borderRadius = "999px";
       el.style.font = "600 12px Inter, Arial, sans-serif";
       el.style.boxShadow = "0 8px 24px rgba(0,0,0,.25)";
-      el.style.background = "#162116";
-      el.style.color = "#dff5d8";
       el.style.maxWidth = "min(92vw, 360px)";
       document.body.appendChild(el);
     }
     return el;
   }
 
-  function setSyncStatus(text, ok = true) {
+  function setSyncStatus(message, ok = true) {
     const el = statusEl();
-    el.textContent = text;
+    el.textContent = message;
     el.style.background = ok ? "#162116" : "#3b1c1c";
     el.style.color = ok ? "#dff5d8" : "#ffd7d7";
+  }
+
+  function setCatalogState(state, message) {
+    window.misticaCatalogState = state;
+    document.documentElement.dataset.catalogState = state;
+    const checkoutButton = document.querySelector("[data-generate-pix]");
+    if (checkoutButton) {
+      const blocked = state !== "ready";
+      checkoutButton.disabled = blocked;
+      checkoutButton.setAttribute("aria-disabled", blocked ? "true" : "false");
+    }
+    if (message) setSyncStatus(message, state === "ready");
+    window.dispatchEvent(new CustomEvent("mistica:catalog-state", {
+      detail: { state, message: message || "" },
+    }));
   }
 
   function apiHeaders(extra = {}) {
@@ -63,123 +59,183 @@
       ...options,
       headers: apiHeaders(options.headers || {}),
     });
-    if (!response.ok) {
-      let detail = `API ${response.status}`;
-      try {
-        const body = await response.json();
-        detail = body.detail || body.message || detail;
-      } catch {}
-      throw new Error(detail);
-    }
-    return response.json();
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.detail || data.message || `API ${response.status}`);
+    return data;
+  }
+
+  function escapeHtml(value) {
+    return String(value == null ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function catalogText(value, fallback = "") {
+    const normalized = String(value == null ? fallback : value)
+      .replace(/[\u0000-\u001F\u007F]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    return escapeHtml(normalized || fallback);
   }
 
   function fullUrl(path) {
     const value = String(path || "").trim();
     if (!value) return "";
-    if (value.startsWith("http://") || value.startsWith("https://")) return value;
-    return `${API_BASE}${value.startsWith("/") ? "" : "/"}${value}`;
+    if (/^https:\/\//i.test(value)) return value;
+    if (value.startsWith("/")) return `${API_BASE}${value}`;
+    return "";
   }
 
   function normalizarProduto(item) {
-    const codigo = item.codigo_p || item.codigo || String(item.id || "");
-    const id = `api-${item.id}`;
+    const codigo = String(item.codigo_p || item.codigo || item.id || "").trim();
     const imagens = Array.isArray(item.imagens) ? item.imagens.map(fullUrl).filter(Boolean) : [];
     const imagemPrincipal = fullUrl(item.imagem_url || item.imagem || item.imageUrl || imagens[0] || "");
+    const limiteEncomenda = Number(item.limite_encomenda || 10);
+    const temRegraExplicita = Object.prototype.hasOwnProperty.call(item, "sob_encomenda");
+    const sobEncomenda = temRegraExplicita ? Boolean(item.sob_encomenda) : undefined;
+    const categoriaOriginal = item.categoria || "Produtos da loja";
     return {
-      id,
+      id: `api-${item.id}`,
       apiId: item.id,
       codigo,
-      name: item.nome || item.nome_p || "Produto sem nome",
-      category: item.categoria || "Produtos da loja",
-      description: item.descricao || (item.categoria ? `Categoria: ${item.categoria}` : "Produto sincronizado da loja."),
+      name: catalogText(item.nome || item.nome_p, "Produto sem nome"),
+      category: catalogText(categoriaOriginal, "Produtos da loja"),
+      description: catalogText(item.descricao || (item.categoria ? `Categoria: ${item.categoria}` : "Produto sincronizado da loja.")),
       price: Number(item.preco || item.valor || 0),
       stock: Number(item.quantidade || item.estoque || 0),
-      icon: item.icone || "✨",
+      icon: catalogText(item.icone || "✨", "✨"),
       imageUrl: imagemPrincipal,
       images: imagens.length ? imagens : (imagemPrincipal ? [imagemPrincipal] : []),
-      externalUrl: item.link_externo || item.externalUrl || "",
-      tag: item.selo || item.tag || "",
+      externalUrl: fullUrl(item.link_externo || item.externalUrl || ""),
+      tag: catalogText(item.selo || item.tag || ""),
+      selo: catalogText(item.selo || item.tag || ""),
+      ...(temRegraExplicita ? {
+        sobEncomenda,
+        sob_encomenda: sobEncomenda,
+      } : {}),
+      limiteEncomenda: Number.isInteger(limiteEncomenda) && limiteEncomenda > 0 ? limiteEncomenda : 10,
+      limite_encomenda: Number.isInteger(limiteEncomenda) && limiteEncomenda > 0 ? limiteEncomenda : 10,
       avaliacoesTotal: Number(item.avaliacoes_total || 0),
       avaliacoesMedia: Number(item.avaliacoes_media || 0),
     };
   }
 
-  function produtoAssinatura(produto) {
-    return [produto.id, produto.stock, produto.price, produto.name, produto.imageUrl].join("|");
-  }
-
-  function produtosMudaram(atuais, novos) {
-    if (atuais.length !== novos.length) return true;
-    for (let i = 0; i < novos.length; i++) {
-      if (produtoAssinatura(atuais[i]) !== produtoAssinatura(novos[i])) return true;
-    }
-    return false;
-  }
-
   function aplicarProdutos(lista) {
-    if (!Array.isArray(lista) || !lista.length || typeof products === "undefined") return false;
-    const novos = lista.map(normalizarProduto);
-    if (!produtosMudaram(products, novos)) return false;
+    if (!Array.isArray(lista) || typeof products === "undefined") {
+      throw new Error("Resposta inválida do catálogo.");
+    }
+    const novos = lista.map(normalizarProduto).filter(product => product.apiId && product.codigo && Number.isFinite(product.price));
     products.splice(0, products.length, ...novos);
     stock = novos.reduce((map, product) => {
       map[product.id] = product.stock;
       return map;
     }, {});
-    return true;
+    if (typeof renderAll === "function") renderAll();
+  }
+
+  function clearCatalog() {
+    if (typeof products !== "undefined" && Array.isArray(products)) products.splice(0, products.length);
+    if (typeof stock !== "undefined") stock = {};
+    if (typeof renderAll === "function") renderAll();
   }
 
   async function sincronizarAgora() {
     if (syncRunning) return;
     syncRunning = true;
+    setCatalogState("loading", "Carregando catálogo oficial...");
     try {
-      const [status, produtos] = await Promise.all([
-        api("/api/status"),
-        api("/api/produtos?limite=500"),
-      ]);
-
-      const mudou = aplicarProdutos(produtos);
-      lastSyncAt = new Date();
-
-      if (mudou) {
-        try {
-          saveState();
-          renderAll();
-        } catch {}
-      }
-
-      setSyncStatus("Online", true);
-    } catch {
-      setSyncStatus("Catálogo local carregado • confirme disponibilidade pelo WhatsApp", true);
+      const produtos = await api("/api/produtos?limite=500");
+      aplicarProdutos(produtos);
+      setCatalogState("ready", produtos.length ? "Online" : "Catálogo sem produtos disponíveis no momento.");
+    } catch (error) {
+      clearCatalog();
+      setCatalogState("error", "Catálogo indisponível. Compras e Pix estão temporariamente bloqueados.");
+      console.error("Falha ao carregar catálogo oficial:", error);
     } finally {
       syncRunning = false;
     }
   }
 
-  function montarItensVenda(itens) {
+  function produtoDoCarrinho(item) {
+    return products.find(candidate => candidate.id === item.id);
+  }
+
+  function montarItensPedido(itens) {
     return itens.map(item => {
-      const produto = products.find(p => p.id === item.id);
-      const temCodigoReal = Boolean(produto?.apiId || produto?.codigo);
-      if (!temCodigoReal) console.warn("Produto sem código sincronizado; envio ignorado.", item.name);
+      const produto = produtoDoCarrinho(item);
+      if (!produto?.apiId || !produto?.codigo) throw new Error("Um produto do carrinho não está mais disponível no catálogo oficial.");
+      const quantidade = Number(item.qty || 0);
+      if (!Number.isInteger(quantidade) || quantidade <= 0) throw new Error("Quantidade inválida no carrinho.");
+      if (window.misticaEncomenda?.isSobEncomenda(produto)) {
+        const limite = window.misticaEncomenda?.limiteDe(produto) || 10;
+        if (quantidade > limite) throw new Error(`Quantidade máxima sob encomenda para ${produto.name}: ${limite}.`);
+      }
       return {
-        produto_id: produto?.apiId || null,
-        codigo_p: produto?.codigo || item.id,
-        nome_p: item.name,
-        quantidade: Number(item.qty || 0),
-        custo_unitario: 0,
-        valor_unitario: Number(item.price || 0),
-        valor_total: Number(item.price || 0) * Number(item.qty || 0),
-        valido: temCodigoReal,
+        produto_id: produto.apiId,
+        codigo_p: produto.codigo,
+        quantidade,
       };
     });
   }
 
-  async function criarPedidoNoServidor(itensCarrinho) {
-    const itensPayload = montarItensVenda(itensCarrinho);
-    if (!itensPayload.length || itensPayload.some(item => !item.valido)) {
-      throw new Error("Um ou mais produtos não estão sincronizados com o catálogo.");
-    }
+  function confirmarCondicoesEncomenda(itensCarrinho) {
+    const produtosCarrinho = itensCarrinho.map(produtoDoCarrinho).filter(Boolean);
+    const flags = produtosCarrinho.map(produto => Boolean(window.misticaEncomenda?.isSobEncomenda(produto)));
+    const possuiEncomenda = flags.some(Boolean);
+    const possuiEstoque = flags.some(flag => !flag);
 
+    if (possuiEncomenda && possuiEstoque) {
+      throw new Error("Produtos disponíveis em estoque e produtos sob encomenda devem ser finalizados em pedidos separados.");
+    }
+    if (!possuiEncomenda) return false;
+
+    const aviso = window.misticaEncomenda?.CHECKOUT_AVISO || "Este pedido contém produto sob encomenda.";
+    const confirma = window.misticaEncomenda?.CHECKOUT_CONFIRMA || "Estou ciente das condições da encomenda.";
+    if (!window.confirm(`${aviso}\n\n${confirma}`)) {
+      throw new Error("Confirmação da encomenda cancelada.");
+    }
+    return true;
+  }
+
+  // Idempotency-Key da tentativa de checkout atual. Fica só em memória
+  // (nunca em localStorage): reenviar a mesma tentativa (retry de rede,
+  // clique duplo) usa a mesma chave, então o backend devolve sempre o mesmo
+  // pedido em vez de criar um novo. Uma chave nova só é gerada quando o
+  // pedido é criado com sucesso, o carrinho muda/é limpo, ou o cliente inicia
+  // uma nova tentativa depois de um erro definitivo (ver app.js).
+  let idempotencyKeyAtual = null;
+
+  function gerarIdempotencyKey() {
+    if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+    const bytes = new Uint8Array(16);
+    if (window.crypto?.getRandomValues) {
+      window.crypto.getRandomValues(bytes);
+    } else {
+      for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+    }
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+
+  function idempotencyKeyDaTentativa() {
+    if (!idempotencyKeyAtual) idempotencyKeyAtual = gerarIdempotencyKey();
+    return idempotencyKeyAtual;
+  }
+
+  function reiniciarIdempotencyKey() {
+    idempotencyKeyAtual = null;
+  }
+
+  async function criarPedidoNoServidor(itensCarrinho) {
+    if (window.misticaCatalogState !== "ready") throw new Error("O catálogo oficial ainda não está disponível.");
+    if (!Array.isArray(itensCarrinho) || !itensCarrinho.length) throw new Error("Carrinho vazio.");
+
+    const cienteSobEncomenda = confirmarCondicoesEncomenda(itensCarrinho);
     const dataIso = new Date().toISOString();
     const payload = {
       origem: "site",
@@ -192,172 +248,59 @@
       data_iso: dataIso,
       dia_operacional: dataIso.slice(0, 10),
       cupom: window.misticaCupomAtivo || null,
-      itens: itensPayload.map(({ valido, ...item }) => item),
+      ciente_sob_encomenda: cienteSobEncomenda,
+      itens: montarItensPedido(itensCarrinho),
     };
-    // O Pix (chave, nome, cidade) é gerado só no servidor a partir do pedido
-    // real (ver backend/pix.py); o navegador nunca monta o payload sozinho.
-    const resposta = await api("/api/checkout/pedidos", { method: "POST", body: JSON.stringify(payload) });
-    if (!resposta || !resposta.id || !resposta.pix_copia_cola) {
+
+    const resposta = await api("/api/checkout/pedidos", {
+      method: "POST",
+      headers: { "Idempotency-Key": idempotencyKeyDaTentativa() },
+      body: JSON.stringify(payload),
+    });
+
+    if (!resposta?.id || !resposta?.pix_copia_cola) {
       throw new Error("O servidor não retornou um Pix válido para este pedido.");
     }
-    return { id: resposta.id, pixTxid: resposta.pix_txid || null, pixPayload: resposta.pix_copia_cola, dataIso, expiraEm: resposta.expira_em || null };
+
+    // Pedido criado com sucesso: a próxima compra deve usar uma chave nova.
+    reiniciarIdempotencyKey();
+
+    return {
+      id: resposta.id,
+      pixTxid: resposta.pix_txid || null,
+      pixPayload: resposta.pix_copia_cola,
+      dataIso,
+      expiraEm: resposta.expira_em || null,
+      totalFinal: Number(resposta.total_final || 0),
+      desconto: Number(resposta.desconto || 0),
+      sobEncomenda: Boolean(resposta.sob_encomenda),
+    };
   }
+
+  async function consultarStatusPedido(pedidoId, pixTxid) {
+    const query = pixTxid ? `?txid=${encodeURIComponent(pixTxid)}` : "";
+    const resposta = await api(`/api/pedidos/${encodeURIComponent(pedidoId)}/status${query}`, { method: "GET" });
+    return {
+      status: resposta.status_atual,
+      estoqueBaixado: Boolean(resposta.estoque_baixado),
+    };
+  }
+
   window.misticaCriarPedido = criarPedidoNoServidor;
-
-  async function consultarStatusPedido(pedidoId) {
-    const resposta = await api(`/api/pedidos/${encodeURIComponent(pedidoId)}/status`, { method: "GET" });
-    return { status: resposta.status_atual, estoqueBaixado: Boolean(resposta.estoque_baixado) };
-  }
   window.misticaConsultarStatusPedido = consultarStatusPedido;
-
-  function textoNormalizado(value) {
-    return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  }
-
-  function vendaCancelada(venda) {
-    return Boolean(venda?.estoqueReposto) || textoNormalizado(venda?.status).includes("cancelad");
-  }
-
-  function escapeInline(value) {
-    return String(value || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-  }
-
-  function mensagemStatusPedido(venda, status) {
-    const nomeLoja = typeof storeConfig !== "undefined" ? storeConfig.name : "Mística Presentes";
-    const itens = (venda.items || []).map(item => `• ${item.qty || 1}x ${item.name || "Item"}`).join("\n");
-    const prefixo = `Olá! Aqui é da ${nomeLoja}.`;
-    const pedido = `Pedido: ${venda.id || ""}`;
-    const total = `Total: ${currency.format(Number(venda.total || 0))}`;
-    const mensagens = {
-      "Aguardando pagamento": "Seu pedido está aguardando confirmação do pagamento.",
-      "Pago": "Pagamento confirmado. Gratidão pela preferência!",
-      "Em separação": "Seu pedido está em separação com carinho pela nossa equipe.",
-      "Pronto para retirada": "Seu pedido já está pronto para retirada.",
-      "Entregue": "Seu pedido foi entregue. Gratidão pela preferência!",
-      "Cancelado": "Seu pedido foi cancelado. Se precisar, podemos ajudar com um novo atendimento.",
-    };
-    // O link de recibo só funciona com o pix_txid do próprio pedido (ver
-    // backend/order_status_routes.py::recibo_pedido); sem ele o servidor recusa
-    // o acesso, então só incluímos o link quando temos esse código.
-    const recibo = venda.pedidoBackendId && venda.pixTxid
-      ? `\n\nRecibo: ${API_BASE}/api/pedidos/${venda.pedidoBackendId}/recibo?txid=${encodeURIComponent(venda.pixTxid)}`
-      : "";
-    return `${prefixo}\n${pedido}\nStatus: ${status}\n${mensagens[status] || "Atualizamos o status do seu pedido."}\n\n${itens}\n\n${total}${recibo}`;
-  }
-
-  function buildWhatsappStatusUrl(venda, status) {
-    const numero = (config.whatsappNumber || (typeof storeConfig !== "undefined" ? storeConfig.whatsappNumber : "554999172137"));
-    return `https://wa.me/${String(numero).replace(/\D/g, "")}?text=${encodeURIComponent(mensagemStatusPedido(venda, status))}`;
-  }
-
-  function atualizarStatusVendaLocal(vendaId, novoStatus, abrirWhatsapp = false) {
-    const venda = sales.find(item => String(item.id) === String(vendaId));
-    if (!venda) return setSyncStatus("Venda não encontrada para atualizar status.", false);
-    const statusAnterior = venda.status;
-    venda.status = novoStatus;
-    venda.statusUpdatedAt = new Date().toISOString();
-
-    if (textoNormalizado(novoStatus).includes("cancelad") && !vendaCancelada(venda)) {
-      const totalReposto = reporEstoqueDaVenda(venda);
-      venda.cancelledAt = venda.cancelledAt || new Date().toISOString();
-      venda.estoqueReposto = true;
-      setSyncStatus(totalReposto > 0 ? `Pedido ${venda.id} cancelado. ${totalReposto} item(ns) devolvido(s) ao estoque.` : `Pedido ${venda.id} cancelado. Sem itens vinculados para repor automaticamente.`, totalReposto > 0);
-    } else {
-      setSyncStatus(`Pedido ${venda.id}: ${statusAnterior || "sem status"} → ${novoStatus}.`, true);
-    }
-
-    saveState();
-    renderAll();
-    if (abrirWhatsapp) window.open(buildWhatsappStatusUrl(venda, novoStatus), "_blank", "noopener");
-  }
-
-  function abrirWhatsappStatus(vendaId, status) {
-    const venda = sales.find(item => String(item.id) === String(vendaId));
-    if (!venda) return setSyncStatus("Venda não encontrada para WhatsApp.", false);
-    window.open(buildWhatsappStatusUrl(venda, status || venda.status || "Atualização"), "_blank", "noopener");
-  }
-
-  function reporEstoqueDaVenda(venda) {
-    let totalReposto = 0;
-    (venda.items || []).forEach(item => {
-      if (!item.id) return;
-      const quantidade = Number(item.qty || item.quantidade || 0);
-      if (!Number.isFinite(quantidade) || quantidade <= 0) return;
-      stock[item.id] = getStock(item.id) + quantidade;
-      totalReposto += quantidade;
-    });
-    return totalReposto;
-  }
-
-  function cancelarVendaLocal(vendaId) {
-    const venda = sales.find(item => String(item.id) === String(vendaId));
-    if (!venda) return setSyncStatus("Venda não encontrada para cancelamento.", false);
-    if (vendaCancelada(venda)) return setSyncStatus("Venda já estava cancelada; estoque não será reposto novamente.", false);
-    if (!confirm(`Cancelar pedido ${venda.id} e devolver os itens ao estoque?`)) return;
-
-    const totalReposto = reporEstoqueDaVenda(venda);
-    venda.status = "Cancelado";
-    venda.cancelledAt = new Date().toISOString();
-    venda.estoqueReposto = true;
-    saveState();
-    renderAll();
-    setSyncStatus(totalReposto > 0 ? `Pedido ${venda.id} cancelado. ${totalReposto} item(ns) devolvido(s) ao estoque.` : `Pedido ${venda.id} cancelado. Sem itens vinculados para repor automaticamente.`, totalReposto > 0);
-  }
-
-  function instalarCancelamentoVendas() {
-    if (window.__misticaCancelSaleInstalled || typeof renderHistory !== "function") return;
-    window.__misticaCancelSaleInstalled = true;
-    window.cancelSale = cancelarVendaLocal;
-    window.updateSaleStatus = atualizarStatusVendaLocal;
-    window.openSaleStatusWhatsapp = abrirWhatsappStatus;
-    renderHistory = function renderHistoryWithCancelActions() {
-      if (!salesHistory) return;
-      if (!sales.length) {
-        salesHistory.innerHTML = `<div class="history-item"><span>Nenhuma venda registrada ainda.</span></div>`;
-        return;
-      }
-      salesHistory.innerHTML = sales.slice(0, 10).map(sale => {
-        const cancelada = vendaCancelada(sale);
-        const vendaId = escapeInline(sale.id);
-        const statusAtual = escapeInline(sale.status || "Atualização");
-        const cancelledInfo = sale.cancelledAt ? `<span>Cancelado em: ${new Date(sale.cancelledAt).toLocaleString("pt-BR")}</span>` : "";
-        const cancelAction = cancelada
-          ? `<span class="privacy-note">Estoque já reposto</span>`
-          : `<button class="btn btn-ghost btn-full" type="button" onclick="cancelSale('${vendaId}')">Cancelar e repor estoque</button>`;
-        const statusButtons = STATUS_RAPIDOS.map(status => {
-          const active = textoNormalizado(status) === textoNormalizado(sale.status) ? " disabled" : "";
-          return `<button class="btn btn-ghost" type="button" onclick="updateSaleStatus('${vendaId}', '${escapeInline(status)}')"${active}>${status}</button>`;
-        }).join("");
-        const whatsAction = `<button class="btn btn-ghost btn-full" type="button" onclick="openSaleStatusWhatsapp('${vendaId}', '${statusAtual}')">WhatsApp do status</button>`;
-        return `
-          <div class="history-item">
-            <strong>${currency.format(sale.total)} • ${new Date(sale.date).toLocaleString("pt-BR")}</strong>
-            <span>${(sale.items || []).map(item => `${item.qty}x ${item.name}`).join(" | ")}</span>
-            <span>Status: ${sale.status}</span>
-            ${cancelledInfo}
-            <div class="admin-activity-tools">${statusButtons}</div>
-            ${whatsAction}
-            ${cancelAction}
-          </div>
-        `;
-      }).join("");
-    };
-    renderHistory();
-  }
-
+  window.misticaResetIdempotencyKey = reiniciarIdempotencyKey;
   window.misticaMobileSync = {
     apiBase: API_BASE,
     syncNow: sincronizarAgora,
     sendSale: criarPedidoNoServidor,
-    cancelSale: cancelarVendaLocal,
-    updateSaleStatus: atualizarStatusVendaLocal,
-    openSaleStatusWhatsapp: abrirWhatsappStatus,
+    resetIdempotencyKey: reiniciarIdempotencyKey,
   };
 
+  setCatalogState("loading", "Carregando catálogo oficial...");
   window.addEventListener("load", () => {
-    carregarPainelAuth();
-    instalarCancelamentoVendas();
     sincronizarAgora();
-    setInterval(sincronizarAgora, SYNC_INTERVAL_MS);
+    setInterval(() => {
+      if (!document.hidden) sincronizarAgora();
+    }, SYNC_INTERVAL_MS);
   });
 })();

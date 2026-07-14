@@ -42,16 +42,18 @@
   pointer-events: none;
 }
 
-/* As auras usam gradientes transparentes e ficam limitadas a 18 px do card. */
+/* Aura mais quente e concentrada nos cantos, sem blur de tela inteira. */
 .escola-fx-halo-red {
   inset: -18px;
   z-index: 0;
   border-radius: 32px 32px 32px 12px;
   background:
-    radial-gradient(ellipse 46% 24% at 12% 6%, rgba(255, 42, 8, .34), transparent 72%),
-    radial-gradient(ellipse 52% 24% at 54% 98%, rgba(238, 27, 3, .38), transparent 72%),
-    radial-gradient(ellipse 24% 34% at 99% 32%, rgba(255, 45, 4, .28), transparent 74%);
-  opacity: .62;
+    radial-gradient(ellipse 48% 27% at 8% 4%, rgba(255, 30, 3, .46), transparent 70%),
+    radial-gradient(ellipse 43% 24% at 94% 5%, rgba(255, 57, 4, .4), transparent 72%),
+    radial-gradient(ellipse 54% 27% at 50% 100%, rgba(239, 25, 2, .5), transparent 70%),
+    radial-gradient(ellipse 27% 38% at 100% 88%, rgba(255, 36, 3, .38), transparent 73%),
+    radial-gradient(ellipse 24% 34% at 0% 86%, rgba(219, 22, 2, .34), transparent 74%);
+  opacity: .7;
   transform: scale(.99);
   transform-origin: 50% 60%;
   animation: escolaHaloRed 3.7s ease-in-out infinite;
@@ -62,10 +64,12 @@
   z-index: 1;
   border-radius: 29px 29px 29px 10px;
   background:
-    radial-gradient(ellipse 34% 18% at 19% 1%, rgba(255, 205, 91, .5), transparent 72%),
-    radial-gradient(ellipse 45% 20% at 68% 99%, rgba(255, 105, 13, .5), transparent 73%),
-    radial-gradient(ellipse 18% 30% at 99% 18%, rgba(255, 145, 27, .38), transparent 75%);
-  opacity: .7;
+    radial-gradient(ellipse 36% 20% at 12% 0%, rgba(255, 213, 92, .65), transparent 70%),
+    radial-gradient(ellipse 31% 19% at 92% 2%, rgba(255, 141, 21, .56), transparent 72%),
+    radial-gradient(ellipse 48% 22% at 68% 100%, rgba(255, 99, 9, .62), transparent 71%),
+    radial-gradient(ellipse 23% 31% at 100% 23%, rgba(255, 159, 25, .48), transparent 73%),
+    radial-gradient(ellipse 24% 29% at 1% 82%, rgba(255, 101, 10, .45), transparent 74%);
+  opacity: .8;
   transform: scale(.995);
   animation: escolaHaloOrange 2.9s ease-in-out -.65s infinite;
 }
@@ -92,7 +96,7 @@
   animation: escolaGlassLight 6.4s ease-in-out infinite;
 }
 
-/* Duas molduras incompletas criam fogo irregular sem blur ou sombra gigante. */
+/* Molduras incompletas mantêm o fogo irregular e concentrado nas bordas. */
 .escola-fx-glow-outer,
 .escola-fx-rim {
   border-radius: inherit;
@@ -106,18 +110,20 @@
   z-index: 3;
   padding: 6px;
   background: conic-gradient(from 218deg,
-    transparent 0 14deg,
-    rgba(231, 31, 3, .72) 28deg,
-    rgba(255, 151, 27, .68) 44deg,
-    transparent 66deg 108deg,
-    rgba(255, 54, 5, .72) 133deg,
-    transparent 154deg 201deg,
-    rgba(255, 193, 65, .75) 221deg,
-    rgba(239, 39, 4, .65) 242deg,
-    transparent 263deg 318deg,
-    rgba(255, 107, 13, .72) 338deg,
+    transparent 0 11deg,
+    rgba(238, 25, 2, .86) 25deg,
+    rgba(255, 180, 35, .84) 43deg,
+    transparent 63deg 102deg,
+    rgba(255, 44, 3, .86) 128deg,
+    rgba(255, 121, 12, .72) 143deg,
+    transparent 159deg 194deg,
+    rgba(255, 209, 70, .88) 218deg,
+    rgba(240, 31, 3, .79) 241deg,
+    transparent 259deg 310deg,
+    rgba(255, 90, 7, .85) 330deg,
+    rgba(255, 177, 33, .72) 344deg,
     transparent 360deg);
-  opacity: .54;
+  opacity: .64;
   transform: scale(.995);
   animation: escolaOuterFire 2.6s ease-in-out -.4s infinite;
 }
@@ -127,27 +133,27 @@
   z-index: 4;
   padding: 2px;
   background: conic-gradient(from 205deg,
-    transparent 0deg 8deg,
-    #ff5a0b 18deg,
-    #ffd064 31deg,
-    rgba(255, 114, 12, .28) 43deg,
-    transparent 53deg 78deg,
-    #ff8f1c 101deg,
-    #fff0b1 113deg,
-    rgba(255, 61, 5, .25) 128deg,
-    transparent 141deg 166deg,
-    #ef2a03 181deg,
-    #ffc34f 201deg,
-    rgba(255, 69, 7, .24) 216deg,
-    transparent 228deg 251deg,
-    #ff760f 265deg,
-    #ffe09a 278deg,
-    rgba(234, 38, 3, .26) 292deg,
-    transparent 304deg 328deg,
-    #ff9d27 342deg,
-    rgba(255, 75, 9, .18) 351deg,
+    transparent 0deg 6deg,
+    #ff3a05 16deg,
+    #ffd86f 30deg,
+    rgba(255, 104, 9, .38) 43deg,
+    transparent 52deg 75deg,
+    #ff7d12 98deg,
+    #fff2b8 112deg,
+    rgba(255, 48, 3, .34) 127deg,
+    transparent 139deg 162deg,
+    #ed2102 178deg,
+    #ffcb55 199deg,
+    rgba(255, 55, 4, .33) 215deg,
+    transparent 226deg 248deg,
+    #ff6509 263deg,
+    #ffe49e 278deg,
+    rgba(232, 29, 2, .35) 292deg,
+    transparent 303deg 325deg,
+    #ff8c1c 340deg,
+    rgba(255, 63, 5, .28) 352deg,
     transparent 360deg);
-  opacity: .72;
+  opacity: .82;
   animation: escolaRimFire 1.9s ease-in-out infinite;
 }
 
@@ -158,8 +164,8 @@
   height: 3px;
   border-radius: 999px;
   pointer-events: none;
-  background: linear-gradient(90deg, transparent, #fff6c9 34%, #ff9a20 70%, transparent);
-  opacity: .74;
+  background: linear-gradient(90deg, transparent, #fff8cf 34%, #ff9b1c 70%, transparent);
+  opacity: .86;
   transform-origin: center;
 }
 
@@ -182,10 +188,12 @@
   z-index: 4;
   border-radius: 18px 18px 18px 2px;
   background:
-    radial-gradient(ellipse 28% 18% at 9% 3%, rgba(255, 235, 174, .42), transparent 72%),
-    radial-gradient(ellipse 36% 16% at 84% 99%, rgba(255, 66, 7, .38), transparent 74%),
-    radial-gradient(ellipse 12% 34% at 100% 34%, rgba(255, 139, 28, .25), transparent 72%);
-  opacity: .58;
+    radial-gradient(ellipse 30% 20% at 7% 2%, rgba(255, 239, 178, .52), transparent 70%),
+    radial-gradient(ellipse 26% 18% at 94% 3%, rgba(255, 157, 32, .35), transparent 72%),
+    radial-gradient(ellipse 38% 18% at 84% 100%, rgba(255, 56, 5, .48), transparent 72%),
+    radial-gradient(ellipse 16% 35% at 100% 34%, rgba(255, 142, 25, .32), transparent 71%),
+    radial-gradient(ellipse 15% 29% at 0% 78%, rgba(255, 84, 8, .3), transparent 73%);
+  opacity: .66;
   animation: escolaInnerFire 2.3s ease-in-out -.25s infinite;
 }
 
@@ -248,8 +256,7 @@
 }
 
 .escola-baloon-emblem,
-.escola-baloon-body,
-.escola-baloon-close {
+.escola-baloon-body {
   position: relative;
   z-index: 6;
 }
@@ -258,21 +265,55 @@
   width: 46px;
   height: 46px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 183, 70, .12), rgba(255, 64, 6, .04) 56%, transparent 72%);
+  background: radial-gradient(circle, rgba(255, 203, 97, .18), rgba(255, 63, 5, .07) 56%, transparent 72%);
+}
+
+.escola-baloon-emblem::before,
+.escola-baloon-emblem::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  transform-origin: 50% 58%;
+}
+
+.escola-baloon-emblem::before {
+  inset: -7px;
+  z-index: -1;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(255, 241, 173, .34) 0 12%, rgba(255, 151, 24, .24) 34%, rgba(255, 52, 4, .11) 58%, transparent 74%);
+  opacity: .54;
+  transform: scale(.94);
+  animation: escolaCandleHalo 3.35s ease-in-out -.8s infinite;
+}
+
+.escola-baloon-emblem::after {
+  top: -12px;
+  left: -15px;
+  z-index: -2;
+  width: 108px;
+  height: 78px;
+  border-radius: 50%;
+  background:
+    radial-gradient(ellipse at 24% 47%, rgba(255, 212, 100, .22), rgba(255, 103, 13, .13) 34%, rgba(219, 28, 2, .06) 54%, transparent 72%);
+  opacity: .4;
+  transform: translate3d(-2px, 1px, 0) scale(.96);
+  animation: escolaCandleReflection 4.65s ease-in-out -1.7s infinite;
 }
 
 .escola-baloon-flame {
   position: absolute;
   left: 50%;
-  bottom: 8px;
-  width: 18px;
-  height: 25px;
+  bottom: 6px;
+  width: 21px;
+  height: 29px;
   border-radius: 52% 48% 48% 52% / 68% 68% 32% 32%;
-  background: linear-gradient(205deg, #fff8d1 0 18%, #ffc74e 38%, #ff6c13 67%, #dc2102 100%);
-  filter: drop-shadow(0 0 5px rgba(255, 87, 11, .72));
+  background: linear-gradient(205deg, #fffbdc 0 18%, #ffd45c 38%, #ff6b0d 67%, #d91801 100%);
+  filter: drop-shadow(0 0 6px rgba(255, 88, 8, .82));
   transform: translateX(-50%);
   transform-origin: bottom center;
-  animation: escolaFlame 1.45s ease-in-out infinite;
+  will-change: opacity, transform;
+  animation: escolaFlame 1.72s cubic-bezier(.42, 0, .58, 1) infinite;
 }
 
 .escola-baloon-flame::after {
@@ -280,12 +321,15 @@
   position: absolute;
   left: 50%;
   bottom: 3px;
-  width: 7px;
-  height: 11px;
+  width: 8px;
+  height: 13px;
   border-radius: inherit;
-  background: #fffbe6;
-  opacity: .9;
+  background: #fffde8;
+  opacity: .94;
   transform: translateX(-50%);
+  transform-origin: bottom center;
+  will-change: opacity, transform;
+  animation: escolaFlameCore 2.08s ease-in-out -.46s infinite;
 }
 
 .escola-baloon-body {
@@ -320,7 +364,10 @@
   font-size: 18px;
   line-height: 1.22;
   font-weight: 900;
-  text-shadow: 0 1px 3px rgba(18, 5, 2, .92), 0 0 8px rgba(255, 236, 203, .18);
+  text-shadow:
+    0 1px 3px rgba(18, 5, 2, .92),
+    0 0 7px rgba(255, 248, 219, .3),
+    0 0 13px rgba(255, 184, 59, .18);
 }
 
 .escola-baloon-text {
@@ -333,6 +380,7 @@
 
 .escola-baloon-cta {
   position: relative;
+  isolation: isolate;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -357,6 +405,19 @@
   box-shadow: 0 0 5px rgba(255, 184, 61, .8);
 }
 
+.escola-baloon-cta::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(255, 114, 16, .24), rgba(255, 47, 3, .1) 54%, transparent 74%);
+  opacity: .42;
+  transform: scale(.98);
+  animation: escolaCtaHalo 4.8s ease-in-out infinite;
+}
+
 .escola-baloon-cta:hover { transform: translateY(-1px); }
 
 .escola-baloon-cta:focus-visible,
@@ -367,10 +428,14 @@
 
 .escola-baloon-close {
   position: absolute;
-  z-index: 7;
   top: 8px;
   right: 10px;
-  padding: 5px;
+  z-index: 10;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: grid;
+  place-items: center;
   border: 0;
   border-radius: 50%;
   background: rgba(42, 12, 5, .18);
@@ -378,6 +443,9 @@
   font-size: 17px;
   line-height: 1;
   cursor: pointer;
+  touch-action: manipulation;
+  animation: none;
+  transition: none;
   text-shadow: 0 1px 2px rgba(27, 4, 1, .8);
 }
 
@@ -392,18 +460,22 @@
   width: 15px;
   height: 15px;
   pointer-events: none;
-  background: linear-gradient(135deg, rgba(255, 184, 65, .64), rgba(230, 45, 4, .18) 48%, transparent 50%);
+  background: linear-gradient(135deg, rgba(255, 184, 65, .72), rgba(230, 45, 4, .24) 48%, transparent 50%);
   transform: rotate(45deg);
 }
 
 @keyframes escolaHaloRed {
-  0%, 100% { opacity: .48; transform: scale(.99); }
-  50% { opacity: .68; transform: scale(1.015); }
+  0%, 100% { opacity: .58; transform: scale(.99); }
+  23% { opacity: .68; transform: scale(1.005); }
+  50% { opacity: .78; transform: scale(1.016); }
+  74% { opacity: .66; transform: scale(1.002); }
 }
 
 @keyframes escolaHaloOrange {
-  0%, 100% { opacity: .52; transform: scale(.995); }
-  48% { opacity: .76; transform: scale(1.012); }
+  0%, 100% { opacity: .64; transform: scale(.995); }
+  27% { opacity: .74; transform: scale(1.003); }
+  48% { opacity: .88; transform: scale(1.013); }
+  69% { opacity: .72; transform: scale(1.001); }
 }
 
 @keyframes escolaGlassLight {
@@ -412,31 +484,31 @@
 }
 
 @keyframes escolaOuterFire {
-  0%, 100% { opacity: .52; transform: scale(.995); }
-  44% { opacity: .78; transform: scale(1.008); }
-  72% { opacity: .61; transform: scale(1.002); }
+  0%, 100% { opacity: .62; transform: scale(.995); }
+  44% { opacity: .88; transform: scale(1.009); }
+  72% { opacity: .71; transform: scale(1.003); }
 }
 
 @keyframes escolaRimFire {
-  0%, 100% { opacity: .76; }
-  37% { opacity: .94; }
-  63% { opacity: .82; }
-  81% { opacity: .9; }
+  0%, 100% { opacity: .82; }
+  37% { opacity: 1; }
+  63% { opacity: .88; }
+  81% { opacity: .96; }
 }
 
 @keyframes escolaHotspotA {
-  0%, 100% { opacity: .48; transform: scaleX(.88); }
-  52% { opacity: .92; transform: scaleX(1.08); }
+  0%, 100% { opacity: .58; transform: scaleX(.88); }
+  52% { opacity: 1; transform: scaleX(1.09); }
 }
 
 @keyframes escolaHotspotB {
-  0%, 100% { opacity: .42; transform: scaleX(.92); }
-  46% { opacity: .86; transform: scaleX(1.06); }
+  0%, 100% { opacity: .52; transform: scaleX(.92); }
+  46% { opacity: .96; transform: scaleX(1.07); }
 }
 
 @keyframes escolaInnerFire {
-  0%, 100% { opacity: .42; }
-  55% { opacity: .66; }
+  0%, 100% { opacity: .52; }
+  55% { opacity: .76; }
 }
 
 @keyframes escolaSmoke {
@@ -458,9 +530,58 @@
 }
 
 @keyframes escolaFlame {
-  0%, 100% { transform: translateX(-50%) scaleY(1) rotate(-1deg); }
-  36% { transform: translateX(-52%) scaleY(1.08) rotate(-3deg); }
-  69% { transform: translateX(-48%) scaleY(.95) rotate(3deg); }
+  0%, 100% { opacity: .96; transform: translate3d(-50%, 0, 0) scaleX(1) scaleY(1) rotate(-1deg); }
+  9% { opacity: .99; transform: translate3d(-54%, 0, 0) scaleX(.93) scaleY(1.05) rotate(-3.4deg); }
+  13% { opacity: 1; transform: translate3d(-53%, 0, 0) scaleX(.94) scaleY(1.08) rotate(-3deg); }
+  27% { opacity: .95; transform: translate3d(-49%, 0, 0) scaleX(1.02) scaleY(1.01) rotate(1.2deg); }
+  31% { opacity: .93; transform: translate3d(-48%, 0, 0) scaleX(1.05) scaleY(.97) rotate(2deg); }
+  39% { opacity: .97; transform: translate3d(-50%, 0, 0) scaleX(.99) scaleY(1.03) rotate(-.5deg); }
+  47% { opacity: .99; transform: translate3d(-52%, 0, 0) scaleX(.97) scaleY(1.11) rotate(-2deg); }
+  58% { opacity: .96; transform: translate3d(-46%, 0, 0) scaleX(1.06) scaleY(.96) rotate(2.6deg); }
+  68% { opacity: .94; transform: translate3d(-47%, 0, 0) scaleX(1.04) scaleY(.95) rotate(3deg); }
+  76% { opacity: .98; transform: translate3d(-51%, 0, 0) scaleX(.98) scaleY(1.04) rotate(-1deg); }
+  84% { opacity: 1; transform: translate3d(-51%, 0, 0) scaleX(.96) scaleY(1.06) rotate(-1.5deg); }
+  93% { opacity: .97; transform: translate3d(-49%, 0, 0) scaleX(1.01) scaleY(1.02) rotate(.8deg); }
+}
+
+@keyframes escolaFlameCore {
+  0%, 100% { opacity: .78; transform: translateX(-50%) scaleX(.92) scaleY(.9); }
+  18% { opacity: .87; transform: translateX(-51%) scaleX(.97) scaleY(1); }
+  24% { opacity: .98; transform: translateX(-52%) scaleX(1.03) scaleY(1.07); }
+  41% { opacity: .89; transform: translateX(-49%) scaleX(.99) scaleY(1.02); }
+  52% { opacity: .84; transform: translateX(-48%) scaleX(.96) scaleY(.95); }
+  65% { opacity: .93; transform: translateX(-50%) scaleX(1) scaleY(1.04); }
+  77% { opacity: 1; transform: translateX(-51%) scaleX(1.01) scaleY(1.1); }
+  90% { opacity: .86; transform: translateX(-49%) scaleX(.95) scaleY(.97); }
+}
+
+@keyframes escolaCandleHalo {
+  0%, 100% { opacity: .4; transform: scale(.92); }
+  15% { opacity: .53; transform: scale(.97); }
+  19% { opacity: .62; transform: scale(1.02); }
+  34% { opacity: .46; transform: scale(.95); }
+  43% { opacity: .49; transform: scale(.97); }
+  60% { opacity: .58; transform: scale(1.015); }
+  71% { opacity: .68; transform: scale(1.045); }
+  80% { opacity: .59; transform: scale(1.01); }
+  88% { opacity: .51; transform: scale(.98); }
+}
+
+@keyframes escolaCandleReflection {
+  0%, 100% { opacity: .28; transform: translate3d(-3px, 1px, 0) scale(.94); }
+  16% { opacity: .38; transform: translate3d(-2px, 1px, 0) scale(.97); }
+  22% { opacity: .47; transform: translate3d(0, 0, 0) scale(1.015); }
+  38% { opacity: .4; transform: translate3d(-1px, 0, 0) scale(1); }
+  49% { opacity: .35; transform: translate3d(-1px, 1px, 0) scale(.98); }
+  62% { opacity: .45; transform: translate3d(0, -1px, 0) scale(1.02); }
+  74% { opacity: .53; transform: translate3d(1px, -1px, 0) scale(1.035); }
+  83% { opacity: .44; transform: translate3d(0, 0, 0) scale(1.005); }
+  91% { opacity: .38; transform: translate3d(-2px, 0, 0) scale(.97); }
+}
+
+@keyframes escolaCtaHalo {
+  0%, 100% { opacity: .34; transform: scale(.98); }
+  50% { opacity: .56; transform: scale(1.025); }
 }
 
 @media (max-width: 560px) {
@@ -476,7 +597,7 @@
   .escola-baloon-emblem { width: 42px; height: 42px; }
   .escola-fx-halo-red { inset: -12px; }
   .escola-fx-halo-orange { inset: -7px; }
-  .escola-fx-smoke { visibility: hidden; }
+  .escola-fx-smoke { display: none; }
   .escola-baloon-spark:nth-child(n + 7),
   .escola-baloon-ash { display: none; }
 }
@@ -496,16 +617,24 @@
   .escola-fx-rim::after,
   .escola-baloon-spark,
   .escola-baloon-ash,
-  .escola-baloon-flame {
+  .escola-baloon-emblem::before,
+  .escola-baloon-emblem::after,
+  .escola-baloon-flame,
+  .escola-baloon-flame::after,
+  .escola-baloon-cta::after {
     animation: none !important;
   }
 
   .escola-baloon { transition: opacity .25s ease, transform .25s ease; }
   .escola-baloon.is-visible { opacity: 1; transform: none; }
-  .escola-fx-halo-red { opacity: .54; }
-  .escola-fx-halo-orange { opacity: .62; }
-  .escola-fx-glow-outer { opacity: .5; }
-  .escola-fx-rim { opacity: .72; }
+  .escola-fx-halo-red { opacity: .62; }
+  .escola-fx-halo-orange { opacity: .7; }
+  .escola-fx-glow-outer { opacity: .58; }
+  .escola-fx-rim { opacity: .8; }
+  .escola-baloon-emblem::before { opacity: .5; transform: none; }
+  .escola-baloon-emblem::after { opacity: .36; transform: none; }
+  .escola-baloon-flame::after { opacity: .94; transform: translateX(-50%); }
+  .escola-baloon-cta::after { opacity: .4; transform: none; }
   .escola-baloon-particles,
   .escola-fx-smoke { display: none; }
 }
