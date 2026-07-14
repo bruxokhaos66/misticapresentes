@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 460" width="1200" height="460" role="img" aria-labelledby="tempoTitulo tempoDesc">
+  <title id="tempoTitulo">Linha do tempo introdutória do xamanismo como campo de estudo</title>
+  <desc id="tempoDesc">Linha do tempo esquemática, com datas aproximadas: tradições espirituais anteriores aos registros escritos; origem histórica do termo "xamã" na Sibéria; contato de viajantes e pesquisadores a partir dos séculos XVII e XVIII; desenvolvimento dos estudos antropológicos nos séculos XIX e XX; popularização do termo "xamanismo" no Ocidente no século XX; crescimento do neoxamanismo a partir das décadas de 1960 e 1970; debates contemporâneos sobre apropriação cultural e respeito aos povos originários.</desc>
+  <rect width="1200" height="460" fill="#07070b"/>
+  <line x1="70" y1="230" x2="1130" y2="230" stroke="#536b37" stroke-width="3"/>
+  <g font-family="Georgia, serif">
+    <!-- pontos -->
+    <circle cx="120" cy="230" r="8" fill="#f0c56a"/>
+    <circle cx="330" cy="230" r="8" fill="#f0c56a"/>
+    <circle cx="520" cy="230" r="8" fill="#f0c56a"/>
+    <circle cx="700" cy="230" r="8" fill="#f0c56a"/>
+    <circle cx="870" cy="230" r="8" fill="#f0c56a"/>
+    <circle cx="1010" cy="230" r="8" fill="#f0c56a"/>
+    <circle cx="1120" cy="230" r="8" fill="#f0c56a"/>
+
+    <text x="120" y="180" font-size="14" fill="#efe1c5" text-anchor="middle">Antes dos registros</text>
+    <text x="120" y="200" font-size="13" fill="#d8cbb6" text-anchor="middle">escritos (datas incertas)</text>
+    <text x="120" y="270" font-size="13" fill="#d8cbb6" text-anchor="middle">Práticas rituais de cura,</text>
+    <text x="120" y="288" font-size="13" fill="#d8cbb6" text-anchor="middle">ancestralidade e natureza</text>
+
+    <text x="330" y="180" font-size="14" fill="#efe1c5" text-anchor="middle">~séc. XVII–XVIII</text>
+    <text x="330" y="270" font-size="13" fill="#d8cbb6" text-anchor="middle">Termo “šamān” registrado</text>
+    <text x="330" y="288" font-size="13" fill="#d8cbb6" text-anchor="middle">por viajantes na Sibéria</text>
+
+    <text x="520" y="180" font-size="14" fill="#efe1c5" text-anchor="middle">séc. XIX</text>
+    <text x="520" y="270" font-size="13" fill="#d8cbb6" text-anchor="middle">Linguistas e primeiros</text>
+    <text x="520" y="288" font-size="13" fill="#d8cbb6" text-anchor="middle">estudos comparativos</text>
+
+    <text x="700" y="180" font-size="14" fill="#efe1c5" text-anchor="middle">início–meados séc. XX</text>
+    <text x="700" y="270" font-size="13" fill="#d8cbb6" text-anchor="middle">Consolidação da</text>
+    <text x="700" y="288" font-size="13" fill="#d8cbb6" text-anchor="middle">antropologia do xamanismo</text>
+
+    <text x="870" y="180" font-size="14" fill="#efe1c5" text-anchor="middle">décadas de 1960–1980</text>
+    <text x="870" y="270" font-size="13" fill="#d8cbb6" text-anchor="middle">Popularização ocidental</text>
+    <text x="870" y="288" font-size="13" fill="#d8cbb6" text-anchor="middle">e surgimento do neoxamanismo</text>
+
+    <text x="1010" y="180" font-size="14" fill="#efe1c5" text-anchor="middle">fim do séc. XX</text>
+    <text x="1010" y="270" font-size="13" fill="#d8cbb6" text-anchor="middle">Expansão de retiros e</text>
+    <text x="1010" y="288" font-size="13" fill="#d8cbb6" text-anchor="middle">mercado espiritualista</text>
+
+    <text x="1120" y="180" font-size="14" fill="#efe1c5" text-anchor="middle">hoje</text>
+    <text x="1120" y="270" font-size="13" fill="#d8cbb6" text-anchor="middle">Debates sobre respeito,</text>
+    <text x="1120" y="288" font-size="13" fill="#d8cbb6" text-anchor="middle">apropriação e povos vivos</text>
+  </g>
+  <text x="70" y="420" font-family="Georgia, serif" font-size="14" fill="#9a8f7c">As datas são aproximadas. Tradições ancestrais não têm um marco inicial exato — elas são contínuas e vivas.</text>
+</svg>

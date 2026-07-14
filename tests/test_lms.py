@@ -671,3 +671,234 @@ def test_xamanismo_reprova_abaixo_de_70_e_aprova_com_70_desbloqueando_modulo_2()
     aprovado = responder(7)
     assert aprovado["nota"] == 70 and aprovado["aprovado"] is True
     assert aluno.get(f"/api/escola/cursos/{XAMANISMO}").json()["modulos"][1]["liberado"] is True
+
+
+# --- Módulo 2 — As Origens e os Caminhos do Xamanismo ----------------------
+
+def _instalar_modulo2():
+    from backend.database import conectar
+    from backend.lms_content_xamanismo import (
+        instalar_conteudo_xamanismo,
+        instalar_conteudo_modulo2_xamanismo,
+    )
+
+    with conectar() as conn:
+        instalar_conteudo_xamanismo(conn)
+        instalar_conteudo_modulo2_xamanismo(conn)
+    return conn
+
+
+def _modulo2_do_banco():
+    from backend.database import conectar
+
+    with conectar() as conn:
+        modulo = conn.execute(
+            "SELECT * FROM curso_modulos WHERE slug=? AND ordem=1", (XAMANISMO,)
+        ).fetchone()
+        assert modulo, "Módulo 2 do curso xamanismo-introducao não encontrado"
+        aulas = conn.execute(
+            "SELECT * FROM curso_aulas WHERE modulo_id=? ORDER BY ordem", (modulo["id"],)
+        ).fetchall()
+        return modulo, aulas
+
+
+def test_modulo2_existe_com_titulo_oficial_e_acesso_publico():
+    _instalar_modulo2()
+    modulo, _ = _modulo2_do_banco()
+    assert modulo["titulo"] == "Módulo 2 — As Origens e os Caminhos do Xamanismo"
+    assert int(modulo["acesso_publico"]) == 1
+    assert int(modulo["publicado"]) == 1
+
+
+def test_modulo2_placeholder_foi_substituido_por_tres_aulas_completas():
+    _instalar_modulo2()
+    _, aulas = _modulo2_do_banco()
+    assert len(aulas) == 3
+    titulos = [a["titulo"] for a in aulas]
+    assert titulos == [
+        "A origem da palavra “xamã”",
+        "Tradições semelhantes em diferentes regiões",
+        "Como o xamanismo chegou ao mundo moderno",
+    ]
+    corpo_completo = " ".join(a["conteudo"] for a in aulas)
+    assert "Em breve" not in corpo_completo
+    assert "em preparação" not in corpo_completo.lower()
+    # blocos pedagógicos obrigatórios presentes em pelo menos uma aula
+    for bloco in [
+        "Você sabia?",
+        "Olhar da História",
+        "Olhar da Ciência",
+        "Respeito às Tradições",
+        "Palavras importantes",
+        "Para refletir",
+    ]:
+        assert bloco in corpo_completo, f"bloco pedagógico ausente: {bloco}"
+    # leitura estimada por aula entre 10 e 15 minutos
+    assert all(10 <= int(a["duracao_min"]) <= 15 for a in aulas)
+
+
+def test_modulo2_nao_possui_quiz_oficial_nem_gabarito_persistido():
+    _instalar_modulo2()
+    modulo, _ = _modulo2_do_banco()
+    from backend.database import conectar
+
+    with conectar() as conn:
+        quiz = conn.execute(
+            "SELECT id FROM curso_quizzes WHERE modulo_id=?", (modulo["id"],)
+        ).fetchone()
+    assert quiz is None
+
+
+def test_modulo2_publico_acessivel_sem_login_e_com_tres_aulas():
+    _instalar_modulo2()
+    r = client.get(f"/api/escola/publico/cursos/{XAMANISMO}")
+    assert r.status_code == 200
+    body = r.json()
+    m2 = next(m for m in body["modulos"] if m["titulo"].startswith("Módulo 2"))
+    assert m2["bloqueado"] is False
+    assert len(m2["aulas"]) == 3
+    for aula in m2["aulas"]:
+        assert aula["conteudo"]
+        assert "correta" not in aula
+
+
+def test_modulo2_publico_nao_expoe_quiz_nem_gabarito():
+    _instalar_modulo2()
+    r = client.get(f"/api/escola/publico/cursos/{XAMANISMO}")
+    corpo_bruto = str(r.json())
+    assert "quiz" not in corpo_bruto.lower()
+    assert '"correta"' not in corpo_bruto
+
+
+def test_modulo2_publico_nao_cria_aluno_matricula_ou_sessao():
+    from backend.database import conectar
+
+    _instalar_modulo2()
+    with conectar() as conn:
+        alunos_antes = conn.execute("SELECT COUNT(*) AS n FROM alunos").fetchone()["n"]
+        matriculas_antes = conn.execute(
+            "SELECT COUNT(*) AS n FROM alunos_cursos WHERE slug=?", (XAMANISMO,)
+        ).fetchone()["n"]
+    for _ in range(3):
+        r = client.get(f"/api/escola/publico/cursos/{XAMANISMO}")
+        assert r.status_code == 200
+        assert "session" not in {c.lower() for c in r.cookies.keys()}
+    with conectar() as conn:
+        alunos_depois = conn.execute("SELECT COUNT(*) AS n FROM alunos").fetchone()["n"]
+        matriculas_depois = conn.execute(
+            "SELECT COUNT(*) AS n FROM alunos_cursos WHERE slug=?", (XAMANISMO,)
+        ).fetchone()["n"]
+    assert alunos_depois == alunos_antes
+    assert matriculas_depois == matriculas_antes
+
+
+def test_modulo2_instalacao_e_idempotente_nao_duplica_aulas_nem_modulo():
+    from backend.database import conectar
+    from backend.lms_content_xamanismo import (
+        instalar_conteudo_xamanismo,
+        instalar_conteudo_modulo2_xamanismo,
+    )
+
+    with conectar() as conn:
+        instalar_conteudo_xamanismo(conn)
+        primeira = instalar_conteudo_modulo2_xamanismo(conn)
+        segunda = instalar_conteudo_modulo2_xamanismo(conn)
+        terceira = instalar_conteudo_modulo2_xamanismo(conn)
+    assert segunda is False and terceira is False
+
+    modulo, aulas = _modulo2_do_banco()
+    assert len(aulas) == 3
+    with conectar() as conn:
+        total_modulos = conn.execute(
+            "SELECT COUNT(*) AS n FROM curso_modulos WHERE slug=? AND ordem=1", (XAMANISMO,)
+        ).fetchone()["n"]
+    assert total_modulos == 1
+
+
+def test_modulo2_atualizacao_de_banco_existente_preserva_progresso_de_aluno():
+    """Simula um banco que só tinha o placeholder do Módulo 1 aplicado (banco
+    persistente já em produção): ao aplicar a nova versão de conteúdo, a aula
+    antiga sem progresso é substituída, mas o progresso de aluno registrado em
+    aulas do Módulo 1 nunca é apagado."""
+    from backend.database import conectar
+    from backend.lms_content_xamanismo import instalar_conteudo_xamanismo, instalar_conteudo_modulo2_xamanismo
+
+    with conectar() as conn:
+        instalar_conteudo_xamanismo(conn)
+        modulo1 = conn.execute(
+            "SELECT id FROM curso_modulos WHERE slug=? AND ordem=0", (XAMANISMO,)
+        ).fetchone()
+        aula1 = conn.execute(
+            "SELECT id FROM curso_aulas WHERE modulo_id=? ORDER BY ordem LIMIT 1", (modulo1["id"],)
+        ).fetchone()
+        progresso_antes = conn.execute(
+            "SELECT COUNT(*) AS n FROM aluno_aula_progresso WHERE aula_id=?", (aula1["id"],)
+        ).fetchone()["n"]
+
+    aluno, _, _ = _aluno_logado(XAMANISMO)
+    aluno.post(f"/api/escola/aulas/{aula1['id']}/progresso", json={"status": "concluida", "percentual": 100})
+
+    with conectar() as conn:
+        instalar_conteudo_modulo2_xamanismo(conn)
+        progresso_depois = conn.execute(
+            "SELECT COUNT(*) AS n FROM aluno_aula_progresso WHERE aula_id=?", (aula1["id"],)
+        ).fetchone()["n"]
+    assert progresso_depois >= progresso_antes + 1
+
+    _, aulas_m2 = _modulo2_do_banco()
+    assert len(aulas_m2) == 3
+
+
+def test_modulo2_nao_altera_modulo1_nem_outros_cursos():
+    from backend.database import conectar
+
+    _instalar_modulo2()
+    with conectar() as conn:
+        m1 = conn.execute(
+            "SELECT titulo, acesso_publico FROM curso_modulos WHERE slug=? AND ordem=0", (XAMANISMO,)
+        ).fetchone()
+    assert m1["titulo"] == "Módulo 1 — O Chamado do Xamanismo"
+    assert int(m1["acesso_publico"]) == 1
+    # outro curso pago do catálogo continua intocado
+    assert client.get(f"/api/escola/publico/cursos/{CATALOGO_PAGO}").status_code == 404
+
+
+def test_modulo2_nenhum_modulo_futuro_alem_do_2_e_publico():
+    _instalar_modulo2()
+    r = client.get(f"/api/escola/publico/cursos/{XAMANISMO}")
+    body = r.json()
+    assert len(body["modulos"]) == 2
+
+
+def test_modulo2_html_das_aulas_nao_contem_tags_perigosas():
+    _instalar_modulo2()
+    _, aulas = _modulo2_do_banco()
+    for aula in aulas:
+        conteudo = aula["conteudo"]
+        assert "<script" not in conteudo.lower()
+        assert "onerror=" not in conteudo.lower()
+        assert "javascript:" not in conteudo.lower()
+
+
+def test_modulo2_imagens_possuem_alt_e_dimensoes():
+    _instalar_modulo2()
+    _, aulas = _modulo2_do_banco()
+    import re
+
+    for aula in aulas:
+        for img in re.findall(r"<img[^>]*>", aula["conteudo"]):
+            assert 'alt="' in img and 'alt=""' not in img
+            assert 'width="' in img and 'height="' in img
+
+
+def test_modulo2_atividade_de_revisao_e_apenas_local_sem_persistencia():
+    """A atividade de revisão do Módulo 2 é só HTML nativo (<details>/<summary>),
+    nunca envolve rota, sessão de quiz ou tabela oficial — evita duplicar o
+    sistema de avaliação do LMS para o visitante anônimo."""
+    _instalar_modulo2()
+    _, aulas = _modulo2_do_banco()
+    aula3 = aulas[2]
+    assert "aula-revisao" in aula3["conteudo"]
+    assert "atividade livre de revisão" in aula3["conteudo"].lower()
+    assert "não substitui a avaliação oficial" in aula3["conteudo"].lower()
+    assert "<script" not in aula3["conteudo"].lower()

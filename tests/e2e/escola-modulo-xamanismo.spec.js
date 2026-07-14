@@ -41,10 +41,14 @@ const curso = {
     },
     {
       id: 2,
-      titulo: "Módulo 2 — Origens e Caminhos",
+      titulo: "Módulo 2 — As Origens e os Caminhos do Xamanismo",
       liberado: false,
       concluido: false,
-      aulas: [{ id: 13, titulo: "Em breve", ordem: 0, obrigatoria: true, status: "nao_iniciada", percentual: 0 }],
+      aulas: [
+        { id: 13, titulo: "A origem da palavra “xamã”", ordem: 0, obrigatoria: true, status: "nao_iniciada", percentual: 0 },
+        { id: 14, titulo: "Tradições semelhantes em diferentes regiões", ordem: 1, obrigatoria: true, status: "nao_iniciada", percentual: 0 },
+        { id: 15, titulo: "Como o xamanismo chegou ao mundo moderno", ordem: 2, obrigatoria: true, status: "nao_iniciada", percentual: 0 },
+      ],
       quiz: null,
     },
   ],
@@ -60,7 +64,7 @@ test("módulo de Xamanismo renderiza responsivamente, sem console error e saniti
 
   await page.goto("/escola-curso.html?curso=xamanismo-introducao");
   await expect(page.getByRole("heading", { name: "O que é o Xamanismo?", level: 1 })).toBeVisible();
-  await expect(page.getByText("Módulo 2 — Origens e Caminhos")).toBeVisible();
+  await expect(page.getByText("Módulo 2 — As Origens e os Caminhos do Xamanismo")).toBeVisible();
   await expect(page.locator(".plataforma-modulo.is-locked")).toHaveCount(1);
   await expect(page.locator(".plataforma-texto script")).toHaveCount(0);
   await expect(page.locator(".plataforma-texto img")).not.toHaveAttribute("onerror", /.+/);
