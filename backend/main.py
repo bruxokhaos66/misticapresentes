@@ -21,6 +21,7 @@ from backend.campaign_routes import router as campaign_router
 from backend.course_routes import router as course_router
 from backend.lms_routes import router as lms_router
 from backend.lms_admin_routes import router as lms_admin_router
+from backend.lms_content_xamanismo import instalar_conteudo_xamanismo
 from backend.database import conectar, executar, listar, obter
 from backend.logging_config import configurar_logging, get_logger
 from backend.order_status_routes import expirar_pedidos_pendentes, router as order_status_router
@@ -71,6 +72,8 @@ def _verificar_persistencia_banco() -> None:
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    with conectar() as conn:
+        instalar_conteudo_xamanismo(conn)
     _verificar_persistencia_banco()
     migrar_musicas_blob_para_arquivo()
     garantir_admin_api()

@@ -83,6 +83,24 @@
 .plataforma-video iframe, .plataforma-video video { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 .plataforma-texto { line-height: 1.7; color: var(--cream); margin: 1rem 0; }
 .plataforma-texto p { margin: 0 0 1rem; }
+.plataforma-texto h2, .plataforma-texto h3 { color: var(--gold-2); font-family: Cinzel, serif; }
+.plataforma-texto h2 { font-size: 1.55rem; margin: 1.5rem 0 .65rem; }
+.plataforma-texto h3 { font-size: 1.08rem; margin: 1.45rem 0 .5rem; }
+.plataforma-texto ul { padding-left: 1.25rem; }
+.aula-kicker { color: var(--gold); text-transform: uppercase; letter-spacing: .12em; font-size: .76rem; }
+.aula-subtitulo { color: var(--muted); font-size: 1.05rem; }
+.aula-box { margin: 1.25rem 0; padding: 1rem 1.1rem; border: 1px solid var(--line); border-left: 4px solid var(--gold); border-radius: 12px; background: rgba(0,0,0,.22); }
+.aula-box h3 { margin-top: 0; }
+.aula-box-ciencia { border-left-color: #8fb4a0; }
+.aula-box-respeito { border-left-color: var(--moss); }
+.aula-box-refletir { border-left-color: #9a82b8; }
+.aula-glossario { display: grid; grid-template-columns: minmax(110px, 170px) 1fr; gap: .45rem .8rem; }
+.aula-glossario dt { color: var(--gold); font-weight: 700; }
+.aula-glossario dd { margin: 0; color: var(--muted); }
+.aula-aviso, .aula-cta { padding: .9rem 1rem; border-radius: 10px; background: rgba(84,102,59,.22); }
+.aula-imagem-placeholder { min-height: 210px; margin: 0 0 1.4rem; padding: 1.2rem; display: grid; place-items: center; text-align: center; border: 1px dashed rgba(242,201,109,.45); border-radius: 16px; color: var(--muted); background: radial-gradient(circle at 50% 25%, rgba(242,201,109,.14), transparent 35%), linear-gradient(150deg, #111b17, #090b0a); }
+.aula-imagem-placeholder > span { color: var(--gold); font-size: 2rem; }
+.aula-imagem-placeholder figcaption { max-width: 560px; font-size: .82rem; }
 .plataforma-conteudo-material { margin: 1rem 0; }
 .plataforma-conteudo-actions { display: flex; gap: .6rem; flex-wrap: wrap; margin-top: 1.6rem; padding-top: 1.2rem; border-top: 1px solid var(--line); }
 .plataforma-conteudo-actions .btn { flex: 1; min-width: 130px; }
@@ -117,4 +135,6 @@
   .plataforma-layout.drawer-open .plataforma-sidebar { transform: translateX(0); box-shadow: var(--shadow); }
   .plataforma-conteudo { padding: 1.2rem 1.1rem 1.6rem; }
   .plataforma-conteudo-head h1 { font-size: 1.4rem; }
+  .aula-glossario { grid-template-columns: 1fr; }
+  .aula-glossario dd { margin-bottom: .5rem; }
 }

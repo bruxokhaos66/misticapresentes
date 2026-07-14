@@ -26,6 +26,7 @@ main = importlib.import_module("backend.main")
 client = TestClient(main.app)
 client.__enter__()
 ADMIN = {"X-Mistica-Api-Key": TEST_API_KEY}
+XAMANISMO = "xamanismo-introducao"
 
 CATALOGO_PAGO = "rape-uso-tradicao"  # curso pago real do catálogo existente
 OUTRO_PAGO = "ayahuasca-fundamentos"  # outro curso pago (não comprado)
@@ -366,3 +367,102 @@ def test_liberacao_manual_de_modulo():
     aluno, aid, _ = _aluno_logado(slug)
     assert client.post("/api/admin/escola/alunos/liberar-modulo", json={"aluno_id": aid, "modulo_id": ids["m2"]}, headers=ADMIN).status_code == 200
     assert _modulos_por_titulo(aluno, slug)["Módulo 2"]["liberado"] is True
+
+
+def test_modulo_xamanismo_oficial_carrega_com_duas_aulas_e_dez_questoes():
+    from backend.database import conectar
+    from backend.lms_content_xamanismo import instalar_conteudo_xamanismo
+
+    with conectar() as conn:
+        instalar_conteudo_xamanismo(conn)
+        modulo = conn.execute(
+            "SELECT id, nota_minima FROM curso_modulos WHERE slug=? AND ordem=0", (XAMANISMO,)
+        ).fetchone()
+        assert modulo and modulo["nota_minima"] == 70
+        aulas = conn.execute(
+            "SELECT titulo, conteudo, duracao_min FROM curso_aulas WHERE modulo_id=? ORDER BY ordem",
+            (modulo["id"],),
+        ).fetchall()
+        assert [a["titulo"] for a in aulas] == [
+            "O que é o Xamanismo?",
+            "Por que o Xamanismo ainda existe?",
+        ]
+        assert all(8 <= int(a["duracao_min"]) <= 15 for a in aulas)
+        assert all(
+            "Olhar da Ciência" in a["conteudo"] and "Respeito às Tradições" in a["conteudo"]
+            for a in aulas
+        )
+        quiz = conn.execute(
+            "SELECT id, nota_minima, num_perguntas FROM curso_quizzes WHERE modulo_id=?",
+            (modulo["id"],),
+        ).fetchone()
+        total = conn.execute(
+            "SELECT COUNT(*) AS n FROM quiz_perguntas WHERE quiz_id=?", (quiz["id"],)
+        ).fetchone()["n"]
+        assert quiz["nota_minima"] == 70 and quiz["num_perguntas"] == 10 and total == 10
+
+
+def test_xamanismo_exige_matricula_ativa_e_nao_revela_gabarito():
+    aluno_sem, _, _ = _aluno_logado()
+    assert aluno_sem.get(f"/api/escola/cursos/{XAMANISMO}").status_code == 403
+
+    aluno, aid, _ = _aluno_logado(XAMANISMO)
+    arvore = aluno.get(f"/api/escola/cursos/{XAMANISMO}")
+    assert arvore.status_code == 200
+    m1 = arvore.json()["modulos"][0]
+    assert len(m1["aulas"]) == 2 and m1["liberado"] is True
+    assert arvore.json()["modulos"][1]["liberado"] is False
+
+    for aula in m1["aulas"]:
+        resposta = aluno.post(
+            f"/api/escola/aulas/{aula['id']}/progresso",
+            json={"status": "concluida", "percentual": 100},
+        )
+        assert resposta.status_code == 200
+    sessao = aluno.get(f"/api/escola/quizzes/{m1['quiz']['id']}/iniciar").json()
+    assert len(sessao["perguntas"]) == 10
+    assert all("correta" not in opcao for p in sessao["perguntas"] for opcao in p["opcoes"])
+
+    assert client.post(
+        "/api/admin/escola/alunos/suspender",
+        json={"aluno_id": aid, "slug": XAMANISMO},
+        headers=ADMIN,
+    ).status_code == 200
+    assert aluno.get(f"/api/escola/cursos/{XAMANISMO}").status_code == 403
+
+
+def test_xamanismo_reprova_abaixo_de_70_e_aprova_com_70_desbloqueando_modulo_2():
+    from backend.database import conectar
+
+    aluno, _, _ = _aluno_logado(XAMANISMO)
+    arvore = aluno.get(f"/api/escola/cursos/{XAMANISMO}").json()
+    m1 = arvore["modulos"][0]
+    for aula in m1["aulas"]:
+        aluno.post(
+            f"/api/escola/aulas/{aula['id']}/progresso",
+            json={"status": "concluida", "percentual": 100},
+        )
+
+    def responder(qtd_corretas):
+        tentativa = aluno.get(f"/api/escola/quizzes/{m1['quiz']['id']}/iniciar").json()
+        respostas = []
+        with conectar() as conn:
+            for indice, pergunta in enumerate(tentativa["perguntas"]):
+                opcoes = conn.execute(
+                    "SELECT id, correta FROM quiz_opcoes WHERE pergunta_id=? ORDER BY id",
+                    (pergunta["id"],),
+                ).fetchall()
+                escolhida = next(o for o in opcoes if bool(o["correta"]) == (indice < qtd_corretas))
+                respostas.append({"pergunta_id": pergunta["id"], "opcao_id": escolhida["id"]})
+        return aluno.post(
+            f"/api/escola/quizzes/{m1['quiz']['id']}/enviar",
+            json={"sessao_id": tentativa["sessao_id"], "respostas": respostas},
+        ).json()
+
+    reprovado = responder(6)
+    assert reprovado["nota"] == 60 and reprovado["aprovado"] is False
+    assert aluno.get(f"/api/escola/cursos/{XAMANISMO}").json()["modulos"][1]["liberado"] is False
+
+    aprovado = responder(7)
+    assert aprovado["nota"] == 70 and aprovado["aprovado"] is True
+    assert aluno.get(f"/api/escola/cursos/{XAMANISMO}").json()["modulos"][1]["liberado"] is True
