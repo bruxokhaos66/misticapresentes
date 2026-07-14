@@ -1,5 +1,10 @@
 # Prompts para imagens finais do Módulo 2 — Xamanismo
 
+> Anexo técnico de `docs/imagens-escola.md`, que é o documento central da
+> auditoria visual da Escola e da lista completa de prompts (Módulo 1 e 2).
+> Mantido aqui por já estar referenciado no código; não editar os dois
+> documentos de forma divergente.
+
 Este módulo já é publicado com ilustrações vetoriais (SVG) originais, leves,
 acessíveis e sem dependência externa — não são placeholders vazios, mas uma
 versão elegante e definitiva o suficiente para produção. Quando a Mística

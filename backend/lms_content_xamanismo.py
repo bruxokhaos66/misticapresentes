@@ -22,21 +22,39 @@ VERSAO = "xamanismo-modulo-1-v2"
 # Controle de versão independente do Módulo 2 (PR #318): sua própria migração
 # idempotente, sem afetar nem ser afetada pela versão do Módulo 1 acima.
 VERSAO_MODULO_2 = "xamanismo-modulo-2-v1"
+# Substitui, nos bancos que já tinham o Módulo 1 instalado, o placeholder de
+# capa textual ("Imagem de capa em preparação") pelas ilustrações definitivas
+# das Aulas 1 e 2. Independente das versões acima; usa UPDATE (nunca
+# DELETE+INSERT) para preservar o id das aulas e o progresso já registrado.
+VERSAO_MODULO_1_CAPAS = "xamanismo-modulo-1-capas-v1"
 
 
 def _agora() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-PLACEHOLDER_CAPA = """
-<figure class="aula-imagem-placeholder" role="img" aria-label="Placeholder de capa: floresta escura sob um céu estrelado, em tons de verde-musgo e dourado">
-  <span aria-hidden="true">✦</span>
-  <figcaption><strong>Imagem de capa em preparação.</strong> Sugestão: floresta e céu estrelado, sem representar povos ou cerimônias específicas. Crédito: acervo próprio/licença a definir.</figcaption>
-</figure>
-"""
+def _capa(arquivo: str, alt: str, legenda: str) -> str:
+    return (
+        f'<figure class="aula-imagem">'
+        f'<img src="assets/escola/xamanismo/{arquivo}" width="1200" height="630" loading="lazy" alt="{alt}">'
+        f'<figcaption>{legenda} <span class="aula-imagem-credito">Ilustração original — Mística Escola.</span></figcaption>'
+        f"</figure>"
+    )
 
 
-AULA_1 = PLACEHOLDER_CAPA + """
+CAPA_M1_AULA_1 = _capa(
+    "modulo-1-aula-1-capa.svg",
+    "Ilustração de uma floresta ancestral ao amanhecer, com as últimas estrelas se apagando em um céu que passa de azul profundo a dourado",
+    "Um primeiro olhar contemplativo, antes das definições: floresta, estrelas e a luz do amanhecer.",
+)
+CAPA_M1_AULA_2 = _capa(
+    "modulo-1-aula-2-capa.svg",
+    "Ilustração de uma árvore ancestral de raízes profundas ao entardecer, com um broto novo crescendo ao seu lado",
+    "Continuidade: uma tradição permanece viva quando alguém ensina e alguém aprende.",
+)
+
+
+AULA_1 = CAPA_M1_AULA_1 + """
 <p class="aula-kicker">Aula 1 · Fundamentos e linguagem</p>
 <h2>O que é o Xamanismo?</h2>
 <p class="aula-subtitulo">Um primeiro mapa para compreender um termo amplo sem apagar a diversidade de quem mantém tradições vivas.</p>
@@ -86,7 +104,7 @@ AULA_1 = PLACEHOLDER_CAPA + """
 """
 
 
-AULA_2 = PLACEHOLDER_CAPA + """
+AULA_2 = CAPA_M1_AULA_2 + """
 <p class="aula-kicker">Aula 2 · Continuidade, encontros e responsabilidades</p>
 <h2>Por que o Xamanismo ainda existe?</h2>
 <p class="aula-subtitulo">Tradições permanecem porque pessoas e comunidades as vivem, recriam e transmitem no presente.</p>
@@ -129,15 +147,6 @@ AULA_2 = PLACEHOLDER_CAPA + """
 <p class="aula-aviso"><strong>Nota de cuidado:</strong> este módulo não oferece instruções sobre substâncias ou cerimônias e não substitui orientação médica, psicológica, jurídica ou religiosa.</p>
 <p class="aula-cta"><strong>Nos próximos módulos, você conhecerá as origens históricas do xamanismo, sua presença em diferentes regiões do mundo e a diversidade das tradições dos povos originários.</strong> Em um curso específico, estudaremos com mais profundidade as tradições dos povos originários; outros percursos abordarão, com contexto e segurança, espiritualidade, Rapé, Ayahuasca e medicinas da floresta.</p>
 """
-
-
-def _capa(arquivo: str, alt: str, legenda: str) -> str:
-    return (
-        f'<figure class="aula-imagem">'
-        f'<img src="assets/escola/xamanismo/{arquivo}" width="1200" height="630" loading="lazy" alt="{alt}">'
-        f'<figcaption>{legenda} <span class="aula-imagem-credito">Ilustração original — Mística Escola.</span></figcaption>'
-        f"</figure>"
-    )
 
 
 CAPA_M2_AULA_1 = _capa(
@@ -476,4 +485,25 @@ def instalar_conteudo_modulo2_xamanismo(conn) -> bool:
             )
 
     conn.execute("INSERT INTO lms_content_versions (versao,aplicada_em) VALUES (?,?)", (VERSAO_MODULO_2, agora))
+    return True
+
+
+def instalar_capas_modulo1_xamanismo(conn) -> bool:
+    """Troca, uma única vez, o placeholder textual das Aulas 1 e 2 do Módulo 1
+    pelas capas ilustradas definitivas — sem recriar aulas nem tocar em
+    progresso já registrado (apenas UPDATE do conteúdo pelo id existente)."""
+    from backend.lms import garantir_tabelas_lms
+
+    garantir_tabelas_lms(conn)
+    conn.execute("CREATE TABLE IF NOT EXISTS lms_content_versions (versao TEXT PRIMARY KEY, aplicada_em TEXT NOT NULL)")
+    if conn.execute("SELECT 1 FROM lms_content_versions WHERE versao=?", (VERSAO_MODULO_1_CAPAS,)).fetchone():
+        return False
+
+    modulo = conn.execute("SELECT id FROM curso_modulos WHERE slug=? AND ordem=0", (SLUG,)).fetchone()
+    if modulo:
+        modulo_id = int(modulo["id"])
+        for conteudo, ordem in ((AULA_1, 0), (AULA_2, 1)):
+            conn.execute("UPDATE curso_aulas SET conteudo=? WHERE modulo_id=? AND ordem=?", (conteudo, modulo_id, ordem))
+
+    conn.execute("INSERT INTO lms_content_versions (versao,aplicada_em) VALUES (?,?)", (VERSAO_MODULO_1_CAPAS, _agora()))
     return True
