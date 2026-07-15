@@ -28,8 +28,8 @@
   // A limpeza de chaves proibidas e a persistência do carrinho mínimo já são
   // responsabilidade estrutural de window.misticaSecureStorage (site-config.js,
   // carregado antes de qualquer script comercial). Este guard não repete
-  // essa lógica nem sobrescreve localStorage.setItem/saveState — ele só
-  // aciona a limpeza como reforço defensivo em pontos específicos do fluxo.
+  // essa lógica nem sobrescreve Storage.prototype ou a função saveState —
+  // ele só aciona a limpeza como reforço defensivo em pontos do fluxo.
   function removeSensitiveLocalKeys() {
     if (window.misticaSecureStorage) window.misticaSecureStorage.removeForbiddenKeys();
   }

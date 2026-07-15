@@ -143,8 +143,12 @@
   function clearCatalog() {
     if (typeof products !== "undefined" && Array.isArray(products)) products.splice(0, products.length);
     if (typeof stock !== "undefined") stock = {};
-    if (typeof window.misticaReconcileCart === "function") window.misticaReconcileCart();
-    else if (typeof renderAll === "function") renderAll();
+    // Falha de rede ao buscar o catálogo NUNCA reconcilia o carrinho: um
+    // catálogo vazio por erro transitório não pode ser tratado como fonte
+    // autoritativa e apagar o carrinho mínimo salvo. O carrinho persistido
+    // continua intacto para quando a API voltar; a UI só mostra o estado de
+    // indisponibilidade (checkout permanece bloqueado via misticaCatalogState).
+    if (typeof renderAll === "function") renderAll();
   }
 
   async function sincronizarAgora() {

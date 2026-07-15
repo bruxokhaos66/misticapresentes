@@ -111,7 +111,7 @@ window.misticaSiteConfig = {
     }
   });
 
-  window.misticaSecureStorage = {
+  const secureStorageApi = Object.freeze({
     CART_KEY,
     FORBIDDEN_KEYS: FORBIDDEN_KEYS.slice(),
     getCart: readRawCart,
@@ -119,7 +119,16 @@ window.misticaSiteConfig = {
     clearCart,
     sanitizeCart: sanitizeCartList,
     removeForbiddenKeys,
-  };
+  });
+  // Não editável e não redefinível: nenhum script carregado depois pode
+  // trocar window.misticaSecureStorage por uma implementação diferente
+  // (silenciosamente ou não) nem alterar seus métodos.
+  Object.defineProperty(window, "misticaSecureStorage", {
+    value: secureStorageApi,
+    writable: false,
+    configurable: false,
+    enumerable: true,
+  });
 })();
 
 (() => {

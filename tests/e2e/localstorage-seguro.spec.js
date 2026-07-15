@@ -1,4 +1,33 @@
 const { test, expect } = require("@playwright/test");
+const fs = require("fs");
+const path = require("path");
+
+const REPO_ROOT = path.resolve(__dirname, "..", "..");
+const CONSUMER_SCRIPTS = /(^|\/)(app|mobile-sync|product-admin|v2-admin-products)\.js(\?|$)/;
+
+// Descobre TODAS as páginas HTML do repositório (exceto node_modules) que
+// carregam algum consumidor de window.misticaSecureStorage, sem depender de
+// uma lista fixa — uma página nova adicionada no futuro que carregue esses
+// scripts é verificada automaticamente por este teste.
+function findHtmlPagesLoadingConsumers() {
+  const resultados = [];
+  const pilha = [REPO_ROOT];
+  while (pilha.length) {
+    const dir = pilha.pop();
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === "node_modules" || entry.name.startsWith(".git")) continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) { pilha.push(full); continue; }
+      if (!entry.name.endsWith(".html")) continue;
+      const html = fs.readFileSync(full, "utf8");
+      const scripts = [...html.matchAll(/<script[^>]*\bsrc=["']([^"']+)["']/g)].map(m => m[1]);
+      if (scripts.some(src => CONSUMER_SCRIPTS.test(src))) {
+        resultados.push({ file: full, urlPath: "/" + path.relative(REPO_ROOT, full) });
+      }
+    }
+  }
+  return resultados;
+}
 
 const produtoApi = {
   id: 701,
@@ -193,7 +222,7 @@ test.describe("persistência segura do navegador", () => {
     await expect(page.locator("#cartList")).toContainText("Nenhum produto adicionado");
   });
 
-  test("Pix, txid e resposta do pedido nunca são persistidos", async ({ page }) => {
+  test("Pix, txid, acompanhamento e resposta do pedido nunca são persistidos (localStorage, sessionStorage, cookies, IndexedDB)", async ({ page }) => {
     await prepararCatalogo(page);
     await page.route("**/api/checkout/pedidos", route => route.fulfill({
       status: 200,
@@ -207,6 +236,11 @@ test.describe("persistência segura do navegador", () => {
         desconto: 0,
       }),
     }));
+    await page.route("**/api/pedidos/PED-STORAGE-1/status**", route => route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true, venda_id: "PED-STORAGE-1", status_atual: "Aguardando pagamento", estoque_baixado: false, historico: [] }),
+    }));
 
     await page.goto("/index.html");
     await expect.poll(() => page.evaluate(() => window.misticaCatalogState)).toBe("ready");
@@ -214,13 +248,45 @@ test.describe("persistência segura do navegador", () => {
     await page.locator("[data-generate-pix]").dispatchEvent("click");
     await expect(page.locator("#pixStatus")).toContainText("aguardando pagamento", { ignoreCase: true });
 
+    // Acompanhamento do pedido (polling de status por id + pix_txid), como
+    // acontece de verdade após gerar o Pix.
+    const acompanhamento = await page.evaluate(() => window.misticaConsultarStatusPedido("PED-STORAGE-1", "TXID-SIGILOSO"));
+    expect(acompanhamento.status).toBe("Aguardando pagamento");
+
     const storage = await dumpLocalStorage(page);
-    const serialized = JSON.stringify(storage).toLowerCase();
+    const session = await page.evaluate(() => {
+      const out = {};
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        out[key] = sessionStorage.getItem(key);
+      }
+      return out;
+    });
+    const cookies = await page.context().cookies();
+    const indexedDbNames = await page.evaluate(async () => {
+      if (!window.indexedDB?.databases) return [];
+      try { return (await window.indexedDB.databases()).map(db => db.name); } catch { return []; }
+    });
+
+    const serialized = JSON.stringify({ storage, session, cookies }).toLowerCase();
     for (const term of FORBIDDEN_VALUE_TERMS) {
       expect(serialized.includes(term), `armazenamento não deveria conter "${term}"`).toBe(false);
     }
     expect(serialized.includes("txid-sigiloso")).toBe(false);
     expect(serialized.includes("00020101021226800014")).toBe(false);
+    expect(serialized.includes("ped-storage-1")).toBe(false);
+    // O site não usa cookies próprios não essenciais (a sessão administrativa
+    // é HttpOnly, invisível a document.cookie/Playwright cookies() lê todos,
+    // mas não deve haver cookie legível por JS com dado de pedido/cliente).
+    for (const cookie of cookies) {
+      expect(cookie.value.toLowerCase().includes("txid-sigiloso")).toBe(false);
+    }
+    // Nenhum banco IndexedDB relacionado a Pix/pedido/cliente é criado por
+    // este fluxo. "misticaAudioStore" é o cache de áudio offline do player
+    // xamânico (v2-shamanic-player.js), sem relação com dados comerciais —
+    // é o único banco esperado nesta página.
+    const bancosInesperados = indexedDbNames.filter(name => name !== "misticaAudioStore");
+    expect(bancosInesperados).toEqual([]);
   });
 
   test("duas abas sincronizam somente id e quantidade do carrinho", async ({ context }) => {
@@ -266,17 +332,239 @@ test.describe("persistência segura do navegador", () => {
     expect(salesValue).toBeNull();
   });
 
-  test("todas as páginas comerciais carregam site-config.js antes de app.js", async ({ request }) => {
-    for (const url of ["/index.html", "/produto.html", "/kit.html", "/achados-misticos/index.html", "/teste-commerce.html", "/admin.html"]) {
-      const response = await request.get(url);
+  test("formato do carrinho inspecionado em todo o ciclo de vida", async ({ context }, testInfo) => {
+    testInfo.setTimeout(60000);
+    const page = await context.newPage();
+    await prepararCatalogo(page);
+    await page.goto("/index.html");
+    await expect.poll(() => page.evaluate(() => window.misticaCatalogState)).toBe("ready");
+    await dismissConsent(page);
+
+    // 1) adicionar produto
+    await page.locator("[data-product-grid] button", { hasText: "Adicionar" }).click();
+    let raw = await page.evaluate(() => localStorage.getItem("misticaCart"));
+    expect(JSON.parse(raw)).toEqual([{ id: "api-701", qty: 1 }]);
+
+    // 2) alterar quantidade (adicionar novamente soma a quantidade)
+    await page.locator("[data-product-grid] input[type='number']").fill("2");
+    await page.locator("[data-product-grid] button", { hasText: "Adicionar" }).click();
+    raw = await page.evaluate(() => localStorage.getItem("misticaCart"));
+    expect(JSON.parse(raw)).toEqual([{ id: "api-701", qty: 3 }]);
+
+    // 3) remover produto
+    await page.locator("#cartList .cart-remove").click();
+    raw = await page.evaluate(() => localStorage.getItem("misticaCart"));
+    expect(JSON.parse(raw)).toEqual([]);
+
+    // adiciona de novo para testar reload/segunda aba/atualização de catálogo
+    await page.locator("[data-product-grid] input[type='number']").fill("1");
+    await page.locator("[data-product-grid] button", { hasText: "Adicionar" }).click();
+
+    // 4) recarregar a página
+    await page.reload();
+    await expect.poll(() => page.evaluate(() => window.misticaCatalogState)).toBe("ready");
+    raw = await page.evaluate(() => localStorage.getItem("misticaCart"));
+    expect(JSON.parse(raw)).toEqual([{ id: "api-701", qty: 1 }]);
+
+    // 5) abrir segunda aba: mesmo formato mínimo é visível
+    const page2 = await context.newPage();
+    await prepararCatalogo(page2);
+    await page2.goto("/index.html");
+    await expect.poll(() => page2.evaluate(() => window.misticaCatalogState)).toBe("ready");
+    raw = await page2.evaluate(() => localStorage.getItem("misticaCart"));
+    expect(JSON.parse(raw)).toEqual([{ id: "api-701", qty: 1 }]);
+
+    // 6) atualizar o catálogo (preço muda): carrinho permanece só id+qty
+    await prepararCatalogo(page, { ...produtoApi, preco: 99 });
+    await page.evaluate(() => window.misticaMobileSync.syncNow());
+    await expect(page.locator("#cartTotal")).toContainText("99,00");
+    raw = await page.evaluate(() => localStorage.getItem("misticaCart"));
+    expect(JSON.parse(raw)).toEqual([{ id: "api-701", qty: 1 }]);
+
+    const serialized = raw.toLowerCase();
+    for (const proibido of ["name", "nome", "price", "preco", "descri", "categ", "image", "estoque", "stock", "custo", "margem", "fornecedor", "sob_encomenda", "sob", "cliente", "pix", "pedido", "total", "subtotal"]) {
+      expect(serialized.includes(proibido), `carrinho não deveria conter "${proibido}"`).toBe(false);
+    }
+
+    await page.close();
+    await page2.close();
+  });
+
+  test("evento storage malicioso com preço/estoque/cliente falsos é sanitizado para id+qty", async ({ page }) => {
+    await prepararCatalogo(page);
+    await page.goto("/index.html");
+    await expect.poll(() => page.evaluate(() => window.misticaCatalogState)).toBe("ready");
+
+    const payloadMalicioso = JSON.stringify([{
+      id: "api-701",
+      qty: 2,
+      price: 0.01,
+      stock: 999999,
+      customer: { name: "dados pessoais" },
+    }]);
+    await page.evaluate((payload) => {
+      window.dispatchEvent(new StorageEvent("storage", { key: "misticaCart", newValue: payload }));
+    }, payloadMalicioso);
+
+    await expect.poll(() => page.evaluate(() => localStorage.getItem("misticaCart"))).not.toBeNull();
+    const raw = await page.evaluate(() => localStorage.getItem("misticaCart"));
+    expect(JSON.parse(raw)).toEqual([{ id: "api-701", qty: 2 }]);
+    expect(raw.toLowerCase().includes("price")).toBe(false);
+    expect(raw.toLowerCase().includes("customer")).toBe(false);
+    expect(raw.toLowerCase().includes("stock")).toBe(false);
+  });
+
+  test("quantidade negativa, decimal, string ou excessiva no legado é descartada/limitada", async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("misticaCart", JSON.stringify([
+        { id: "api-701", qty: -5 },
+        { id: "api-702", qty: 1.5 },
+        { id: "api-703", qty: "abc" },
+        { id: "api-704", qty: 5000 },
+      ]));
+    });
+    await prepararCatalogo(page, { ...produtoApi, id: 704, codigo_p: "STORAGE-704" });
+    await page.goto("/index.html");
+    await expect.poll(() => page.evaluate(() => window.misticaCatalogState)).toBe("ready");
+
+    // Só o item com quantidade inteira válida (704) sobrevive à sanitização
+    // do módulo seguro; os demais (negativo/decimal/string) já são
+    // descartados antes mesmo de chegar ao app.js. A quantidade de 5000 é
+    // limitada pelo teto do módulo seguro e depois recortada pelo estoque
+    // real do catálogo ao reconciliar.
+    const raw = await page.evaluate(() => localStorage.getItem("misticaCart"));
+    const cart = JSON.parse(raw);
+    expect(cart.every(item => Number.isInteger(item.qty) && item.qty >= 1 && item.qty <= 999)).toBe(true);
+    expect(cart.find(item => item.id === "api-701")).toBeUndefined();
+    expect(cart.find(item => item.id === "api-702")).toBeUndefined();
+    expect(cart.find(item => item.id === "api-703")).toBeUndefined();
+  });
+
+  test("chave proibida criada depois da inicialização é removida na próxima carga", async ({ page }) => {
+    await prepararCatalogo(page);
+    await page.goto("/index.html");
+    await expect.poll(() => page.evaluate(() => window.misticaCatalogState)).toBe("ready");
+
+    // Simula um script comprometido/futuro gravando uma chave proibida
+    // depois que a página já carregou.
+    await page.evaluate(() => { localStorage.setItem("misticaSales", JSON.stringify([{ total: 1 }])); });
+    expect(await page.evaluate(() => localStorage.getItem("misticaSales"))).not.toBeNull();
+
+    await page.reload();
+    await expect.poll(() => page.evaluate(() => window.misticaCatalogState)).toBe("ready");
+    expect(await page.evaluate(() => localStorage.getItem("misticaSales"))).toBeNull();
+  });
+
+  test("catálogo indisponível durante reload não trata cache local como autoritativo", async ({ page }) => {
+    await prepararCatalogo(page);
+    await page.goto("/index.html");
+    await expect.poll(() => page.evaluate(() => window.misticaCatalogState)).toBe("ready");
+    await page.locator("[data-product-grid] button", { hasText: "Adicionar" }).click();
+    await expect(page.locator("#cartList")).toContainText("Vela de teste");
+
+    await page.route("**/api/produtos?**", route => route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "indisponível" }),
+    }));
+    await page.reload();
+    await expect.poll(() => page.evaluate(() => window.misticaCatalogState)).toBe("error");
+
+    // Carrinho não é exibido como confiável (catálogo indisponível bloqueia
+    // compra); o valor mínimo salvo continua intacto para quando a API
+    // voltar, mas não é tratado como fonte de verdade de preço/estoque.
+    await expect(page.locator("[data-generate-pix]")).toBeDisabled();
+    const raw = await page.evaluate(() => localStorage.getItem("misticaCart"));
+    expect(JSON.parse(raw)).toEqual([{ id: "api-701", qty: 1 }]);
+  });
+
+  test("logout/limpeza remove o carrinho persistido", async ({ page }) => {
+    await prepararCatalogo(page);
+    await page.goto("/index.html");
+    await expect.poll(() => page.evaluate(() => window.misticaCatalogState)).toBe("ready");
+    await page.locator("[data-product-grid] button", { hasText: "Adicionar" }).click();
+    expect(await page.evaluate(() => localStorage.getItem("misticaCart"))).not.toBeNull();
+
+    await page.locator("[data-clear-cart]").click();
+    const raw = await page.evaluate(() => localStorage.getItem("misticaCart"));
+    expect(JSON.parse(raw)).toEqual([]);
+  });
+
+  test("localStorage indisponível (modo privado) não quebra a página nem usa fallback proibido", async ({ page }) => {
+    const erros = [];
+    page.on("pageerror", error => erros.push(String(error)));
+    await page.addInitScript(() => {
+      const throwStorage = {
+        getItem() { throw new DOMException("SecurityError", "SecurityError"); },
+        setItem() { throw new DOMException("SecurityError", "SecurityError"); },
+        removeItem() { throw new DOMException("SecurityError", "SecurityError"); },
+        get length() { return 0; },
+        key() { return null; },
+      };
+      Object.defineProperty(window, "localStorage", { get: () => throwStorage, configurable: true });
+    });
+    await prepararCatalogo(page);
+    await page.goto("/index.html");
+    await expect.poll(() => page.evaluate(() => window.misticaCatalogState)).toBe("ready");
+    await dismissConsent(page);
+
+    // O carrinho continua funcionando em memória mesmo sem persistência.
+    await page.locator("[data-product-grid] button", { hasText: "Adicionar" }).click();
+    await expect(page.locator("#cartList")).toContainText("Vela de teste");
+    expect(erros, `nenhum erro JS fatal deveria ocorrer: ${erros.join(" | ")}`).toEqual([]);
+
+    // Nenhum fallback alternativo (cookie, variável global exposta, etc.)
+    // recebeu os dados proibidos que iriam para localStorage.
+    const cookies = await page.context().cookies();
+    expect(cookies.some(c => /mistica(sales|stock|suppliers|cart)/i.test(c.name))).toBe(false);
+  });
+
+  test("quota de armazenamento excedida ao salvar o carrinho não lança erro fatal", async ({ page }) => {
+    const erros = [];
+    page.on("pageerror", error => erros.push(String(error)));
+    await page.addInitScript(() => {
+      const originalSetItem = Storage.prototype.setItem;
+      Storage.prototype.setItem = function quotaExceeded(key, value) {
+        if (this === window.localStorage && key === "misticaCart") {
+          throw new DOMException("QuotaExceededError", "QuotaExceededError");
+        }
+        return originalSetItem.call(this, key, value);
+      };
+    });
+    await prepararCatalogo(page);
+    await page.goto("/index.html");
+    await expect.poll(() => page.evaluate(() => window.misticaCatalogState)).toBe("ready");
+    await dismissConsent(page);
+
+    await page.locator("[data-product-grid] button", { hasText: "Adicionar" }).click();
+    await expect(page.locator("#cartList")).toContainText("Vela de teste");
+    expect(erros, `nenhum erro JS fatal deveria ocorrer: ${erros.join(" | ")}`).toEqual([]);
+  });
+
+  test("nenhum script grava em localStorage fora de window.misticaSecureStorage", async ({ request }) => {
+    const arquivos = ["app.js", "mobile-sync.js", "site-production-guard.js", "product-admin.js", "v2-admin-products.js"];
+    for (const arquivo of arquivos) {
+      const response = await request.get(`/${arquivo}`);
       expect(response.ok()).toBe(true);
-      const html = await response.text();
-      const scripts = [...html.matchAll(/<script[^>]*\bsrc=["']([^"']+)["']/g)].map(match => match[1]);
+      const source = await response.text();
+      expect(source.includes("localStorage.setItem"), `${arquivo} não deveria chamar localStorage.setItem diretamente`).toBe(false);
+      expect(/localStorage\[/.test(source), `${arquivo} não deveria indexar localStorage[...] diretamente`).toBe(false);
+    }
+  });
+
+  test("nenhuma página do repositório carrega consumidores antes de site-config.js", async () => {
+    const paginas = findHtmlPagesLoadingConsumers();
+    // Falha alto (em vez de passar silenciosamente) se a varredura não
+    // encontrar nenhuma página: garante que o teste continua fiscalizando
+    // páginas novas e não fica "verde por acidente" após uma refatoração.
+    expect(paginas.length).toBeGreaterThan(0);
+    for (const pagina of paginas) {
+      const html = fs.readFileSync(pagina.file, "utf8");
+      const scripts = [...html.matchAll(/<script[^>]*\bsrc=["']([^"']+)["']/g)].map(m => m[1]);
       const configIndex = scripts.findIndex(src => /site-config\.js/.test(src));
-      const appIndex = scripts.findIndex(src => /(^|\/)app\.js/.test(src));
-      if (appIndex === -1) continue;
-      expect(configIndex, `${url}: site-config.js deve existir`).toBeGreaterThan(-1);
-      expect(configIndex, `${url}: site-config.js deve vir antes de app.js`).toBeLessThan(appIndex);
+      const primeiroConsumidorIndex = scripts.findIndex(src => CONSUMER_SCRIPTS.test(src));
+      expect(configIndex, `${pagina.urlPath}: site-config.js deve existir`).toBeGreaterThan(-1);
+      expect(configIndex, `${pagina.urlPath}: site-config.js deve vir antes de ${scripts[primeiroConsumidorIndex]}`).toBeLessThan(primeiroConsumidorIndex);
     }
   });
 });
