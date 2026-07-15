@@ -117,10 +117,10 @@ for (const viewport of [
 test.describe("catálogo da Escola", () => {
   test("card de incensos usa capa WebP, sem SVG", async ({ page }) => {
     await page.goto("/escola.html");
-    const cover = page.locator('[data-course="incensos-introducao"] .course-card-cover');
+    const cover = page.locator('[data-course="incensos-introducao"] .escola-card-cover');
     await expect(cover).toBeVisible();
-    const backgroundImage = await cover.evaluate(el => getComputedStyle(el).backgroundImage);
-    expect(backgroundImage).toContain("incensos-curso-capa.webp");
-    expect(backgroundImage).not.toContain(".svg");
+    const src = await cover.getAttribute("src");
+    expect(src).toContain("incensos-curso-capa.webp");
+    expect(src).not.toContain(".svg");
   });
 });
