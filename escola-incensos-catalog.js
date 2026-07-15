@@ -10,7 +10,7 @@
     card.className = "course-card is-free";
     card.dataset.course = "incensos-introducao";
     card.innerHTML = `
-      <div class="course-card-cover" style="background-image:linear-gradient(180deg,transparent,rgba(0,0,0,.88)),url('assets/escola/incensos/incensos-curso-capa.webp')">
+      <div class="course-card-cover" style="background-image:linear-gradient(180deg,transparent,rgba(0,0,0,.88)),url('assets/escola/incensos/incensos-curso-capa.svg')">
         <span class="course-card-badge">Gratuito</span>
         <span class="course-card-icon" aria-hidden="true">🔥</span>
       </div>
