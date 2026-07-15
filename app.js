@@ -18,13 +18,26 @@ const products = [
   { id: "presente-mistico", name: "Kit Presente Especial", category: "Kits e presentes", description: "Combinação especial com aromas, velas, pedras e artigos escolhidos com carinho.", price: 59.9, stock: 8, icon: "🎁", imageUrl: "" }
 ];
 
-let cart = loadStorage("misticaCart", []);
-// Dados pessoais de clientes (nome, CPF, endereço, WhatsApp) nunca são
-// persistidos no navegador: ficam só em memória durante a sessão da página.
+// O navegador só persiste o carrinho mínimo (id + quantidade), via
+// window.misticaSecureStorage (site-config.js, carregado antes deste
+// script). Nome, preço e classificação de encomenda são recompostos a
+// partir do catálogo oficial em reconcileCartWithCatalog().
+let cart = (window.misticaSecureStorage ? window.misticaSecureStorage.getCart() : [])
+  .map(entry => ({ id: entry.id, qty: entry.qty }));
+// Dados pessoais de clientes (nome, CPF, endereço, WhatsApp), vendas,
+// estoque e fornecedores nunca são persistidos no navegador: ficam só em
+// memória durante a sessão da página. Estoque e catálogo vêm sempre do
+// servidor (mobile-sync.js).
 let clients = [];
-let sales = loadStorage("misticaSales", []);
-let stock = loadStorage("misticaStock", createInitialStock());
-let suppliers = loadStorage("misticaSuppliers", []);
+let sales = [];
+let stock = createInitialStock();
+let suppliers = [];
+let lastBackupAt = null;
+// O carrinho carregado do navegador só tem id+quantidade: até o catálogo
+// oficial confirmar esses produtos (mobile-sync.js), a UI mostra um estado
+// de carregamento em vez de itens com nome/preço incompletos ou confiar no
+// catálogo estático de fallback acima.
+let cartReady = false;
 
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const $ = selector => document.querySelector(selector);
@@ -55,10 +68,39 @@ const isisChat = $("#isisChat");
 const isisInput = $("#isisInput");
 const backupStatus = $("#backupStatus");
 
-function loadStorage(key, fallback) { try { const value = localStorage.getItem(key); return value ? JSON.parse(value) : fallback; } catch { localStorage.removeItem(key); return fallback; } }
 function createInitialStock() { return products.reduce((map, product) => { map[product.id] = product.stock; return map; }, {}); }
-function saveState() { localStorage.setItem("misticaCart", JSON.stringify(cart)); localStorage.removeItem("misticaClients"); localStorage.setItem("misticaSales", JSON.stringify(sales)); localStorage.setItem("misticaStock", JSON.stringify(stock)); localStorage.setItem("misticaSuppliers", JSON.stringify(suppliers)); localStorage.setItem("misticaAutoBackup", JSON.stringify(createBackupPayload())); localStorage.setItem("misticaLastBackupAt", new Date().toISOString()); }
+// Única gravação no navegador: o carrinho mínimo (id + quantidade). Vendas,
+// estoque, fornecedores e clientes nunca tocam localStorage.
+function saveState() { if (window.misticaSecureStorage) window.misticaSecureStorage.setCart(cart.map(item => ({ id: item.id, qty: item.qty }))); }
 function createBackupPayload() { return { store: storeConfig.name, createdAt: new Date().toISOString(), products, sales, stock, suppliers }; }
+// Reconstrói o carrinho a partir do catálogo oficial atual: descarta
+// produtos inexistentes/inativos, aplica preço e estoque vigentes e
+// recalcula a classificação de encomenda. Nunca confia em dados antigos do
+// navegador (preço, nome e sob-encomenda salvos localmente).
+function reconcileCartWithCatalog() {
+  cartReady = true;
+  const minimal = cart.map(item => ({ id: item.id, qty: item.qty }));
+  cart = minimal.reduce((acc, entry) => {
+    const product = products.find(p => p.id === entry.id);
+    if (!product) return acc;
+    const available = getStock(product.id);
+    const qty = Math.max(0, Math.min(Math.floor(Number(entry.qty) || 0), available));
+    if (qty < 1) return acc;
+    const sob = Boolean(window.misticaEncomenda && window.misticaEncomenda.isSobEncomenda(product));
+    acc.push({ id: product.id, name: product.name, price: product.price, qty, sob });
+    return acc;
+  }, []);
+  saveState();
+  renderCart();
+  renderProducts();
+}
+window.misticaReconcileCart = reconcileCartWithCatalog;
+window.addEventListener("storage", event => {
+  if (window.misticaSecureStorage && event.key === window.misticaSecureStorage.CART_KEY) {
+    cart = window.misticaSecureStorage.getCart().map(entry => ({ id: entry.id, qty: entry.qty }));
+    reconcileCartWithCatalog();
+  }
+});
 function text(value) { return String(value ?? ""); }
 function onlyDigits(value) { return text(value).replace(/\D/g, ""); }
 function getStock(productId) { return Number(stock[productId] ?? 0); }
@@ -127,7 +169,7 @@ function updateCheckoutEncomendaBox() {
   const check = document.getElementById("encomendaConfirm");
   if (check && !show) check.checked = false;
 }
-function renderCart() { updateCartCount(); renderCrossSell(); updateCheckoutEncomendaBox(); if (!cartList || !cartTotal) return; if (!cart.length) cartList.innerHTML = `<div class="cart-item"><span>Nenhum produto adicionado ainda.</span></div>`; else cartList.innerHTML = cart.map(item => `<div class="cart-item"><div><strong>${item.name}</strong><span>${item.qty}x ${currency.format(item.price)} = ${currency.format(item.price * item.qty)}</span>${cartItemIsEncomenda(item) ? `<span class="cart-encomenda-tag">${(window.misticaEncomenda && window.misticaEncomenda.BADGE) || "Sob encomenda"}</span>` : ""}</div><button class="cart-remove" type="button" onclick="removeFromCart('${item.id}')">Remover</button></div>`).join(""); cartTotal.textContent = currency.format(getTotal()); }
+function renderCart() { updateCartCount(); renderCrossSell(); updateCheckoutEncomendaBox(); if (!cartList || !cartTotal) return; if (!cartReady) { cartList.innerHTML = `<div class="cart-item"><span>Carregando catálogo oficial para exibir seu carrinho...</span></div>`; cartTotal.textContent = currency.format(0); return; } if (!cart.length) cartList.innerHTML = `<div class="cart-item"><span>Nenhum produto adicionado ainda.</span></div>`; else cartList.innerHTML = cart.map(item => `<div class="cart-item"><div><strong>${item.name}</strong><span>${item.qty}x ${currency.format(item.price)} = ${currency.format(item.price * item.qty)}</span>${cartItemIsEncomenda(item) ? `<span class="cart-encomenda-tag">${(window.misticaEncomenda && window.misticaEncomenda.BADGE) || "Sob encomenda"}</span>` : ""}</div><button class="cart-remove" type="button" onclick="removeFromCart('${item.id}')">Remover</button></div>`).join(""); cartTotal.textContent = currency.format(getTotal()); }
 
 // Cross-sell no carrinho: sugere até 4 produtos disponíveis que ainda não
 // estão no carrinho, priorizando categorias diferentes das já escolhidas
@@ -137,7 +179,7 @@ function renderCrossSell() {
   const checkout = document.querySelector("#checkout .checkout-grid");
   if (!checkout) return;
   let box = document.getElementById("cartCrossSell");
-  if (!cart.length) { if (box) box.remove(); return; }
+  if (!cartReady || !cart.length) { if (box) box.remove(); return; }
   const noCarrinho = new Set(cart.map(item => item.id));
   const sugestoes = products
     .filter(product => !noCarrinho.has(product.id) && getStock(product.id) > 0)
@@ -277,8 +319,8 @@ function exportCsv(filename, rows) { if (!rows.length) return alert("Não há da
 function downloadFile(filename, content, type) { const blob = new Blob([content], { type }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = filename; link.click(); URL.revokeObjectURL(url); }
 function exportClients() { const rows = [["Nome", "CPF", "Endereco", "WhatsApp", "Cadastro"]].concat(clients.map(client => [client.name, client.cpf, client.address, client.whatsapp, client.createdAt])); exportCsv("mistica-clientes.csv", rows); }
 function exportSales() { const rows = [["ID", "Data", "Itens", "Total", "Status"]].concat(sales.map(sale => [sale.id, sale.date, sale.items.map(item => `${item.qty}x ${item.name}`).join(" | "), sale.total.toFixed(2).replace(".", ","), sale.status])); exportCsv("mistica-vendas.csv", rows); }
-function renderAdminDashboard() { const today = new Date(); const startDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()); const startWeek = new Date(startDay); startWeek.setDate(startDay.getDate() - startDay.getDay()); const startMonth = new Date(today.getFullYear(), today.getMonth(), 1); const totalSince = date => sales.filter(s => new Date(s.date) >= date).reduce((sum, s) => sum + Number(s.total || 0), 0); const setText = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; }; setText("revenueToday", currency.format(totalSince(startDay))); setText("revenueWeek", currency.format(totalSince(startWeek))); setText("revenueMonth", currency.format(totalSince(startMonth))); setText("salesCount", String(sales.length)); const lowStock = products.filter(product => getStock(product.id) <= storeConfig.minStock); const alerts = document.getElementById("lowStockAlerts"); if (alerts) alerts.innerHTML = lowStock.length ? lowStock.map(product => `<div class="history-item"><strong>${product.name}</strong><span>Estoque atual: ${getStock(product.id)} un. Reposição recomendada.</span></div>`).join("") : `<div class="history-item"><span>Nenhum alerta de estoque mínimo.</span></div>`; if (backupStatus) { const last = localStorage.getItem("misticaLastBackupAt"); backupStatus.textContent = last ? `Último backup automático local: ${new Date(last).toLocaleString("pt-BR")}` : "Nenhum backup automático salvo ainda."; } }
-function downloadBackup() { saveState(); downloadFile(`mistica-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(createBackupPayload(), null, 2), "application/json;charset=utf-8;"); }
+function renderAdminDashboard() { const today = new Date(); const startDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()); const startWeek = new Date(startDay); startWeek.setDate(startDay.getDate() - startDay.getDay()); const startMonth = new Date(today.getFullYear(), today.getMonth(), 1); const totalSince = date => sales.filter(s => new Date(s.date) >= date).reduce((sum, s) => sum + Number(s.total || 0), 0); const setText = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; }; setText("revenueToday", currency.format(totalSince(startDay))); setText("revenueWeek", currency.format(totalSince(startWeek))); setText("revenueMonth", currency.format(totalSince(startMonth))); setText("salesCount", String(sales.length)); const lowStock = products.filter(product => getStock(product.id) <= storeConfig.minStock); const alerts = document.getElementById("lowStockAlerts"); if (alerts) alerts.innerHTML = lowStock.length ? lowStock.map(product => `<div class="history-item"><strong>${product.name}</strong><span>Estoque atual: ${getStock(product.id)} un. Reposição recomendada.</span></div>`).join("") : `<div class="history-item"><span>Nenhum alerta de estoque mínimo.</span></div>`; if (backupStatus) { backupStatus.textContent = lastBackupAt ? `Último backup baixado nesta sessão: ${new Date(lastBackupAt).toLocaleString("pt-BR")}` : "Nenhum backup baixado nesta sessão."; } }
+function downloadBackup() { lastBackupAt = new Date().toISOString(); downloadFile(`mistica-backup-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(createBackupPayload(), null, 2), "application/json;charset=utf-8;"); renderAdminDashboard(); }
 function restoreBackupInfo() { alert("Para restaurar um backup real, será necessário adicionar upload de arquivo JSON ou backend. O backup automático local já está salvo neste navegador."); }
 function printReceipt(sale = sales[0]) { if (!sale) return alert("Nenhuma venda para imprimir."); const items = sale.items.map(item => `<tr><td>${item.qty}x ${item.name}</td><td>${currency.format(item.price * item.qty)}</td></tr>`).join(""); const win = window.open("", "_blank", "width=420,height=620"); win.document.write(`<html><head><title>Cupom ${sale.id}</title><style>body{font-family:Arial,sans-serif;padding:18px;color:#111}h1{font-size:20px}table{width:100%;border-collapse:collapse}td{border-bottom:1px dashed #999;padding:8px 0}.total{font-size:20px;font-weight:bold;text-align:right}.small{font-size:12px;color:#555}</style></head><body><h1>${storeConfig.name}</h1><p class="small">Cupom: ${sale.id}<br>${new Date(sale.date).toLocaleString("pt-BR")}</p><table>${items}</table><p class="total">Total: ${currency.format(sale.total)}</p><p>Status: ${sale.status}</p><p class="small">Obrigado pela preferência.</p></body></html>`); win.document.close(); win.focus(); win.print(); }
 function sendLastReceiptWhatsapp() { const sale = sales[0]; if (!sale) return alert("Nenhuma venda para enviar."); const items = sale.items.map(item => `• ${item.qty}x ${item.name} - ${currency.format(item.price * item.qty)}`).join("\n"); const message = `Comprovante/Pedido - ${storeConfig.name}\n\nVenda: ${sale.id}\nData: ${new Date(sale.date).toLocaleString("pt-BR")}\n\n${items}\n\nTotal: ${currency.format(sale.total)}\nStatus: ${sale.status}`; window.open(buildWhatsappUrl(message), "_blank", "noopener"); }
@@ -363,4 +405,3 @@ setupFloatingWhatsapp();
 setupFloatingCart();
 renderAll();
 clearQrCanvas();
-saveState();

@@ -3,8 +3,6 @@
   const API_BASE = String(
     (window.misticaSiteConfig || {}).apiBaseUrl || 'https://api.misticaesotericos.com.br'
   ).replace(/\/$/, '');
-  const PRODUCT_CACHE_KEY = 'misticaApiProductsCache';
-
   const ready = (fn) => document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', fn) : fn();
   const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -59,12 +57,10 @@
     if (typeof renderAll === 'function') renderAll();
   };
 
+  // A resposta de /api/produtos/admin é privada (pode incluir custo/margem);
+  // fica só em memória (currentProducts, abaixo) e nunca em localStorage.
   const syncCatalogWithApi = (apiItems) => {
     applyCatalogToUi(apiItems);
-    try {
-      localStorage.setItem(PRODUCT_CACHE_KEY, JSON.stringify(apiItems));
-      localStorage.setItem(`${PRODUCT_CACHE_KEY}At`, String(Date.now()));
-    } catch {}
   };
 
   const loadApiProductsPublic = async () => {
@@ -279,18 +275,9 @@
         renderList();
         setStatus(`Produtos atualizados: ${currentProducts.length} item(ns).`, true);
       } catch (error) {
-        const cached = JSON.parse(localStorage.getItem(PRODUCT_CACHE_KEY) || '[]');
-        if (cached.length) {
-          currentProducts = cached;
-          applyCatalogToUi(cached);
-          renderList();
-          const cachedAt = Number(localStorage.getItem(`${PRODUCT_CACHE_KEY}At`) || 0);
-          const idadeMin = cachedAt ? Math.round((Date.now() - cachedAt) / 60000) : null;
-          const idadeTxto = idadeMin === null ? 'de data desconhecida' : idadeMin < 1 ? 'de menos de 1 minuto' : `de ${idadeMin} min atrás`;
-          setStatus(`API indisponível agora. Exibindo cache local (${idadeTxto}) — pode estar desatualizado.`);
-        } else {
-          setStatus(error.message || 'Falha ao carregar produtos.');
-        }
+        // Sem cache local: a resposta privada da API nunca é persistida no
+        // navegador. Em caso de falha, o operador só pode tentar novamente.
+        setStatus(error.message || 'Falha ao carregar produtos.');
       }
     };
 

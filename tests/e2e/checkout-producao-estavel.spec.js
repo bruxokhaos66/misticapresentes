@@ -101,7 +101,11 @@ test.describe("checkout de produção estável", () => {
     expect(payloadRecebido).not.toHaveProperty("total_final");
     await expect(page.locator("#cartList")).toContainText("Incenso de teste");
 
-    const pendingId = await page.evaluate(() => localStorage.getItem("misticaPendingOrderId"));
+    // O id do pedido pendente fica só em memória (window.misticaProductionGuard),
+    // nunca em localStorage.
+    const pendingId = await page.evaluate(() => window.misticaProductionGuard?.pendingOrderId);
     expect(pendingId).toBe("PED-TESTE-1");
+    const persistedPendingId = await page.evaluate(() => localStorage.getItem("misticaPendingOrderId"));
+    expect(persistedPendingId).toBeNull();
   });
 });

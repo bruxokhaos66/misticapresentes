@@ -33,7 +33,15 @@ def test_site_config_captura_login_admin_antes_do_listener_local():
     assert "/api/auth/login" in config
     assert 'credentials: "include"' in config
     assert "X-Mistica-Api-Key" not in config
-    assert "localStorage" not in config
+    # O bloco de captura de login admin (a partir da leitura de
+    # window.location.search) nunca deve tocar localStorage: a sessão real é
+    # sempre o cookie HttpOnly revalidado em /api/auth/me. Isso não proíbe
+    # localStorage no restante do arquivo: o módulo de persistência segura do
+    # carrinho (window.misticaSecureStorage, coberto por
+    # tests/e2e/localstorage-seguro.spec.js) roda antes deste bloco e é a
+    # única gravação de localStorage permitida no site.
+    bloco_admin = config.split("const params = new URLSearchParams(window.location.search);", 1)[1]
+    assert "localStorage" not in bloco_admin
 
 
 def test_site_config_restaura_sessao_no_servidor():
