@@ -20,6 +20,21 @@ corretamente e de forma exclusiva, mas nenhum lançamento financeiro de
 estorno é criado. Isso é verificado explicitamente abaixo para não regredir
 silenciosamente caso a API passe a gravar fluxo_caixa no futuro sem os
 mesmos testes de exclusão mútua.
+
+Nota sobre flake pré-existente (investigado na Fase A, PR #331): o CI
+relatou um `threading.BrokenBarrierError` intermitente em
+`test_api_x_api_no_banco_compartilhado`. Reprodução estatística mostrou que
+o mesmo erro ocorre (1/25 execuções isoladas) em `origin/main` ANTES das
+mudanças da Fase A — este arquivo não foi alterado pelo PR #331 e a Fase A
+não toca nada usado aqui. A causa raiz é o tempo de startup do
+`TestClient(main.app)` (ciclo de vida/lifespan do FastAPI, incluindo
+inicialização de banco e logging) variar sob contenção de GIL entre as
+duas threads; com `barreira.wait(timeout=10)` justo, uma inicialização
+lenta em uma das threads pode ultrapassar a janela antes da outra thread
+liberar a barreira. A correção aplicada aqui é puramente de tolerância a
+timing (10s -> 30s no barrier, 20s -> 45s no resultado dos futures) — não
+altera nenhuma asserção nem a semântica do teste, que continua exercendo a
+corrida real do POST concorrente.
 """
 
 import os
@@ -130,7 +145,7 @@ def test_desktop_x_desktop_no_banco_compartilhado(banco_compartilhado):
     barreira = threading.Barrier(2)
 
     def estornar():
-        barreira.wait(timeout=10)
+        barreira.wait(timeout=30)
         try:
             venda_service.cancelar_venda_service(venda_id, "Teste", caixa_id)
             return "ok"
@@ -138,7 +153,7 @@ def test_desktop_x_desktop_no_banco_compartilhado(banco_compartilhado):
             return str(exc)
 
     with ThreadPoolExecutor(max_workers=2) as executor:
-        resultados = [f.result(timeout=20) for f in [executor.submit(estornar) for _ in range(2)]]
+        resultados = [f.result(timeout=45) for f in [executor.submit(estornar) for _ in range(2)]]
 
     assert sorted(resultados) == ["Venda ja cancelada.", "ok"]
     assert _estoque(codigo) == 5
@@ -156,11 +171,11 @@ def test_api_x_api_no_banco_compartilhado(banco_compartilhado):
 
     def enviar():
         with TestClient(main.app) as thread_client:
-            barreira.wait(timeout=10)
+            barreira.wait(timeout=30)
             return thread_client.post(f"/api/vendas/{venda_id}/estornar", headers=HEADERS, json={"usuario": "Teste"})
 
     with ThreadPoolExecutor(max_workers=2) as executor:
-        respostas = [f.result(timeout=20) for f in [executor.submit(enviar) for _ in range(2)]]
+        respostas = [f.result(timeout=45) for f in [executor.submit(enviar) for _ in range(2)]]
 
     for resposta in respostas:
         assert resposta.status_code == 200, resposta.text
@@ -184,7 +199,7 @@ def test_desktop_x_api_apenas_um_vence_e_nao_duplica_efeitos(banco_compartilhado
         resultado = {}
 
         def estornar_desktop():
-            barreira.wait(timeout=10)
+            barreira.wait(timeout=30)
             try:
                 venda_service.cancelar_venda_service(venda_id, "Teste", caixa_id)
                 resultado["desktop"] = "ok"
@@ -193,7 +208,7 @@ def test_desktop_x_api_apenas_um_vence_e_nao_duplica_efeitos(banco_compartilhado
 
         def estornar_api():
             with TestClient(main.app) as thread_client:
-                barreira.wait(timeout=10)
+                barreira.wait(timeout=30)
                 resp = thread_client.post(f"/api/vendas/{venda_id}/estornar", headers=HEADERS, json={"usuario": "Teste"})
                 resultado["api_status"] = resp.status_code
                 resultado["api_ja_cancelada"] = resp.json().get("ja_cancelada") if resp.status_code == 200 else None
@@ -201,8 +216,8 @@ def test_desktop_x_api_apenas_um_vence_e_nao_duplica_efeitos(banco_compartilhado
         with ThreadPoolExecutor(max_workers=2) as executor:
             f1 = executor.submit(estornar_desktop)
             f2 = executor.submit(estornar_api)
-            f1.result(timeout=20)
-            f2.result(timeout=20)
+            f1.result(timeout=45)
+            f2.result(timeout=45)
 
         # Exclusão mútua: exatamente um dos dois caminhos reivindicou a
         # transição (rowcount==1); o outro observa o estado JÁ cancelado.

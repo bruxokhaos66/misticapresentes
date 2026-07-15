@@ -196,7 +196,7 @@ def _reivindicar_fechamento_cursor(cur, caixa_id):
     return cur.rowcount
 
 
-def fechar_caixa_conferido(caixa_id, saldo, formas, informado):
+def fechar_caixa_conferido(caixa_id, saldo, formas, informado, operador=None):
     formas = formas or {}
     informado = informado or {}
     credito_sistema = formas.get("Credito", None)
@@ -223,7 +223,7 @@ def fechar_caixa_conferido(caixa_id, saldo, formas, informado):
             """,
             (datetime.now().strftime("%d/%m/%Y %H:%M"), saldo, formas.get("Dinheiro", 0.0), formas.get("Pix", 0.0), formas.get("Debito", 0.0), credito_sistema, informado.get("Dinheiro", 0.0), informado.get("Pix", 0.0), informado.get("Debito", 0.0), credito_informado, diferenca, caixa_id),
         )
-        registrar_auditoria(conn, "caixa", caixa_id, "fechar_conferido", depois={"saldo_final": saldo, "formas_sistema": formas, "formas_informado": informado, "diferenca": diferenca})
+        registrar_auditoria(conn, "caixa", caixa_id, "fechar_conferido", operador, depois={"saldo_final": saldo, "formas_sistema": formas, "formas_informado": informado, "diferenca": diferenca})
         conn.commit()
     except Exception:
         conn.rollback()
@@ -233,7 +233,7 @@ def fechar_caixa_conferido(caixa_id, saldo, formas, informado):
     return diferenca
 
 
-def fechar_caixa_simples(caixa_id, saldo):
+def fechar_caixa_simples(caixa_id, saldo, operador=None):
     conn = get_connection()
     cur = conn.cursor()
     try:
@@ -243,7 +243,7 @@ def fechar_caixa_simples(caixa_id, saldo):
             "UPDATE caixa_diario SET data_fechamento=?, saldo_final=? WHERE id=?",
             (datetime.now().strftime("%d/%m/%Y %H:%M"), saldo, caixa_id),
         )
-        registrar_auditoria(conn, "caixa", caixa_id, "fechar_simples", depois={"saldo_final": saldo})
+        registrar_auditoria(conn, "caixa", caixa_id, "fechar_simples", operador, depois={"saldo_final": saldo})
         conn.commit()
     except Exception:
         conn.rollback()
@@ -252,7 +252,7 @@ def fechar_caixa_simples(caixa_id, saldo):
         conn.close()
 
 
-def lancar_fluxo(tipo, descricao, valor, caixa_id, rotulo=None, forma_pagamento=None):
+def lancar_fluxo(tipo, descricao, valor, caixa_id, rotulo=None, forma_pagamento=None, operador=None):
     """Lança sangria/reforço no caixa aberto. A checagem de que o caixa
     informado segue 'Aberto' e o INSERT do lançamento acontecem na mesma
     transação (subquery no próprio INSERT + rowcount), para que um
@@ -276,7 +276,7 @@ def lancar_fluxo(tipo, descricao, valor, caixa_id, rotulo=None, forma_pagamento=
         )
         if cur.rowcount != 1:
             raise ValueError("O caixa foi fechado durante a operação; lançamento cancelado. Reabra o caixa e tente novamente.")
-        registrar_auditoria(conn, "caixa", caixa_id, "lancar_fluxo", depois={"tipo": tipo, "rotulo": rotulo, "valor": float(valor or 0)})
+        registrar_auditoria(conn, "caixa", caixa_id, "lancar_fluxo", operador, depois={"tipo": tipo, "rotulo": rotulo, "valor": float(valor or 0)})
         conn.commit()
     except Exception:
         conn.rollback()
@@ -320,7 +320,11 @@ def marcar_conta_paga(conta_id, caixa_id=None, operador="Sistema"):
         raise ValueError("Conta nao localizada.")
     _, descricao, valor, vencimento, categoria, status = conta
     valor = float(valor or 0)
+    if valor <= 0:
+        raise ValueError("Conta com valor invalido (zero ou negativo); corrija o cadastro antes de pagar.")
     cx_id = caixa_id or obter_caixa_id_ativo()
+    if not cx_id:
+        raise ValueError("Abra o caixa antes de marcar uma conta como paga.")
 
     conn = get_connection()
     cur = conn.cursor()

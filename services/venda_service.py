@@ -8,7 +8,7 @@ from repositories import estoque as estoque_repo
 from repositories import vendas as vendas_repo
 from services.dia_operacional_service import etiqueta_dia_operacional
 from services.estoque_service import validar_estoque_carrinho
-from services.pagamento_misto_service import extrair_pagamentos_mistos
+from services.pagamento_misto_service import extrair_pagamentos_mistos, eh_pagamento_misto
 
 
 def _centavos(valor) -> Decimal:
@@ -226,6 +226,16 @@ def registrar_venda_service(carrinho, cliente, data_venda, data_iso, calculo, fo
     conn = get_connection()
     cur = conn.cursor()
     try:
+        # Mesma guarda usada em cancelar_venda_service: o caixa informado
+        # precisa continuar 'Aberto' dentro desta transação antes de gravar
+        # a entrada em fluxo_caixa. Sem isso, uma venda podia terminar de
+        # ser registrada e lançar sua entrada financeira num caixa que
+        # fechou no meio da operação (gap de produtor de fluxo_caixa sem
+        # guard, achado na revisão da Fase A).
+        caixa_row = cur.execute("SELECT status FROM caixa_diario WHERE id=?", (caixa_id,)).fetchone()
+        if not caixa_row or str(caixa_row[0] or "").lower() != "aberto":
+            raise ValueError("O caixa foi fechado durante a operação; venda cancelada. Reabra o caixa e tente novamente.")
+
         venda_id = vendas_repo.inserir_venda_cursor(
             cur, cliente, data_venda, data_iso, calculo["s"], calculo["d"], calculo["tx"], calculo["tot"], forma_pagamento, vendedor, "Concluído", dia_operacional
         )
@@ -342,7 +352,22 @@ def cancelar_venda_service(venda_id, usuario, caixa_id=None):
         agora_data = datetime.now().strftime("%d/%m/%Y %H:%M")
         agora_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         pagamentos_mistos = extrair_pagamentos_mistos(forma_estorno)
+        if eh_pagamento_misto(forma_estorno) and not pagamentos_mistos:
+            raise ValueError(
+                "Falha ao interpretar o pagamento misto no estorno: forma_pagamento "
+                f"'{forma_estorno}' começa com 'Misto:' mas nenhuma parcela pôde ser "
+                "extraída. Estorno abortado sem gravar nada em fluxo_caixa (nunca "
+                "seguindo parcialmente); corrija o formato antes de tentar novamente."
+            )
         if pagamentos_mistos:
+            soma_parcelas = float(sum((_centavos(p["valor"]) for p in pagamentos_mistos), Decimal("0.00")))
+            if abs(soma_parcelas - round(valor_estorno, 2)) > 0.01:
+                raise ValueError(
+                    "Falha ao interpretar as parcelas do pagamento misto no estorno: "
+                    f"soma das parcelas (R$ {soma_parcelas:.2f}) diverge do total da venda "
+                    f"(R$ {valor_estorno:.2f}). Estorno abortado sem gravar nada em fluxo_caixa; "
+                    "verifique o formato de forma_pagamento desta venda."
+                )
             for pagamento in pagamentos_mistos:
                 forma = normalizar_forma_pagamento(pagamento["forma"])
                 valor = dinheiro_para_float(pagamento["valor"])

@@ -2969,7 +2969,7 @@ class MisticaApp(ctk.CTk):
         if not messagebox.askyesno("Fechar Caixa", f"A Isis calculou o saldo em {format_moeda(saldo)}. Deseja fechar o caixa?"):
             return "Fechamento cancelado."
         try:
-            caixa_fechar_simples(resumo["caixa_id"], saldo)
+            caixa_fechar_simples(resumo["caixa_id"], saldo, self.current_user['nome'])
             return f"Caixa fechado com saldo final de {format_moeda(saldo)}."
         except Exception as e:
             registrar_erro_sistema("Isis fechar caixa", e)
@@ -3084,7 +3084,7 @@ class MisticaApp(ctk.CTk):
                 if not messagebox.askyesno("Confirmar fechamento", texto):
                     return
                 try:
-                    caixa_fechar_conferido(cx_id, saldo, formas, informado)
+                    caixa_fechar_conferido(cx_id, saldo, formas, informado, self.current_user['nome'])
                     registrar_log(self.current_user['nome'], "Fechamento caixa", f"Caixa {cx_id} fechado. Diferenca {format_moeda(diferenca)}")
                     win.destroy()
                     atualizar_status_caixa()
@@ -3116,7 +3116,7 @@ class MisticaApp(ctk.CTk):
             if desc and val > 0:
                 try:
                     rotulo = "Reforco de caixa" if tipo == "Entrada" else "Sangria"
-                    caixa_lancar_fluxo(tipo, desc, val, cx_id, rotulo)
+                    caixa_lancar_fluxo(tipo, desc, val, cx_id, rotulo, operador=self.current_user['nome'])
                     registrar_log(self.current_user['nome'], rotulo, f"{desc} - {format_moeda(val)}")
                     ent_desc_fl.delete(0, 'end')
                     ent_val_fl.delete(0, 'end')
