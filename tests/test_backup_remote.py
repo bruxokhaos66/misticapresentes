@@ -42,7 +42,7 @@ def _config(**changes):
         "bucket": "backups",
         "endpoint": "https://example.r2.cloudflarestorage.com",
         "access_key": "access",
-        "secret_key": "secret",
+        "secret_key": "secret",  # pragma: allowlist secret
         "prefix": "mistica",
         "encryption_key": b"k" * 32,
         "timeout": 5.0,
@@ -270,7 +270,7 @@ def test_erro_persistido_remove_credenciais_bucket_endpoint_chave_e_caminho(tmp_
     monkeypatch.setenv("BACKUP_ENCRYPTION_KEY", encryption_text)
     config = _config(
         access_key="access-super-secreto",
-        secret_key="secret-super-secreto",
+        secret_key="secret-super-secreto",  # pragma: allowlist secret
         bucket="bucket-privado",
         endpoint="https://endpoint-privado.example",
     )
