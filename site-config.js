@@ -17,6 +17,120 @@ window.misticaSiteConfig = {
   metaPixelId: ""
 };
 
+// Persistência segura do navegador. Este bloco roda de forma síncrona, no
+// primeiro script da página (site-config.js sempre precede app.js e os
+// demais consumidores), então nenhuma escrita comercial acontece antes dele.
+// Não depende de monkey patch tardio: é a única API de armazenamento usada
+// pelos scripts do site (app.js, mobile-sync.js, product-admin.js,
+// v2-admin-products.js, site-production-guard.js).
+(() => {
+  const CART_KEY = "misticaCart";
+  const FORBIDDEN_KEYS = [
+    "misticaClients",
+    "misticaSales",
+    "misticaStock",
+    "misticaSuppliers",
+    "misticaAutoBackup",
+    "misticaLastBackupAt",
+    "misticaPendingOrderId",
+    "misticaCustomProducts",
+    "misticaApiProductsCache",
+    "misticaApiProductsCacheAt",
+  ];
+  const MAX_QTY = 999;
+
+  function sanitizeCartList(list) {
+    if (!Array.isArray(list)) return [];
+    const limpo = [];
+    for (const raw of list) {
+      if (!raw || typeof raw !== "object") continue;
+      const id = raw.produto_id ?? raw.id;
+      const qty = Number(raw.quantidade ?? raw.qty);
+      if ((typeof id !== "string" && typeof id !== "number") || String(id).trim() === "") continue;
+      if (!Number.isInteger(qty) || qty < 1) continue;
+      limpo.push({ id: String(id), qty: Math.min(qty, MAX_QTY) });
+    }
+    return limpo;
+  }
+
+  function readRawCart() {
+    let raw = null;
+    try { raw = localStorage.getItem(CART_KEY); } catch { return []; }
+    if (!raw) return [];
+    let parsed;
+    try { parsed = JSON.parse(raw); } catch { return []; }
+    return sanitizeCartList(parsed);
+  }
+
+  function writeCart(items) {
+    const limpo = sanitizeCartList(items);
+    try { localStorage.setItem(CART_KEY, JSON.stringify(limpo)); } catch {}
+    return limpo;
+  }
+
+  function clearCart() {
+    try { localStorage.removeItem(CART_KEY); } catch {}
+  }
+
+  function removeForbiddenKeys() {
+    let removidas = 0;
+    FORBIDDEN_KEYS.forEach(key => {
+      try {
+        if (localStorage.getItem(key) !== null) {
+          localStorage.removeItem(key);
+          removidas++;
+        }
+      } catch {}
+    });
+    if (removidas > 0) {
+      try {
+        console.info(JSON.stringify({ evento: "armazenamento_legado_removido", quantidade_chaves: removidas }));
+      } catch {}
+    }
+    return removidas;
+  }
+
+  // Limpeza de legado acontece imediatamente, antes de qualquer leitura pelo
+  // restante da aplicação (nenhum outro script ainda executou neste ponto).
+  removeForbiddenKeys();
+
+  // Uma aba antiga (com formato de carrinho legado ou chaves proibidas) não
+  // pode reintroduzir dados: qualquer alteração de storage vinda de outra
+  // aba é filtrada aqui antes de propagar.
+  window.addEventListener("storage", event => {
+    if (!event.key) return;
+    if (FORBIDDEN_KEYS.includes(event.key)) {
+      try { localStorage.removeItem(event.key); } catch {}
+      return;
+    }
+    if (event.key === CART_KEY && event.newValue) {
+      let parsed;
+      try { parsed = JSON.parse(event.newValue); } catch { parsed = null; }
+      const sanitizado = sanitizeCartList(parsed);
+      if (JSON.stringify(sanitizado) !== event.newValue) writeCart(sanitizado);
+    }
+  });
+
+  const secureStorageApi = Object.freeze({
+    CART_KEY,
+    FORBIDDEN_KEYS: FORBIDDEN_KEYS.slice(),
+    getCart: readRawCart,
+    setCart: writeCart,
+    clearCart,
+    sanitizeCart: sanitizeCartList,
+    removeForbiddenKeys,
+  });
+  // Não editável e não redefinível: nenhum script carregado depois pode
+  // trocar window.misticaSecureStorage por uma implementação diferente
+  // (silenciosamente ou não) nem alterar seus métodos.
+  Object.defineProperty(window, "misticaSecureStorage", {
+    value: secureStorageApi,
+    writable: false,
+    configurable: false,
+    enumerable: true,
+  });
+})();
+
 (() => {
   const cfg = window.misticaSiteConfig || {};
   const productionMode = cfg.serverMode === "production" || cfg.storageMode === "api_first" || cfg.usePublicDomainAccess === true;

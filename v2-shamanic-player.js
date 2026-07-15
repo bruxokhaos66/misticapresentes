@@ -20,7 +20,9 @@
   };
   const clampVolume = (value) => Math.max(0, Math.min(1, Number(value) || 0));
   const savedVolume = () => {
-    const stored = Number(localStorage.getItem(VOLUME_KEY));
+    let raw = null;
+    try { raw = localStorage.getItem(VOLUME_KEY); } catch { return 0.35; }
+    const stored = Number(raw);
     return Number.isFinite(stored) && stored >= 0 && stored <= 1 ? stored : 0.35;
   };
   const publicSrc = () => new URL(`assets/audio/xamanico-ambiente.mp3?v=${AUDIO_VERSION}`, document.baseURI).href;
@@ -223,7 +225,7 @@
       volume.value = String(Math.round(audio.volume * 100));
       volume.addEventListener('input', () => {
         audio.volume = clampVolume(Number(volume.value) / 100);
-        localStorage.setItem(VOLUME_KEY, String(audio.volume));
+        try { localStorage.setItem(VOLUME_KEY, String(audio.volume)); } catch {}
       });
     }
 
