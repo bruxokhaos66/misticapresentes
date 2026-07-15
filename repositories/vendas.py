@@ -51,9 +51,28 @@ def listar_itens_cursor(cur, venda_id):
     ).fetchall()
 
 
-def marcar_cancelada_cursor(cur, venda_id):
-    cur.execute("UPDATE vendas SET status='Cancelado' WHERE id=?", (venda_id,))
+def reivindicar_cancelamento_cursor(cur, venda_id):
+    """Reivindica atomicamente a transição da venda para 'Cancelado'.
+
+    A checagem (venda ainda não cancelada) e a escrita (marca Cancelado)
+    acontecem no mesmo UPDATE, com guarda no próprio WHERE — nunca um SELECT
+    de status seguido de um UPDATE incondicional. Duas chamadas concorrentes
+    de estorno para a mesma venda nunca decidem com base no mesmo estado
+    "antigo": só uma reivindica (rowcount==1) e prossegue com a devolução de
+    estoque e o lançamento de saída no caixa; a outra vê rowcount==0 e não
+    repete nenhum efeito colateral."""
+    cur.execute(
+        "UPDATE vendas SET status='Cancelado' WHERE id=? AND lower(COALESCE(status,'')) NOT LIKE 'cancel%'",
+        (venda_id,),
+    )
     return cur.rowcount
+
+
+def obter_status_total_forma_cursor(cur, venda_id):
+    return cur.execute(
+        "SELECT status, total_final, forma_pagamento FROM vendas WHERE id=?",
+        (venda_id,),
+    ).fetchone()
 
 
 def buscar_venda(venda_id):

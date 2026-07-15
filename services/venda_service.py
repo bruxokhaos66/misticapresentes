@@ -287,21 +287,45 @@ def consultar_venda_salva(venda_id):
 
 
 def cancelar_venda_service(venda_id, usuario, caixa_id=None):
+    """Cancela/estorna uma venda de forma atômica e idempotente.
+
+    A leitura do status atual, a decisão de estornar e a escrita do novo
+    status acontecem dentro de um único UPDATE com guarda no próprio WHERE
+    (repositories.vendas.reivindicar_cancelamento_cursor) — nunca um SELECT
+    seguido de um UPDATE incondicional. Duas chamadas concorrentes de
+    estorno para a mesma venda (duplo clique, dois operadores, retry de
+    rede) nunca decidem com base no mesmo estado "antigo": só uma
+    reivindica a transição (rowcount==1) e executa a devolução de estoque
+    e o lançamento de saída no caixa; a outra vê rowcount==0 e levanta
+    ValueError sem repetir nenhum efeito colateral (nem estoque, nem
+    fluxo_caixa, nem histórico duplicados).
+
+    Depois de reivindicar o cancelamento, a operação ainda confere se o
+    caixa informado continua aberto antes de gravar a saída financeira —
+    um estorno correndo contra o fechamento do caixa nunca lança valores
+    num caixa_diario já fechado; se o caixa fechou no meio da operação, a
+    transação inteira é revertida (rollback também desfaz a reivindicação
+    do cancelamento), preservando o "tudo ou nada"."""
     if not caixa_id:
         raise ValueError("Abra o caixa antes de cancelar/estornar uma venda.")
 
-    status_total = vendas_repo.obter_status_total_forma(venda_id)
-    if not status_total:
-        raise ValueError("Venda nao localizada.")
-    status, valor_estorno, forma_original = status_total
-    if str(status or "").lower() in ("cancelado", "cancelada"):
-        raise ValueError("Venda ja cancelada.")
-
-    forma_estorno = forma_original or "Estorno"
-    valor_estorno = float(valor_estorno or 0)
     conn = get_connection()
     cur = conn.cursor()
     try:
+        if vendas_repo.reivindicar_cancelamento_cursor(cur, venda_id) != 1:
+            existente = vendas_repo.obter_status_total_forma_cursor(cur, venda_id)
+            if not existente:
+                raise ValueError("Venda nao localizada.")
+            raise ValueError("Venda ja cancelada.")
+
+        caixa_row = cur.execute("SELECT status FROM caixa_diario WHERE id=?", (caixa_id,)).fetchone()
+        if not caixa_row or str(caixa_row[0] or "").lower() != "aberto":
+            raise ValueError("O caixa foi fechado durante a operação; estorno cancelado. Reabra o caixa e tente novamente.")
+
+        _, valor_estorno, forma_original = vendas_repo.obter_status_total_forma_cursor(cur, venda_id)
+        forma_estorno = forma_original or "Estorno"
+        valor_estorno = float(valor_estorno or 0)
+
         itens = vendas_repo.listar_itens_cursor(cur, venda_id)
         for codigo_p, nome_p, quantidade in itens:
             quantidade = int(quantidade or 0)
@@ -314,7 +338,6 @@ def cancelar_venda_service(venda_id, usuario, caixa_id=None):
                 cur, codigo_p, nome_p, quantidade, "Cancelamento", f"Cancelamento venda no {venda_id}", usuario, datetime.now().strftime("%d/%m/%Y %H:%M:%S"), estoque_anterior, estoque_posterior, venda_id
             )
 
-        vendas_repo.marcar_cancelada_cursor(cur, venda_id)
         agora_data = datetime.now().strftime("%d/%m/%Y %H:%M")
         agora_iso = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         pagamentos_mistos = extrair_pagamentos_mistos(forma_estorno)
