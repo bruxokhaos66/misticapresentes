@@ -268,6 +268,9 @@
     let ultimaTentativa = 0;
     let timerAtualizacao = null;
 
+    let logoutChannel = null;
+    try { logoutChannel = new BroadcastChannel("mistica-painel-logout"); logoutChannel.onmessage = () => voltarParaLogin(); } catch {}
+
     const $ = (id) => document.getElementById(id);
     const brl = (n) => (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
     const pad = (n) => String(n).padStart(2, "0");
@@ -334,9 +337,21 @@
         ...options,
         headers: { "Content-Type": "application/json", ...(options.headers || {}) }
       }), ms, path);
+      if ((response.status === 401 || response.status === 403) && sessao && path !== "/api/auth/logout") {
+        voltarParaLogin();
+      }
       const text = await response.text();
       if (!response.ok) throw new Error(text || `HTTP ${response.status}`);
       try { return JSON.parse(text); } catch { return text; }
+    }
+    function voltarParaLogin() {
+      if (!sessao && $("painel").classList.contains("hide")) return;
+      sessao = null;
+      pararAtualizacaoAutomatica();
+      $("painel").classList.add("hide");
+      $("loginBox").classList.remove("hide");
+      $("vendasList").innerHTML = "";
+      $("senha").value = "";
     }
     async function entrar() {
       try {
@@ -347,7 +362,6 @@
           body: JSON.stringify({ login: $("login").value.trim(), senha: $("senha").value })
         }, 12000);
         sessao = res;
-        sessionStorage.setItem("misticaPainelSessao", JSON.stringify(res));
         abrirPainel();
         await sincronizar("login");
         iniciarAtualizacaoAutomatica();
@@ -367,9 +381,9 @@
       setStatus("ONLINE", "Atualizando", "Conectado.");
     }
     async function sair() {
-      pararAtualizacaoAutomatica();
+      voltarParaLogin();
       try { await api("/api/auth/logout", { method: "POST" }); } catch {}
-      sessionStorage.removeItem("misticaPainelSessao");
+      if (logoutChannel) { try { logoutChannel.postMessage("logout"); } catch {} }
       location.reload();
     }
     function esc(value) {
@@ -472,19 +486,21 @@
       sincronizando = false;
     }
     window.addEventListener("load", async () => {
-      // A sessão local é só um atalho de UI; o servidor sempre revalida via cookie HttpOnly.
+      // Fonte única da sessão: cookie HttpOnly revalidado a cada carregamento.
+      // Nunca lida de localStorage/sessionStorage — apenas mantida em memória.
+      try {
+        localStorage.removeItem("misticaPainelSessao");
+        sessionStorage.removeItem("misticaPainelSessao");
+      } catch {}
       try {
         sessao = await api("/api/auth/me", { method: "GET" });
       } catch {
         sessao = null;
       }
       if (sessao?.usuario) {
-        try { sessionStorage.setItem("misticaPainelSessao", JSON.stringify(sessao)); } catch {}
         abrirPainel();
         sincronizar("load");
         iniciarAtualizacaoAutomatica();
-      } else {
-        sessionStorage.removeItem("misticaPainelSessao");
       }
     });
   </script>
