@@ -647,6 +647,3 @@ def instalar_legenda_imagem_exclusiva_xamanismo(conn) -> bool:
 
     conn.execute("INSERT INTO lms_content_versions (versao,aplicada_em) VALUES (?,?)", (VERSAO_LEGENDA_IMAGEM_EXCLUSIVA, _agora()))
     return True
-
-    conn.execute("INSERT INTO lms_content_versions (versao,aplicada_em) VALUES (?,?)", (VERSAO_AULA_ORIGEM_TERMO_XAMA_FOTO, _agora()))
-    return True
