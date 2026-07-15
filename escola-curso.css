@@ -43,17 +43,29 @@
 
 /* --- Layout do player --- */
 .plataforma-topbar { display: none; align-items: center; gap: .75rem; margin-bottom: 1rem; }
+.plataforma-topbar .plataforma-drawer-toggle { flex: none; }
+.plataforma-topbar .plataforma-topbar-titulo { flex: 1; }
 .plataforma-topbar-titulo { font-family: Cinzel, serif; color: var(--gold-2); }
 .plataforma-layout { display: grid; grid-template-columns: 320px 1fr; gap: 1.5rem; align-items: start; }
 
 .plataforma-sidebar { background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 1.1rem; position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow: auto; }
-.plataforma-sidebar-head strong { display: block; font-family: Cinzel, serif; color: var(--gold-2); margin-bottom: .5rem; }
+.plataforma-sidebar-head { max-width: 100%; }
+/* Título do curso: até 3 linhas, line-height confortável, nunca corta nem
+   sobrepõe o restante do cabeçalho (barra de progresso + contagem). */
+.plataforma-sidebar-head strong {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+  font-family: Cinzel, serif; color: var(--gold-2); margin: 0 0 .6rem; font-size: 1.05rem; line-height: 1.35;
+}
 .plataforma-sidebar-head small { color: var(--muted); }
+.plataforma-topbar-titulo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .plataforma-modulos { margin-top: 1rem; display: grid; gap: .7rem; }
 .plataforma-modulo { border: 1px solid var(--line); border-radius: 14px; padding: .7rem .8rem; background: rgba(0,0,0,.18); }
 .plataforma-modulo.is-locked { opacity: .6; }
 .plataforma-modulo.is-done { border-color: rgba(189,209,122,.5); }
-.plataforma-modulo-capa { height: 110px; margin: -.7rem -.8rem .7rem; border-radius: 14px 14px 0 0; background-size: cover; background-position: center; }
+.plataforma-modulo-capa {
+  aspect-ratio: 1200 / 630; height: auto; margin: -.7rem -.8rem .7rem; border-radius: 14px 14px 0 0;
+  background-size: cover; background-position: 50% 22%; max-height: 130px;
+}
 .plataforma-modulo-head { display: flex; gap: .6rem; align-items: center; }
 .plataforma-modulo-num { width: 26px; height: 26px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--panel-strong); color: var(--gold); font-weight: 700; font-size: .85rem; }
 .plataforma-modulo-head strong { display: block; font-size: .98rem; }
@@ -122,6 +134,15 @@
 }
 .aula-imagem-credito { display: block; opacity: .68; font-size: .74rem; margin-top: .2rem; letter-spacing: .01em; }
 
+/* A capa da aula já mostra o título em destaque na própria foto, e o <h1>
+   logo abaixo repete o mesmo texto para SEO/acessibilidade. O <h2> que abre
+   o corpo do texto (mesmo título, pela terceira vez) fica visualmente
+   oculto — permanece no DOM e é lido normalmente por leitores de tela. */
+.plataforma-texto > .aula-kicker:first-child + h2 {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
 /* --- Divisor elegante entre seções de leitura --- */
 .aula-divisor { display: flex; align-items: center; gap: .8rem; margin: 2.1rem 0; color: var(--gold); opacity: .8; }
 .aula-divisor::before, .aula-divisor::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, transparent, var(--line) 50%, transparent); }
@@ -175,6 +196,7 @@
   .plataforma-layout.drawer-open .plataforma-sidebar { transform: translateX(0); box-shadow: var(--shadow); }
   .plataforma-conteudo { padding: 1.2rem 1.1rem 1.6rem; }
   .plataforma-conteudo-head h1 { font-size: 1.4rem; }
+  .plataforma-sidebar-head strong { font-size: .95rem; line-height: 1.3; -webkit-line-clamp: 2; }
   .aula-glossario { grid-template-columns: 1fr; }
   .aula-glossario dd { margin-bottom: .5rem; }
 }

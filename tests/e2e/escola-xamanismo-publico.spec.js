@@ -157,6 +157,10 @@ test.describe("Acesso público ao curso de Xamanismo (visitante anônimo)", () =
     await expect(page.locator(".plataforma-login")).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "O que é o Xamanismo?", level: 1 })).toBeVisible();
 
+    // Contagem real das 5 aulas públicas (2 do Módulo 1 + 3 do Módulo 2) —
+    // nunca "0/0", mesmo sem sessão/matrícula.
+    await expect(page.locator(".plataforma-sidebar-head small")).toHaveText("0/5 aulas • 0%");
+
     // Navega pelas 5 aulas públicas usando "Próxima →" (funciona em qualquer
     // viewport, sem depender de abrir o drawer de módulos no mobile).
     await page.locator("[data-next]").click();
