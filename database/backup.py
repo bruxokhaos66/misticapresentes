@@ -22,6 +22,7 @@ _LOCK_EXPIRA_SEGUNDOS = 6 * 60 * 60
 _ESTADO_ARQUIVO = "backup.status.json"
 _LOG_ARQUIVO = "backup.log"
 _LOCK_ARQUIVO = ".backup.lock"
+_HISTORICO_REMOTO_LIMITE = 50
 _estado_lock = threading.RLock()
 
 
@@ -302,6 +303,12 @@ def _salvar_estado(diretorio, **alteracoes):
     diretorio.mkdir(parents=True, exist_ok=True)
     with _estado_lock:
         dados = _ler_estado(diretorio)
+        registro_remoto = alteracoes.pop("_prepend_remote_upload", None)
+        if isinstance(registro_remoto, dict):
+            historico = dados.get("remote_uploads", [])
+            if not isinstance(historico, list):
+                historico = []
+            dados["remote_uploads"] = ([registro_remoto] + historico)[:_HISTORICO_REMOTO_LIMITE]
         dados.update(alteracoes)
         temporario = diretorio / f".{_ESTADO_ARQUIVO}.{os.getpid()}.{threading.get_ident()}.tmp"
         temporario.write_text(json.dumps(dados, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -471,6 +478,42 @@ def executar_backup(*, agendado=False):
                 tamanho=tamanho,
                 tempo_gasto=duracao,
             )
+            # Segunda camada independente: somente arquivos ja validados,
+            # publicados e registrados chegam ao uploader. A tarefa remota e
+            # supervisionada fora deste fluxo, portanto rede, retries e falhas
+            # nunca bloqueiam nem invalidam o backup local.
+            try:
+                from database.backup_remote import sanitize_remote_error, trigger_remote_sync
+
+                trigger_remote_sync(
+                    destino,
+                    save_state=lambda **changes: _salvar_estado(diretorio, **changes),
+                )
+            except Exception as exc:
+                # Ate uma falha ao registrar o erro remoto deve ser isolada:
+                # neste ponto o backup local ja esta valido e publicado.
+                mensagem_segura = "Falha ao iniciar a replicacao remota."
+                try:
+                    mensagem_segura = sanitize_remote_error(
+                        exc,
+                        source=destino,
+                        fallback=mensagem_segura,
+                        expose_safe_detail=False,
+                    )
+                except Exception:
+                    # O sanitizador faz parte da camada opcional. Se ele mesmo
+                    # falhar, somente a categoria fixa pode chegar ao status.
+                    pass
+                try:
+                    _salvar_estado(
+                        diretorio,
+                        remote_enabled=True,
+                        remote_provider=str(os.environ.get("BACKUP_PROVIDER", "r2")).strip().lower() or "r2",
+                        remote_status="erro",
+                        last_remote_error=mensagem_segura,
+                    )
+                except Exception:
+                    pass
             return {
                 "status": "ok",
                 "nome": destino.name,
@@ -531,6 +574,9 @@ def obter_status_backup():
     estado = _ler_estado(diretorio)
     ultimo = arquivos[0] if arquivos else None
     habilitado = backup_habilitado()
+    remoto_habilitado = str(os.environ.get("BACKUP_REMOTE_ENABLED", "false")).strip().lower() in {
+        "1", "true", "yes", "on", "sim"
+    }
     return {
         "ultimo_backup": ultimo.name if ultimo else None,
         "tamanho_bytes": ultimo.stat().st_size if ultimo else None,
@@ -541,4 +587,20 @@ def obter_status_backup():
         "status": estado.get("status", "aguardando" if habilitado else "desabilitado"),
         "ultimo_erro": estado.get("ultimo_erro"),
         "integridade": estado.get("integridade"),
+        "remote_enabled": remoto_habilitado,
+        "last_remote_backup": estado.get("last_remote_backup"),
+        "remote_provider": estado.get("remote_provider") or (
+            str(os.environ.get("BACKUP_PROVIDER", "r2")).strip().lower() if remoto_habilitado else None
+        ),
+        "remote_status": estado.get("remote_status", "aguardando") if remoto_habilitado else "desabilitado",
+        "last_remote_error": estado.get("last_remote_error"),
+        "last_remote_size": estado.get("last_remote_size"),
+        "last_remote_hash": estado.get("last_remote_hash"),
     }
+
+
+def obter_historico_backup_remoto():
+    """Historico sanitizado; credenciais e caminhos nunca sao persistidos."""
+    estado = _ler_estado(_diretorio_backup_automatico())
+    uploads = estado.get("remote_uploads", [])
+    return {"uploads": uploads if isinstance(uploads, list) else []}

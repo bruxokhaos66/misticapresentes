@@ -49,6 +49,7 @@ from backend.system_status_routes import router as system_status_router
 from config import hash_password_pbkdf2
 from database.migrations import init_db
 from database.backup import backup_habilitado, scheduler_backup
+from database.backup_remote import shutdown_remote_uploads, start_remote_uploads
 
 configurar_logging()
 logger = get_logger(__name__)
@@ -116,6 +117,7 @@ async def lifespan(app: FastAPI):
     )
     tarefa_expiracao = asyncio.create_task(_expirar_pedidos_periodicamente())
     tarefa_backup = asyncio.create_task(scheduler_backup()) if backup_habilitado() else None
+    start_remote_uploads()
     try:
         yield
     finally:
@@ -127,6 +129,12 @@ async def lifespan(app: FastAPI):
         for tarefa in tarefas:
             with contextlib.suppress(asyncio.CancelledError):
                 await tarefa
+        uploads_finalizados = await asyncio.to_thread(shutdown_remote_uploads, 30.0)
+        if not uploads_finalizados:
+            logger.warning(
+                "encerramento prosseguiu com upload remoto ainda ativo",
+                extra={"evento": "backup_remoto_shutdown_timeout"},
+            )
 
 
 app = FastAPI(

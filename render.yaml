@@ -14,6 +14,10 @@ services:
     envVars:
       - key: APP_ENV
         value: production
+      # Versao validada pela suite desta implementacao. boto3 e cryptography
+      # tambem suportam este runtime.
+      - key: PYTHON_VERSION
+        value: 3.12.11
       # O banco vive no disco persistente montado em /data (ver 'disk' abaixo).
       # config.py::carregar_db_path lê MISTICA_DB_PATH; sem esta variável o
       # padrão cai em ~/Documents (efêmero no Render).
@@ -31,6 +35,32 @@ services:
         value: /data/backups
       - key: BACKUP_TIMEZONE
         value: America/Sao_Paulo
+      # Replicacao remota e opt-in: o deploy permanece local-only ate que as
+      # credenciais abaixo sejam cadastradas e esta flag seja alterada.
+      - key: BACKUP_REMOTE_ENABLED
+        value: false
+      - key: BACKUP_PROVIDER
+        value: r2
+      - key: BACKUP_BUCKET
+        sync: false
+      # Formato: https://<ACCOUNT_ID>.r2.cloudflarestorage.com; regiao S3 auto.
+      - key: BACKUP_ENDPOINT
+        sync: false
+      - key: BACKUP_ACCESS_KEY
+        sync: false
+      - key: BACKUP_SECRET_KEY
+        sync: false
+      - key: BACKUP_PREFIX
+        sync: false
+      # 32 bytes em base64 ou 64 hex. Sem esta chave nao ha restauracao.
+      - key: BACKUP_ENCRYPTION_KEY
+        sync: false
+      - key: BACKUP_UPLOAD_TIMEOUT
+        value: "30"
+      - key: BACKUP_VERIFY_AFTER_UPLOAD
+        value: true
+      # Nao ha retencao remota na aplicacao: configure Object Lifecycle Rules
+      # no bucket R2, preferencialmente limitadas ao BACKUP_PREFIX.
     disk:
       name: mistica-dados
       mountPath: /data

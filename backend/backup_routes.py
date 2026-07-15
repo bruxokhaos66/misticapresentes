@@ -11,7 +11,12 @@ from starlette.background import BackgroundTask
 from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.panel_sessions import exigir_sessao_ou_chave_api
 from config import BACKUP_DIR, DB_PATH
-from database.backup import BackupInvalidoError, criar_backup_seguro, obter_status_backup
+from database.backup import (
+    BackupInvalidoError,
+    criar_backup_seguro,
+    obter_historico_backup_remoto,
+    obter_status_backup,
+)
 
 router = APIRouter(prefix="/api", tags=["backup"])
 
@@ -91,6 +96,12 @@ def status_backup_manual(x_mistica_api_key: str | None = Header(default=None)):
 def status_backup_administrativo(sessao: dict = Depends(exigir_sessao_ou_chave_api("adm"))):
     """Resumo operacional sem expor caminhos ou permitir acesso aos arquivos."""
     return obter_status_backup()
+
+
+@router.get("/admin/backup/remote")
+def status_backup_remoto_administrativo(sessao: dict = Depends(exigir_sessao_ou_chave_api("adm"))):
+    """Ultimas replicacoes remotas, protegido pela autenticacao administrativa."""
+    return obter_historico_backup_remoto()
 
 
 @router.get("/backup/download")

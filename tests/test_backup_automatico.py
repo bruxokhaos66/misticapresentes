@@ -193,3 +193,14 @@ def test_status_nao_expoe_caminhos_internos(tmp_path, monkeypatch):
     assert status["integridade"] == "ok"
     assert str(tmp_path) not in texto
     assert str(origem) not in texto
+
+
+def test_status_remoto_desabilitado_prevalece_sobre_estado_anterior(tmp_path, monkeypatch):
+    _, diretorio = _configurar(monkeypatch, tmp_path)
+    monkeypatch.setenv("BACKUP_REMOTE_ENABLED", "false")
+    backup._salvar_estado(diretorio, remote_status="ok", remote_provider="r2")
+
+    status = backup.obter_status_backup()
+
+    assert status["remote_enabled"] is False
+    assert status["remote_status"] == "desabilitado"
