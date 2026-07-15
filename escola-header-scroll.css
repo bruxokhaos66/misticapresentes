@@ -1,11 +1,7 @@
 /* Correção estrutural do flicker do header compacto.
-   A caixa externa mantém a mesma altura nos dois estados; apenas elementos
-   internos usam transform/opacity. Assim a compactação não empurra hero,
-   título ou conteúdo e a sentinela conserva sua posição no documento. */
-.escola-plataforma .site-header {
-  min-height: 78px;
-}
-
+   A caixa externa mantém a mesma altura nos dois estados; somente elementos
+   internos usam transform. Nada empurra hero, título ou conteúdo. */
+.escola-plataforma .site-header,
 .escola-plataforma .site-header .nav,
 .escola-plataforma.is-leitura-compacta .site-header .nav {
   min-height: 78px;
@@ -14,7 +10,7 @@
 .escola-plataforma .brand-mark {
   width: 44px;
   height: 44px;
-  transform: translateZ(0) scale(1);
+  transform: translate3d(0, 0, 0) scale(1);
   transform-origin: left center;
   transition: transform .22s ease, box-shadow .22s ease;
 }
@@ -22,49 +18,63 @@
 .escola-plataforma.is-leitura-compacta .brand-mark {
   width: 44px;
   height: 44px;
-  transform: translateZ(0) scale(.78);
+  transform: translate3d(0, 0, 0) scale(.78);
+}
+
+.escola-plataforma .brand-copy {
+  position: relative;
+  min-width: 150px;
+  min-height: 42px;
+}
+
+.escola-plataforma .brand-copy strong,
+.escola-plataforma .brand-copy small {
+  position: absolute;
+  left: 0;
+  transform-origin: left center;
+  transition: transform .22s ease;
 }
 
 .escola-plataforma .brand-copy strong {
+  top: 2px;
   font-size: inherit;
-  transform: translateZ(0) scale(1);
-  transform-origin: left center;
-  transition: transform .22s ease, opacity .22s ease;
+  transform: translate3d(0, 0, 0) scale(1);
+}
+
+.escola-plataforma .brand-copy small {
+  top: 24px;
+  display: block;
+  transform: translate3d(0, 0, 0) scale(1);
 }
 
 .escola-plataforma.is-leitura-compacta .brand-copy strong {
   font-size: inherit;
-  transform: translateZ(0) scale(.92);
-}
-
-.escola-plataforma .brand-copy small {
-  display: block;
-  visibility: visible;
-  opacity: 1;
-  transition: opacity .18s ease;
+  transform: translate3d(0, 7px, 0) scale(.92);
 }
 
 .escola-plataforma.is-leitura-compacta .brand-copy small {
   display: block;
-  visibility: hidden;
-  opacity: 0;
+  transform: translate3d(0, -36px, 0) scale(.92);
 }
 
 .escola-plataforma .header-aula-resumo {
   display: block;
-  visibility: hidden;
-  opacity: 0;
+  transform: translate3d(0, -48px, 0);
   pointer-events: none;
-  transition: opacity .18s ease;
+  transition: transform .22s ease;
 }
 
 .escola-plataforma.is-leitura-compacta .header-aula-resumo {
   display: block;
-  visibility: visible;
-  opacity: 1;
+  transform: translate3d(0, 0, 0);
 }
 
+/* Ponto absoluto, fora do fluxo e imutável. O header compacto nunca altera sua
+   posição, altura ou o limite observado. */
 .plataforma-header-sentinel {
+  position: absolute;
+  top: var(--sentinel-top, 118px);
+  left: 0;
   display: block;
   inline-size: 1px;
   block-size: 1px;
