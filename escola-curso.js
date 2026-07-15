@@ -173,6 +173,7 @@
   // públicas do curso. Preserva o destino: o slug segue na URL e, ao voltar
   // ou logar, o mesmo curso é recarregado.
   function renderLogin(mensagem, permitirVoltar) {
+    document.body.classList.remove("plataforma-drawer-aberto"); // tela sem drawer: nunca deixa o scroll travado
     shell.innerHTML = `
       <div class="plataforma-login">
         <h1>Entrar na Escola Mística</h1>
@@ -478,12 +479,22 @@
     renderLogin("Entre para continuar: essa parte do curso é exclusiva de quem tem plano ativo.", true);
   }
 
+  // Abre/fecha o drawer de módulos travando o scroll do fundo enquanto o
+  // drawer está aberto (a classe no <body> só existe com o drawer aberto).
+  function alternarDrawer(forcar) {
+    const layout = shell.querySelector("[data-layout]");
+    if (!layout) return;
+    const aberto = typeof forcar === "boolean" ? forcar : !layout.classList.contains("drawer-open");
+    layout.classList.toggle("drawer-open", aberto);
+    document.body.classList.toggle("plataforma-drawer-aberto", aberto);
+  }
+
   function bindSidebar() {
     shell.querySelectorAll("[data-aula]").forEach(btn => {
       if (btn.classList.contains("plataforma-quiz-link")) return;
       btn.addEventListener("click", () => {
         aulaAtiva = { moduloId: Number(btn.dataset.modulo), aulaId: Number(btn.dataset.aula) };
-        shell.querySelector("[data-layout]")?.classList.remove("drawer-open");
+        alternarDrawer(false);
         refreshConteudo();
         rolarParaConteudo();
       });
@@ -535,14 +546,15 @@
   function bindPlayer() {
     bindSidebar();
     bindConteudo();
-    shell.querySelector("[data-drawer-toggle]")?.addEventListener("click", () => {
-      shell.querySelector("[data-layout]")?.classList.toggle("drawer-open");
-    });
+    shell.querySelector("[data-drawer-toggle]")?.addEventListener("click", () => alternarDrawer());
     // Toque no backdrop (a área escurecida fora do drawer) fecha o drawer.
     const layout = shell.querySelector("[data-layout]");
     layout?.addEventListener("click", e => {
-      if (e.target === layout && layout.classList.contains("drawer-open")) layout.classList.remove("drawer-open");
+      if (e.target === layout && layout.classList.contains("drawer-open")) alternarDrawer(false);
     });
+    // O player pode ser re-renderizado com o drawer aberto: nunca deixa o
+    // scroll do fundo travado sem drawer visível.
+    if (!layout || !layout.classList.contains("drawer-open")) document.body.classList.remove("plataforma-drawer-aberto");
   }
 
   // ---- Avaliação --------------------------------------------------------

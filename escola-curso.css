@@ -448,6 +448,9 @@
     transform: translateX(-105%); transition: transform .28s cubic-bezier(.22, .8, .3, 1); width: min(88vw, 340px);
   }
   .plataforma-layout.drawer-open .plataforma-sidebar { transform: translateX(0); box-shadow: var(--shadow); }
+  /* Com o drawer aberto, o conteúdo atrás não rola (classe posta pelo JS
+     apenas enquanto o drawer existe e está aberto). */
+  body.plataforma-drawer-aberto { overflow: hidden; }
   /* backdrop do drawer: escurece e captura o toque fora para fechar */
   .plataforma-layout.drawer-open::before {
     content: ""; position: fixed; inset: 0; z-index: 55; background: rgba(3,3,6,.55);
