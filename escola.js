@@ -19,6 +19,7 @@
       preco: 0,
       tags: ["Xamanismo", "Iniciante"],
       resumo: "Fundamentos do xamanismo: história, práticas, símbolos e como essa sabedoria ancestral se conecta com o dia a dia.",
+      capa: "assets/escola/xamanismo/xamanismo-introducao.webp",
       // Este curso usa a plataforma de estudo (LMS) em escola-curso.html: as
       // partes introdutórias abrem direto, sem login/cadastro/matrícula.
       lms: true
@@ -331,6 +332,12 @@
       </div>`;
   }
 
+  function coverHtml(curso) {
+    if (!curso.capa) return "";
+    const alt = `Capa do curso ${escapeHtml(curso.titulo)}`;
+    return `<img class="escola-card-cover" src="${escapeHtml(curso.capa)}" alt="${alt}" width="1200" height="630" loading="lazy" onerror="this.remove()">`;
+  }
+
   function cardHtml(curso) {
     const badge = curso.tipo === "gratuito" ? `<span class="escola-badge gratuito">Gratuito</span>` : `<span class="escola-badge pago">Pago</span>`;
     const price = curso.tipo === "gratuito"
@@ -341,6 +348,7 @@
       // escola-curso.html, sem exigir login para as partes introdutórias.
       return `
         <article class="escola-card" data-course-card="${curso.slug}">
+          ${coverHtml(curso)}
           ${badge}
           <div class="escola-card-icon" aria-hidden="true">${curso.icone}</div>
           <div class="escola-card-tags">${curso.tags.map(tag => `<span>${tag}</span>`).join("")}</div>
@@ -358,6 +366,7 @@
       : `<button class="btn btn-full" type="button" data-action="comprar">Comprar acesso</button>`;
     return `
       <article class="escola-card" data-course-card="${curso.slug}">
+        ${coverHtml(curso)}
         ${badge}
         <div class="escola-card-icon" aria-hidden="true">${curso.icone}</div>
         <div class="escola-card-tags">${curso.tags.map(tag => `<span>${tag}</span>`).join("")}</div>

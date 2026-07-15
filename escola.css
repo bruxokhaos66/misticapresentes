@@ -44,6 +44,7 @@ body.escola-page{
 
 .escola-card{position:relative;display:flex;flex-direction:column;gap:14px;padding:26px;border:1px solid rgba(242,201,109,.3);border-radius:26px;background:linear-gradient(180deg,rgba(255,248,230,.08),rgba(255,248,230,.03)),rgba(6,6,9,.7);box-shadow:0 20px 60px rgba(0,0,0,.32);backdrop-filter:blur(12px);transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}
 .escola-card:hover{transform:translateY(-4px);border-color:rgba(242,201,109,.62);box-shadow:0 26px 76px rgba(0,0,0,.42)}
+.escola-card-cover{display:block;width:calc(100% + 52px);max-width:calc(100% + 52px);height:auto;margin:-26px -26px 0;aspect-ratio:1200/630;object-fit:cover;border-radius:26px 26px 0 0}
 .escola-badge{position:absolute;top:18px;right:18px;font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;font-weight:950;padding:6px 12px;border-radius:999px;border:1px solid rgba(242,201,109,.4)}
 .escola-badge.gratuito{color:#0f1a05;background:linear-gradient(135deg,#e7f4b8,#bdd17a)}
 .escola-badge.pago{color:#1b1204;background:linear-gradient(135deg,#fff0b6,#e3b64f)}
