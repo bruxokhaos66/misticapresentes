@@ -1,14 +1,25 @@
 (() => {
   "use strict";
 
-  const style = document.createElement("style");
-  style.textContent = `
-    .incensos-page::before{background-image:linear-gradient(rgba(4,5,4,.82),rgba(4,5,4,.94)),url('assets/escola/incensos/incensos-curso-capa.svg')!important}
-    [data-article="1"] .incensos-hero{--hero:url('assets/escola/incensos/aula-1-o-que-e-incenso.svg')!important}
-    [data-article="2"] .incensos-hero{--hero:url('assets/escola/incensos/aula-2-historia-incensos.svg')!important}
-    [data-article="3"] .incensos-hero{--hero:url('assets/escola/incensos/aula-3-por-que-usamos-incensos.svg')!important}
-  `;
-  document.head.appendChild(style);
+  const ASSETS = window.INCENSOS_ASSETS || {};
+  const HERO_BY_LESSON = { 1: ASSETS.aula1, 2: ASSETS.aula2, 3: ASSETS.aula3 };
+  const preloaded = new Set();
+
+  function preloadHero(id) {
+    const src = HERO_BY_LESSON[id];
+    if (!src || preloaded.has(src)) return;
+    preloaded.add(src);
+    const img = new Image();
+    img.src = src;
+  }
+
+  function preloadNextHeroWhenIdle(id) {
+    const connection = navigator.connection;
+    if (connection && (connection.saveData || /(^|-)2g$/.test(connection.effectiveType || ""))) return;
+    const run = () => preloadHero(id);
+    if ("requestIdleCallback" in window) requestIdleCallback(run, { timeout: 2000 });
+    else setTimeout(run, 1200);
+  }
 
   const STORAGE_KEY = "misticaIncensosModulo1";
   const lessons = [...document.querySelectorAll("[data-lesson]")];
@@ -73,6 +84,7 @@
     updateProgress();
     document.title = `${target.querySelector("h2")?.textContent || "Incensos"} | Mística Escola`;
     window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    if (Number(id) < 3) preloadNextHeroWhenIdle(Number(id) + 1);
     if (focus) {
       const title = target.querySelector("h2");
       if (title) {

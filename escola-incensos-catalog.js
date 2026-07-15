@@ -9,8 +9,9 @@
     const card = document.createElement("article");
     card.className = "course-card is-free";
     card.dataset.course = "incensos-introducao";
+    const capa = window.INCENSOS_ASSETS?.curso || "assets/escola/incensos/incensos-curso-capa.webp";
     card.innerHTML = `
-      <div class="course-card-cover" style="background-image:linear-gradient(180deg,transparent,rgba(0,0,0,.88)),url('assets/escola/incensos/incensos-curso-capa.svg')">
+      <div class="course-card-cover" style="background-image:linear-gradient(180deg,transparent,rgba(0,0,0,.88)),url('${capa}')">
         <span class="course-card-badge">Gratuito</span>
         <span class="course-card-icon" aria-hidden="true">🔥</span>
       </div>
