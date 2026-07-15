@@ -19,6 +19,16 @@ services:
       # padrão cai em ~/Documents (efêmero no Render).
       - key: MISTICA_DB_PATH
         value: /data/mistica_gestao_v20.db
+      - key: BACKUP_ENABLED
+        value: true
+      - key: BACKUP_HOUR
+        value: "03"
+      - key: BACKUP_MINUTE
+        value: "00"
+      - key: BACKUP_KEEP
+        value: "30"
+      - key: BACKUP_DIRECTORY
+        value: /data/backups
     disk:
       name: mistica-dados
       mountPath: /data

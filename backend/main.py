@@ -37,6 +37,7 @@ from backend.site_stock_routes import router as site_stock_router
 from backend.system_status_routes import router as system_status_router
 from config import hash_password_pbkdf2
 from database.migrations import init_db
+from database.backup import backup_habilitado, scheduler_backup
 
 configurar_logging()
 logger = get_logger(__name__)
@@ -93,12 +94,18 @@ async def lifespan(app: FastAPI):
         },
     )
     tarefa_expiracao = asyncio.create_task(_expirar_pedidos_periodicamente())
+    tarefa_backup = asyncio.create_task(scheduler_backup()) if backup_habilitado() else None
     try:
         yield
     finally:
-        tarefa_expiracao.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await tarefa_expiracao
+        tarefas = [tarefa_expiracao]
+        if tarefa_backup is not None:
+            tarefas.append(tarefa_backup)
+        for tarefa in tarefas:
+            tarefa.cancel()
+        for tarefa in tarefas:
+            with contextlib.suppress(asyncio.CancelledError):
+                await tarefa
 
 
 app = FastAPI(
