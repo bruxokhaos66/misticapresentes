@@ -1,6 +1,15 @@
 (() => {
   "use strict";
 
+  const style = document.createElement("style");
+  style.textContent = `
+    .incensos-page::before{background-image:linear-gradient(rgba(4,5,4,.82),rgba(4,5,4,.94)),url('assets/escola/incensos/incensos-curso-capa.svg')!important}
+    [data-article="1"] .incensos-hero{--hero:url('assets/escola/incensos/aula-1-o-que-e-incenso.svg')!important}
+    [data-article="2"] .incensos-hero{--hero:url('assets/escola/incensos/aula-2-historia-incensos.svg')!important}
+    [data-article="3"] .incensos-hero{--hero:url('assets/escola/incensos/aula-3-por-que-usamos-incensos.svg')!important}
+  `;
+  document.head.appendChild(style);
+
   const STORAGE_KEY = "misticaIncensosModulo1";
   const lessons = [...document.querySelectorAll("[data-lesson]")];
   const articles = [...document.querySelectorAll("[data-article]")];
