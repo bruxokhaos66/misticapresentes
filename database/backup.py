@@ -9,8 +9,9 @@ import time
 import traceback
 import uuid
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from config import BACKUP_DIR, DB_PATH, ERROR_LOG_PATH
 
@@ -232,7 +233,14 @@ def _quantidade_manter():
 
 
 def _agora_local():
-    return datetime.now().astimezone()
+    nome_fuso = str(os.environ.get("BACKUP_TIMEZONE", "America/Sao_Paulo")).strip()
+    try:
+        fuso = ZoneInfo(nome_fuso)
+    except (ZoneInfoNotFoundError, ValueError):
+        # Windows sem a base IANA e ambientes minimos continuam respeitando o
+        # horario brasileiro atual, sem exigir o pacote externo tzdata.
+        fuso = timezone(timedelta(hours=-3))
+    return datetime.now(fuso)
 
 
 def _arquivos_automaticos(diretorio):
@@ -526,7 +534,7 @@ def obter_status_backup():
     return {
         "ultimo_backup": ultimo.name if ultimo else None,
         "tamanho_bytes": ultimo.stat().st_size if ultimo else None,
-        "data": datetime.fromtimestamp(ultimo.stat().st_mtime).astimezone().isoformat(timespec="seconds") if ultimo else None,
+        "data": datetime.fromtimestamp(ultimo.stat().st_mtime, tz=_agora_local().tzinfo).isoformat(timespec="seconds") if ultimo else None,
         "quantidade_backups": len(arquivos),
         "espaco_livre_bytes": _obter_espaco_livre_bytes(diretorio),
         "proximo_backup": calcular_proximo_backup().isoformat(timespec="seconds") if habilitado else None,

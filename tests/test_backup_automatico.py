@@ -3,7 +3,7 @@ import os
 import re
 import sqlite3
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import database.backup as backup
 
@@ -174,6 +174,11 @@ def test_scheduler_calcula_horario_e_dispara_uma_vez(monkeypatch):
     asyncio.run(backup.scheduler_backup())
 
     assert chamadas == [{"agendado": True}]
+
+
+def test_scheduler_usa_fuso_de_sao_paulo_sem_dependencia_externa(monkeypatch):
+    monkeypatch.setenv("BACKUP_TIMEZONE", "America/Sao_Paulo")
+    assert backup._agora_local().utcoffset() == timedelta(hours=-3)
 
 
 def test_status_nao_expoe_caminhos_internos(tmp_path, monkeypatch):
