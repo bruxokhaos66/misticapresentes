@@ -915,6 +915,7 @@ def _instalar_capas_fotograficas():
         instalar_capas_v2_modulo1_xamanismo,
         instalar_capas_modulo2_xamanismo,
         instalar_capas_modulos_xamanismo,
+        instalar_capa_foto_aula_origem_termo_xama,
     )
 
     with conectar() as conn:
@@ -924,6 +925,7 @@ def _instalar_capas_fotograficas():
         instalar_capas_v2_modulo1_xamanismo(conn)
         instalar_capas_modulo2_xamanismo(conn)
         instalar_capas_modulos_xamanismo(conn)
+        instalar_capa_foto_aula_origem_termo_xama(conn)
 
 
 def test_capas_fotograficas_substituem_svg_nas_aulas_esperadas():
@@ -943,9 +945,10 @@ def test_capas_fotograficas_substituem_svg_nas_aulas_esperadas():
     assert "modulo-1-aula-2-capa.svg" not in aulas_m1[1]["conteudo"]
 
     _, aulas_m2 = _modulo2_do_banco()
-    assert "aula-origem-termo-xama.svg" in aulas_m2[0]["conteudo"]  # não fotografada
+    assert "aula-origem-termo-xama.webp" in aulas_m2[0]["conteudo"]
     assert "aula-tradicoes-regioes.webp" in aulas_m2[1]["conteudo"]
     assert "aula-xamanismo-moderno.webp" in aulas_m2[2]["conteudo"]
+    assert "aula-origem-termo-xama.svg" not in aulas_m2[0]["conteudo"]
     assert "aula-tradicoes-regioes.svg" not in aulas_m2[1]["conteudo"]
     assert "aula-xamanismo-moderno.svg" not in aulas_m2[2]["conteudo"]
 
@@ -986,6 +989,7 @@ def test_migracao_de_capas_fotograficas_e_idempotente_e_preserva_progresso():
         instalar_capas_v2_modulo1_xamanismo,
         instalar_capas_modulo2_xamanismo,
         instalar_capas_modulos_xamanismo,
+        instalar_capa_foto_aula_origem_termo_xama,
     )
 
     _instalar_capas_fotograficas()
@@ -1005,9 +1009,35 @@ def test_migracao_de_capas_fotograficas_e_idempotente_e_preserva_progresso():
         segunda_v2 = instalar_capas_v2_modulo1_xamanismo(conn)
         segunda_m2 = instalar_capas_modulo2_xamanismo(conn)
         segunda_mod = instalar_capas_modulos_xamanismo(conn)
+        segunda_origem = instalar_capa_foto_aula_origem_termo_xama(conn)
         progresso_depois = conn.execute(
             "SELECT COUNT(*) AS n FROM aluno_aula_progresso WHERE aula_id=?", (aula1["id"],)
         ).fetchone()["n"]
 
-    assert segunda_v2 is False and segunda_m2 is False and segunda_mod is False
+    assert segunda_v2 is False and segunda_m2 is False and segunda_mod is False and segunda_origem is False
     assert progresso_depois == progresso_antes
+
+
+def test_sete_webps_oficiais_existem_sao_validos_e_tem_1200x630():
+    from PIL import Image
+
+    base = os.path.join(os.path.dirname(__file__), "..", "assets", "escola", "xamanismo")
+    arquivos = [
+        "modulo-1-capa.webp",
+        "modulo-1-aula-1-capa.webp",
+        "modulo-1-aula-2-capa.webp",
+        "modulo-2-capa.webp",
+        "aula-origem-termo-xama.webp",
+        "aula-tradicoes-regioes.webp",
+        "aula-xamanismo-moderno.webp",
+    ]
+    for nome in arquivos:
+        caminho = os.path.join(base, nome)
+        assert os.path.isfile(caminho), f"arquivo ausente: {nome}"
+        with Image.open(caminho) as im:
+            im.verify()
+        with Image.open(caminho) as im:
+            assert im.format == "WEBP"
+            assert im.size == (1200, 630), f"{nome} tem tamanho {im.size}, esperado (1200, 630)"
+    # o SVG substituído não deve mais existir no repositório
+    assert not os.path.isfile(os.path.join(base, "aula-origem-termo-xama.svg"))
