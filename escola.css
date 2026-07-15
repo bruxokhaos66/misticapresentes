@@ -59,6 +59,18 @@ body.escola-page{
 .escola-card-toggle{margin-top:0}
 .escola-card-note{margin:0;font-size:.74rem;color:rgba(231,215,183,.75);text-align:center}
 
+.course-card{position:relative;display:flex;flex-direction:column;border:1px solid rgba(242,201,109,.3);border-radius:26px;overflow:hidden;background:linear-gradient(180deg,rgba(255,248,230,.08),rgba(255,248,230,.03)),rgba(6,6,9,.7);box-shadow:0 20px 60px rgba(0,0,0,.32);transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}
+.course-card:hover{transform:translateY(-4px);border-color:rgba(242,201,109,.62);box-shadow:0 26px 76px rgba(0,0,0,.42)}
+.course-card-cover{position:relative;aspect-ratio:1200/630;background-size:cover;background-position:center;display:flex;align-items:flex-start;justify-content:space-between;padding:14px}
+.course-card-badge{padding:5px 12px;border-radius:999px;font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;font-weight:950;color:#0f1a05;background:linear-gradient(135deg,#e7f4b8,#bdd17a);border:1px solid rgba(242,201,109,.4)}
+.course-card-icon{width:40px;height:40px;display:grid;place-items:center;border-radius:12px;font-size:1.2rem;background:rgba(8,9,7,.55);border:1px solid rgba(242,201,109,.4);backdrop-filter:blur(4px)}
+.course-card-body{display:flex;flex-direction:column;gap:14px;padding:22px 26px 26px}
+.course-card-body h3{margin:0;color:#fff2cb;font-family:Cinzel,serif;font-size:1.24rem;line-height:1.25}
+.course-card-body p{margin:0;color:#e7d7b7;font-size:.94rem;line-height:1.55}
+.course-card-tags{display:flex;flex-wrap:wrap;gap:8px}
+.course-card-tags span{border:1px solid rgba(189,209,122,.32);border-radius:999px;padding:4px 10px;color:#def19b;background:rgba(189,209,122,.08);font-size:.7rem;font-weight:900;letter-spacing:.06em;text-transform:uppercase}
+.course-card-body .btn{align-self:flex-start}
+
 .escola-detail{margin-top:14px;padding-top:14px;border-top:1px dashed rgba(242,201,109,.3);display:grid;gap:12px}
 .escola-detail[hidden]{display:none}
 .escola-materials{display:grid;gap:10px}
