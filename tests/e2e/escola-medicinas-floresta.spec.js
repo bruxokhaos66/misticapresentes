@@ -131,10 +131,10 @@ for (const viewport of [
 test.describe("catálogo da Escola", () => {
   test("card de medicinas da floresta usa capa WebP correta", async ({ page }) => {
     await page.goto("/escola.html");
-    const cover = page.locator('[data-course="medicinas-floresta-introducao"] .course-card-cover');
+    const cover = page.locator('[data-course="medicinas-floresta-introducao"] .escola-card-cover');
     await expect(cover).toBeVisible();
-    const backgroundImage = await cover.evaluate(el => getComputedStyle(el).backgroundImage);
-    expect(backgroundImage).toContain("medicinas-floresta-capa.webp");
-    expect(backgroundImage).not.toContain(".png");
+    const src = await cover.getAttribute("src");
+    expect(src).toContain("medicinas-floresta-capa.webp");
+    expect(src).not.toContain(".png");
   });
 });
