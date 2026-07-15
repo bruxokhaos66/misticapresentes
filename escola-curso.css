@@ -7,20 +7,55 @@
 .plataforma-main { padding: 1.2rem 0 5rem; }
 /* Palco mais largo só na plataforma de estudo: sensação de cinema. */
 .escola-plataforma .plataforma-main > .container { width: min(1400px, calc(100% - 28px)); }
-.plataforma-shell { margin-top: .9rem; }
+/* min-height reserva o palco antes do conteúdo chegar da API: menos layout
+   shift (CLS) na primeira pintura. */
+.plataforma-shell { margin-top: .9rem; min-height: 62vh; }
 .plataforma-loading, .plataforma-status { color: var(--muted); }
 .plataforma-titulo { font-family: Cinzel, serif; color: var(--gold-2); margin: 0 0 1.2rem; letter-spacing: .02em; }
 
+/* Fundo na área de LEITURA: a mesma arte xamânica do catálogo, mas com
+   overlay bem mais forte — planetas, rostos e objetos laterais perdem brilho
+   e contraste para não competir com o texto. A arte segue protagonista no
+   catálogo (escola.html) e no hero da aula, não no corpo da leitura. */
+body.escola-plataforma {
+  background:
+    linear-gradient(180deg, rgba(5,5,9,.78) 0%, rgba(5,5,9,.88) 22%, rgba(5,5,9,.96) 48%, rgba(6,6,10,.99) 100%),
+    radial-gradient(circle at 82% 72%, rgba(75,42,89,.10), transparent 40rem),
+    url("assets/escola-bg-xamanico.webp") center 12%/cover no-repeat;
+  background-attachment: scroll;
+}
+
 /* Fundo decorativo com parallax discreto (camada composta via transform;
-   nunca background-attachment:fixed, que causava flicker no WebKit). */
+   nunca background-attachment:fixed, que causava flicker no WebKit).
+   Intensidade reduzida no modo leitura para não distrair. */
 .plataforma-parallax {
   position: fixed; inset: -18vh -5vw; z-index: -1; pointer-events: none;
   will-change: transform;
   background:
-    radial-gradient(circle at 14% 22%, rgba(242,201,109,.07), transparent 30rem),
-    radial-gradient(circle at 86% 12%, rgba(140,110,220,.08), transparent 32rem),
-    radial-gradient(circle at 72% 84%, rgba(81,104,50,.10), transparent 34rem);
+    radial-gradient(circle at 14% 22%, rgba(242,201,109,.045), transparent 30rem),
+    radial-gradient(circle at 86% 12%, rgba(140,110,220,.05), transparent 32rem),
+    radial-gradient(circle at 72% 84%, rgba(81,104,50,.06), transparent 34rem);
 }
+
+/* ------------------------------------------- header compacto na leitura */
+/* Após rolar (classe posta via rAF no mesmo tick da barra de leitura), o
+   header sticky encolhe: logo menor, título resumido da aula no centro e a
+   readbar logo acima como progresso. Recupera ~40px de altura em notebooks. */
+.header-aula-resumo { display: none; }
+body.is-leitura-compacta .site-header .nav { min-height: 54px; }
+body.is-leitura-compacta .brand-mark {
+  width: 34px; height: 34px; font-size: 1.15rem;
+  box-shadow: 0 0 0 3px rgba(242,201,109,.06);
+}
+body.is-leitura-compacta .brand-copy strong { font-size: 1rem; }
+body.is-leitura-compacta .brand-copy small { display: none; }
+body.is-leitura-compacta .header-aula-resumo {
+  display: block; flex: 1; min-width: 0; text-align: center;
+  color: var(--cream); font-size: .86rem; font-weight: 600; letter-spacing: .02em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+body.is-leitura-compacta .header-aula-resumo:empty { visibility: hidden; }
+.site-header .nav, .brand-mark, .brand-copy strong { transition: min-height .25s ease, width .25s ease, height .25s ease, font-size .25s ease; }
 
 /* Barra de leitura fixa no topo (efeito "sticky progress" de leitura). */
 .plataforma-readbar {
@@ -101,63 +136,91 @@
 .plataforma-topbar .plataforma-drawer-toggle { flex: none; }
 .plataforma-topbar .plataforma-topbar-titulo { flex: 1; }
 .plataforma-topbar-titulo { font-family: Cinzel, serif; color: var(--gold-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.plataforma-layout { display: grid; grid-template-columns: 332px minmax(0, 1fr); gap: clamp(1.2rem, 2.2vw, 2rem); align-items: start; }
+.plataforma-layout { display: grid; grid-template-columns: 312px minmax(0, 1fr); gap: clamp(1.2rem, 2.2vw, 2rem); align-items: start; }
 
 /* ------------------------------------------------- sidebar estilo série */
+/* 312px no desktop (faixa 300–320px): densa sem congestionar. Só o módulo
+   atual começa expandido; os demais recolhem no cabeçalho-botão. */
 .plataforma-sidebar {
-  background: linear-gradient(180deg, rgba(10,10,15,.92), rgba(8,8,12,.86));
-  border: 1px solid var(--line); border-radius: 20px; padding: 1.15rem;
+  background: linear-gradient(180deg, rgba(10,10,15,.96), rgba(8,8,12,.93));
+  border: 1px solid var(--line); border-radius: 20px; padding: 1rem;
   position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow: auto;
   scrollbar-width: thin; scrollbar-color: rgba(242,201,109,.35) transparent;
   box-shadow: 0 24px 60px rgba(0,0,0,.4);
 }
 .plataforma-sidebar::-webkit-scrollbar { width: 6px; }
 .plataforma-sidebar::-webkit-scrollbar-thumb { background: rgba(242,201,109,.3); border-radius: 99px; }
+.plataforma-drawer-fechar { display: none; }
 .plataforma-sidebar-head { max-width: 100%; }
 .plataforma-sidebar-head strong {
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
-  font-family: Cinzel, serif; color: var(--gold-2); margin: 0 0 .65rem; font-size: 1.05rem; line-height: 1.35;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+  font-family: Cinzel, serif; color: var(--gold-2); margin: 0 0 .65rem; font-size: 1rem; line-height: 1.35;
 }
-.plataforma-sidebar-head small { color: var(--muted); display: block; margin-top: .45rem; letter-spacing: .02em; }
-.plataforma-modulos { margin-top: 1.1rem; display: grid; gap: .8rem; }
+.plataforma-sidebar-head small { color: var(--muted); display: block; margin-top: .45rem; letter-spacing: .02em; font-size: .8rem; }
+.plataforma-modulos { margin-top: 1rem; display: grid; gap: .55rem; }
 .plataforma-modulo {
-  border: 1px solid var(--line); border-radius: 16px; padding: .75rem .85rem;
+  border: 1px solid var(--line); border-radius: 14px;
   background: rgba(0,0,0,.22); overflow: hidden;
-  transition: border-color .25s ease, transform .25s ease, box-shadow .25s ease;
+  transition: border-color .25s ease, box-shadow .25s ease;
 }
 .plataforma-modulo:hover { border-color: rgba(242,201,109,.45); }
-.plataforma-modulo.is-open { box-shadow: inset 0 0 0 1px rgba(242,201,109,.06); }
-.plataforma-modulo.is-locked { opacity: .58; filter: saturate(.7); }
+.plataforma-modulo.is-aberto { box-shadow: inset 0 0 0 1px rgba(242,201,109,.08); }
+/* Módulo bloqueado: rebaixado sem virar ilegível (nada de opacidade baixa
+   em informação essencial — o título continua com contraste AA). */
+.plataforma-modulo.is-locked { background: rgba(0,0,0,.14); }
+.plataforma-modulo.is-locked .plataforma-modulo-num { opacity: .7; }
 .plataforma-modulo.is-done { border-color: rgba(189,209,122,.5); }
+/* Cabeçalho do módulo = botão de expandir/recolher (aria-expanded no JS). */
+.plataforma-modulo-head {
+  display: flex; gap: .6rem; align-items: center; position: relative; width: 100%;
+  background: transparent; border: 0; color: inherit; text-align: left; cursor: pointer;
+  padding: .65rem .7rem; border-radius: 0; font: inherit;
+  transition: background .2s ease;
+}
+.plataforma-modulo-head:hover { background: rgba(255,246,221,.05); }
+.plataforma-modulo-head:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+.plataforma-modulo-num {
+  width: 26px; height: 26px; flex: none; border-radius: 50%; display: grid; place-items: center;
+  background: radial-gradient(circle at 38% 30%, rgba(255,244,198,.28), rgba(242,201,109,.10) 62%, rgba(20,14,4,.6));
+  border: 1px solid rgba(242,201,109,.4); color: var(--gold); font-weight: 700; font-size: .8rem;
+}
+.plataforma-modulo-info { flex: 1; min-width: 0; }
+.plataforma-modulo-head strong {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+  font-size: .92rem; line-height: 1.3;
+}
+.plataforma-modulo-seta { flex: none; color: var(--gold); font-size: .8rem; transition: transform .25s ease; }
+.plataforma-modulo.is-aberto .plataforma-modulo-seta { transform: rotate(180deg); }
+/* Estados do módulo em badge legível (sem "Em andamento" genérico). */
+.plataforma-modulo-badge {
+  display: inline-block; margin-top: .3rem; padding: .14rem .55rem; border-radius: 999px;
+  font-size: .7rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--muted); border: 1px solid rgba(215,200,173,.3); background: rgba(0,0,0,.3);
+}
+.plataforma-modulo-badge.is-aqui { color: #ffe7a3; border-color: rgba(242,201,109,.55); background: rgba(242,201,109,.14); }
+.plataforma-modulo-badge.is-concluido { color: #d8e8a8; border-color: rgba(189,209,122,.5); background: rgba(189,209,122,.12); }
+.plataforma-modulo-badge.is-andamento { color: #f3ddb0; border-color: rgba(242,201,109,.4); background: rgba(242,201,109,.08); }
+.plataforma-modulo-corpo { padding: 0 .7rem .7rem; }
 .plataforma-modulo-capa {
-  aspect-ratio: 1200 / 630; height: auto; margin: -.75rem -.85rem .75rem; border-radius: 15px 15px 0 0;
-  background-size: cover; background-position: 50% 22%; max-height: 132px; position: relative;
-  transition: transform .45s ease;
+  aspect-ratio: 1200 / 420; height: auto; margin: .1rem 0 .55rem; border-radius: 10px;
+  background-size: cover; background-position: 50% 22%; max-height: 88px; position: relative; overflow: hidden;
 }
 .plataforma-modulo-capa::after {
-  content: ""; position: absolute; inset: 0;
-  background: linear-gradient(180deg, transparent 40%, rgba(8,8,12,.85) 100%);
+  content: ""; position: absolute; inset: 0; border-radius: inherit;
+  background: linear-gradient(180deg, rgba(8,8,12,.12), rgba(8,8,12,.55) 100%);
 }
-.plataforma-modulo:hover .plataforma-modulo-capa { transform: scale(1.02); }
-.plataforma-modulo-head { display: flex; gap: .6rem; align-items: center; position: relative; }
-.plataforma-modulo-num {
-  width: 28px; height: 28px; flex: none; border-radius: 50%; display: grid; place-items: center;
-  background: radial-gradient(circle at 38% 30%, rgba(255,244,198,.28), rgba(242,201,109,.10) 62%, rgba(20,14,4,.6));
-  border: 1px solid rgba(242,201,109,.4); color: var(--gold); font-weight: 700; font-size: .85rem;
-}
-.plataforma-modulo-head strong { display: block; font-size: .98rem; line-height: 1.3; }
-.plataforma-modulo-head small { color: var(--muted); font-size: .78rem; letter-spacing: .04em; }
-.plataforma-modulo-bloqueado { color: var(--muted); font-size: .82rem; margin: .55rem 0 0; line-height: 1.5; }
+.plataforma-modulo-bloqueado { color: var(--muted); font-size: .82rem; margin: .3rem 0 0; line-height: 1.5; }
 .plataforma-modulo [data-login-cta] { margin-top: .55rem; }
 .plataforma-conteudo-vazio [data-login-cta] { margin-top: 1rem; }
-.plataforma-aulas { list-style: none; margin: .65rem 0 0; padding: 0; display: grid; gap: .3rem; }
+.plataforma-aulas { list-style: none; margin: 0; padding: 0; display: grid; gap: .25rem; }
 .plataforma-aula-link, .plataforma-quiz-link {
-  width: 100%; text-align: left; display: flex; gap: .55rem; align-items: center;
+  width: 100%; text-align: left; display: flex; gap: .55rem; align-items: flex-start;
   background: transparent; border: 0; color: var(--cream); padding: .5rem .55rem;
-  border-radius: 10px; cursor: pointer; font-size: .9rem; position: relative;
-  transition: background .2s ease, transform .2s ease;
+  border-radius: 10px; cursor: pointer; font-size: .88rem; position: relative;
+  transition: background .2s ease;
 }
-.plataforma-aula-link:hover, .plataforma-quiz-link:hover:not(:disabled) { background: var(--panel-strong); transform: translateX(3px); }
+.plataforma-aula-link:hover, .plataforma-quiz-link:hover:not(:disabled) { background: var(--panel-strong); }
+.plataforma-aula-link:focus-visible, .plataforma-quiz-link:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
 .plataforma-aula-link.is-active {
   background: linear-gradient(90deg, rgba(242,201,109,.16), rgba(242,201,109,.05));
   box-shadow: inset 2px 0 0 var(--gold);
@@ -166,18 +229,28 @@
 .plataforma-aula-status { width: 18px; flex: none; text-align: center; color: var(--gold); transition: transform .25s ease; }
 .plataforma-aula-link.is-done .plataforma-aula-status { animation: plataformaCheckPop .45s cubic-bezier(.3, 1.6, .5, 1) both; }
 @keyframes plataformaCheckPop { 0% { transform: scale(.4); } 100% { transform: scale(1); } }
-.plataforma-aula-titulo { flex: 1; min-width: 0; }
+/* Título da aula limitado a 2 linhas: nada de itens gigantes na lista. */
+.plataforma-aula-titulo {
+  flex: 1; min-width: 0; line-height: 1.35;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
 .plataforma-aula-titulo em { color: var(--muted); font-style: normal; font-size: .8rem; }
-.plataforma-aula-tempo { flex: none; color: var(--muted); font-size: .72rem; letter-spacing: .03em; opacity: .85; }
+/* Duração em badge compacto e legível (sem opacidade baixa). */
+.plataforma-aula-tempo {
+  flex: none; color: #e9d9b4; font-size: .7rem; font-weight: 600; letter-spacing: .03em;
+  padding: .1rem .45rem; border-radius: 999px; margin-top: .1rem;
+  border: 1px solid rgba(242,201,109,.28); background: rgba(242,201,109,.08);
+}
 .plataforma-quiz-link { font-weight: 600; }
-.plataforma-quiz-link.is-locked, .plataforma-quiz-link:disabled { opacity: .5; cursor: not-allowed; }
+.plataforma-quiz-link.is-locked, .plataforma-quiz-link:disabled { opacity: .6; cursor: not-allowed; }
 .plataforma-sidebar > .btn { margin-top: 1rem; }
 
 /* ------------------------------------------------------------ conteúdo */
 .plataforma-conteudo {
   /* padding lateral em var para o hero "sangrar" até as bordas do cartão */
   --px: clamp(1.3rem, 4.2vw, 3.6rem);
-  background: linear-gradient(180deg, rgba(12,12,17,.86), rgba(9,9,13,.82));
+  /* Cartão de leitura quase opaco: o texto nunca disputa com a arte do fundo. */
+  background: linear-gradient(180deg, rgba(12,12,17,.97), rgba(9,9,13,.95));
   border: 1px solid var(--line); border-radius: 22px;
   padding: 0 var(--px) clamp(2.2rem, 4.5vw, 3.4rem);
   min-height: 60vh; box-shadow: 0 30px 90px rgba(0,0,0,.42);
@@ -209,8 +282,8 @@
 }
 .aula-hero-media .aula-imagem figcaption {
   position: absolute; right: .9rem; top: .8rem; max-width: min(46%, 380px);
-  padding: .4rem .7rem; border-radius: 10px; font-size: .68rem; line-height: 1.4;
-  color: rgba(255,246,221,.82); background: rgba(5,5,9,.5); backdrop-filter: blur(6px);
+  padding: .4rem .7rem; border-radius: 10px; font-size: .74rem; line-height: 1.4;
+  color: var(--cream); background: rgba(5,5,9,.72); backdrop-filter: blur(6px);
   text-align: right;
 }
 .aula-hero-copy {
@@ -226,10 +299,30 @@
   font-size: clamp(1.6rem, 3.2vw, 2.5rem); line-height: 1.22; letter-spacing: .01em;
   text-shadow: 0 2px 18px rgba(0,0,0,.75);
 }
-.plataforma-conteudo-desc {
-  color: var(--muted); margin: 0 0 1rem; font-size: clamp(.98rem, 1.4vw, 1.08rem);
-  line-height: 1.6; max-width: 620px; text-shadow: 0 1px 10px rgba(0,0,0,.6);
+/* --- Resumo "Em poucas palavras" + mini índice da aula --- */
+.aula-resumo {
+  margin: 2rem auto 1.6rem; padding: 1.1rem 1.3rem; border-radius: 16px;
+  border: 1px solid rgba(242,201,109,.3); border-left: 4px solid var(--gold);
+  background: linear-gradient(180deg, rgba(242,201,109,.08), rgba(242,201,109,.02));
 }
+.aula-resumo strong {
+  display: block; color: var(--gold); text-transform: uppercase;
+  letter-spacing: .12em; font-size: .74rem; margin-bottom: .45rem;
+}
+.aula-resumo p { margin: 0 !important; color: var(--cream); font-size: 1rem; line-height: 1.7; }
+.aula-indice {
+  margin: 0 auto 2.2rem; padding: 1rem 1.3rem; border-radius: 16px;
+  border: 1px solid var(--line); background: rgba(0,0,0,.22);
+}
+.aula-indice strong {
+  display: block; color: var(--gold); text-transform: uppercase;
+  letter-spacing: .12em; font-size: .74rem; margin-bottom: .5rem;
+}
+.aula-indice ol { margin: 0; padding-left: 1.2rem; display: grid; gap: .3rem; }
+.aula-indice li { margin: 0; font-size: .92rem; }
+.aula-indice li.is-sub { list-style: circle; margin-left: 1rem; font-size: .88rem; }
+.aula-indice a { color: var(--cream); text-decoration: none; }
+.aula-indice a:hover, .aula-indice a:focus-visible { color: var(--gold-2); text-decoration: underline; text-underline-offset: 3px; }
 
 /* --- Meta da aula: posição, tempo de leitura e nível --- */
 .aula-meta { display: flex; flex-wrap: wrap; gap: .5rem .6rem; align-items: center; }
@@ -257,14 +350,19 @@
    ~46rem centralizado; imagens, tabelas e destaques respiram mais largos. */
 .plataforma-texto { color: var(--cream); margin: 1rem 0 0; font-size: 1.05rem; line-height: 1.85; letter-spacing: .008em; }
 .plataforma-texto > * { max-width: 46rem; margin-left: auto; margin-right: auto; }
+/* Frases-chave destacadas com cor, não com peso exagerado. */
+.plataforma-texto strong { color: var(--gold-2); font-weight: 700; }
+/* Âncoras do mini índice não somem sob o header sticky. */
+.plataforma-texto h2[id], .plataforma-texto h3[id] { scroll-margin-top: 96px; }
 .plataforma-texto > .aula-imagem, .plataforma-texto > .aula-timeline-wrap,
 .plataforma-texto > .aula-tabela-wrap, .plataforma-texto > .aula-box,
 .plataforma-texto > .aula-aviso, .plataforma-texto > .aula-cta,
 .plataforma-texto > .aula-revisao { max-width: 56rem; }
-.plataforma-texto p { margin: 0 auto 1.25rem; }
+/* Parágrafos com mais respiro: blocos visualmente mais curtos. */
+.plataforma-texto p { margin: 0 auto 1.4rem; }
 .plataforma-texto h2, .plataforma-texto h3 { color: var(--gold-2); font-family: Cinzel, serif; letter-spacing: .015em; }
-.plataforma-texto h2 { font-size: clamp(1.4rem, 2.4vw, 1.7rem); margin: 2.4rem auto .8rem; line-height: 1.3; }
-.plataforma-texto h3 { font-size: 1.14rem; margin: 2rem auto .6rem; }
+.plataforma-texto h2 { font-size: clamp(1.4rem, 2.4vw, 1.7rem); margin: 3rem auto .9rem; line-height: 1.3; }
+.plataforma-texto h3 { font-size: 1.14rem; margin: 2.4rem auto .7rem; }
 .plataforma-texto ul, .plataforma-texto ol { padding-left: 1.3rem; margin: 0 auto 1.25rem; }
 .plataforma-texto li { margin-bottom: .45rem; }
 .plataforma-texto a { color: var(--gold-2); text-decoration: underline; text-underline-offset: 3px; }
@@ -346,7 +444,8 @@
   position: relative; margin: 0; padding: .85rem 1.15rem 1rem; font-size: .84rem; color: var(--cream);
   background: linear-gradient(180deg, rgba(6,6,9,.05), rgba(6,6,9,.55));
 }
-.aula-imagem-credito { display: block; opacity: .68; font-size: .74rem; margin-top: .2rem; letter-spacing: .01em; }
+/* Crédito da imagem legível (cor sólida em vez de opacidade baixa). */
+.aula-imagem-credito { display: block; color: #cbbd9f; font-size: .76rem; margin-top: .2rem; letter-spacing: .01em; }
 /* Linha do tempo ilustrada: em telas estreitas ganha rolagem própria para
    continuar legível sem estourar a página. */
 .aula-timeline-wrap { margin: 2rem auto; }
@@ -378,22 +477,23 @@
 .aula-revisao-item summary { cursor: pointer; font-weight: 600; color: var(--muted-strong, var(--cream)); }
 .aula-revisao-item summary::marker { color: var(--gold); }
 .aula-revisao-item p { margin: .65rem 0 0; color: var(--muted); }
-.aula-referencias { font-size: .84rem; color: var(--muted); opacity: .9; }
+.aula-referencias { font-size: .86rem; color: var(--muted); }
 .plataforma-conteudo-material { margin: 1.4rem auto; max-width: 46rem; }
 
-/* --- Ações da aula --- */
+/* --- Ações da aula: uma ação principal, "Anterior" como secundária --- */
 .plataforma-conteudo-actions {
-  display: flex; gap: .6rem; flex-wrap: wrap; max-width: 56rem;
+  display: flex; gap: .8rem; flex-wrap: wrap; align-items: center; max-width: 56rem;
   margin: 2.2rem auto 0; padding-top: 1.4rem; border-top: 1px solid var(--line);
 }
-.plataforma-conteudo-actions .btn { flex: 1; min-width: 130px; transition: transform .2s ease, box-shadow .2s ease, opacity .2s ease; }
+.plataforma-conteudo-actions .btn { transition: transform .2s ease, box-shadow .2s ease, opacity .2s ease; }
 .plataforma-conteudo-actions .btn:hover:not(:disabled) { transform: translateY(-2px); }
-.plataforma-conteudo-actions .btn:disabled { opacity: .45; cursor: not-allowed; }
+.plataforma-conteudo-actions .btn:disabled { opacity: .55; cursor: not-allowed; }
+.plataforma-conteudo-actions [data-prev] { flex: 0 1 auto; }
+.plataforma-cta-principal { flex: 1 1 auto; min-width: 220px; font-weight: 700; }
 
-/* --- Próxima aula em destaque no final --- */
+/* --- Próxima aula: prévia sem botão (a ação é o CTA principal acima) --- */
 .aula-next {
-  display: flex; align-items: center; gap: 1.4rem; flex-wrap: wrap;
-  max-width: 56rem; margin: 1.8rem auto 0; padding: 1.5rem 1.7rem;
+  display: block; max-width: 56rem; margin: 1.8rem auto 0; padding: 1.4rem 1.6rem;
   border-radius: 20px; border: 1px solid rgba(242,201,109,.4); position: relative; overflow: hidden;
   background:
     radial-gradient(circle at 8% 15%, rgba(242,201,109,.14), transparent 45%),
@@ -401,16 +501,30 @@
     linear-gradient(160deg, rgba(16,14,8,.9), rgba(10,10,16,.9));
   box-shadow: 0 26px 70px rgba(0,0,0,.45), inset 0 0 0 1px rgba(242,201,109,.06);
 }
-.aula-next-info { flex: 1 1 320px; min-width: 0; }
+.aula-next-info { min-width: 0; }
 .aula-next-kicker {
   display: block; color: var(--gold); text-transform: uppercase; letter-spacing: .16em;
   font-size: .72rem; font-weight: 800; margin-bottom: .4rem;
 }
 .aula-next-titulo { display: block; font-family: Cinzel, serif; color: var(--gold-2); font-size: 1.25rem; line-height: 1.3; }
 .aula-next-info p { margin: .45rem 0 0; color: var(--muted); font-size: .92rem; line-height: 1.55; }
-.aula-next-btn { flex: none; }
-.aula-next.is-fim { justify-content: center; text-align: center; display: block; }
+.aula-next-tempo {
+  display: inline-block; margin-top: .6rem; padding: .2rem .6rem; border-radius: 999px;
+  font-size: .74rem; font-weight: 600; color: #e9d9b4;
+  border: 1px solid rgba(242,201,109,.28); background: rgba(242,201,109,.08);
+}
+.aula-next.is-fim { text-align: center; }
 .aula-next.is-fim p { color: var(--muted); margin: .5rem auto 0; max-width: 460px; }
+
+/* ------------------------------------------- footer do modo player */
+/* Sem blocos institucionais no meio da jornada: só ajuda, copyright e a
+   continuidade do curso. */
+.plataforma-footer-grid {
+  display: flex; flex-wrap: wrap; gap: .8rem 1.6rem; align-items: center;
+  justify-content: space-between; color: var(--muted); font-size: .88rem;
+}
+.plataforma-footer-grid a { color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+.plataforma-footer-grid a:hover { color: var(--gold-2); }
 
 /* ------------------------------------------------------------ avaliação */
 .plataforma-quiz { max-width: 52rem; margin: 0 auto; padding-top: clamp(1.8rem, 4vw, 2.6rem); }
@@ -447,6 +561,13 @@
     position: fixed; inset: 0 30% 0 0; z-index: 60; max-height: 100vh; border-radius: 0 18px 18px 0;
     transform: translateX(-105%); transition: transform .28s cubic-bezier(.22, .8, .3, 1); width: min(88vw, 340px);
   }
+  /* Botão de fechar visível só no drawer (primeiro alvo do focus trap). */
+  .plataforma-drawer-fechar {
+    display: grid; place-items: center; width: 34px; height: 34px; margin-left: auto;
+    border-radius: 50%; border: 1px solid var(--line); background: rgba(0,0,0,.3);
+    color: var(--cream); font-size: 1rem; cursor: pointer;
+  }
+  .plataforma-drawer-fechar:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
   .plataforma-layout.drawer-open .plataforma-sidebar { transform: translateX(0); box-shadow: var(--shadow); }
   /* Com o drawer aberto, o conteúdo atrás não rola (classe posta pelo JS
      apenas enquanto o drawer existe e está aberto). */
@@ -465,9 +586,8 @@
   .plataforma-sidebar-head strong { font-size: .95rem; line-height: 1.3; -webkit-line-clamp: 2; }
   .aula-glossario { grid-template-columns: 1fr; gap: .3rem; }
   .aula-glossario dd { margin-bottom: .7rem; }
-  .aula-meta-item { font-size: .7rem; padding: .3rem .65rem; }
+  .aula-meta-item { font-size: .72rem; padding: .3rem .65rem; }
   .aula-next { padding: 1.2rem 1.1rem; }
-  .aula-next .btn { width: 100%; }
   .plataforma-parallax { display: none; }
 }
 
@@ -476,7 +596,9 @@
   .plataforma-progress > span, .plataforma-readbar > span,
   .plataforma-curso-card, .plataforma-curso-capa, .plataforma-modulo-capa,
   .plataforma-aula-link, .plataforma-quiz-link, .aula-box,
-  .plataforma-conteudo-actions .btn { transition: none; }
+  .plataforma-conteudo-actions .btn,
+  .plataforma-modulo-head, .plataforma-modulo-seta,
+  .site-header .nav, .brand-mark, .brand-copy strong { transition: none; }
   .plataforma-conteudo.is-entrando { animation: none; }
   .plataforma-progress > span::after { animation: none; }
   .plataforma-aula-link.is-done .plataforma-aula-status { animation: none; }

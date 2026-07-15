@@ -99,11 +99,14 @@
     </div>`;
   }
 
-  // Barra de leitura fixa (sticky progress) + fundo com parallax discreto.
-  // Criadas uma única vez; atualizadas via rAF no scroll (compositor-friendly,
-  // sem background-attachment:fixed, que causava flicker no WebKit).
+  // Barra de leitura fixa (sticky progress) + fundo com parallax discreto +
+  // header compacto durante a leitura. Criadas uma única vez; atualizadas via
+  // rAF no scroll (compositor-friendly, sem background-attachment:fixed, que
+  // causava flicker no WebKit). A classe do header só é trocada quando o
+  // estado realmente muda — nada de reflow a cada tick de scroll.
   let atualizarLeitura = () => {};
   let camadasPremiumProntas = false;
+  let headerCompacto = false;
   function garantirCamadasPremium() {
     if (camadasPremiumProntas) return;
     camadasPremiumProntas = true;
@@ -112,6 +115,14 @@
     readbar.setAttribute("aria-hidden", "true");
     readbar.innerHTML = "<span></span>";
     document.body.appendChild(readbar);
+    // Título resumido da aula dentro do header (visível só no modo compacto).
+    const nav = document.querySelector(".site-header .nav");
+    if (nav && !nav.querySelector("[data-header-aula]")) {
+      const resumo = document.createElement("span");
+      resumo.className = "header-aula-resumo";
+      resumo.setAttribute("data-header-aula", "");
+      nav.insertBefore(resumo, nav.querySelector(".nav-links"));
+    }
     let parallax = null;
     if (!reduzMovimento()) {
       parallax = document.createElement("div");
@@ -123,6 +134,12 @@
     let agendado = false;
     const medir = () => {
       agendado = false;
+      // Header compacto após rolar: devolve área vertical em notebooks.
+      const compacto = window.scrollY > 110 && !!shell.querySelector("[data-conteudo]");
+      if (compacto !== headerCompacto) {
+        headerCompacto = compacto;
+        document.body.classList.toggle("is-leitura-compacta", compacto);
+      }
       const box = shell.querySelector("[data-conteudo]");
       if (!box) { fill.style.transform = "scaleX(0)"; readbar.classList.remove("is-visivel"); return; }
       readbar.classList.add("is-visivel");
@@ -136,6 +153,24 @@
     window.addEventListener("scroll", atualizarLeitura, { passive: true });
     window.addEventListener("resize", atualizarLeitura, { passive: true });
     atualizarLeitura();
+  }
+
+  // document.title acompanha a aula aberta (leitores de tela e histórico do
+  // navegador sabem onde o aluno está); o header compacto mostra o mesmo
+  // título resumido.
+  const TITULO_BASE = "Meu curso | Escola Mística";
+  function atualizarTituloDocumento() {
+    const found = curso && aulaAtiva ? aulaPorId(aulaAtiva.aulaId) : null;
+    document.title = found ? `${found.aula.titulo} · ${curso.titulo} | Escola Mística` : (curso ? `${curso.titulo} | Escola Mística` : TITULO_BASE);
+    const resumo = document.querySelector("[data-header-aula]");
+    if (resumo) resumo.textContent = found ? found.aula.titulo : "";
+  }
+
+  // Move o foco para o título da aula após navegação sem reload — leitores de
+  // tela anunciam a nova aula e o Tab continua do lugar certo.
+  function focarConteudo() {
+    const h1 = shell.querySelector(".aula-hero h1");
+    if (h1) { h1.setAttribute("tabindex", "-1"); h1.focus({ preventScroll: true }); }
   }
 
   // Anima a barra de progresso do curso uma única vez, na primeira pintura.
@@ -174,6 +209,8 @@
   // ou logar, o mesmo curso é recarregado.
   function renderLogin(mensagem, permitirVoltar) {
     document.body.classList.remove("plataforma-drawer-aberto"); // tela sem drawer: nunca deixa o scroll travado
+    // Se o drawer estava aberto ao pedir login, solta o focus trap dele.
+    if (drawerKeydown) { document.removeEventListener("keydown", drawerKeydown); drawerKeydown = null; drawerFocoAnterior = null; }
     shell.innerHTML = `
       <div class="plataforma-login">
         <h1>Entrar na Escola Mística</h1>
@@ -306,8 +343,30 @@
     return status === "concluida" ? "✓" : status === "em_andamento" ? "◔" : "○";
   }
 
+  // Estado visual honesto de cada módulo. Visitante anônimo nunca vê
+  // "Em andamento" genérico: os estados são "Disponível", "Você está aqui",
+  // "Concluído nesta sessão" (progresso efêmero em sessionStorage) e
+  // "Bloqueado". Aluno logado mantém "Concluído"/"Em andamento" reais,
+  // decididos pelo backend.
+  function badgeModulo(m) {
+    if (modoAnonimo && m.bloqueado) return { texto: "🔒 Conteúdo pago", cls: "is-bloqueado" };
+    if (!m.liberado) return { texto: "🔒 Bloqueado", cls: "is-bloqueado" };
+    const aulas = m.aulas || [];
+    const todasConcluidas = aulas.length > 0 && aulas.every(a => a.status === "concluida");
+    if (m.concluido || todasConcluidas) return { texto: modoAnonimo ? "Concluído nesta sessão" : "Concluído", cls: "is-concluido" };
+    if (aulaAtiva && aulas.some(a => a.id === aulaAtiva.aulaId)) return { texto: "Você está aqui", cls: "is-aqui" };
+    if (!modoAnonimo && aulas.some(a => a.status === "concluida" || a.status === "em_andamento")) return { texto: "Em andamento", cls: "is-andamento" };
+    return { texto: "Disponível", cls: "is-disponivel" };
+  }
+
+  // Só o módulo da aula ativa começa expandido; os demais ficam recolhidos e
+  // podem ser abertos pelo cabeçalho (botão com aria-expanded).
+  let modulosAbertos = new Set();
+
   function renderSidebar() {
-    return `<aside class="plataforma-sidebar" data-sidebar>
+    if (aulaAtiva && !modulosAbertos.size) modulosAbertos = new Set([aulaAtiva.moduloId]);
+    return `<aside class="plataforma-sidebar" data-sidebar aria-label="Conteúdo do curso">
+      <button type="button" class="plataforma-drawer-fechar" data-drawer-fechar aria-label="Fechar lista de módulos">✕</button>
       <div class="plataforma-sidebar-head">
         <strong title="${esc(curso.titulo)}">${esc(curso.titulo)}</strong>
         <div class="plataforma-progress"><span style="width:${curso.progresso.percentual}%"></span></div>
@@ -317,27 +376,32 @@
         ${curso.modulos.map((m, i) => {
           const bloqueadoPago = modoAnonimo && m.bloqueado;
           const cls = m.concluido ? "is-done" : m.liberado ? "is-open" : "is-locked";
-          const badge = m.concluido ? "Concluído" : bloqueadoPago ? "🔒 Conteúdo pago" : !m.liberado ? "🔒 Bloqueado" : "Em andamento";
+          const badge = badgeModulo(m);
+          const aberto = modulosAbertos.has(m.id);
           const bloqueio = bloqueadoPago
             ? `<p class="plataforma-modulo-bloqueado">Continue sua jornada assinando o plano completo.</p>
                <button type="button" class="btn btn-small" data-login-cta>Entrar / assinar para continuar</button>`
             : `<p class="plataforma-modulo-bloqueado">Conclua o módulo anterior para liberar.</p>`;
-          const capa = m.imagem ? `<div class="plataforma-modulo-capa" style="background-image:url('${esc(normalizeUrl(m.imagem))}')" aria-hidden="true"></div>` : "";
-          return `<div class="plataforma-modulo ${cls}">
-            ${capa}
-            <div class="plataforma-modulo-head"><span class="plataforma-modulo-num">${i + 1}</span><div><strong>${esc(m.titulo)}</strong><small>${badge}</small></div></div>
-            ${m.liberado ? `<ul class="plataforma-aulas">
+          const capa = m.imagem && aberto ? `<div class="plataforma-modulo-capa" style="background-image:url('${esc(normalizeUrl(m.imagem))}')" aria-hidden="true"></div>` : "";
+          const corpo = m.liberado ? `<ul class="plataforma-aulas">
               ${m.aulas.map(a => `<li>
-                <button type="button" class="plataforma-aula-link ${aulaAtiva && aulaAtiva.aulaId === a.id ? "is-active" : ""} ${a.status === "concluida" ? "is-done" : ""}" data-aula="${a.id}" data-modulo="${m.id}">
-                  <span class="plataforma-aula-status">${statusIcon(a.status)}</span>
+                <button type="button" class="plataforma-aula-link ${aulaAtiva && aulaAtiva.aulaId === a.id ? "is-active" : ""} ${a.status === "concluida" ? "is-done" : ""}" data-aula="${a.id}" data-modulo="${m.id}" ${aulaAtiva && aulaAtiva.aulaId === a.id ? 'aria-current="true"' : ""}>
+                  <span class="plataforma-aula-status" aria-hidden="true">${statusIcon(a.status)}</span>
                   <span class="plataforma-aula-titulo">${esc(a.titulo)}${a.obrigatoria ? "" : " <em>(opcional)</em>"}</span>
                   ${Number(a.duracao_min) > 0 ? `<span class="plataforma-aula-tempo">${Math.round(Number(a.duracao_min))} min</span>` : ""}
                 </button></li>`).join("")}
               ${m.quiz ? `<li><button type="button" class="plataforma-quiz-link ${m.quiz.disponivel ? "" : "is-locked"} ${m.quiz.aprovado ? "is-done" : ""}" data-quiz="${m.quiz.id}" ${m.quiz.disponivel ? "" : "disabled"}>
-                <span class="plataforma-aula-status">${m.quiz.aprovado ? "✓" : "★"}</span>
+                <span class="plataforma-aula-status" aria-hidden="true">${m.quiz.aprovado ? "✓" : "★"}</span>
                 <span class="plataforma-aula-titulo">${esc(m.quiz.titulo)}${m.quiz.maior_nota != null ? ` — melhor nota ${m.quiz.maior_nota}%` : ""}</span></button></li>` : ""}
-            </ul>` : bloqueio}
-          </div>`;
+            </ul>` : bloqueio;
+          return `<section class="plataforma-modulo ${cls}${aberto ? " is-aberto" : ""}">
+            <button type="button" class="plataforma-modulo-head" data-toggle-modulo="${m.id}" aria-expanded="${aberto}" aria-controls="modulo-corpo-${m.id}">
+              <span class="plataforma-modulo-num" aria-hidden="true">${i + 1}</span>
+              <span class="plataforma-modulo-info"><strong>${esc(m.titulo)}</strong><small class="plataforma-modulo-badge ${badge.cls}">${badge.texto}</small></span>
+              <span class="plataforma-modulo-seta" aria-hidden="true">▾</span>
+            </button>
+            <div class="plataforma-modulo-corpo" id="modulo-corpo-${m.id}" ${aberto ? "" : "hidden"}>${capa}${corpo}</div>
+          </section>`;
         }).join("")}
       </nav>
       ${modoAnonimo ? `<button type="button" class="btn btn-full" data-login-cta>Entrar para salvar progresso e emitir certificado</button>` : ""}
@@ -410,7 +474,40 @@
         restante = tpl.innerHTML;
       }
     }
-    const texto = restante ? `<div class="plataforma-texto">${restante}</div>` : "";
+
+    // Mini índice da aula + imagens internas lazy. As seções (h2/h3 do corpo)
+    // ganham id e viram âncoras; imagens de meio de texto sem loading
+    // explícito ficam lazy (a capa acima já foi promovida a eager).
+    let indice = "";
+    if (restante) {
+      const tplIdx = document.createElement("template");
+      tplIdx.innerHTML = restante;
+      tplIdx.content.querySelectorAll("img:not([loading])").forEach(img => img.setAttribute("loading", "lazy"));
+      const secoes = [];
+      tplIdx.content.querySelectorAll("h2, h3").forEach(h => {
+        const titulo = (h.textContent || "").trim();
+        // Títulos de cards (curiosidade, ciência...) não são seções da aula.
+        if (h.closest(".aula-box, .aula-glossario, .aula-revisao, aside, figure, table")) return;
+        // O primeiro h2 repete o título da aula (fica visualmente oculto no
+        // CSS) — não entra no índice.
+        if (!titulo || titulo === String(aula.titulo).trim()) return;
+        const id = `aula-secao-${secoes.length + 1}`;
+        h.id = id;
+        secoes.push({ id, titulo, sub: h.tagName === "H3" });
+      });
+      restante = tplIdx.innerHTML;
+      if (secoes.length >= 2) {
+        indice = `<nav class="aula-indice" aria-label="Nesta aula">
+          <strong>Nesta aula</strong>
+          <ol>${secoes.map(s => `<li${s.sub ? ' class="is-sub"' : ""}><a href="#${s.id}">${esc(s.titulo)}</a></li>`).join("")}</ol>
+        </nav>`;
+      }
+    }
+
+    // "Em poucas palavras": a descrição da aula abre o corpo do texto como
+    // resumo editorial (sai do hero, onde competia com o título sobre a foto).
+    const resumo = aula.descricao ? `<aside class="aula-resumo"><strong>Em poucas palavras</strong><p>${esc(aula.descricao)}</p></aside>` : "";
+    const texto = restante || resumo || indice ? `<div class="plataforma-texto">${resumo}${indice}${restante}</div>` : "";
 
     const flat = todasAulas().filter(a => a.moduloLiberado);
     const idx = flat.findIndex(a => a.id === aula.id);
@@ -425,35 +522,39 @@
         ${capaAula ? `<div class="aula-hero-media">${capaAula}</div>` : ""}
         <div class="aula-hero-copy">
           <p class="plataforma-conteudo-modulo">${esc(modulo.titulo)}</p>
-          <h1>${esc(aula.titulo)}</h1>
-          ${aula.descricao ? `<p class="plataforma-conteudo-desc">${esc(aula.descricao)}</p>` : ""}
+          <h1 tabindex="-1">${esc(aula.titulo)}</h1>
           ${metaAulaHtml(aula, restante, posicao)}
         </div>
       </header>`;
 
-    // Próxima aula em destaque ao final da leitura (navegação sem reload).
+    // Prévia da próxima aula (sem botão: a ação de seguir adiante é uma só,
+    // o CTA principal logo acima — nada de dois botões competindo).
     const proxima = next
       ? `<aside class="aula-next" data-next-card>
           <div class="aula-next-info">
             <span class="aula-next-kicker">A seguir na sua jornada</span>
             <strong class="aula-next-titulo">${esc(next.titulo)}</strong>
             ${next.descricao ? `<p>${esc(next.descricao)}</p>` : ""}
+            ${Number(next.duracao_min) > 0 ? `<span class="aula-next-tempo">📖 ~${Math.round(Number(next.duracao_min))} min</span>` : ""}
           </div>
-          <button class="btn aula-next-btn" type="button" data-proxima-aula>Continuar para a próxima aula →</button>
         </aside>`
       : `<aside class="aula-next is-fim" data-next-card>
           <span class="aula-next-kicker">Você chegou ao fim das aulas liberadas</span>
           <p>Avaliações e novos módulos aparecem na barra lateral assim que forem liberados. Bons estudos! ☾</p>
         </aside>`;
 
+    // Uma única ação principal ao fim da aula; "Anterior" fica como ação
+    // secundária discreta. O rótulo se adapta ao estado real da aula.
+    const rotuloPrincipal = feito
+      ? (next ? "Continuar para a próxima aula →" : "✓ Aula concluída")
+      : (next ? "Marcar como concluída e continuar →" : "Marcar como concluída");
     return `${hero}
       ${midia}
       ${texto}
       <div class="plataforma-conteudo-material">${material}</div>
       <div class="plataforma-conteudo-actions">
         <button class="btn btn-ghost" type="button" data-prev ${prev ? "" : "disabled"}>← Anterior</button>
-        <button class="btn ${feito ? "btn-ghost" : ""}" type="button" data-concluir data-aula="${aula.id}" data-tipo="${aula.tipo}" data-min="${aula.percentual_minimo || 80}">${feito ? "✓ Concluída" : "Marcar como concluída"}</button>
-        <button class="btn btn-ghost" type="button" data-next ${next ? "" : "disabled"}>Próxima →</button>
+        <button class="btn plataforma-cta-principal" type="button" data-concluir-continuar data-aula="${aula.id}" data-tipo="${aula.tipo}" data-min="${aula.percentual_minimo || 80}" ${feito && !next ? "disabled" : ""}>${rotuloPrincipal}</button>
       </div>
       ${proxima}`;
   }
@@ -472,6 +573,7 @@
     garantirCamadasPremium();
     animarProgresso();
     animarEntradaConteudo();
+    atualizarTituloDocumento();
     atualizarLeitura();
   }
 
@@ -482,6 +584,7 @@
     if (side) side.outerHTML = renderSidebar();
     bindSidebar();
     animarEntradaConteudo();
+    atualizarTituloDocumento();
     atualizarLeitura();
   }
 
@@ -494,22 +597,73 @@
 
   // Abre/fecha o drawer de módulos travando o scroll do fundo enquanto o
   // drawer está aberto (a classe no <body> só existe com o drawer aberto).
+  // Com o drawer aberto: foco preso dentro dele, Escape fecha e, ao fechar,
+  // o foco volta para quem o abriu.
+  let drawerKeydown = null;
+  let drawerFocoAnterior = null;
   function alternarDrawer(forcar) {
     const layout = shell.querySelector("[data-layout]");
     if (!layout) return;
     const aberto = typeof forcar === "boolean" ? forcar : !layout.classList.contains("drawer-open");
     layout.classList.toggle("drawer-open", aberto);
     document.body.classList.toggle("plataforma-drawer-aberto", aberto);
+    if (aberto && !drawerKeydown) {
+      drawerFocoAnterior = document.activeElement;
+      drawerKeydown = e => {
+        if (e.key === "Escape") { e.preventDefault(); alternarDrawer(false); return; }
+        if (e.key !== "Tab") return;
+        const side = shell.querySelector("[data-sidebar]");
+        if (!side) return;
+        const focaveis = [...side.querySelectorAll("button, a[href], input, select, textarea, [tabindex]:not([tabindex='-1'])")]
+          .filter(el => !el.disabled && el.offsetParent !== null);
+        if (!focaveis.length) return;
+        const primeiro = focaveis[0];
+        const ultimo = focaveis[focaveis.length - 1];
+        if (e.shiftKey && (document.activeElement === primeiro || !side.contains(document.activeElement))) { e.preventDefault(); ultimo.focus(); }
+        else if (!e.shiftKey && (document.activeElement === ultimo || !side.contains(document.activeElement))) { e.preventDefault(); primeiro.focus(); }
+      };
+      document.addEventListener("keydown", drawerKeydown);
+      shell.querySelector("[data-sidebar] [data-drawer-fechar]")?.focus();
+    } else if (!aberto && drawerKeydown) {
+      document.removeEventListener("keydown", drawerKeydown);
+      drawerKeydown = null;
+      if (drawerFocoAnterior && drawerFocoAnterior.isConnected) drawerFocoAnterior.focus();
+      drawerFocoAnterior = null;
+    }
+  }
+
+  // Navegação para uma aula específica sem reload: abre só o módulo dela na
+  // sidebar, re-renderiza, rola até o conteúdo e move o foco para o título.
+  function irParaAula(moduloId, aulaId) {
+    aulaAtiva = { moduloId, aulaId };
+    modulosAbertos = new Set([moduloId]);
+    refreshConteudo();
+    rolarParaConteudo();
+    focarConteudo();
   }
 
   function bindSidebar() {
-    shell.querySelectorAll("[data-aula]").forEach(btn => {
+    shell.querySelectorAll("[data-toggle-modulo]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        // Expande/recolhe no lugar (sem re-render): preserva foco e a posição
+        // de rolagem da sidebar — navegável só com teclado.
+        const id = Number(btn.dataset.toggleModulo);
+        const aberto = !modulosAbertos.has(id);
+        if (aberto) modulosAbertos.add(id); else modulosAbertos.delete(id);
+        btn.setAttribute("aria-expanded", String(aberto));
+        btn.closest(".plataforma-modulo")?.classList.toggle("is-aberto", aberto);
+        const corpo = shell.querySelector(`#modulo-corpo-${id}`);
+        if (corpo) corpo.hidden = !aberto;
+      });
+    });
+    // Escopo restrito à sidebar: o CTA principal do conteúdo também carrega
+    // data-aula e, sem o escopo, ganhava um segundo listener de navegação
+    // (listener duplicado disparando junto com o de concluir).
+    shell.querySelectorAll("[data-sidebar] [data-aula]").forEach(btn => {
       if (btn.classList.contains("plataforma-quiz-link")) return;
       btn.addEventListener("click", () => {
-        aulaAtiva = { moduloId: Number(btn.dataset.modulo), aulaId: Number(btn.dataset.aula) };
         alternarDrawer(false);
-        refreshConteudo();
-        rolarParaConteudo();
+        irParaAula(Number(btn.dataset.modulo), Number(btn.dataset.aula));
       });
     });
     shell.querySelectorAll("[data-quiz]").forEach(btn => {
@@ -518,34 +672,42 @@
     shell.querySelectorAll("[data-login-cta]").forEach(btn => {
       btn.addEventListener("click", pedirLoginParaRecursoProtegido);
     });
+    shell.querySelector("[data-drawer-fechar]")?.addEventListener("click", () => alternarDrawer(false));
   }
 
   function bindConteudo() {
     const box = shell.querySelector("[data-conteudo]");
     if (!box) return;
     box.querySelector("[data-prev]")?.addEventListener("click", () => navegar(-1));
-    box.querySelector("[data-next]")?.addEventListener("click", () => navegar(1));
-    box.querySelector("[data-proxima-aula]")?.addEventListener("click", () => navegar(1));
     box.querySelector("[data-login-cta]")?.addEventListener("click", pedirLoginParaRecursoProtegido);
-    box.querySelector("[data-concluir]")?.addEventListener("click", async e => {
+    // Ação principal única: "Marcar como concluída e continuar". Se a aula já
+    // está concluída, o mesmo botão só navega. Nenhuma regra de progresso
+    // muda: o backend continua recebendo o mesmo POST de progresso de sempre.
+    box.querySelector("[data-concluir-continuar]")?.addEventListener("click", async e => {
       const btn = e.currentTarget;
       const aulaId = Number(btn.dataset.aula);
-      const tipo = btn.dataset.tipo;
-      // Para vídeo, enviamos 100% ao marcar manualmente (o aluno declara que assistiu).
-      const percentual = tipo === "video" ? 100 : 100;
+      const found = aulaPorId(aulaId);
+      if (found && found.aula.status === "concluida") { navegar(1); return; }
       btn.disabled = true;
       if (modoAnonimo) {
         // Visitante sem sessão: marcação é só visual (sessionStorage), nunca
         // grava progresso no servidor nem exige conta.
         marcarProgressoAnonimo(aulaId);
-        const found = aulaPorId(aulaId);
         if (found) found.aula.status = "concluida";
         curso.progresso = calcularProgressoPublico(curso.modulos);
-        refreshConteudo();
+        if (!navegar(1)) { refreshConteudo(); focarConteudo(); }
         return;
       }
-      const r = await api(`/api/escola/aulas/${aulaId}/progresso`, { method: "POST", body: JSON.stringify({ status: "concluida", percentual }) });
-      if (r.ok) await carregarCurso(); else btn.disabled = false;
+      const r = await api(`/api/escola/aulas/${aulaId}/progresso`, { method: "POST", body: JSON.stringify({ status: "concluida", percentual: 100 }) });
+      if (!r.ok) { btn.disabled = false; return; }
+      // Avança para a próxima aula antes de recarregar a árvore do curso:
+      // o aluno cai direto na aula seguinte, já com o progresso salvo.
+      const flat = todasAulas().filter(a => a.moduloLiberado);
+      const idx = flat.findIndex(a => a.id === aulaId);
+      const prox = idx >= 0 ? flat[idx + 1] : null;
+      if (prox) { aulaAtiva = { moduloId: prox.moduloId, aulaId: prox.id }; modulosAbertos = new Set([prox.moduloId]); }
+      await carregarCurso();
+      if (prox) { rolarParaConteudo(); focarConteudo(); }
     });
   }
 
@@ -553,7 +715,9 @@
     const flat = todasAulas().filter(a => a.moduloLiberado);
     const idx = flat.findIndex(a => a.id === aulaAtiva.aulaId);
     const alvo = flat[idx + dir];
-    if (alvo) { aulaAtiva = { moduloId: alvo.moduloId, aulaId: alvo.id }; refreshConteudo(); rolarParaConteudo(); }
+    if (!alvo) return false;
+    irParaAula(alvo.moduloId, alvo.id);
+    return true;
   }
 
   function bindPlayer() {
@@ -637,8 +801,8 @@
 
   // ---- Boot -------------------------------------------------------------
   async function boot() {
-    if (slug) { aulaAtiva = null; curso = null; await carregarCurso(); }
-    else await renderLista();
+    if (slug) { aulaAtiva = null; curso = null; modulosAbertos = new Set(); await carregarCurso(); }
+    else { document.title = TITULO_BASE; await renderLista(); }
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot, { once: true });

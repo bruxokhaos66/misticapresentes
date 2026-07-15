@@ -140,11 +140,16 @@ test.describe("Acesso público ao curso de Xamanismo (visitante anônimo)", () =
     expect(erros).toEqual([]);
   });
 
-  test("visitante abre o curso sem login e navega pelas 5 aulas gratuitas (Módulo 1 + Módulo 2)", async ({ page }) => {
+  test("visitante abre o curso sem login e conclui as 5 aulas gratuitas com o CTA único (progresso só em sessionStorage)", async ({ page }) => {
     const erros = [];
     const chamadasArvorePublica = [];
+    const postsDeProgresso = [];
     page.on("console", msg => { if (msg.type() === "error" && !ehDiagnosticoDeRecurso(msg.text())) erros.push(msg.text()); });
     page.on("pageerror", erro => erros.push(erro.message));
+    page.on("request", req => { if (req.method() === "POST" && /\/progresso/.test(req.url())) postsDeProgresso.push(req.url()); });
+    // Percurso longo (5 aulas + drawer + login): com prefers-reduced-motion o
+    // scroll é instantâneo e os cliques ficam estáveis em qualquer viewport.
+    await page.emulateMedia({ reducedMotion: "reduce" });
     await mockApiAnonima(page);
     await page.route("**/api/escola/publico/cursos/xamanismo-introducao", route => {
       chamadasArvorePublica.push(1);
@@ -161,27 +166,57 @@ test.describe("Acesso público ao curso de Xamanismo (visitante anônimo)", () =
     // nunca "0/0", mesmo sem sessão/matrícula.
     await expect(page.locator(".plataforma-sidebar-head small")).toHaveText("0/5 aulas • 0%");
 
-    // Navega pelas 5 aulas públicas usando "Próxima →" (funciona em qualquer
-    // viewport, sem depender de abrir o drawer de módulos no mobile).
-    await page.locator("[data-next]").click();
+    // Estados honestos para o visitante anônimo: nada de "Em andamento".
+    const badges = page.locator(".plataforma-modulo-badge");
+    await expect(badges.nth(0)).toHaveText("Você está aqui");
+    await expect(badges.nth(1)).toHaveText("Disponível");
+    await expect(badges.nth(2)).toHaveText("🔒 Conteúdo pago");
+    await expect(page.locator(".plataforma-modulo-badge", { hasText: "Em andamento" })).toHaveCount(0);
+
+    // Percorre as 5 aulas com a ação principal única "Marcar como concluída e
+    // continuar" (funciona em qualquer viewport, sem abrir o drawer).
+    const principal = page.locator("[data-concluir-continuar]");
+    await expect(principal).toHaveText(/Marcar como concluída e continuar/);
+    await principal.click();
     await expect(page.getByRole("heading", { name: "Por que o Xamanismo ainda existe?", level: 1 })).toBeVisible();
-    await page.locator("[data-next]").click();
+    await principal.click();
     await expect(page.getByRole("heading", { name: "A origem da palavra “xamã”", level: 1 })).toBeVisible();
-    await page.locator("[data-next]").click();
+    await principal.click();
     await expect(page.getByRole("heading", { name: "Tradições semelhantes em diferentes regiões", level: 1 })).toBeVisible();
-    await page.locator("[data-next]").click();
+    await principal.click();
     await expect(page.getByRole("heading", { name: "Como o xamanismo chegou ao mundo moderno", level: 1 })).toBeVisible();
+
+    // O progresso do anônimo é efêmero: vive em sessionStorage, nunca vai ao
+    // servidor nem para localStorage.
+    await expect(page.locator(".plataforma-sidebar-head small")).toHaveText("4/5 aulas • 80%");
+    expect(postsDeProgresso).toEqual([]);
+    expect(await page.evaluate(() => sessionStorage.getItem("plataforma_progresso_anonimo"))).toContain("concluida");
+    expect(await page.evaluate(() => localStorage.getItem("plataforma_progresso_anonimo"))).toBeNull();
+
+    // Módulo 1 completo nesta sessão: o estado conta a história certa.
+    await expect(badges.nth(0)).toHaveText("Concluído nesta sessão");
 
     // No mobile a lista de módulos vive num drawer fechado por padrão; no
     // desktop já está visível na barra lateral. Abre o drawer só quando ele
     // existe (botão "☰ Módulos" visível) para ver o módulo futuro bloqueado.
     const abrirModulos = page.locator("[data-drawer-toggle]");
-    if (await abrirModulos.isVisible()) await abrirModulos.click();
+    const temDrawer = await abrirModulos.isVisible();
+    if (temDrawer) await abrirModulos.click();
     await expect(page.getByText("Módulo 3 — Conteúdo premium (futuro)")).toBeVisible();
     await expect(page.getByText("🔒 Conteúdo pago")).toBeVisible();
 
-    // Clicar no recurso protegido só agora pede login (CTA).
-    await page.locator("[data-login-cta]").first().click();
+    if (temDrawer) {
+      // Escape fecha o drawer e devolve o foco para quem o abriu.
+      await page.keyboard.press("Escape");
+      await expect(page.locator(".plataforma-layout")).not.toHaveClass(/drawer-open/);
+      await expect(abrirModulos).toBeFocused();
+      await abrirModulos.click();
+    }
+
+    // O módulo pago recolhido expande pelo cabeçalho; só o clique no recurso
+    // protegido (CTA) leva ao login.
+    await page.locator('[data-toggle-modulo="3"]').click();
+    await page.locator("#modulo-corpo-3 [data-login-cta]").click();
     await expect(page.locator(".plataforma-login")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Entrar na Escola Mística" })).toBeVisible();
 
