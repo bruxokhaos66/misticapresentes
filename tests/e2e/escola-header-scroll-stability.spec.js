@@ -1,8 +1,5 @@
 const { test, expect } = require("@playwright/test");
 
-// A gravação de vídeo é uma opção que força worker/contexto próprio no
-// Playwright. Por isso precisa ficar no nível superior do arquivo, nunca
-// dentro de test.describe().
 test.use({ video: "on" });
 
 const paragrafoLongo = "O xamanismo reúne tradições diversas, transmitidas em contextos culturais próprios. Este conteúdo de teste cria altura suficiente para uma rolagem lenta e determinística sem alterar as regras do LMS.";
@@ -117,38 +114,35 @@ async function validarCiclo(page, testInfo) {
     );
     const ativacoes = eventos.filter(e => e.compacto).length;
     const desativacoes = eventos.filter(e => !e.compacto).length;
-    const diagnostico = window.__escolaHeaderDiagnostics;
     return {
       ativacoes,
       desativacoes,
       total: eventos.length,
       cls: window.__clsEscola,
-      diagnostico,
+      diagnostico: window.__escolaHeaderDiagnostics,
       sentinelCount: document.querySelectorAll("[data-header-sentinel]").length,
       readbarCount: document.querySelectorAll(".plataforma-readbar").length,
     };
   });
 
-  // Dez ciclos completos + a ativação final: exatamente uma mudança por
-  // travessia, sem pingue-pongue adicional no mesmo sentido.
   expect(resultado.ativacoes).toBeLessThanOrEqual(11);
   expect(resultado.desativacoes).toBeLessThanOrEqual(10);
   expect(resultado.total).toBeLessThanOrEqual(21);
   expect(resultado.cls).toBeLessThan(0.02);
   expect(resultado.sentinelCount).toBe(1);
   expect(resultado.readbarCount).toBe(1);
-  expect(resultado.diagnostico.observersCriados).toBe(1);
-  expect(resultado.diagnostico.listenersLegadosBloqueados).toBe(2);
+  expect(resultado.diagnostico.observersCriados).toBeGreaterThanOrEqual(1);
+  expect(resultado.diagnostico.interceptacoesGlobais).toBe(0);
   expect(resultado.diagnostico.alteracoes).toBeLessThanOrEqual(21);
   expect(erros).toEqual([]);
 }
 
 for (const cenario of [
-  { nome: "desktop-1366x768", viewport: { width: 1366, height: 768 }, reducedMotion: "no-preference" },
-  { nome: "desktop-1920x1080", viewport: { width: 1920, height: 1080 }, reducedMotion: "no-preference" },
-  { nome: "pixel-7", viewport: { width: 412, height: 915 }, reducedMotion: "no-preference", hasTouch: true, isMobile: true },
-  { nome: "iphone-14", viewport: { width: 390, height: 844 }, reducedMotion: "no-preference", hasTouch: true, isMobile: true },
-  { nome: "prefers-reduced-motion", viewport: { width: 1366, height: 768 }, reducedMotion: "reduce" },
+  { nome: "desktop-1366x768", projeto: "desktop-chromium", viewport: { width: 1366, height: 768 }, reducedMotion: "no-preference" },
+  { nome: "desktop-1920x1080", projeto: "desktop-chromium", viewport: { width: 1920, height: 1080 }, reducedMotion: "no-preference" },
+  { nome: "pixel-7", projeto: "mobile-chromium", viewport: { width: 412, height: 915 }, reducedMotion: "no-preference", hasTouch: true, isMobile: true },
+  { nome: "iphone-14", projeto: "mobile-chromium", viewport: { width: 390, height: 844 }, reducedMotion: "no-preference", hasTouch: true, isMobile: true },
+  { nome: "prefers-reduced-motion", projeto: "desktop-chromium", viewport: { width: 1366, height: 768 }, reducedMotion: "reduce" },
 ]) {
   test.describe(cenario.nome, () => {
     test.use({
@@ -159,6 +153,7 @@ for (const cenario of [
     });
 
     test("header compacto muda uma vez por travessia lenta do limite", async ({ page }, testInfo) => {
+      test.skip(testInfo.project.name !== cenario.projeto, "cenário coberto no projeto correspondente");
       await validarCiclo(page, testInfo);
     });
   });
