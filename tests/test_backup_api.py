@@ -1,5 +1,6 @@
 import hashlib
 import importlib
+import json
 import os
 import sqlite3
 
@@ -10,6 +11,8 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 import backend.backup_routes as backup_routes  # noqa: E402
 import config  # noqa: E402
+import database.backup as backup  # noqa: E402
+import database.backup_remote as remote  # noqa: E402
 
 main = importlib.import_module("backend.main")
 client = TestClient(main.app)
@@ -30,6 +33,75 @@ def test_backup_status_exige_chave_valida():
 def test_backup_status_administrativo_exige_autenticacao():
     response = client.get("/api/admin/backup/status")
     assert response.status_code in (401, 403)
+
+
+def test_falha_excepcional_remota_nao_expoe_dados_no_status_ou_historico(tmp_path, monkeypatch):
+    source = tmp_path / "mistica_gestao_v20.db"
+    directory = tmp_path / "backups"
+    conn = sqlite3.connect(source)
+    conn.execute("CREATE TABLE dados (valor TEXT)")
+    conn.commit()
+    conn.close()
+
+    access_key = "AKIA_TEST_DISPATCH"
+    secret_key = "secret-dispatch-fake"  # pragma: allowlist secret
+    encryption_key = "ef" * 32
+    bucket = "bucket-dispatch-secreto"
+    endpoint = "https://dispatch-fake.r2.cloudflarestorage.com"
+    credential_url = "https://user-fake:password-fake@example.test/path?token=query-fake"  # pragma: allowlist secret
+    sensitive_values = (
+        r"C:\data\backups\arquivo.db",
+        "/data/backups/arquivo.db",
+        r"interno\backups\arquivo.db",
+        "interno/backups/arquivo.db",
+        r"\\servidor-fake\backups\arquivo.db",
+        endpoint,
+        bucket,
+        access_key,
+        secret_key,
+        encryption_key,
+        credential_url,
+        "Authorization: Bearer token-dispatch-fake",
+    )
+    unsafe = " ".join(sensitive_values)
+    monkeypatch.setenv("MISTICA_DB_PATH", str(source))
+    monkeypatch.setenv("BACKUP_DIRECTORY", str(directory))
+    monkeypatch.setenv("BACKUP_REMOTE_ENABLED", "true")
+    monkeypatch.setenv("BACKUP_BUCKET", bucket)
+    monkeypatch.setenv("BACKUP_ENDPOINT", endpoint)
+    monkeypatch.setenv("BACKUP_ACCESS_KEY", access_key)
+    monkeypatch.setenv("BACKUP_SECRET_KEY", secret_key)  # pragma: allowlist secret
+    monkeypatch.setenv("BACKUP_ENCRYPTION_KEY", encryption_key)
+    monkeypatch.setattr(backup, "_obter_espaco_livre_bytes", lambda diretorio=None: 1024**3)
+    monkeypatch.setattr(
+        remote,
+        "trigger_remote_sync",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError(unsafe)),
+    )
+
+    result = backup.executar_backup()
+    status_path = directory / "backup.status.json"
+    state = json.loads(status_path.read_text(encoding="utf-8"))
+    status_response = client.get("/api/admin/backup/status", headers=HEADERS)
+    remote_response = client.get("/api/admin/backup/remote", headers=HEADERS)
+    exposed = " ".join(
+        (
+            str(state),
+            status_response.text,
+            remote_response.text,
+        )
+    )
+
+    assert result["status"] == "ok"
+    assert (directory / result["nome"]).is_file()
+    assert state["status"] == "ok"
+    assert state["last_remote_error"] == "Falha ao iniciar a replicacao remota."
+    assert isinstance(state.get("remote_uploads", []), list)
+    assert status_response.status_code == 200
+    assert status_response.json()["last_remote_error"] == "Falha ao iniciar a replicacao remota."
+    assert remote_response.status_code == 200
+    assert isinstance(remote_response.json()["uploads"], list)
+    assert all(value not in exposed for value in sensitive_values)
 
 
 def test_backup_status_administrativo_usa_auth_existente_e_nao_expoe_caminhos(monkeypatch):

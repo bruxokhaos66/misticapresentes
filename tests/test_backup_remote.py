@@ -296,6 +296,48 @@ def test_erro_persistido_remove_credenciais_bucket_endpoint_chave_e_caminho(tmp_
     assert str(source) not in state["last_remote_error"]
 
 
+def test_sanitizador_rejeita_caminhos_urls_headers_tokens_e_credenciais(tmp_path, monkeypatch):
+    source = _source(tmp_path)
+    encryption_text = "cd" * 32
+    access_key = "AKIA_TEST_FAKE"
+    secret_key = "secret-test-fake"  # pragma: allowlist secret
+    bucket = "bucket-secreto-fake"
+    endpoint = "https://conta-fake.r2.cloudflarestorage.com"
+    credential_url = "https://user-fake:password-fake@example.test/path?token=abc123-fake"  # pragma: allowlist secret
+    monkeypatch.setenv("BACKUP_ENCRYPTION_KEY", encryption_text)
+    config = _config(
+        access_key=access_key,
+        secret_key=secret_key,  # pragma: allowlist secret
+        bucket=bucket,
+        endpoint=endpoint,
+    )
+    sensitive_values = (
+        r"C:\data\backups\arquivo.db",
+        "/data/backups/arquivo.db",
+        r"interno\backups\arquivo.db",
+        "interno/backups/arquivo.db",
+        r"\\servidor-fake\backups\arquivo.db",
+        endpoint,
+        bucket,
+        access_key,
+        secret_key,
+        encryption_text,
+        credential_url,
+        "Authorization: Bearer token-fake",
+    )
+    unsafe = " ".join(sensitive_values)
+
+    safe = remote.sanitize_remote_error(
+        RuntimeError(unsafe),
+        config,
+        source,
+        fallback="Falha ao iniciar a replicacao remota.",
+    )
+
+    assert safe == "Falha ao iniciar a replicacao remota."
+    assert all(value not in safe for value in sensitive_values)
+
+
 def test_configuracao_aceita_chave_base64_e_nunca_expoe_credenciais(monkeypatch):
     monkeypatch.setenv("BACKUP_REMOTE_ENABLED", "true")
     monkeypatch.setenv("BACKUP_BUCKET", "bucket")

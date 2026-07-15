@@ -483,7 +483,7 @@ def executar_backup(*, agendado=False):
             # supervisionada fora deste fluxo, portanto rede, retries e falhas
             # nunca bloqueiam nem invalidam o backup local.
             try:
-                from database.backup_remote import trigger_remote_sync
+                from database.backup_remote import sanitize_remote_error, trigger_remote_sync
 
                 trigger_remote_sync(
                     destino,
@@ -492,13 +492,25 @@ def executar_backup(*, agendado=False):
             except Exception as exc:
                 # Ate uma falha ao registrar o erro remoto deve ser isolada:
                 # neste ponto o backup local ja esta valido e publicado.
+                mensagem_segura = "Falha ao iniciar a replicacao remota."
+                try:
+                    mensagem_segura = sanitize_remote_error(
+                        exc,
+                        source=destino,
+                        fallback=mensagem_segura,
+                        expose_safe_detail=False,
+                    )
+                except Exception:
+                    # O sanitizador faz parte da camada opcional. Se ele mesmo
+                    # falhar, somente a categoria fixa pode chegar ao status.
+                    pass
                 try:
                     _salvar_estado(
                         diretorio,
                         remote_enabled=True,
                         remote_provider=str(os.environ.get("BACKUP_PROVIDER", "r2")).strip().lower() or "r2",
                         remote_status="erro",
-                        last_remote_error=str(exc) or exc.__class__.__name__,
+                        last_remote_error=mensagem_segura,
                     )
                 except Exception:
                     pass

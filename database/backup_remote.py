@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import re
 import sqlite3
 import struct
 import tempfile
@@ -244,22 +245,57 @@ def _validate_local_backup(path: Path) -> None:
         raise RemoteBackupError("arquivo local de backup invalido")
 
 
-def _safe_error(error: Exception, config: RemoteBackupConfig, source: Path | None = None) -> str:
+_UNSAFE_ERROR_DETAIL_RE = re.compile(
+    r"(?i)(?:https?://|[a-z]:[\\/]|(?:^|\s)[\\/]\S+|(?:^|\s)\.{1,2}[\\/]\S+|"
+    r"(?:^|\s)[\w.-]+[\\/]\S+|"
+    r"\?[^\s]*=|(?:authorization|cookie|headers?|access[_\s-]*key|secret[_\s-]*key|"
+    r"encryption[_\s-]*key|api[_\s-]*key|password|credential|token|signature)[\"']?\s*[:=])"
+)
+
+
+def sanitize_remote_error(
+    error: Exception,
+    config: RemoteBackupConfig | None = None,
+    source: Path | None = None,
+    *,
+    fallback: str = "Falha na replicacao remota.",
+    expose_safe_detail: bool = True,
+) -> str:
+    """Produz mensagem segura para persistencia e exposicao administrativa.
+
+    O caminho de despacho usa ``expose_safe_detail=False`` porque a excecao
+    pode vir do runtime, do filesystem ou de um SDK ainda nao normalizado. Nos
+    fluxos controlados do provider, detalhes operacionais simples continuam
+    uteis, mas URLs, caminhos, headers e parametros sensiveis forcam fallback.
+    """
+    if not expose_safe_detail:
+        return fallback
+
     message = str(error) or error.__class__.__name__
+    if any(marker in message for marker in ("\r", "\n", "Traceback", 'File "')):
+        return fallback
+    message = message[:4000]
     encryption_key_text = os.environ.get("BACKUP_ENCRYPTION_KEY", "").strip()
+    configured_values = (
+        config.access_key if config else os.environ.get("BACKUP_ACCESS_KEY", "").strip(),
+        config.secret_key if config else os.environ.get("BACKUP_SECRET_KEY", "").strip(),
+        config.bucket if config else os.environ.get("BACKUP_BUCKET", "").strip(),
+        config.endpoint if config else os.environ.get("BACKUP_ENDPOINT", "").strip(),
+    )
     for sensitive in (
-        config.access_key,
-        config.secret_key,
-        config.bucket,
-        config.endpoint,
+        *configured_values,
         encryption_key_text,
         str(source) if source else "",
+        str(source.resolve()) if source else "",
         tempfile.gettempdir(),
         str(Path.home()),
     ):
         if sensitive:
             message = message.replace(sensitive, "[dado removido]")
-    return " ".join(message.splitlines())[:500]
+    message = " ".join(message.splitlines()).strip()
+    if not message or _UNSAFE_ERROR_DETAIL_RE.search(message):
+        return fallback
+    return message[:500]
 
 
 def _is_retryable(error: Exception) -> bool:
@@ -381,7 +417,7 @@ class RemoteBackupService:
                     if attempt < self.attempts:
                         self.sleep(2 ** (attempt - 1))
             assert last_error is not None
-            error_message = _safe_error(last_error, self.config, source)
+            error_message = sanitize_remote_error(last_error, self.config, source)
             raise RemoteBackupError(
                 error_message,
                 record={
@@ -418,7 +454,7 @@ def _failure_record(source: Path, provider: str, error: Exception, config: Remot
         "source_tamanho_bytes": source_size,
         "provider": provider,
         "status": "falha",
-        "erro": _safe_error(error, config, source),
+        "erro": sanitize_remote_error(error, config, source),
         "tentativas": 0,
     }
 
