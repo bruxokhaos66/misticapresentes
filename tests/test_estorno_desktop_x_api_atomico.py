@@ -24,17 +24,20 @@ mesmos testes de exclusão mútua.
 Nota sobre flake pré-existente (investigado na Fase A, PR #331): o CI
 relatou um `threading.BrokenBarrierError` intermitente em
 `test_api_x_api_no_banco_compartilhado`. Reprodução estatística mostrou que
-o mesmo erro ocorre (1/25 execuções isoladas) em `origin/main` ANTES das
-mudanças da Fase A — este arquivo não foi alterado pelo PR #331 e a Fase A
-não toca nada usado aqui. A causa raiz é o tempo de startup do
-`TestClient(main.app)` (ciclo de vida/lifespan do FastAPI, incluindo
-inicialização de banco e logging) variar sob contenção de GIL entre as
-duas threads; com `barreira.wait(timeout=10)` justo, uma inicialização
-lenta em uma das threads pode ultrapassar a janela antes da outra thread
-liberar a barreira. A correção aplicada aqui é puramente de tolerância a
-timing (10s -> 30s no barrier, 20s -> 45s no resultado dos futures) — não
-altera nenhuma asserção nem a semântica do teste, que continua exercendo a
-corrida real do POST concorrente.
+o mesmo erro ocorre também em `origin/main` ANTES das mudanças da Fase A —
+este arquivo não foi alterado pelo PR #331 e a Fase A não toca nada usado
+aqui. A causa raiz não era só timeout apertado: os dois threads faziam
+`with TestClient(main.app) as thread_client:` (o que dispara o
+lifespan/startup do FastAPI, incluindo inicialização de banco e logging)
+*dentro* do trecho cronometrado pela barreira — sob CI compartilhado, esse
+startup concorrente pode variar bem mais que os poucos segundos que a
+corrida em si leva, e um simples aumento de timeout (10s -> 30s) não foi
+suficiente (voltou a falhar com o mesmo erro). A correção definitiva foi
+tirar a criação do `TestClient` de dentro do bloco cronometrado,
+pré-aquecendo os dois clients ANTES da barreira: assim `barreira.wait`
+só precisa cobrir o skew de agendamento das threads até o POST em si, não
+mais o startup do app. Nenhuma asserção nem a semântica do teste mudou —
+a corrida real do POST concorrente continua sendo exercida.
 """
 
 import os
@@ -169,13 +172,21 @@ def test_api_x_api_no_banco_compartilhado(banco_compartilhado):
     venda_id = _venda_direto(codigo, caixa_id)
     barreira = threading.Barrier(2)
 
-    def enviar():
-        with TestClient(main.app) as thread_client:
-            barreira.wait(timeout=30)
-            return thread_client.post(f"/api/vendas/{venda_id}/estornar", headers=HEADERS, json={"usuario": "Teste"})
+    # O startup do TestClient (lifespan do FastAPI) é feito ANTES da
+    # barreira, fora do trecho cronometrado: assim a janela do barrier só
+    # precisa cobrir o skew de agendamento das threads até o POST, não a
+    # inicialização do app (que sob CI compartilhado/GIL pode variar bem
+    # mais que os poucos segundos que a corrida em si leva).
+    def enviar(cliente):
+        barreira.wait(timeout=30)
+        return cliente.post(f"/api/vendas/{venda_id}/estornar", headers=HEADERS, json={"usuario": "Teste"})
 
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        respostas = [f.result(timeout=45) for f in [executor.submit(enviar) for _ in range(2)]]
+    with TestClient(main.app) as cliente_a, TestClient(main.app) as cliente_b:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            respostas = [
+                f.result(timeout=45)
+                for f in [executor.submit(enviar, cliente_a), executor.submit(enviar, cliente_b)]
+            ]
 
     for resposta in respostas:
         assert resposta.status_code == 200, resposta.text
@@ -206,18 +217,18 @@ def test_desktop_x_api_apenas_um_vence_e_nao_duplica_efeitos(banco_compartilhado
             except ValueError as exc:
                 resultado["desktop"] = str(exc)
 
-        def estornar_api():
-            with TestClient(main.app) as thread_client:
-                barreira.wait(timeout=30)
-                resp = thread_client.post(f"/api/vendas/{venda_id}/estornar", headers=HEADERS, json={"usuario": "Teste"})
-                resultado["api_status"] = resp.status_code
-                resultado["api_ja_cancelada"] = resp.json().get("ja_cancelada") if resp.status_code == 200 else None
+        def estornar_api(cliente):
+            barreira.wait(timeout=30)
+            resp = cliente.post(f"/api/vendas/{venda_id}/estornar", headers=HEADERS, json={"usuario": "Teste"})
+            resultado["api_status"] = resp.status_code
+            resultado["api_ja_cancelada"] = resp.json().get("ja_cancelada") if resp.status_code == 200 else None
 
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            f1 = executor.submit(estornar_desktop)
-            f2 = executor.submit(estornar_api)
-            f1.result(timeout=45)
-            f2.result(timeout=45)
+        with TestClient(main.app) as cliente_api:
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                f1 = executor.submit(estornar_desktop)
+                f2 = executor.submit(estornar_api, cliente_api)
+                f1.result(timeout=45)
+                f2.result(timeout=45)
 
         # Exclusão mútua: exatamente um dos dois caminhos reivindicou a
         # transição (rowcount==1); o outro observa o estado JÁ cancelado.
