@@ -1,47 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" role="img" aria-labelledby="capaTitulo capaDesc">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1200 630" width="1200" height="630" role="img" aria-labelledby="capaTitulo capaDesc">
   <title id="capaTitulo">Por que o Xamanismo ainda existe?</title>
-  <desc id="capaDesc">Ilustração de uma árvore ancestral de raízes profundas ao entardecer, com um broto novo crescendo ao seu lado, representando continuidade e transmissão viva, em tons de verde-musgo, dourado e marrom.</desc>
-  <defs>
-    <linearGradient id="ceuA2" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#0b1220"/>
-      <stop offset="50%" stop-color="#2c2a1c"/>
-      <stop offset="100%" stop-color="#5a4420"/>
-    </linearGradient>
-    <radialGradient id="luzA2" cx="72%" cy="38%" r="55%">
-      <stop offset="0%" stop-color="#f2c96d" stop-opacity="0.5"/>
-      <stop offset="50%" stop-color="#f2c96d" stop-opacity="0.14"/>
-      <stop offset="100%" stop-color="#f2c96d" stop-opacity="0"/>
-    </radialGradient>
-    <linearGradient id="terraA2" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#1c1712"/>
-      <stop offset="100%" stop-color="#0a0806"/>
-    </linearGradient>
-    <linearGradient id="troncoA2" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#0c0a08"/>
-      <stop offset="100%" stop-color="#2a2015"/>
-    </linearGradient>
-  </defs>
-  <rect width="1200" height="630" fill="url(#ceuA2)"/>
-  <circle cx="864" cy="236" r="920" fill="url(#luzA2)"/>
-  <path d="M0,630 L0,470 Q200,410 400,460 Q620,400 840,460 Q1020,415 1200,460 L1200,630 Z" fill="url(#terraA2)"/>
-  <g stroke="#211a10" stroke-width="10" fill="none" stroke-linecap="round" opacity="0.85">
-    <path d="M470,560 C440,590 400,600 350,610"/>
-    <path d="M470,560 C500,595 545,600 600,615"/>
-    <path d="M470,560 C455,600 460,608 452,622"/>
-  </g>
-  <path d="M470,560 C455,470 460,360 430,250 C500,300 520,220 500,150 C560,220 590,150 570,90 C610,180 660,190 680,140 C650,240 610,290 560,330 C590,400 560,470 500,560 Z" fill="url(#troncoA2)"/>
-  <g fill="#3a4d2a" opacity="0.9">
-    <ellipse cx="560" cy="150" rx="70" ry="34" transform="rotate(-18 560 150)"/>
-    <ellipse cx="630" cy="190" rx="60" ry="30" transform="rotate(12 630 190)"/>
-    <ellipse cx="500" cy="200" rx="55" ry="28" transform="rotate(-30 500 200)"/>
-    <ellipse cx="610" cy="120" rx="50" ry="24" transform="rotate(20 610 120)"/>
-  </g>
-  <g stroke="#f2c96d" stroke-width="3" fill="none" opacity="0.55">
-    <path d="M700,600 C695,560 705,520 690,480"/>
-  </g>
-  <path d="M690,480 C660,420 705,370 675,320 C715,350 725,300 705,270" stroke="#241d13" stroke-width="7" fill="none" stroke-linecap="round"/>
-  <g fill="#4a6435" opacity="0.9">
-    <ellipse cx="705" cy="270" rx="20" ry="10" transform="rotate(-15 705 270)"/>
-    <ellipse cx="690" cy="300" rx="16" ry="9" transform="rotate(10 690 300)"/>
-  </g>
+  <desc id="capaDesc">Fotografia cinematográfica de uma mulher em ambiente de floresta, em postura contemplativa, representando continuidade, transmissão e permanência de tradições vivas.</desc>
+  <image href="modulo-1-aula-2-capa.webp.png" xlink:href="modulo-1-aula-2-capa.webp.png" x="0" y="0" width="1200" height="630" preserveAspectRatio="xMidYMid slice"/>
 </svg>
