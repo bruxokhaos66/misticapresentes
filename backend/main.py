@@ -22,7 +22,14 @@ from backend.campaign_routes import router as campaign_router
 from backend.course_routes import router as course_router
 from backend.lms_routes import router as lms_router
 from backend.lms_admin_routes import router as lms_admin_router
-from backend.lms_content_xamanismo import instalar_conteudo_xamanismo, instalar_conteudo_modulo2_xamanismo, instalar_capas_modulo1_xamanismo
+from backend.lms_content_xamanismo import (
+    instalar_conteudo_xamanismo,
+    instalar_conteudo_modulo2_xamanismo,
+    instalar_capas_modulo1_xamanismo,
+    instalar_capas_v2_modulo1_xamanismo,
+    instalar_capas_modulo2_xamanismo,
+    instalar_capas_modulos_xamanismo,
+)
 from backend.database import conectar, executar, listar, obter
 from backend.infra_diagnostics import banco_acessivel, disco_diretorio_disponivel
 from backend.logging_config import configurar_logging, get_logger
@@ -82,6 +89,9 @@ async def lifespan(app: FastAPI):
         instalar_conteudo_xamanismo(conn)
         instalar_conteudo_modulo2_xamanismo(conn)
         instalar_capas_modulo1_xamanismo(conn)
+        instalar_capas_v2_modulo1_xamanismo(conn)
+        instalar_capas_modulo2_xamanismo(conn)
+        instalar_capas_modulos_xamanismo(conn)
     _verificar_persistencia_banco()
     migrar_musicas_blob_para_arquivo()
     garantir_admin_api()

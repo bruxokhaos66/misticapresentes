@@ -160,6 +160,7 @@ def arvore_curso(slug: str, sessao: dict = Depends(sessao_aluno_atual)):
                     "id": mod["id"],
                     "titulo": mod["titulo"],
                     "descricao": mod["descricao"],
+                    "imagem": mod.get("imagem"),
                     "ordem": mod["ordem"],
                     "liberado": liberado,
                     "concluido": item["concluido"],

@@ -97,6 +97,12 @@ def garantir_tabelas_lms(conn) -> None:
         conn.execute("ALTER TABLE curso_modulos ADD COLUMN acesso_publico INTEGER NOT NULL DEFAULT 0")
     except Exception:
         pass
+    # Capa oficial do módulo (catálogo/lista de módulos), independente das
+    # capas de cada aula embutidas no conteúdo.
+    try:
+        conn.execute("ALTER TABLE curso_modulos ADD COLUMN imagem TEXT")
+    except Exception:
+        pass
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS curso_aulas (
@@ -442,6 +448,7 @@ def arvore_publica_curso(conn, slug: str) -> Optional[dict]:
                     "id": mod["id"],
                     "titulo": mod["titulo"],
                     "descricao": mod["descricao"],
+                    "imagem": mod.get("imagem"),
                     "ordem": mod["ordem"],
                     "publico": True,
                     "bloqueado": False,
@@ -453,6 +460,7 @@ def arvore_publica_curso(conn, slug: str) -> Optional[dict]:
                 {
                     "id": mod["id"],
                     "titulo": mod["titulo"],
+                    "imagem": mod.get("imagem"),
                     "ordem": mod["ordem"],
                     "publico": False,
                     "bloqueado": True,

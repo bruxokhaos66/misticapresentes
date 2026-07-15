@@ -539,7 +539,7 @@ def test_publico_entrega_apenas_modulos_marcados_e_bloqueia_o_resto():
 
     pago = mods["Módulo pago"]
     assert pago["bloqueado"] is True
-    assert set(pago.keys()) == {"id", "titulo", "ordem", "publico", "bloqueado"}
+    assert set(pago.keys()) == {"id", "titulo", "imagem", "ordem", "publico", "bloqueado"}
     assert "aulas" not in pago
     assert "quiz" not in pago
     assert "conteudo" not in pago
@@ -902,3 +902,112 @@ def test_modulo2_atividade_de_revisao_e_apenas_local_sem_persistencia():
     assert "atividade livre de revisão" in aula3["conteudo"].lower()
     assert "não substitui a avaliação oficial" in aula3["conteudo"].lower()
     assert "<script" not in aula3["conteudo"].lower()
+
+
+# --- Migração para artes fotográficas oficiais (WebP) ----------------------
+
+def _instalar_capas_fotograficas():
+    from backend.database import conectar
+    from backend.lms_content_xamanismo import (
+        instalar_conteudo_xamanismo,
+        instalar_conteudo_modulo2_xamanismo,
+        instalar_capas_modulo1_xamanismo,
+        instalar_capas_v2_modulo1_xamanismo,
+        instalar_capas_modulo2_xamanismo,
+        instalar_capas_modulos_xamanismo,
+    )
+
+    with conectar() as conn:
+        instalar_conteudo_xamanismo(conn)
+        instalar_conteudo_modulo2_xamanismo(conn)
+        instalar_capas_modulo1_xamanismo(conn)
+        instalar_capas_v2_modulo1_xamanismo(conn)
+        instalar_capas_modulo2_xamanismo(conn)
+        instalar_capas_modulos_xamanismo(conn)
+
+
+def test_capas_fotograficas_substituem_svg_nas_aulas_esperadas():
+    _instalar_capas_fotograficas()
+    from backend.database import conectar
+
+    with conectar() as conn:
+        mod1 = conn.execute(
+            "SELECT id FROM curso_modulos WHERE slug=? AND ordem=0", (XAMANISMO,)
+        ).fetchone()
+        aulas_m1 = conn.execute(
+            "SELECT * FROM curso_aulas WHERE modulo_id=? ORDER BY ordem", (mod1["id"],)
+        ).fetchall()
+    assert "modulo-1-aula-1-capa.webp" in aulas_m1[0]["conteudo"]
+    assert "modulo-1-aula-2-capa.webp" in aulas_m1[1]["conteudo"]
+    assert "modulo-1-aula-1-capa.svg" not in aulas_m1[0]["conteudo"]
+    assert "modulo-1-aula-2-capa.svg" not in aulas_m1[1]["conteudo"]
+
+    _, aulas_m2 = _modulo2_do_banco()
+    assert "aula-origem-termo-xama.svg" in aulas_m2[0]["conteudo"]  # não fotografada
+    assert "aula-tradicoes-regioes.webp" in aulas_m2[1]["conteudo"]
+    assert "aula-xamanismo-moderno.webp" in aulas_m2[2]["conteudo"]
+    assert "aula-tradicoes-regioes.svg" not in aulas_m2[1]["conteudo"]
+    assert "aula-xamanismo-moderno.svg" not in aulas_m2[2]["conteudo"]
+
+
+def test_capas_de_modulo_instaladas_em_curso_modulos_imagem():
+    _instalar_capas_fotograficas()
+    from backend.database import conectar
+
+    with conectar() as conn:
+        mod1 = conn.execute(
+            "SELECT imagem FROM curso_modulos WHERE slug=? AND ordem=0", (XAMANISMO,)
+        ).fetchone()
+        mod2 = conn.execute(
+            "SELECT imagem FROM curso_modulos WHERE slug=? AND ordem=1", (XAMANISMO,)
+        ).fetchone()
+    assert mod1["imagem"] == "assets/escola/xamanismo/modulo-1-capa.webp"
+    assert mod2["imagem"] == "assets/escola/xamanismo/modulo-2-capa.webp"
+
+
+def test_capas_fotograficas_expostas_na_api_publica_e_autenticada():
+    _instalar_capas_fotograficas()
+    r = client.get(f"/api/escola/publico/cursos/{XAMANISMO}")
+    assert r.status_code == 200
+    modulos = r.json()["modulos"]
+    assert modulos[0]["imagem"] == "assets/escola/xamanismo/modulo-1-capa.webp"
+
+    aluno, _, _ = _aluno_logado(XAMANISMO)
+    r2 = aluno.get(f"/api/escola/cursos/{XAMANISMO}")
+    assert r2.status_code == 200
+    modulos2 = r2.json()["modulos"]
+    assert modulos2[0]["imagem"] == "assets/escola/xamanismo/modulo-1-capa.webp"
+    assert modulos2[1]["imagem"] == "assets/escola/xamanismo/modulo-2-capa.webp"
+
+
+def test_migracao_de_capas_fotograficas_e_idempotente_e_preserva_progresso():
+    from backend.database import conectar
+    from backend.lms_content_xamanismo import (
+        instalar_capas_v2_modulo1_xamanismo,
+        instalar_capas_modulo2_xamanismo,
+        instalar_capas_modulos_xamanismo,
+    )
+
+    _instalar_capas_fotograficas()
+    aluno, _, _ = _aluno_logado(XAMANISMO)
+    with conectar() as conn:
+        aula1 = conn.execute(
+            "SELECT ca.id FROM curso_aulas ca JOIN curso_modulos cm ON cm.id=ca.modulo_id "
+            "WHERE cm.slug=? AND cm.ordem=0 ORDER BY ca.ordem LIMIT 1",
+            (XAMANISMO,),
+        ).fetchone()
+    aluno.post(f"/api/escola/aulas/{aula1['id']}/progresso", json={"status": "concluida", "percentual": 100})
+
+    with conectar() as conn:
+        progresso_antes = conn.execute(
+            "SELECT COUNT(*) AS n FROM aluno_aula_progresso WHERE aula_id=?", (aula1["id"],)
+        ).fetchone()["n"]
+        segunda_v2 = instalar_capas_v2_modulo1_xamanismo(conn)
+        segunda_m2 = instalar_capas_modulo2_xamanismo(conn)
+        segunda_mod = instalar_capas_modulos_xamanismo(conn)
+        progresso_depois = conn.execute(
+            "SELECT COUNT(*) AS n FROM aluno_aula_progresso WHERE aula_id=?", (aula1["id"],)
+        ).fetchone()["n"]
+
+    assert segunda_v2 is False and segunda_m2 is False and segunda_mod is False
+    assert progresso_depois == progresso_antes
