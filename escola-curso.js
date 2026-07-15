@@ -63,6 +63,110 @@
     return v;
   }
 
+  // ---- Apresentação premium ----------------------------------------------
+  // Tudo abaixo é somente experiência visual do aluno (hero, tempo de
+  // leitura, barra de leitura, parallax): nenhuma regra de LMS, progresso ou
+  // API muda aqui.
+  const reduzMovimento = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // Tempo estimado de leitura: usa a duração cadastrada da aula quando
+  // existe; senão estima pela contagem de palavras do texto (~180 wpm).
+  function tempoLeituraMin(aula, htmlSanitizado) {
+    const cadastrado = Number(aula.duracao_min);
+    if (Number.isFinite(cadastrado) && cadastrado > 0) return Math.round(cadastrado);
+    const tpl = document.createElement("template");
+    tpl.innerHTML = String(htmlSanitizado || "");
+    const palavras = (tpl.content.textContent || "").trim().split(/\s+/).filter(Boolean).length;
+    return Math.max(1, Math.round(palavras / 180));
+  }
+
+  // Indicador de dificuldade (apenas visual, derivado da densidade de leitura).
+  function nivelLeitura(min) {
+    if (min <= 8) return { rotulo: "Leitura leve", pontos: 1 };
+    if (min <= 14) return { rotulo: "Nível intermediário", pontos: 2 };
+    return { rotulo: "Leitura aprofundada", pontos: 3 };
+  }
+
+  function metaAulaHtml(aula, htmlSanitizado, posicao) {
+    const min = tempoLeituraMin(aula, htmlSanitizado);
+    const nivel = nivelLeitura(min);
+    return `<div class="aula-meta">
+      ${posicao ? `<span class="aula-meta-item">${esc(posicao)}</span>` : ""}
+      <span class="aula-meta-item" data-tempo-leitura>📖 ~${min} min de leitura</span>
+      <span class="aula-meta-item aula-meta-nivel" data-nivel-leitura role="img" aria-label="Dificuldade: ${esc(nivel.rotulo)}">
+        <span class="aula-nivel-pontos" aria-hidden="true">${[1, 2, 3].map(n => `<i class="${n <= nivel.pontos ? "is-on" : ""}"></i>`).join("")}</span>${esc(nivel.rotulo)}
+      </span>
+    </div>`;
+  }
+
+  // Barra de leitura fixa (sticky progress) + fundo com parallax discreto.
+  // Criadas uma única vez; atualizadas via rAF no scroll (compositor-friendly,
+  // sem background-attachment:fixed, que causava flicker no WebKit).
+  let atualizarLeitura = () => {};
+  let camadasPremiumProntas = false;
+  function garantirCamadasPremium() {
+    if (camadasPremiumProntas) return;
+    camadasPremiumProntas = true;
+    const readbar = document.createElement("div");
+    readbar.className = "plataforma-readbar";
+    readbar.setAttribute("aria-hidden", "true");
+    readbar.innerHTML = "<span></span>";
+    document.body.appendChild(readbar);
+    let parallax = null;
+    if (!reduzMovimento()) {
+      parallax = document.createElement("div");
+      parallax.className = "plataforma-parallax";
+      parallax.setAttribute("aria-hidden", "true");
+      document.body.prepend(parallax);
+    }
+    const fill = readbar.firstElementChild;
+    let agendado = false;
+    const medir = () => {
+      agendado = false;
+      const box = shell.querySelector("[data-conteudo]");
+      if (!box) { fill.style.transform = "scaleX(0)"; readbar.classList.remove("is-visivel"); return; }
+      readbar.classList.add("is-visivel");
+      const rect = box.getBoundingClientRect();
+      const total = rect.height - window.innerHeight;
+      const lido = total > 0 ? Math.min(1, Math.max(0, -rect.top / total)) : (rect.bottom <= window.innerHeight ? 1 : 0);
+      fill.style.transform = `scaleX(${lido})`;
+      if (parallax) parallax.style.transform = `translate3d(0, ${window.scrollY * -0.06}px, 0)`;
+    };
+    atualizarLeitura = () => { if (!agendado) { agendado = true; requestAnimationFrame(medir); } };
+    window.addEventListener("scroll", atualizarLeitura, { passive: true });
+    window.addEventListener("resize", atualizarLeitura, { passive: true });
+    atualizarLeitura();
+  }
+
+  // Anima a barra de progresso do curso uma única vez, na primeira pintura.
+  let progressoAnimado = false;
+  function animarProgresso() {
+    if (progressoAnimado || reduzMovimento()) { progressoAnimado = true; return; }
+    progressoAnimado = true;
+    shell.querySelectorAll(".plataforma-progress > span").forEach(sp => {
+      const alvo = sp.style.width;
+      sp.style.width = "0%";
+      requestAnimationFrame(() => requestAnimationFrame(() => { sp.style.width = alvo; }));
+    });
+  }
+
+  // Transição suave ao trocar de aula sem recarregar a página.
+  function animarEntradaConteudo() {
+    if (reduzMovimento()) return;
+    const box = shell.querySelector("[data-conteudo]");
+    if (!box) return;
+    box.classList.remove("is-entrando");
+    void box.offsetWidth; // reinicia a animação
+    box.classList.add("is-entrando");
+  }
+
+  function rolarParaConteudo() {
+    const box = shell.querySelector("[data-conteudo]");
+    if (!box) return;
+    const topo = box.getBoundingClientRect().top + window.scrollY - 76;
+    window.scrollTo({ top: Math.max(0, topo), behavior: reduzMovimento() ? "auto" : "smooth" });
+  }
+
   // ---- Login ------------------------------------------------------------
   // Só é chamado quando o visitante interage com algo protegido (conteúdo
   // pago, progresso, avaliação ou certificado) — nunca para as partes
@@ -226,6 +330,7 @@
                 <button type="button" class="plataforma-aula-link ${aulaAtiva && aulaAtiva.aulaId === a.id ? "is-active" : ""} ${a.status === "concluida" ? "is-done" : ""}" data-aula="${a.id}" data-modulo="${m.id}">
                   <span class="plataforma-aula-status">${statusIcon(a.status)}</span>
                   <span class="plataforma-aula-titulo">${esc(a.titulo)}${a.obrigatoria ? "" : " <em>(opcional)</em>"}</span>
+                  ${Number(a.duracao_min) > 0 ? `<span class="plataforma-aula-tempo">${Math.round(Number(a.duracao_min))} min</span>` : ""}
                 </button></li>`).join("")}
               ${m.quiz ? `<li><button type="button" class="plataforma-quiz-link ${m.quiz.disponivel ? "" : "is-locked"} ${m.quiz.aprovado ? "is-done" : ""}" data-quiz="${m.quiz.id}" ${m.quiz.disponivel ? "" : "disabled"}>
                 <span class="plataforma-aula-status">${m.quiz.aprovado ? "✓" : "★"}</span>
@@ -299,12 +404,35 @@
     const next = idx >= 0 && idx < flat.length - 1 ? flat[idx + 1] : null;
     const feito = aula.status === "concluida";
 
-    return `${capaAula}
-      <div class="plataforma-conteudo-head">
-        <p class="plataforma-conteudo-modulo">${esc(modulo.titulo)}</p>
-        <h1>${esc(aula.titulo)}</h1>
-        ${aula.descricao ? `<p class="plataforma-conteudo-desc">${esc(aula.descricao)}</p>` : ""}
-      </div>
+    // Hero cinematográfico: a capa fotográfica vira o pano de fundo do
+    // cabeçalho da aula (título, módulo, tempo de leitura e nível por cima).
+    const posicao = idx >= 0 ? `Aula ${idx + 1} de ${flat.length}` : "";
+    const hero = `<header class="aula-hero${capaAula ? " has-capa" : ""}">
+        ${capaAula ? `<div class="aula-hero-media">${capaAula}</div>` : ""}
+        <div class="aula-hero-copy">
+          <p class="plataforma-conteudo-modulo">${esc(modulo.titulo)}</p>
+          <h1>${esc(aula.titulo)}</h1>
+          ${aula.descricao ? `<p class="plataforma-conteudo-desc">${esc(aula.descricao)}</p>` : ""}
+          ${metaAulaHtml(aula, restante, posicao)}
+        </div>
+      </header>`;
+
+    // Próxima aula em destaque ao final da leitura (navegação sem reload).
+    const proxima = next
+      ? `<aside class="aula-next" data-next-card>
+          <div class="aula-next-info">
+            <span class="aula-next-kicker">A seguir na sua jornada</span>
+            <strong class="aula-next-titulo">${esc(next.titulo)}</strong>
+            ${next.descricao ? `<p>${esc(next.descricao)}</p>` : ""}
+          </div>
+          <button class="btn aula-next-btn" type="button" data-proxima-aula>Continuar para a próxima aula →</button>
+        </aside>`
+      : `<aside class="aula-next is-fim" data-next-card>
+          <span class="aula-next-kicker">Você chegou ao fim das aulas liberadas</span>
+          <p>Avaliações e novos módulos aparecem na barra lateral assim que forem liberados. Bons estudos! ☾</p>
+        </aside>`;
+
+    return `${hero}
       ${midia}
       ${texto}
       <div class="plataforma-conteudo-material">${material}</div>
@@ -312,7 +440,8 @@
         <button class="btn btn-ghost" type="button" data-prev ${prev ? "" : "disabled"}>← Anterior</button>
         <button class="btn ${feito ? "btn-ghost" : ""}" type="button" data-concluir data-aula="${aula.id}" data-tipo="${aula.tipo}" data-min="${aula.percentual_minimo || 80}">${feito ? "✓ Concluída" : "Marcar como concluída"}</button>
         <button class="btn btn-ghost" type="button" data-next ${next ? "" : "disabled"}>Próxima →</button>
-      </div>`;
+      </div>
+      ${proxima}`;
   }
 
   function renderPlayer() {
@@ -326,6 +455,10 @@
         <section class="plataforma-conteudo" data-conteudo>${renderConteudoAula()}</section>
       </div>`;
     bindPlayer();
+    garantirCamadasPremium();
+    animarProgresso();
+    animarEntradaConteudo();
+    atualizarLeitura();
   }
 
   function refreshConteudo() {
@@ -334,6 +467,8 @@
     const side = shell.querySelector("[data-sidebar]");
     if (side) side.outerHTML = renderSidebar();
     bindSidebar();
+    animarEntradaConteudo();
+    atualizarLeitura();
   }
 
   // Único ponto em que o visitante anônimo é levado ao login: ele clicou em
@@ -350,6 +485,7 @@
         aulaAtiva = { moduloId: Number(btn.dataset.modulo), aulaId: Number(btn.dataset.aula) };
         shell.querySelector("[data-layout]")?.classList.remove("drawer-open");
         refreshConteudo();
+        rolarParaConteudo();
       });
     });
     shell.querySelectorAll("[data-quiz]").forEach(btn => {
@@ -365,6 +501,7 @@
     if (!box) return;
     box.querySelector("[data-prev]")?.addEventListener("click", () => navegar(-1));
     box.querySelector("[data-next]")?.addEventListener("click", () => navegar(1));
+    box.querySelector("[data-proxima-aula]")?.addEventListener("click", () => navegar(1));
     box.querySelector("[data-login-cta]")?.addEventListener("click", pedirLoginParaRecursoProtegido);
     box.querySelector("[data-concluir]")?.addEventListener("click", async e => {
       const btn = e.currentTarget;
@@ -392,7 +529,7 @@
     const flat = todasAulas().filter(a => a.moduloLiberado);
     const idx = flat.findIndex(a => a.id === aulaAtiva.aulaId);
     const alvo = flat[idx + dir];
-    if (alvo) { aulaAtiva = { moduloId: alvo.moduloId, aulaId: alvo.id }; refreshConteudo(); }
+    if (alvo) { aulaAtiva = { moduloId: alvo.moduloId, aulaId: alvo.id }; refreshConteudo(); rolarParaConteudo(); }
   }
 
   function bindPlayer() {
@@ -400,6 +537,11 @@
     bindConteudo();
     shell.querySelector("[data-drawer-toggle]")?.addEventListener("click", () => {
       shell.querySelector("[data-layout]")?.classList.toggle("drawer-open");
+    });
+    // Toque no backdrop (a área escurecida fora do drawer) fecha o drawer.
+    const layout = shell.querySelector("[data-layout]");
+    layout?.addEventListener("click", e => {
+      if (e.target === layout && layout.classList.contains("drawer-open")) layout.classList.remove("drawer-open");
     });
   }
 
