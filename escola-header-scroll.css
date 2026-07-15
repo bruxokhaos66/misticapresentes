@@ -1,14 +1,43 @@
 /* Correção estrutural do flicker do header compacto.
-   A caixa externa mantém a mesma altura nos dois estados; somente elementos
+   A caixa externa mantém a mesma geometria nos dois estados; somente elementos
    internos usam transform. Nada empurra hero, título ou conteúdo. */
 .escola-plataforma .site-header,
 .escola-plataforma .site-header .nav,
 .escola-plataforma.is-leitura-compacta .site-header .nav {
+  box-sizing: border-box;
+  block-size: 78px;
+  min-block-size: 78px;
+  max-block-size: 78px;
   min-height: 78px;
+  max-height: 78px;
+}
+
+.escola-plataforma .site-header .nav,
+.escola-plataforma.is-leitura-compacta .site-header .nav {
+  padding-block: 0;
+  align-items: center;
+  transition: none;
+}
+
+/* A marca ocupa a mesma coluna antes e depois da compactação. Isso também
+   impede que a troca tardia da webfont redistribua os demais itens da nav. */
+.escola-plataforma .site-header .brand {
+  flex: 0 0 214px;
+  inline-size: 214px;
+  min-inline-size: 214px;
+  max-inline-size: 214px;
 }
 
 .escola-plataforma .brand-mark,
 .escola-plataforma.is-leitura-compacta .brand-mark {
+  box-sizing: border-box;
+  flex: 0 0 44px;
+  inline-size: 44px;
+  min-inline-size: 44px;
+  max-inline-size: 44px;
+  block-size: 44px;
+  min-block-size: 44px;
+  max-block-size: 44px;
   width: 44px;
   height: 44px;
   font-size: inherit;
@@ -26,10 +55,20 @@
 
 .escola-plataforma .brand-copy {
   position: relative;
+  box-sizing: border-box;
   flex: 0 0 150px;
+  inline-size: 150px;
+  min-inline-size: 150px;
+  max-inline-size: 150px;
+  block-size: 42px;
+  min-block-size: 42px;
+  max-block-size: 42px;
   width: 150px;
   min-width: 150px;
+  max-width: 150px;
   min-height: 42px;
+  max-height: 42px;
+  overflow: hidden;
 }
 
 .escola-plataforma .brand-copy strong,
@@ -37,18 +76,27 @@
   position: absolute;
   left: 0;
   display: block;
+  inline-size: 150px;
+  min-inline-size: 150px;
+  max-inline-size: 150px;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   transform-origin: left center;
   transition: transform .22s ease;
 }
 
 .escola-plataforma .brand-copy strong {
   top: 2px;
+  block-size: 20px;
   font-size: inherit;
   transform: translate3d(0, 0, 0) scale(1);
 }
 
 .escola-plataforma .brand-copy small {
   top: 24px;
+  block-size: 18px;
   transform: translate3d(0, 0, 0) scale(1);
 }
 
@@ -62,16 +110,18 @@
   transform: translate3d(0, -36px, 0) scale(.92);
 }
 
-/* O espaço central existe nos dois estados. O CSS legado aplicava `flex: 1`
-   somente ao compactar; essa troca alterava a distribuição horizontal da nav
-   e era a origem do CLS residual medido pelo Playwright. */
+/* O espaço central existe nos dois estados e sempre usa base flexível zero.
+   Inserir o título da aula ou trocar a fonte não altera a distribuição. */
 .escola-plataforma .header-aula-resumo,
 .escola-plataforma.is-leitura-compacta .header-aula-resumo {
   display: block;
   flex: 1 1 0%;
-  width: auto;
+  width: 0;
   min-width: 0;
+  max-width: none;
   block-size: 24px;
+  min-block-size: 24px;
+  max-block-size: 24px;
   line-height: 24px;
   text-align: center;
   overflow: hidden;
@@ -87,6 +137,20 @@
 
 .escola-plataforma.is-leitura-compacta .header-aula-resumo {
   transform: translate3d(0, 0, 0);
+}
+
+/* A navegação à direita também recebe uma coluna estável em desktop. Sem isso,
+   a troca tardia da fonte dos links muda sua largura intrínseca e desloca o
+   bloco central, aparecendo como CLS durante o teste de rolagem. */
+@media (min-width: 769px) {
+  .escola-plataforma .site-header .nav-links {
+    box-sizing: border-box;
+    flex: 0 0 360px;
+    inline-size: 360px;
+    min-inline-size: 360px;
+    max-inline-size: 360px;
+    justify-content: flex-end;
+  }
 }
 
 /* Ponto absoluto, fora do fluxo e imutável. O header compacto nunca altera sua
