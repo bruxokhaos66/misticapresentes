@@ -54,9 +54,15 @@ const curso = {
   ],
 };
 
+// "Failed to load resource" é o diagnóstico automático do Chromium para toda
+// resposta de rede que falha (ex.: Google Fonts bloqueado no sandbox de CI) —
+// não é um erro de JavaScript da aplicação. Mesmo filtro já usado em
+// escola-xamanismo-publico.spec.js; `pageerror` continua verificado sem filtro.
+const ehDiagnosticoDeRecurso = texto => /Failed to load resource/i.test(texto);
+
 test("módulo de Xamanismo renderiza responsivamente, sem console error e sanitiza HTML", async ({ page }) => {
   const erros = [];
-  page.on("console", msg => { if (msg.type() === "error") erros.push(msg.text()); });
+  page.on("console", msg => { if (msg.type() === "error" && !ehDiagnosticoDeRecurso(msg.text())) erros.push(msg.text()); });
   page.on("pageerror", erro => erros.push(erro.message));
   await page.route("**/api/escola/cursos/xamanismo-introducao", route =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(curso) })
