@@ -42,6 +42,12 @@ VERSAO_MODULOS_CAPAS = "xamanismo-modulos-capas-v1"
 # conjunto das 7 artes fotográficas do curso. UPDATE por id existente, nunca
 # DELETE+INSERT.
 VERSAO_AULA_ORIGEM_TERMO_XAMA_FOTO = "xamanismo-aula-origem-termo-xama-foto-v1"
+# Corrige a legenda de crédito das 7 capas fotográficas: "Ilustração
+# original" descrevia os antigos SVGs, mas os assets já são fotografias.
+# Os dois infográficos (mapa-tradicoes.svg, linha-tempo-xamanismo.svg) não
+# são tocados por esta migração — continuam sendo ilustrações de fato.
+# UPDATE por id existente, nunca DELETE+INSERT.
+VERSAO_LEGENDA_IMAGEM_EXCLUSIVA = "xamanismo-legenda-imagem-exclusiva-v1"
 
 
 def _agora() -> str:
@@ -52,7 +58,7 @@ def _capa(arquivo: str, alt: str, legenda: str) -> str:
     return (
         f'<figure class="aula-imagem">'
         f'<img src="assets/escola/xamanismo/{arquivo}" width="1200" height="630" loading="lazy" alt="{alt}">'
-        f'<figcaption>{legenda} <span class="aula-imagem-credito">Ilustração original — Mística Escola.</span></figcaption>'
+        f'<figcaption>{legenda} <span class="aula-imagem-credito">Imagem exclusiva — Mística Escola.</span></figcaption>'
         f"</figure>"
     )
 
@@ -610,4 +616,34 @@ def instalar_capa_foto_aula_origem_termo_xama(conn) -> bool:
         conn.execute("UPDATE curso_aulas SET conteudo=? WHERE modulo_id=? AND ordem=0", (AULA_M2_1, int(modulo["id"])))
 
     conn.execute("INSERT INTO lms_content_versions (versao,aplicada_em) VALUES (?,?)", (VERSAO_AULA_ORIGEM_TERMO_XAMA_FOTO, _agora()))
+    return True
+
+
+def instalar_legenda_imagem_exclusiva_xamanismo(conn) -> bool:
+    """Corrige a legenda de crédito das 7 capas fotográficas do curso, que
+    ainda diziam "Ilustração original" (herdado da época dos SVGs). Os
+    módulos AULA_* já foram regravados com o texto novo ("Imagem exclusiva
+    — Mística Escola."); esta migração apenas propaga esse texto para bancos
+    que já tinham o conteúdo instalado. UPDATE por id existente (nunca
+    DELETE+INSERT), preservando matrículas, progresso e tentativas de quiz."""
+    from backend.lms import garantir_tabelas_lms
+
+    garantir_tabelas_lms(conn)
+    conn.execute("CREATE TABLE IF NOT EXISTS lms_content_versions (versao TEXT PRIMARY KEY, aplicada_em TEXT NOT NULL)")
+    if conn.execute("SELECT 1 FROM lms_content_versions WHERE versao=?", (VERSAO_LEGENDA_IMAGEM_EXCLUSIVA,)).fetchone():
+        return False
+
+    modulo1 = conn.execute("SELECT id FROM curso_modulos WHERE slug=? AND ordem=0", (SLUG,)).fetchone()
+    if modulo1:
+        modulo1_id = int(modulo1["id"])
+        for conteudo, ordem in ((AULA_1, 0), (AULA_2, 1)):
+            conn.execute("UPDATE curso_aulas SET conteudo=? WHERE modulo_id=? AND ordem=?", (conteudo, modulo1_id, ordem))
+
+    modulo2 = conn.execute("SELECT id FROM curso_modulos WHERE slug=? AND ordem=1", (SLUG,)).fetchone()
+    if modulo2:
+        modulo2_id = int(modulo2["id"])
+        for conteudo, ordem in ((AULA_M2_1, 0), (AULA_M2_2, 1), (AULA_M2_3, 2)):
+            conn.execute("UPDATE curso_aulas SET conteudo=? WHERE modulo_id=? AND ordem=?", (conteudo, modulo2_id, ordem))
+
+    conn.execute("INSERT INTO lms_content_versions (versao,aplicada_em) VALUES (?,?)", (VERSAO_LEGENDA_IMAGEM_EXCLUSIVA, _agora()))
     return True

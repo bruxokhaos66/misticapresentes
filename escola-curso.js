@@ -158,6 +158,16 @@
     renderPlayer();
   }
 
+  // Recalcula total/concluídas/percentual a partir das aulas públicas
+  // realmente presentes nos módulos liberados — nunca um valor fixo.
+  function calcularProgressoPublico(modulos) {
+    const aulasPublicas = modulos.filter(m => m.liberado).flatMap(m => m.aulas);
+    const total_aulas = aulasPublicas.length;
+    const aulas_concluidas = aulasPublicas.filter(a => a.status === "concluida").length;
+    const percentual = total_aulas ? Math.round((aulas_concluidas / total_aulas) * 100) : 0;
+    return { total_aulas, aulas_concluidas, percentual, concluido: total_aulas > 0 && aulas_concluidas === total_aulas };
+  }
+
   async function carregarCursoPublico() {
     const r = await api(`/api/escola/publico/cursos/${encodeURIComponent(slug)}`);
     if (!r.ok) {
@@ -166,17 +176,21 @@
     }
     modoAnonimo = true;
     const progressoLocal = lerProgressoAnonimo();
+    const modulos = r.body.modulos.map(m => ({
+      ...m,
+      liberado: !m.bloqueado,
+      concluido: false,
+      quiz: null,
+      aulas: (m.aulas || []).map(a => ({ ...a, status: progressoLocal[a.id] === "concluida" ? "concluida" : "nao_iniciada", percentual: 0 })),
+    }));
+    // Contagem real das aulas públicas retornadas pela árvore anônima (nunca
+    // 0/0 fixo): soma as aulas dos módulos liberados e cruza com o progresso
+    // efêmero salvo em sessionStorage para saber quantas já foram concluídas.
     curso = {
       ...r.body,
       certificado: false,
-      progresso: { total_aulas: 0, aulas_concluidas: 0, percentual: 0, concluido: false },
-      modulos: r.body.modulos.map(m => ({
-        ...m,
-        liberado: !m.bloqueado,
-        concluido: false,
-        quiz: null,
-        aulas: (m.aulas || []).map(a => ({ ...a, status: progressoLocal[a.id] === "concluida" ? "concluida" : "nao_iniciada", percentual: 0 })),
-      })),
+      progresso: calcularProgressoPublico(modulos),
+      modulos,
     };
     if (!curso.modulos.length) { shell.innerHTML = `<div class="plataforma-vazio"><h1>${esc(curso.titulo)}</h1><p>Conteúdo em preparação. Volte em breve.</p></div>`; return; }
     if (!aulaAtiva) selecionarPrimeiraPendente();
@@ -190,7 +204,7 @@
   function renderSidebar() {
     return `<aside class="plataforma-sidebar" data-sidebar>
       <div class="plataforma-sidebar-head">
-        <strong>${esc(curso.titulo)}</strong>
+        <strong title="${esc(curso.titulo)}">${esc(curso.titulo)}</strong>
         <div class="plataforma-progress"><span style="width:${curso.progresso.percentual}%"></span></div>
         <small>${curso.progresso.aulas_concluidas}/${curso.progresso.total_aulas} aulas • ${curso.progresso.percentual}%</small>
       </div>
@@ -258,7 +272,26 @@
     }
     const material = aula.material_url
       ? `<a class="btn btn-ghost" href="${esc(normalizeUrl(aula.material_url))}" target="_blank" rel="noopener">📎 Material complementar</a>` : "";
-    const texto = aula.conteudo ? `<div class="plataforma-texto">${sanitizeHtml(aula.conteudo)}</div>` : "";
+
+    // A capa fotográfica da aula (quando abre o conteúdo) sobe para antes do
+    // título: evita que o <h1> fique espremido logo acima da própria foto,
+    // que já carrega o título embutido na imagem. Diagramas no meio do texto
+    // (mapa/linha do tempo) não são movidos — só a capa de abertura.
+    const sanitizado = aula.conteudo ? sanitizeHtml(aula.conteudo) : "";
+    let capaAula = "";
+    let restante = sanitizado;
+    if (sanitizado) {
+      const tpl = document.createElement("template");
+      tpl.innerHTML = sanitizado;
+      const primeiro = tpl.content.firstElementChild;
+      if (primeiro && primeiro.tagName === "FIGURE" && primeiro.classList.contains("aula-imagem")
+          && !primeiro.classList.contains("aula-imagem-timeline") && !primeiro.classList.contains("aula-imagem-mapa")) {
+        capaAula = primeiro.outerHTML;
+        primeiro.remove();
+        restante = tpl.innerHTML;
+      }
+    }
+    const texto = restante ? `<div class="plataforma-texto">${restante}</div>` : "";
 
     const flat = todasAulas().filter(a => a.moduloLiberado);
     const idx = flat.findIndex(a => a.id === aula.id);
@@ -266,7 +299,8 @@
     const next = idx >= 0 && idx < flat.length - 1 ? flat[idx + 1] : null;
     const feito = aula.status === "concluida";
 
-    return `<div class="plataforma-conteudo-head">
+    return `${capaAula}
+      <div class="plataforma-conteudo-head">
         <p class="plataforma-conteudo-modulo">${esc(modulo.titulo)}</p>
         <h1>${esc(aula.titulo)}</h1>
         ${aula.descricao ? `<p class="plataforma-conteudo-desc">${esc(aula.descricao)}</p>` : ""}
@@ -285,7 +319,7 @@
     shell.innerHTML = `
       <div class="plataforma-topbar">
         <button class="btn btn-ghost btn-small plataforma-drawer-toggle" type="button" data-drawer-toggle aria-label="Abrir módulos">☰ Módulos</button>
-        <span class="plataforma-topbar-titulo">${esc(curso.titulo)}</span>
+        <span class="plataforma-topbar-titulo" title="${esc(curso.titulo)}">${esc(curso.titulo)}</span>
       </div>
       <div class="plataforma-layout" data-layout>
         ${renderSidebar()}
@@ -345,6 +379,7 @@
         marcarProgressoAnonimo(aulaId);
         const found = aulaPorId(aulaId);
         if (found) found.aula.status = "concluida";
+        curso.progresso = calcularProgressoPublico(curso.modulos);
         refreshConteudo();
         return;
       }
