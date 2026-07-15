@@ -35,7 +35,7 @@ import pytest
 import config
 import database.connection as db_conn
 from services import venda_service
-from services.venda_service import calcular_total_venda, registrar_venda_service, cancelar_venda_service
+from services.venda_service import calcular_total_venda, calcular_total_venda_misto, registrar_venda_service, cancelar_venda_service
 from services.caixa_service import (
     abrir_caixa,
     fechar_caixa_simples,
@@ -90,6 +90,12 @@ def _estoque(codigo):
 def _status_venda(venda_id):
     from database import query_db
     res = query_db("SELECT status FROM vendas WHERE id=?", (venda_id,))
+    return res[0][0] if res else None
+
+
+def _status_caixa(caixa_id):
+    from database import query_db
+    res = query_db("SELECT status FROM caixa_diario WHERE id=?", (caixa_id,))
     return res[0][0] if res else None
 
 
@@ -199,26 +205,50 @@ def test_estorno_concorrente_com_fechamento_de_caixa_e_deterministico(banco_temp
             f1.result(timeout=20)
             f2.result(timeout=20)
 
-        # Nunca um estado "meio-termo": ou o estorno venceu (estoque devolvido,
-        # venda cancelada, caixa fechado sem a saída) ou o fechamento venceu
-        # (estorno abortado por completo, caixa fechado, nada de estoque/fluxo
-        # alterado pelo estorno perdedor).
+        # Nunca um estado "meio-termo": só dois desfechos são possíveis, e
+        # cada um deve satisfazer TODAS as propriedades abaixo — nenhuma
+        # combinação parcial é aceita.
         estoque_final = _estoque(codigo)
         status_final = _status_venda(venda_id)
+        status_caixa_final = _status_caixa(caixa_id)
+        saidas = [linha for linha in _fluxo_caixa(caixa_id) if linha[0] == "Saida"]
+        cancelamentos = [m for m in _movimentacoes(venda_id) if m[0] == "Cancelamento"]
+
         if resultado["estorno"] == "ok":
+            # O estorno venceu o CAS da venda: estoque reposto uma única vez,
+            # saída financeira lançada, venda cancelada, e o fechamento -
+            # que só pôde rodar depois - inclui esse lançamento e fecha o
+            # caixa normalmente (nunca falha por "já fechado" nem sobra
+            # "Aberto").
             assert estoque_final == 5
             assert status_final == "Cancelado"
+            assert len(saidas) == 1
+            assert len(cancelamentos) == 1
+            assert status_caixa_final == "Fechado"
+            assert resultado["fechamento"] == "ok"
         else:
-            assert "caixa foi fechado" in resultado["estorno"] or "ja cancelada" in resultado["estorno"]
-            if "caixa foi fechado" in resultado["estorno"]:
-                assert estoque_final == 4  # rollback completo: nada mudou
-                assert status_final == "Concluído"
-        resultados_gerais.append((resultado["estorno"], resultado["fechamento"]))
+            # O fechamento venceu o CAS do caixa: o estorno detecta
+            # 'status != Aberto' dentro da própria transação e sofre
+            # rollback completo — nem estoque, nem status da venda, nem
+            # fluxo_caixa, nem histórico são tocados. O caixa termina
+            # fechado por quem venceu.
+            assert resultado["estorno"] == "O caixa foi fechado durante a operação; estorno cancelado. Reabra o caixa e tente novamente."
+            assert resultado["fechamento"] == "ok"
+            assert estoque_final == 4  # rollback completo: nada mudou
+            assert status_final == "Concluído"
+            assert saidas == []  # nenhuma saída financeira criada pelo perdedor
+            assert cancelamentos == []  # nenhum histórico de cancelamento "fantasma"
+            assert status_caixa_final == "Fechado"
+        resultados_gerais.append(resultado["estorno"] == "ok")
+        # Cada iteração usa um caixa novo (abrir_caixa exige o anterior
+        # fechado); o loop acima já garante isso em ambos os desfechos.
 
-    # Garante que ambos os desfechos possíveis realmente ocorreram ao longo
-    # das repetições (a corrida não é sempre resolvida do mesmo jeito).
-    desfechos_estorno = {r[0] for r in resultados_gerais}
-    assert "ok" in desfechos_estorno
+    # Garante que os dois desfechos possíveis realmente ocorreram ao longo
+    # das repetições (a corrida não é sempre resolvida do mesmo jeito) — sem
+    # isso, o teste poderia estar validando só metade da lógica por sorte de
+    # agendamento de threads.
+    assert True in resultados_gerais
+    assert False in resultados_gerais
 
 
 # 4 — rollback completo em falha intermediária
@@ -341,3 +371,131 @@ def test_estorno_apos_caixa_fechado_no_mesmo_caixa_e_rejeitado(banco_temporario)
 
     assert _estoque(codigo) == 4  # nada mudou
     assert _status_venda(venda_id) == "Concluído"
+
+
+# 9 — integridade financeira: forma de pagamento original é preservada e o
+# valor estornado vem do banco (nunca de entrada externa), para dinheiro,
+# Pix, cartão, misto, com desconto e com acréscimo (taxa de cartão).
+
+
+@pytest.mark.parametrize(
+    "forma,preco,desconto",
+    [
+        ("Dinheiro", 100.0, 0),
+        ("Pix", 100.0, 0),
+        ("Credito 3x", 100.0, 0),  # acréscimo: taxa fixa de cartão soma ao total
+        ("Dinheiro", 100.0, 10),  # desconto percentual aplicado no subtotal
+    ],
+)
+def test_estorno_preserva_forma_de_pagamento_e_valor_autoritativo(banco_temporario, forma, preco, desconto):
+    codigo = _produto(quantidade=5, preco=preco)
+    caixa_id = abrir_caixa(0.0, "Teste")
+    carrinho = [{"id": codigo, "n": "Produto", "q": 1, "p": preco, "t": preco}]
+    calculo = calcular_total_venda(carrinho, desconto, forma)
+    venda_id = registrar_venda_service(
+        carrinho, "Consumidor Final", "01/01/2026 10:00", "2026-01-01 10:00:00",
+        calculo, forma, "Teste", caixa_id,
+    )
+    from database import query_db
+    total_final_gravado = query_db("SELECT total_final FROM vendas WHERE id=?", (venda_id,))[0][0]
+
+    cancelar_venda_service(venda_id, "Teste", caixa_id)
+
+    saidas = [linha for linha in _fluxo_caixa(caixa_id) if linha[0] == "Saida"]
+    assert len(saidas) == 1
+    # O valor estornado é sempre o total_final gravado na venda — nunca um
+    # valor arbitrário passado por quem chama cancelar_venda_service (a
+    # função nem aceita esse parâmetro).
+    assert saidas[0][2] == pytest.approx(total_final_gravado)
+    assert _estoque(codigo) == 5
+
+
+def test_estorno_de_venda_com_pagamento_misto_lanca_saida_por_forma(banco_temporario):
+    codigo = _produto(quantidade=5, preco=100.0)
+    caixa_id = abrir_caixa(0.0, "Teste")
+    carrinho = [{"id": codigo, "n": "Produto", "q": 1, "p": 100.0, "t": 100.0}]
+    calculo = calcular_total_venda_misto(carrinho, 0, [{"forma": "Dinheiro", "valor": 40}, {"forma": "Pix", "valor": 60}])
+    venda_id = registrar_venda_service(
+        carrinho, "Consumidor Final", "01/01/2026 10:00", "2026-01-01 10:00:00",
+        calculo, "Misto", "Teste", caixa_id,
+        pagamentos_mistos=[{"forma": "Dinheiro", "valor": 40}, {"forma": "Pix", "valor": 60}],
+    )
+
+    cancelar_venda_service(venda_id, "Teste", caixa_id)
+
+    saidas = [linha for linha in _fluxo_caixa(caixa_id) if linha[0] == "Saida"]
+    # Uma saída por forma de pagamento do misto, preservando o split original.
+    assert len(saidas) == 2
+    valores = sorted(linha[2] for linha in saidas)
+    assert valores == [pytest.approx(40.0), pytest.approx(60.0)]
+    assert _estoque(codigo) == 5
+
+
+# 10 — estorno não grava em caixa diferente do informado, e não altera um
+# fechamento já concluído anteriormente
+
+
+def test_estorno_nao_grava_lancamento_em_caixa_diferente_do_informado(banco_temporario):
+    codigo_a = _produto(quantidade=5)
+    caixa_a = abrir_caixa(0.0, "Teste")
+    venda_a = _vender(codigo_a, caixa_a)
+    resumo_a = resumo_fechamento_caixa()
+    fechar_caixa_simples(caixa_a, resumo_a["saldo"])
+
+    codigo_b = _produto(quantidade=5)
+    caixa_b = abrir_caixa(0.0, "Teste")
+    venda_b = _vender(codigo_b, caixa_b)
+
+    cancelar_venda_service(venda_b, "Teste", caixa_b)
+
+    # O estorno da venda do caixa B não grava nada no caixa A, que já
+    # fechou antes — o fechamento anterior nunca é alterado.
+    assert _fluxo_caixa(caixa_a) == [
+        linha for linha in _fluxo_caixa(caixa_a) if "no " + str(venda_b) not in linha[1]
+    ]
+    from database import query_db
+    saldo_final_a = query_db("SELECT saldo_final FROM caixa_diario WHERE id=?", (caixa_a,))[0][0]
+    assert saldo_final_a == pytest.approx(resumo_a["saldo"])
+
+
+# 11 — estoque: mesmo produto em duas linhas da mesma venda soma corretamente
+
+
+def test_produto_duplicado_na_mesma_venda_devolve_soma_correta(banco_temporario):
+    codigo = _produto(quantidade=10)
+    caixa_id = abrir_caixa(0.0, "Teste")
+    carrinho = [
+        {"id": codigo, "n": "Produto", "q": 2, "p": 50.0, "t": 100.0},
+        {"id": codigo, "n": "Produto", "q": 3, "p": 50.0, "t": 150.0},
+    ]
+    calculo = calcular_total_venda(carrinho, 0, "Dinheiro")
+    venda_id = registrar_venda_service(
+        carrinho, "Consumidor Final", "01/01/2026 10:00", "2026-01-01 10:00:00",
+        calculo, "Dinheiro", "Teste", caixa_id,
+    )
+    assert _estoque(codigo) == 5  # 10 - 2 - 3
+
+    cancelar_venda_service(venda_id, "Teste", caixa_id)
+
+    assert _estoque(codigo) == 10  # 2 + 3 devolvidos corretamente
+    cancelamentos = [m for m in _movimentacoes(venda_id) if m[0] == "Cancelamento"]
+    assert len(cancelamentos) == 2  # uma movimentação coerente por linha do carrinho, sem se fundirem incorretamente
+
+
+# 12 — produto inativo (soft-deleted) ainda recebe a devolução de estoque
+# corretamente; só a exclusão física (DELETE) força rollback (já coberto
+# pelo teste de rollback em falha intermediária acima)
+
+
+def test_produto_inativo_ainda_recebe_devolucao_de_estoque(banco_temporario):
+    codigo = _produto(quantidade=5)
+    caixa_id = abrir_caixa(0.0, "Teste")
+    venda_id = _vender(codigo, caixa_id)
+    assert _estoque(codigo) == 4
+
+    from database import query_db
+    query_db("UPDATE produtos SET ativo=0 WHERE codigo_p=?", (codigo,), commit=True)
+
+    cancelar_venda_service(venda_id, "Teste", caixa_id)
+
+    assert _estoque(codigo) == 5  # devolução de estoque não é bloqueada por ativo=0
