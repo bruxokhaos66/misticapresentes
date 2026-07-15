@@ -3,16 +3,22 @@ import asyncio
 import json
 import os
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from database import init_db
 from api.audit import registrar_acesso_api
-from api.security import validar_token, validar_token_valor
-from api.app_auth import login_app, logout_app, validar_sessao_app
+from api.security import (
+    APP_SESSION_COOKIE,
+    origem_websocket_permitida,
+    validar_origem_csrf,
+    validar_token,
+    validar_token_valor,
+)
+from api.app_auth import DURACAO_SESSAO_HORAS, login_app, logout_app, validar_sessao_app
 from api.service import (
     alertas_isis_api,
     app_android_info,
@@ -87,7 +93,7 @@ app.add_middleware(
     allow_origins=_allowed_origins(),
     allow_credentials=True,
     allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type", "X-Mistica-Token", "X-Mistica-App-Session"],
+    allow_headers=["Content-Type", "X-Mistica-Token"],
 )
 
 
@@ -162,24 +168,49 @@ def api_app_android():
 
 
 @app.post("/api/app/login", dependencies=[Depends(validar_token)])
-def api_app_login(payload: LoginAppRequest):
+def api_app_login(payload: LoginAppRequest, request: Request):
+    validar_origem_csrf(request)
     resultado = login_app(payload.login, payload.senha)
     if not resultado.get("ok"):
-        raise HTTPException(status_code=401, detail=resultado.get("erro", "Usuário ou senha incorretos."))
+        return JSONResponse(
+            status_code=401,
+            content={"detail": resultado.get("erro", "Usuário ou senha incorretos.")},
+            headers=NO_CACHE_HEADERS,
+        )
+    sessao = resultado.pop("sessao")
+    response = JSONResponse(content=resultado, headers=NO_CACHE_HEADERS)
+    response.set_cookie(
+        key=APP_SESSION_COOKIE,
+        value=sessao,
+        httponly=True,
+        secure=IS_PRODUCTION,
+        samesite="lax",
+        max_age=DURACAO_SESSAO_HORAS * 3600,
+        path="/",
+    )
+    return response
+
+
+@app.post("/api/app/logout")
+def api_app_logout(request: Request, response: Response):
+    validar_origem_csrf(request)
+    sessao_cookie = request.cookies.get(APP_SESSION_COOKIE)
+    resultado = logout_app(sessao_cookie)
+    response.delete_cookie(APP_SESSION_COOKIE, path="/")
+    response.headers.update(NO_CACHE_HEADERS)
     return resultado
 
 
-@app.post("/api/app/logout", dependencies=[Depends(validar_token)])
-def api_app_logout(x_mistica_app_session: str | None = Header(default=None)):
-    return logout_app(x_mistica_app_session)
-
-
-@app.get("/api/app/painel", dependencies=[Depends(validar_token)])
-def api_app_painel(x_mistica_app_session: str | None = Header(default=None)):
-    sessao = validar_sessao_app(x_mistica_app_session)
+@app.get("/api/app/painel")
+def api_app_painel(request: Request):
+    sessao = validar_sessao_app(request.cookies.get(APP_SESSION_COOKIE))
     if not sessao:
-        raise HTTPException(status_code=401, detail="Faça login novamente no app.")
-    return dashboard_app(sessao)
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Faça login novamente no app."},
+            headers=NO_CACHE_HEADERS,
+        )
+    return JSONResponse(content=dashboard_app(sessao), headers=NO_CACHE_HEADERS)
 
 
 @app.get("/api/dashboard", dependencies=[Depends(validar_token)])
@@ -225,7 +256,13 @@ def api_alertas_isis():
 @app.websocket("/ws/dashboard")
 async def ws_dashboard(websocket: WebSocket):
     token = websocket.query_params.get("token", "")
-    if not validar_token_valor(token):
+    cookie_sessao = websocket.cookies.get(APP_SESSION_COOKIE)
+    sessao_app = validar_sessao_app(cookie_sessao) if cookie_sessao else None
+    if cookie_sessao and sessao_app and not origem_websocket_permitida(websocket.headers.get("origin")):
+        await websocket.close(code=1008)
+        registrar_acesso_api("WS", "/ws/dashboard", "403", websocket.client.host if websocket.client else "-")
+        return
+    if not validar_token_valor(token) and not sessao_app:
         await websocket.close(code=1008)
         registrar_acesso_api("WS", "/ws/dashboard", "401", websocket.client.host if websocket.client else "-")
         return
@@ -233,7 +270,15 @@ async def ws_dashboard(websocket: WebSocket):
     registrar_acesso_api("WS", "/ws/dashboard", "101", websocket.client.host if websocket.client else "-")
     try:
         while True:
-            await websocket.send_text(json.dumps(dashboard_api(), ensure_ascii=False))
+            if cookie_sessao:
+                sessao_app = validar_sessao_app(cookie_sessao)
+                if not sessao_app:
+                    await websocket.close(code=1008)
+                    return
+                payload = dashboard_app(sessao_app)
+            else:
+                payload = dashboard_api()
+            await websocket.send_text(json.dumps(payload, ensure_ascii=False))
             await asyncio.sleep(5)
     except WebSocketDisconnect:
         return

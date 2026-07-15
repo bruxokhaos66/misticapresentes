@@ -267,6 +267,10 @@
     let sincronizando = false;
     let ultimaTentativa = 0;
     let timerAtualizacao = null;
+    let sessaoVersao = 0; // evita que uma resposta em voo antes do logout repopule a UI depois
+
+    let logoutChannel = null;
+    try { logoutChannel = new BroadcastChannel("mistica-painel-logout"); logoutChannel.onmessage = () => voltarParaLogin(); } catch {}
 
     const $ = (id) => document.getElementById(id);
     const brl = (n) => (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -334,9 +338,22 @@
         ...options,
         headers: { "Content-Type": "application/json", ...(options.headers || {}) }
       }), ms, path);
+      if ((response.status === 401 || response.status === 403) && sessao && path !== "/api/auth/logout") {
+        voltarParaLogin();
+      }
       const text = await response.text();
       if (!response.ok) throw new Error(text || `HTTP ${response.status}`);
       try { return JSON.parse(text); } catch { return text; }
+    }
+    function voltarParaLogin() {
+      sessaoVersao++;
+      if (!sessao && $("painel").classList.contains("hide")) return;
+      sessao = null;
+      pararAtualizacaoAutomatica();
+      $("painel").classList.add("hide");
+      $("loginBox").classList.remove("hide");
+      $("vendasList").innerHTML = "";
+      $("senha").value = "";
     }
     async function entrar() {
       try {
@@ -347,7 +364,6 @@
           body: JSON.stringify({ login: $("login").value.trim(), senha: $("senha").value })
         }, 12000);
         sessao = res;
-        sessionStorage.setItem("misticaPainelSessao", JSON.stringify(res));
         abrirPainel();
         await sincronizar("login");
         iniciarAtualizacaoAutomatica();
@@ -357,6 +373,7 @@
       }
     }
     function abrirPainel() {
+      sessaoVersao++;
       const perfil = isAdmin() ? "Adm" : "Vendedor(a)";
       const nome = usuarioAtual().nome || usuarioAtual().login || perfil;
       $("loginBox").classList.add("hide");
@@ -367,9 +384,9 @@
       setStatus("ONLINE", "Atualizando", "Conectado.");
     }
     async function sair() {
-      pararAtualizacaoAutomatica();
+      voltarParaLogin();
       try { await api("/api/auth/logout", { method: "POST" }); } catch {}
-      sessionStorage.removeItem("misticaPainelSessao");
+      if (logoutChannel) { try { logoutChannel.postMessage("logout"); } catch {} }
       location.reload();
     }
     function esc(value) {
@@ -438,18 +455,21 @@
       if (motivo === "auto" && agora - ultimaTentativa < MIN_REFRESH_GAP_MS) return;
       sincronizando = true;
       ultimaTentativa = agora;
+      const minhaVersao = sessaoVersao;
       try {
         setStatus("ONLINE", "Atualizando", "Buscando dados em segundo plano...");
         const [status, dashboard] = await Promise.all([
           api("/api/status", {}, 8000).catch(() => ({})),
           api(`/api/painel/dashboard?meta_mes=${META_MES}`, {}, 12000)
         ]);
+        if (minhaVersao !== sessaoVersao) return; // logout aconteceu enquanto a resposta viajava
         aplicarResumo(dashboard);
         const hora = dashboard.ultima_atualizacao || new Date().toLocaleTimeString("pt-BR");
         $("lastUpdate").textContent = `Ultima atualização: ${hora}`;
         setStatus("ONLINE", "Atualizado", `Última atualização: ${hora}`);
         reagendar(AUTO_REFRESH_MS);
       } catch (error) {
+        if (minhaVersao !== sessaoVersao) return;
         $("lastUpdate").textContent = "Ultima atualizacao: sem conexao.";
         setStatus("OFFLINE", "Sem conexao", String(error.message || error).slice(0, 130));
         reagendar(ERROR_RETRY_MS);
@@ -472,19 +492,21 @@
       sincronizando = false;
     }
     window.addEventListener("load", async () => {
-      // A sessão local é só um atalho de UI; o servidor sempre revalida via cookie HttpOnly.
+      // Fonte única da sessão: cookie HttpOnly revalidado a cada carregamento.
+      // Nunca lida de localStorage/sessionStorage — apenas mantida em memória.
+      try {
+        localStorage.removeItem("misticaPainelSessao");
+        sessionStorage.removeItem("misticaPainelSessao");
+      } catch {}
       try {
         sessao = await api("/api/auth/me", { method: "GET" });
       } catch {
         sessao = null;
       }
       if (sessao?.usuario) {
-        try { sessionStorage.setItem("misticaPainelSessao", JSON.stringify(sessao)); } catch {}
         abrirPainel();
         sincronizar("load");
         iniciarAtualizacaoAutomatica();
-      } else {
-        sessionStorage.removeItem("misticaPainelSessao");
       }
     });
   </script>
