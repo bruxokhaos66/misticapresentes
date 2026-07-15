@@ -46,6 +46,13 @@ def test_backup_status_administrativo_usa_auth_existente_e_nao_expoe_caminhos(mo
             "status": "ok",
             "ultimo_erro": None,
             "integridade": "ok",
+            "remote_enabled": False,
+            "last_remote_backup": None,
+            "remote_provider": None,
+            "remote_status": "desabilitado",
+            "last_remote_error": None,
+            "last_remote_size": None,
+            "last_remote_hash": None,
         },
     )
     response = client.get("/api/admin/backup/status", headers=HEADERS)
@@ -61,9 +68,48 @@ def test_backup_status_administrativo_usa_auth_existente_e_nao_expoe_caminhos(mo
         "status",
         "ultimo_erro",
         "integridade",
+        "remote_enabled",
+        "last_remote_backup",
+        "remote_provider",
+        "remote_status",
+        "last_remote_error",
+        "last_remote_size",
+        "last_remote_hash",
     }
     assert "/data" not in response.text
     assert str(config.DB_PATH) not in response.text
+
+
+def test_backup_remoto_exige_autenticacao_administrativa():
+    response = client.get("/api/admin/backup/remote")
+    assert response.status_code in (401, 403)
+
+
+def test_backup_remoto_retorna_historico_sem_credenciais(monkeypatch):
+    monkeypatch.setattr(
+        backup_routes,
+        "obter_historico_backup_remoto",
+        lambda: {
+            "uploads": [
+                {
+                    "nome": "backup.db.aes256",
+                    "tamanho_bytes": 123,
+                    "data": "2026-07-15T06:00:00+00:00",
+                    "hash_sha256": "a" * 64,
+                    "provider": "r2",
+                    "status": "sucesso",
+                    "erro": None,
+                    "tentativas": 1,
+                }
+            ]
+        },
+    )
+    response = client.get("/api/admin/backup/remote", headers=HEADERS)
+
+    assert response.status_code == 200
+    assert response.json()["uploads"][0]["provider"] == "r2"
+    assert "access_key" not in response.text.lower()
+    assert "secret" not in response.text.lower()
 
 
 def test_backup_download_exige_chave_valida():
