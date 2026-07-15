@@ -61,6 +61,15 @@ def _origens_permitidas() -> list[str]:
     return [origem.strip() for origem in configurado.split(",") if origem.strip()]
 
 
+def origem_websocket_permitida(origem: str | None) -> bool:
+    """Mesma checagem de validar_origem_csrf, para o handshake do WebSocket
+    autenticado por cookie (CORSMiddleware não cobre WebSocket)."""
+    permitidas = _origens_permitidas()
+    if not permitidas:
+        return True
+    return (origem or "") in permitidas
+
+
 def validar_origem_csrf(request: Request) -> None:
     """Defesa em profundidade para as rotas de sessão do app (cookie
     HttpOnly + SameSite=Lax): rejeita mutações cuja Origin/Referer não bate

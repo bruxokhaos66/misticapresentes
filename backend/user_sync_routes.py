@@ -290,8 +290,10 @@ def logout_painel(response: Response, mistica_painel_sessao: str | None = Cookie
 
 
 @router.get("/api/auth/me")
-def me_painel(sessao: dict = Depends(sessao_atual)):
+def me_painel(response: Response, sessao: dict = Depends(sessao_atual)):
     """Revalida a sessão no servidor a cada carregamento do painel (nunca confia em dado local)."""
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
     perfil = sessao.get("perfil") or "vendedor"
     return {
         "status": "ok",

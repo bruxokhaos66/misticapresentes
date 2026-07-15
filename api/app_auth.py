@@ -147,6 +147,23 @@ def login_app(login: str, senha: str) -> dict:
     }
 
 
+def _usuario_ativo_e_perfil_atual(login: str) -> tuple[bool, str] | None:
+    """Relê ativo/perfil direto da tabela usuarios a cada validação de sessão,
+    para que suspensão ou mudança de perfil no cadastro valham imediatamente
+    em vez de só no próximo login (a sessão em si não guarda a verdade)."""
+    try:
+        linhas = query_db(
+            "SELECT COALESCE(ativo,1), COALESCE(perfil,'vendedor') FROM usuarios WHERE login=?",
+            (login,),
+        )
+    except Exception:
+        return None
+    if not linhas:
+        return None
+    ativo, perfil = linhas[0]
+    return bool(int(ativo or 0)), _perfil_app(perfil)
+
+
 def validar_sessao_app(sessao: str | None) -> dict | None:
     _limpar_sessoes_expiradas()
     if not sessao:
@@ -169,12 +186,19 @@ def validar_sessao_app(sessao: str | None) -> dict | None:
             dados = None
     if not dados:
         return None
+
+    status_atual = _usuario_ativo_e_perfil_atual(dados.get("login"))
+    if status_atual is None or not status_atual[0]:
+        logout_app(token)
+        return None
+    dados["perfil"] = status_atual[1]
+
     nova_expiracao = datetime.now() + timedelta(hours=DURACAO_SESSAO_HORAS)
     dados["expira_em"] = nova_expiracao
     try:
         query_db(
-            "UPDATE app_sessoes SET expira_em=?, ultimo_acesso=? WHERE sessao=?",
-            (_dt_txt(nova_expiracao), _agora_txt(), token),
+            "UPDATE app_sessoes SET perfil=?, expira_em=?, ultimo_acesso=? WHERE sessao=?",
+            (dados["perfil"], _dt_txt(nova_expiracao), _agora_txt(), token),
             commit=True,
         )
     except Exception:

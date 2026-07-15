@@ -267,6 +267,7 @@
     let sincronizando = false;
     let ultimaTentativa = 0;
     let timerAtualizacao = null;
+    let sessaoVersao = 0; // evita que uma resposta em voo antes do logout repopule a UI depois
 
     let logoutChannel = null;
     try { logoutChannel = new BroadcastChannel("mistica-painel-logout"); logoutChannel.onmessage = () => voltarParaLogin(); } catch {}
@@ -345,6 +346,7 @@
       try { return JSON.parse(text); } catch { return text; }
     }
     function voltarParaLogin() {
+      sessaoVersao++;
       if (!sessao && $("painel").classList.contains("hide")) return;
       sessao = null;
       pararAtualizacaoAutomatica();
@@ -371,6 +373,7 @@
       }
     }
     function abrirPainel() {
+      sessaoVersao++;
       const perfil = isAdmin() ? "Adm" : "Vendedor(a)";
       const nome = usuarioAtual().nome || usuarioAtual().login || perfil;
       $("loginBox").classList.add("hide");
@@ -452,18 +455,21 @@
       if (motivo === "auto" && agora - ultimaTentativa < MIN_REFRESH_GAP_MS) return;
       sincronizando = true;
       ultimaTentativa = agora;
+      const minhaVersao = sessaoVersao;
       try {
         setStatus("ONLINE", "Atualizando", "Buscando dados em segundo plano...");
         const [status, dashboard] = await Promise.all([
           api("/api/status", {}, 8000).catch(() => ({})),
           api(`/api/painel/dashboard?meta_mes=${META_MES}`, {}, 12000)
         ]);
+        if (minhaVersao !== sessaoVersao) return; // logout aconteceu enquanto a resposta viajava
         aplicarResumo(dashboard);
         const hora = dashboard.ultima_atualizacao || new Date().toLocaleTimeString("pt-BR");
         $("lastUpdate").textContent = `Ultima atualização: ${hora}`;
         setStatus("ONLINE", "Atualizado", `Última atualização: ${hora}`);
         reagendar(AUTO_REFRESH_MS);
       } catch (error) {
+        if (minhaVersao !== sessaoVersao) return;
         $("lastUpdate").textContent = "Ultima atualizacao: sem conexao.";
         setStatus("OFFLINE", "Sem conexao", String(error.message || error).slice(0, 130));
         reagendar(ERROR_RETRY_MS);

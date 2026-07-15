@@ -256,3 +256,267 @@ def test_csrf_nao_bloqueia_get(monkeypatch):
     req = _request_com_origem("http://atacante.example")
     req.scope["method"] = "GET"
     security.validar_origem_csrf(req)  # GET não é mutável, não deve levantar
+
+
+def test_csrf_end_to_end_login_sem_origin_e_negado(usuario_teste):
+    """CSRF real (não só a função isolada): POST /api/app/login sem Origin,
+    quando MISTICA_ALLOWED_ORIGINS está configurado, é rejeitado com 403."""
+    usuario_teste.cookies.clear()
+    r = usuario_teste.post("/api/app/login", json={"login": LOGIN_TESTE, "senha": SENHA_TESTE}, headers=TOKEN_HEADER)
+    assert r.status_code == 403
+
+
+def test_csrf_end_to_end_logout_com_origem_externa_e_negado(usuario_teste):
+    usuario_teste.cookies.clear()
+    login = usuario_teste.post(
+        "/api/app/login",
+        json={"login": LOGIN_TESTE, "senha": SENHA_TESTE},
+        headers={**TOKEN_HEADER, **ORIGIN_HEADER},
+    )
+    assert login.status_code == 200
+    r = usuario_teste.post("/api/app/logout", headers={"Origin": "http://atacante.example"})
+    assert r.status_code == 403
+    # a sessão não deve ter sido revogada por uma tentativa de logout com origem forjada
+    assert usuario_teste.get("/api/app/painel").status_code == 200
+    usuario_teste.cookies.clear()
+
+
+# ---------------------------------------------------------------------------
+# Perfil: sempre do servidor, nunca do cliente.
+# ---------------------------------------------------------------------------
+
+
+def test_perfil_enviado_pelo_cliente_no_login_e_ignorado(usuario_teste):
+    """LoginAppRequest só aceita login/senha; um campo 'perfil' extra no
+    corpo não pode elevar o vendedor a admin."""
+    usuario_teste.cookies.clear()
+    salt = "salt-vendedor-elevacao"
+    query_db("DELETE FROM usuarios WHERE login='vendedor_tenta_elevar'", commit=True)
+    query_db(
+        "INSERT INTO usuarios (nome, login, senha_hash, senha_salt, perfil, ativo) VALUES (?,?,?,?,?,?)",
+        ("Vendedor Tenta Elevar", "vendedor_tenta_elevar", hash_password_pbkdf2("senha-vendedor-1", salt.encode("utf-8")), salt, "vendedor", 1),
+        commit=True,
+    )
+    try:
+        r = usuario_teste.post(
+            "/api/app/login",
+            json={"login": "vendedor_tenta_elevar", "senha": "senha-vendedor-1", "perfil": "adm", "usuario": "adm"},
+            headers={**TOKEN_HEADER, **ORIGIN_HEADER},
+        )
+        assert r.status_code == 200
+        assert r.json()["usuario"]["perfil"] == "vendedor"
+        painel = usuario_teste.get("/api/app/painel")
+        assert painel.json()["usuario"]["perfil"] == "vendedor"
+        assert "vendas_hoje" not in painel.json()
+    finally:
+        usuario_teste.cookies.clear()
+        query_db("DELETE FROM usuarios WHERE login='vendedor_tenta_elevar'", commit=True)
+
+
+def test_cookie_de_sessao_nao_pode_ser_forjado_para_elevar_perfil(usuario_teste):
+    """Um cookie com valor arbitrário (não emitido pelo servidor) nunca é
+    aceito como sessão válida, mesmo que o atacante tente adivinhar um
+    formato plausível."""
+    usuario_teste.cookies.clear()
+    usuario_teste.cookies.set(security.APP_SESSION_COOKIE, "adm-eu-mesmo-decidi-que-sou-admin")
+    r = usuario_teste.get("/api/app/painel")
+    assert r.status_code == 401
+    usuario_teste.cookies.clear()
+
+
+# ---------------------------------------------------------------------------
+# Suspensão/demoção: precisam valer imediatamente, sem esperar expirar.
+# ---------------------------------------------------------------------------
+
+
+def test_usuario_suspenso_perde_acesso_imediatamente(usuario_teste):
+    usuario_teste.cookies.clear()
+    salt = "salt-suspenso-teste"
+    query_db("DELETE FROM usuarios WHERE login='usuario_suspenso_teste'", commit=True)
+    query_db(
+        "INSERT INTO usuarios (nome, login, senha_hash, senha_salt, perfil, ativo) VALUES (?,?,?,?,?,?)",
+        ("Usuario Suspenso", "usuario_suspenso_teste", hash_password_pbkdf2("senha-suspenso-1", salt.encode("utf-8")), salt, "adm", 1),
+        commit=True,
+    )
+    try:
+        login = usuario_teste.post(
+            "/api/app/login",
+            json={"login": "usuario_suspenso_teste", "senha": "senha-suspenso-1"},
+            headers={**TOKEN_HEADER, **ORIGIN_HEADER},
+        )
+        assert login.status_code == 200
+        assert usuario_teste.get("/api/app/painel").status_code == 200
+
+        # suspensão acontece no cadastro, sem logout explícito
+        query_db("UPDATE usuarios SET ativo=0 WHERE login='usuario_suspenso_teste'", commit=True)
+
+        r = usuario_teste.get("/api/app/painel")
+        assert r.status_code == 401
+    finally:
+        usuario_teste.cookies.clear()
+        query_db("DELETE FROM usuarios WHERE login='usuario_suspenso_teste'", commit=True)
+
+
+def test_democao_de_perfil_vale_na_proxima_requisicao_sem_novo_login(usuario_teste):
+    usuario_teste.cookies.clear()
+    salt = "salt-democao-teste"
+    query_db("DELETE FROM usuarios WHERE login='usuario_democao_teste'", commit=True)
+    query_db(
+        "INSERT INTO usuarios (nome, login, senha_hash, senha_salt, perfil, ativo) VALUES (?,?,?,?,?,?)",
+        ("Usuario Democao", "usuario_democao_teste", hash_password_pbkdf2("senha-democao-1", salt.encode("utf-8")), salt, "adm", 1),
+        commit=True,
+    )
+    try:
+        login = usuario_teste.post(
+            "/api/app/login",
+            json={"login": "usuario_democao_teste", "senha": "senha-democao-1"},
+            headers={**TOKEN_HEADER, **ORIGIN_HEADER},
+        )
+        assert login.status_code == 200
+        assert usuario_teste.get("/api/app/painel").json()["usuario"]["perfil"] == "adm"
+
+        query_db("UPDATE usuarios SET perfil='vendedor' WHERE login='usuario_democao_teste'", commit=True)
+
+        r = usuario_teste.get("/api/app/painel")
+        assert r.status_code == 200
+        assert r.json()["usuario"]["perfil"] == "vendedor"
+        assert "vendas_hoje" not in r.json()
+    finally:
+        usuario_teste.cookies.clear()
+        query_db("DELETE FROM usuarios WHERE login='usuario_democao_teste'", commit=True)
+
+
+# ---------------------------------------------------------------------------
+# Atributos do cookie de sessão.
+# ---------------------------------------------------------------------------
+
+
+def test_atributos_do_cookie_de_sessao(usuario_teste):
+    usuario_teste.cookies.clear()
+    r = usuario_teste.post(
+        "/api/app/login",
+        json={"login": LOGIN_TESTE, "senha": SENHA_TESTE},
+        headers={**TOKEN_HEADER, **ORIGIN_HEADER},
+    )
+    assert r.status_code == 200
+    set_cookie = r.headers.get("set-cookie", "")
+    assert f"{security.APP_SESSION_COOKIE}=" in set_cookie
+    assert "httponly" in set_cookie.lower()
+    assert "samesite=lax" in set_cookie.lower()
+    assert "path=/" in set_cookie.lower()
+    assert "max-age=" in set_cookie.lower()
+    # ambiente de teste roda com APP_ENV != production: Secure não é setado,
+    # o que é o comportamento correto para desenvolvimento local sem HTTPS.
+    from api import main as api_main
+    assert api_main.IS_PRODUCTION is False
+    assert "secure" not in set_cookie.lower()
+    usuario_teste.cookies.clear()
+
+
+def test_logout_expira_cookie_com_mesmo_path(usuario_teste):
+    usuario_teste.cookies.clear()
+    login = usuario_teste.post(
+        "/api/app/login",
+        json={"login": LOGIN_TESTE, "senha": SENHA_TESTE},
+        headers={**TOKEN_HEADER, **ORIGIN_HEADER},
+    )
+    assert login.status_code == 200
+    r = usuario_teste.post("/api/app/logout", headers=ORIGIN_HEADER)
+    assert r.status_code == 200
+    set_cookie = r.headers.get("set-cookie", "")
+    assert f"{security.APP_SESSION_COOKIE}=" in set_cookie
+    assert "path=/" in set_cookie.lower()
+    # Max-Age=0 ou data no passado indica remoção
+    assert "max-age=0" in set_cookie.lower() or "1970" in set_cookie
+    usuario_teste.cookies.clear()
+
+
+def test_nao_existe_segundo_cookie_de_sessao_no_login(usuario_teste):
+    usuario_teste.cookies.clear()
+    r = usuario_teste.post(
+        "/api/app/login",
+        json={"login": LOGIN_TESTE, "senha": SENHA_TESTE},
+        headers={**TOKEN_HEADER, **ORIGIN_HEADER},
+    )
+    assert r.status_code == 200
+    cookies_no_jar = [c for c in usuario_teste.cookies.jar]
+    nomes = {c.name for c in cookies_no_jar}
+    assert nomes == {security.APP_SESSION_COOKIE}
+    usuario_teste.cookies.clear()
+
+
+# ---------------------------------------------------------------------------
+# WebSocket: handshake autenticado por cookie, sem token na URL.
+# ---------------------------------------------------------------------------
+
+
+def test_websocket_sem_credenciais_e_recusado(usuario_teste):
+    with pytest.raises(Exception):
+        with usuario_teste.websocket_connect("/ws/dashboard"):
+            pass
+
+
+def test_websocket_com_cookie_de_sessao_valido_e_aceito(usuario_teste):
+    usuario_teste.cookies.clear()
+    login = usuario_teste.post(
+        "/api/app/login",
+        json={"login": LOGIN_TESTE, "senha": SENHA_TESTE},
+        headers={**TOKEN_HEADER, **ORIGIN_HEADER},
+    )
+    assert login.status_code == 200
+    with usuario_teste.websocket_connect("/ws/dashboard", headers=ORIGIN_HEADER) as ws:
+        data = ws.receive_json()
+        assert data["usuario"]["perfil"] == "adm"
+        assert "vendas_hoje" in data
+    usuario_teste.cookies.clear()
+
+
+def test_websocket_com_cookie_invalido_e_recusado(usuario_teste):
+    usuario_teste.cookies.clear()
+    usuario_teste.cookies.set(security.APP_SESSION_COOKIE, "cookie-forjado-invalido")
+    with pytest.raises(Exception):
+        with usuario_teste.websocket_connect("/ws/dashboard"):
+            pass
+    usuario_teste.cookies.clear()
+
+
+def test_websocket_com_origem_externa_e_recusado(usuario_teste):
+    usuario_teste.cookies.clear()
+    login = usuario_teste.post(
+        "/api/app/login",
+        json={"login": LOGIN_TESTE, "senha": SENHA_TESTE},
+        headers={**TOKEN_HEADER, **ORIGIN_HEADER},
+    )
+    assert login.status_code == 200
+    with pytest.raises(Exception):
+        with usuario_teste.websocket_connect("/ws/dashboard", headers={"Origin": "http://atacante.example"}):
+            pass
+    usuario_teste.cookies.clear()
+
+
+def test_websocket_nao_expoe_token_na_url_do_frontend():
+    assert "ws/dashboard?token=" not in PAINEL_HTML
+    assert "new WebSocket(`${proto}://${location.host}/ws/dashboard`)" in PAINEL_HTML
+
+
+# ---------------------------------------------------------------------------
+# BroadcastChannel: só sinaliza logout, nunca carrega dado sensível.
+# ---------------------------------------------------------------------------
+
+
+def test_broadcastchannel_so_transmite_evento_de_logout_sem_payload_sensivel():
+    for arquivo in (PAINEL_HTML, PAINEL_OPERACIONAL_HTML):
+        for chave_proibida in ("token", "senha", "perfil", "usuario", "cookie", security.APP_SESSION_COOKIE):
+            for match_inicio in _ocorrencias(arquivo, "postMessage("):
+                trecho = arquivo[match_inicio: match_inicio + 80]
+                assert chave_proibida not in trecho.lower(), f"BroadcastChannel.postMessage parece incluir '{chave_proibida}': {trecho}"
+
+
+def _ocorrencias(texto: str, alvo: str):
+    inicio = 0
+    while True:
+        idx = texto.find(alvo, inicio)
+        if idx == -1:
+            return
+        yield idx
+        inicio = idx + 1

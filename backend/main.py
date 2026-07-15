@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.responses import FileResponse, JSONResponse
@@ -633,7 +633,9 @@ def _anexar_itens_vendas(vendas: list[dict]) -> list[dict]:
 
 
 @app.get("/api/painel/dashboard")
-def painel_dashboard(meta_mes: float = Query(1500.0, ge=0), sessao: dict = Depends(exigir_sessao_ou_chave_api())):
+def painel_dashboard(response: Response, meta_mes: float = Query(1500.0, ge=0), sessao: dict = Depends(exigir_sessao_ou_chave_api())):
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
     inicio_hoje, fim_hoje, dia_operacional = _intervalo_vendas_hoje_backend()
     mes = datetime.now().strftime("/%m/%Y")
     with conectar() as conn:

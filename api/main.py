@@ -13,6 +13,7 @@ from database import init_db
 from api.audit import registrar_acesso_api
 from api.security import (
     APP_SESSION_COOKIE,
+    origem_websocket_permitida,
     validar_origem_csrf,
     validar_token,
     validar_token_valor,
@@ -256,7 +257,11 @@ def api_alertas_isis():
 async def ws_dashboard(websocket: WebSocket):
     token = websocket.query_params.get("token", "")
     cookie_sessao = websocket.cookies.get(APP_SESSION_COOKIE)
-    sessao_app = validar_sessao_app(cookie_sessao)
+    sessao_app = validar_sessao_app(cookie_sessao) if cookie_sessao else None
+    if cookie_sessao and sessao_app and not origem_websocket_permitida(websocket.headers.get("origin")):
+        await websocket.close(code=1008)
+        registrar_acesso_api("WS", "/ws/dashboard", "403", websocket.client.host if websocket.client else "-")
+        return
     if not validar_token_valor(token) and not sessao_app:
         await websocket.close(code=1008)
         registrar_acesso_api("WS", "/ws/dashboard", "401", websocket.client.host if websocket.client else "-")
