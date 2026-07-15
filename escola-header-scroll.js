@@ -1,64 +1,29 @@
 (() => {
   "use strict";
 
-  // Controlador estrutural do header compacto da Escola Mística.
-  //
-  // O player anterior registrava o mesmo callback de scroll para progresso,
-  // parallax e compactação. A compactação alterava o layout do próprio header
-  // enquanto o scroll era medido, permitindo que a ancoragem do navegador
-  // atravessasse repetidamente o limite de 110px. Este módulo substitui apenas
-  // essa responsabilidade por uma sentinela estável; progresso e parallax
-  // continuam no controlador original.
+  // Sentinela estrutural do header compacto. Este módulo não sobrescreve APIs
+  // nativas nem registra listeners de scroll: o IntersectionObserver acompanha
+  // um ponto absoluto e estável, independente da altura visual do header.
   const CLASSE = "is-leitura-compacta";
   const SELETOR_SENTINELA = "[data-header-sentinel]";
+  const TOPO_SENTINELA = 118; // rootMargin -8px => transição efetiva em 110px.
+
   const diagnostico = {
     controlador: "intersection-observer-sentinel",
     alteracoes: 0,
     ativacoes: 0,
     desativacoes: 0,
-    listenersLegadosBloqueados: 0,
     observersCriados: 0,
+    reinicializacoes: 0,
+    interceptacoesGlobais: 0,
     estado: false,
   };
   window.__escolaHeaderDiagnostics = diagnostico;
 
   let observer = null;
   let sentinel = null;
-  let estadoCompacto = false;
-  let controladorAtivo = true;
-
-  const toggleNativo = DOMTokenList.prototype.toggle;
-  const addEventListenerNativo = window.addEventListener.bind(window);
-  const removeEventListenerNativo = window.removeEventListener.bind(window);
-
-  // Impede somente o controlador legado de compactação de voltar a escrever a
-  // classe. A identificação é restrita ao callback fechado sobre `agendado` e
-  // `medir`, criado em escola-curso.js. Outros listeners de scroll permanecem
-  // intocados.
-  const addEventListenerInterceptado = function (tipo, listener, opcoes) {
-    const fonte = typeof listener === "function" ? Function.prototype.toString.call(listener) : "";
-    const controladorLegado = (tipo === "scroll" || tipo === "resize")
-      && fonte.includes("requestAnimationFrame(medir)")
-      && fonte.includes("agendado");
-
-    if (controladorLegado) {
-      diagnostico.listenersLegadosBloqueados += 1;
-      return;
-    }
-    return addEventListenerNativo(tipo, listener, opcoes);
-  };
-
-  window.addEventListener = addEventListenerInterceptado;
-
-  // O código legado ainda chama seu medidor diretamente na renderização e na
-  // troca de aula. Bloqueamos exclusivamente a escrita antiga desta classe;
-  // o observer abaixo usa o método nativo para aplicar o estado estável.
-  DOMTokenList.prototype.toggle = function (token, force) {
-    if (controladorAtivo && token === CLASSE && this === document.body.classList) {
-      return this.contains(token);
-    }
-    return toggleNativo.call(this, token, force);
-  };
+  let estadoCompacto = document.body.classList.contains(CLASSE);
+  let shellObserver = null;
 
   function aplicarEstado(proximoEstado) {
     if (proximoEstado === estadoCompacto) return;
@@ -67,32 +32,32 @@
     diagnostico.alteracoes += 1;
     if (proximoEstado) diagnostico.ativacoes += 1;
     else diagnostico.desativacoes += 1;
-    toggleNativo.call(document.body.classList, CLASSE, proximoEstado);
+    document.body.classList.toggle(CLASSE, proximoEstado);
     document.body.dispatchEvent(new CustomEvent("escola:header-compacto", {
       detail: { compacto: proximoEstado, alteracoes: diagnostico.alteracoes },
     }));
   }
 
   function destruirObserver() {
-    if (observer) observer.disconnect();
+    observer?.disconnect();
     observer = null;
   }
 
   function garantirSentinela() {
-    const layout = document.querySelector("[data-layout]");
-    if (!layout) return false;
+    const main = document.querySelector(".plataforma-main");
+    if (!main) return false;
 
-    const existente = document.querySelector(SELETOR_SENTINELA);
-    if (existente && existente !== sentinel) existente.remove();
-
+    const existentes = [...document.querySelectorAll(SELETOR_SENTINELA)];
     if (!sentinel || !sentinel.isConnected) {
-      sentinel = document.createElement("span");
+      sentinel = existentes.shift() || document.createElement("span");
       sentinel.className = "plataforma-header-sentinel";
       sentinel.setAttribute("data-header-sentinel", "");
       sentinel.setAttribute("aria-hidden", "true");
     }
+    existentes.forEach(elemento => elemento.remove());
 
-    if (layout.previousElementSibling !== sentinel) layout.before(sentinel);
+    sentinel.style.setProperty("--sentinel-top", `${TOPO_SENTINELA}px`);
+    if (main.previousElementSibling !== sentinel) main.before(sentinel);
     return true;
   }
 
@@ -108,19 +73,21 @@
     });
     observer.observe(sentinel);
     diagnostico.observersCriados += 1;
+    diagnostico.reinicializacoes += 1;
     return true;
   }
 
-  // O shell é preenchido depois do fetch. Observamos somente a troca estrutural
-  // do player e recriamos um único observer quando [data-layout] nasce de novo.
+  // O player é renderizado depois do fetch. O MutationObserver observa apenas a
+  // criação/substituição do layout e recria exatamente um IntersectionObserver.
   const shell = document.querySelector("[data-plataforma]");
-  const shellObserver = shell ? new MutationObserver(() => {
-    if (document.querySelector("[data-layout]") && (!sentinel || !sentinel.isConnected)) {
-      iniciarObserver();
-    }
-  }) : null;
-
-  if (shellObserver) shellObserver.observe(shell, { childList: true, subtree: true });
+  if (shell) {
+    shellObserver = new MutationObserver(() => {
+      if (document.querySelector("[data-layout]") && (!observer || !sentinel?.isConnected)) {
+        iniciarObserver();
+      }
+    });
+    shellObserver.observe(shell, { childList: true, subtree: false });
+  }
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", iniciarObserver, { once: true });
@@ -128,17 +95,15 @@
     iniciarObserver();
   }
 
-  // API mínima para testes e para reinicializações explícitas do player.
   window.__escolaHeaderScroll = {
     reiniciar: iniciarObserver,
     destruir() {
       destruirObserver();
       shellObserver?.disconnect();
+      shellObserver = null;
       aplicarEstado(false);
-      controladorAtivo = false;
-      DOMTokenList.prototype.toggle = toggleNativo;
-      window.addEventListener = addEventListenerNativo;
-      window.removeEventListener = removeEventListenerNativo;
+      sentinel?.remove();
+      sentinel = null;
     },
   };
 })();
