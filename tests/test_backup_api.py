@@ -27,6 +27,45 @@ def test_backup_status_exige_chave_valida():
     assert response.status_code in (401, 403)
 
 
+def test_backup_status_administrativo_exige_autenticacao():
+    response = client.get("/api/admin/backup/status")
+    assert response.status_code in (401, 403)
+
+
+def test_backup_status_administrativo_usa_auth_existente_e_nao_expoe_caminhos(monkeypatch):
+    monkeypatch.setattr(
+        backup_routes,
+        "obter_status_backup",
+        lambda: {
+            "ultimo_backup": "backup_2026-07-14_03-00-00.db",
+            "tamanho_bytes": 4096,
+            "data": "2026-07-14T03:00:00-03:00",
+            "quantidade_backups": 1,
+            "espaco_livre_bytes": 500_000_000,
+            "proximo_backup": "2026-07-15T03:00:00-03:00",
+            "status": "ok",
+            "ultimo_erro": None,
+            "integridade": "ok",
+        },
+    )
+    response = client.get("/api/admin/backup/status", headers=HEADERS)
+
+    assert response.status_code == 200
+    assert set(response.json()) == {
+        "ultimo_backup",
+        "tamanho_bytes",
+        "data",
+        "quantidade_backups",
+        "espaco_livre_bytes",
+        "proximo_backup",
+        "status",
+        "ultimo_erro",
+        "integridade",
+    }
+    assert "/data" not in response.text
+    assert str(config.DB_PATH) not in response.text
+
+
 def test_backup_download_exige_chave_valida():
     response = client.get("/api/backup/download")
     assert response.status_code in (401, 403)

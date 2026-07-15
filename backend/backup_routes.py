@@ -4,13 +4,14 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
 
 from backend.api_security import validar_site_api_key as validar_chave_api
+from backend.panel_sessions import exigir_sessao_ou_chave_api
 from config import BACKUP_DIR, DB_PATH
-from database.backup import BackupInvalidoError, criar_backup_seguro
+from database.backup import BackupInvalidoError, criar_backup_seguro, obter_status_backup
 
 router = APIRouter(prefix="/api", tags=["backup"])
 
@@ -84,6 +85,12 @@ def status_backup_manual(x_mistica_api_key: str | None = Header(default=None)):
         "ultimos_backups": backups,
         "data_hora": datetime.now().isoformat(timespec="seconds"),
     }
+
+
+@router.get("/admin/backup/status")
+def status_backup_administrativo(sessao: dict = Depends(exigir_sessao_ou_chave_api("adm"))):
+    """Resumo operacional sem expor caminhos ou permitir acesso aos arquivos."""
+    return obter_status_backup()
 
 
 @router.get("/backup/download")
