@@ -27,6 +27,21 @@ VERSAO_MODULO_2 = "xamanismo-modulo-2-v1"
 # das Aulas 1 e 2. Independente das versões acima; usa UPDATE (nunca
 # DELETE+INSERT) para preservar o id das aulas e o progresso já registrado.
 VERSAO_MODULO_1_CAPAS = "xamanismo-modulo-1-capas-v1"
+# Substitui as ilustrações SVG das Aulas 1 e 2 do Módulo 1 pelas artes
+# fotográficas oficiais da Mística Escola (mesmo padrão de migração das
+# versões acima: UPDATE por id existente, nunca DELETE+INSERT).
+VERSAO_MODULO_1_CAPAS_V2 = "xamanismo-modulo-1-capas-v2"
+# Substitui as ilustrações SVG das 3 aulas do Módulo 2 pelas artes
+# fotográficas oficiais da Mística Escola.
+VERSAO_MODULO_2_CAPAS = "xamanismo-modulo-2-capas-v1"
+# Instala a capa oficial (imagem) de cada módulo (1 e 2) em
+# curso_modulos.imagem — recurso novo, sem efeito em progresso/matrícula.
+VERSAO_MODULOS_CAPAS = "xamanismo-modulos-capas-v1"
+# Substitui a última ilustração SVG restante (Módulo 2 · Aula 1 — "A origem
+# da palavra xamã") pela fotografia oficial correspondente, fechando o
+# conjunto das 7 artes fotográficas do curso. UPDATE por id existente, nunca
+# DELETE+INSERT.
+VERSAO_AULA_ORIGEM_TERMO_XAMA_FOTO = "xamanismo-aula-origem-termo-xama-foto-v1"
 
 
 def _agora() -> str:
@@ -43,13 +58,13 @@ def _capa(arquivo: str, alt: str, legenda: str) -> str:
 
 
 CAPA_M1_AULA_1 = _capa(
-    "modulo-1-aula-1-capa.svg",
-    "Ilustração de uma floresta ancestral ao amanhecer, com as últimas estrelas se apagando em um céu que passa de azul profundo a dourado",
-    "Um primeiro olhar contemplativo, antes das definições: floresta, estrelas e a luz do amanhecer.",
+    "modulo-1-aula-1-capa.webp",
+    "Fotografia cinematográfica de uma xamã com cocar de penas e pintura ritual no rosto, segurando um recipiente com fumaça de defumação em uma floresta ancestral iluminada por velas",
+    "Um primeiro olhar contemplativo, antes das definições: a floresta, o ritual e a presença de quem guarda a tradição.",
 )
 CAPA_M1_AULA_2 = _capa(
-    "modulo-1-aula-2-capa.svg",
-    "Ilustração de uma árvore ancestral de raízes profundas ao entardecer, com um broto novo crescendo ao seu lado",
+    "modulo-1-aula-2-capa.webp",
+    "Fotografia cinematográfica de uma xamã em transe contemplativo, rodeada por velas acesas e objetos rituais em uma floresta ancestral",
     "Continuidade: uma tradição permanece viva quando alguém ensina e alguém aprende.",
 )
 
@@ -150,18 +165,18 @@ AULA_2 = CAPA_M1_AULA_2 + """
 
 
 CAPA_M2_AULA_1 = _capa(
-    "aula-origem-termo-xama.svg",
-    "Ilustração de uma taiga siberiana nevada ao entardecer, com abetos escuros sob um céu dourado e azul profundo",
-    "A taiga siberiana, cenário histórico associado à origem da palavra “xamã”.",
+    "aula-origem-termo-xama.webp",
+    "Fotografia cinematográfica de uma xamã com cocar de penas em uma floresta escura, segurando um recipiente com fumaça de defumação, ao lado de um tambor ritual com símbolos e de um mapa-múndi estilizado destacando a Sibéria",
+    "A palavra “xamã” tem raízes documentadas nas línguas tungúsicas da Sibéria.",
 )
 CAPA_M2_AULA_2 = _capa(
-    "aula-tradicoes-regioes.svg",
-    "Ilustração de um globo estilizado com pontos luminosos em diferentes regiões do mundo",
+    "aula-tradicoes-regioes.webp",
+    "Fotografia cinematográfica com quatro especialistas espirituais de tradições distintas — América Nativa, Amazônia, África e Ásia — lado a lado, com um globo estilizado ao centro conectando as regiões",
     "Práticas rituais comparáveis existem em regiões distintas — sem uma origem comum.",
 )
 CAPA_M2_AULA_3 = _capa(
-    "aula-xamanismo-moderno.svg",
-    "Ilustração combinando a silhueta de uma floresta ancestral com contornos geométricos de uma cidade contemporânea",
+    "aula-xamanismo-moderno.webp",
+    "Fotografia cinematográfica combinando, à esquerda, uma cerimônia tradicional à luz de velas em uma floresta e, à direita, um encontro urbano contemporâneo com o horizonte de uma cidade ao fundo",
     "Da transmissão comunitária às releituras urbanas do século XX e XXI.",
 )
 
@@ -506,4 +521,93 @@ def instalar_capas_modulo1_xamanismo(conn) -> bool:
             conn.execute("UPDATE curso_aulas SET conteudo=? WHERE modulo_id=? AND ordem=?", (conteudo, modulo_id, ordem))
 
     conn.execute("INSERT INTO lms_content_versions (versao,aplicada_em) VALUES (?,?)", (VERSAO_MODULO_1_CAPAS, _agora()))
+    return True
+
+
+def instalar_capas_v2_modulo1_xamanismo(conn) -> bool:
+    """Troca as ilustrações SVG das Aulas 1 e 2 do Módulo 1 pelas artes
+    fotográficas oficiais (modulo-1-aula-1-capa.webp, modulo-1-aula-2-capa.webp)
+    — mesmo padrão de `instalar_capas_modulo1_xamanismo`: UPDATE por id
+    existente, nunca DELETE+INSERT, preservando progresso já registrado."""
+    from backend.lms import garantir_tabelas_lms
+
+    garantir_tabelas_lms(conn)
+    conn.execute("CREATE TABLE IF NOT EXISTS lms_content_versions (versao TEXT PRIMARY KEY, aplicada_em TEXT NOT NULL)")
+    if conn.execute("SELECT 1 FROM lms_content_versions WHERE versao=?", (VERSAO_MODULO_1_CAPAS_V2,)).fetchone():
+        return False
+
+    modulo = conn.execute("SELECT id FROM curso_modulos WHERE slug=? AND ordem=0", (SLUG,)).fetchone()
+    if modulo:
+        modulo_id = int(modulo["id"])
+        for conteudo, ordem in ((AULA_1, 0), (AULA_2, 1)):
+            conn.execute("UPDATE curso_aulas SET conteudo=? WHERE modulo_id=? AND ordem=?", (conteudo, modulo_id, ordem))
+
+    conn.execute("INSERT INTO lms_content_versions (versao,aplicada_em) VALUES (?,?)", (VERSAO_MODULO_1_CAPAS_V2, _agora()))
+    return True
+
+
+def instalar_capas_modulo2_xamanismo(conn) -> bool:
+    """Troca as ilustrações SVG de 2 das 3 aulas do Módulo 2 pelas artes
+    fotográficas oficiais (aula-tradicoes-regioes.webp, aula-xamanismo-moderno.webp)
+    — UPDATE por id existente, nunca DELETE+INSERT, preservando progresso já
+    registrado. A capa da Aula 1 (aula-origem-termo-xama) é trocada
+    separadamente por `instalar_capa_foto_aula_origem_termo_xama`."""
+    from backend.lms import garantir_tabelas_lms
+
+    garantir_tabelas_lms(conn)
+    conn.execute("CREATE TABLE IF NOT EXISTS lms_content_versions (versao TEXT PRIMARY KEY, aplicada_em TEXT NOT NULL)")
+    if conn.execute("SELECT 1 FROM lms_content_versions WHERE versao=?", (VERSAO_MODULO_2_CAPAS,)).fetchone():
+        return False
+
+    modulo = conn.execute("SELECT id FROM curso_modulos WHERE slug=? AND ordem=1", (SLUG,)).fetchone()
+    if modulo:
+        modulo_id = int(modulo["id"])
+        for conteudo, ordem in ((AULA_M2_2, 1), (AULA_M2_3, 2)):
+            conn.execute("UPDATE curso_aulas SET conteudo=? WHERE modulo_id=? AND ordem=?", (conteudo, modulo_id, ordem))
+
+    conn.execute("INSERT INTO lms_content_versions (versao,aplicada_em) VALUES (?,?)", (VERSAO_MODULO_2_CAPAS, _agora()))
+    return True
+
+
+def instalar_capas_modulos_xamanismo(conn) -> bool:
+    """Instala a capa oficial (imagem) de cada módulo em curso_modulos.imagem
+    — recurso novo, não afeta conteúdo de aulas, progresso, matrícula ou
+    quizzes. Usa UPDATE por id existente, nunca DELETE+INSERT."""
+    from backend.lms import garantir_tabelas_lms
+
+    garantir_tabelas_lms(conn)
+    conn.execute("CREATE TABLE IF NOT EXISTS lms_content_versions (versao TEXT PRIMARY KEY, aplicada_em TEXT NOT NULL)")
+    if conn.execute("SELECT 1 FROM lms_content_versions WHERE versao=?", (VERSAO_MODULOS_CAPAS,)).fetchone():
+        return False
+
+    capas = {
+        0: "assets/escola/xamanismo/modulo-1-capa.webp",
+        1: "assets/escola/xamanismo/modulo-2-capa.webp",
+    }
+    for ordem, imagem in capas.items():
+        modulo = conn.execute("SELECT id FROM curso_modulos WHERE slug=? AND ordem=?", (SLUG, ordem)).fetchone()
+        if modulo:
+            conn.execute("UPDATE curso_modulos SET imagem=? WHERE id=?", (imagem, int(modulo["id"])))
+
+    conn.execute("INSERT INTO lms_content_versions (versao,aplicada_em) VALUES (?,?)", (VERSAO_MODULOS_CAPAS, _agora()))
+    return True
+
+
+def instalar_capa_foto_aula_origem_termo_xama(conn) -> bool:
+    """Troca a última ilustração SVG do curso (Módulo 2 · Aula 1 — "A origem
+    da palavra xamã") pela fotografia oficial (aula-origem-termo-xama.webp)
+    — UPDATE por id existente, nunca DELETE+INSERT, preservando progresso,
+    matrícula e tentativas de quiz já registrados."""
+    from backend.lms import garantir_tabelas_lms
+
+    garantir_tabelas_lms(conn)
+    conn.execute("CREATE TABLE IF NOT EXISTS lms_content_versions (versao TEXT PRIMARY KEY, aplicada_em TEXT NOT NULL)")
+    if conn.execute("SELECT 1 FROM lms_content_versions WHERE versao=?", (VERSAO_AULA_ORIGEM_TERMO_XAMA_FOTO,)).fetchone():
+        return False
+
+    modulo = conn.execute("SELECT id FROM curso_modulos WHERE slug=? AND ordem=1", (SLUG,)).fetchone()
+    if modulo:
+        conn.execute("UPDATE curso_aulas SET conteudo=? WHERE modulo_id=? AND ordem=0", (AULA_M2_1, int(modulo["id"])))
+
+    conn.execute("INSERT INTO lms_content_versions (versao,aplicada_em) VALUES (?,?)", (VERSAO_AULA_ORIGEM_TERMO_XAMA_FOTO, _agora()))
     return True

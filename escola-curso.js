@@ -203,7 +203,9 @@
             ? `<p class="plataforma-modulo-bloqueado">Continue sua jornada assinando o plano completo.</p>
                <button type="button" class="btn btn-small" data-login-cta>Entrar / assinar para continuar</button>`
             : `<p class="plataforma-modulo-bloqueado">Conclua o módulo anterior para liberar.</p>`;
+          const capa = m.imagem ? `<div class="plataforma-modulo-capa" style="background-image:url('${esc(normalizeUrl(m.imagem))}')" aria-hidden="true"></div>` : "";
           return `<div class="plataforma-modulo ${cls}">
+            ${capa}
             <div class="plataforma-modulo-head"><span class="plataforma-modulo-num">${i + 1}</span><div><strong>${esc(m.titulo)}</strong><small>${badge}</small></div></div>
             ${m.liberado ? `<ul class="plataforma-aulas">
               ${m.aulas.map(a => `<li>

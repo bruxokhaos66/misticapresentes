@@ -53,6 +53,7 @@
 .plataforma-modulo { border: 1px solid var(--line); border-radius: 14px; padding: .7rem .8rem; background: rgba(0,0,0,.18); }
 .plataforma-modulo.is-locked { opacity: .6; }
 .plataforma-modulo.is-done { border-color: rgba(189,209,122,.5); }
+.plataforma-modulo-capa { height: 110px; margin: -.7rem -.8rem .7rem; border-radius: 14px 14px 0 0; background-size: cover; background-position: center; }
 .plataforma-modulo-head { display: flex; gap: .6rem; align-items: center; }
 .plataforma-modulo-num { width: 26px; height: 26px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--panel-strong); color: var(--gold); font-weight: 700; font-size: .85rem; }
 .plataforma-modulo-head strong { display: block; font-size: .98rem; }

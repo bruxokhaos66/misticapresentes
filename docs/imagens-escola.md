@@ -72,7 +72,51 @@ arquivos SVG foram substituídos no mesmo caminho).
   alterado; `mapa-tradicoes.svg` e `linha-tempo-xamanismo.svg` permanecem
   esquemáticos, como já determinado nesta auditoria.
 
+## 2b. Migração para artes fotográficas oficiais
+
+Escopo: as ilustrações SVG (provisórias) das capas de Módulo 1, Módulo 2 e das
+5 aulas cobertas neste documento foram substituídas pelas artes fotográficas
+oficiais fornecidas pela Mística Escola, convertidas para WebP a 1200×630 px
+(crop central, sem distorção, sem EXIF, perfil de cor sRGB). Diferente do que
+a seção 3 previa (prompts "sem pessoas, sem cocar, sem cerimônia"), as fotos
+oficiais entregues retratam pessoas, cocares e cenas cerimoniais — decisão de
+conteúdo da própria Mística Escola, que substitui a diretriz "sem pessoas"
+documentada abaixo para estes arquivos específicos.
+
+| Arquivo (novo, `.webp`) | Usado em | Substitui |
+|---|---|---|
+| `modulo-1-capa.webp` | Capa do Módulo 1 (`curso_modulos.imagem`, novo) | — (recurso novo) |
+| `modulo-1-aula-1-capa.webp` | Aula 1 — "O que é o Xamanismo?" | `modulo-1-aula-1-capa.svg` |
+| `modulo-1-aula-2-capa.webp` | Aula 2 — "Por que o Xamanismo ainda existe?" | `modulo-1-aula-2-capa.svg` |
+| `modulo-2-capa.webp` | Capa do Módulo 2 (`curso_modulos.imagem`, novo) | `modulo-2-capa.svg` |
+| `aula-origem-termo-xama.webp` | Módulo 2 · Aula 1 — "A origem da palavra xamã" | `aula-origem-termo-xama.svg` |
+| `aula-tradicoes-regioes.webp` | Módulo 2 · Aula 2 | `aula-tradicoes-regioes.svg` |
+| `aula-xamanismo-moderno.webp` | Módulo 2 · Aula 3 | `aula-xamanismo-moderno.svg` |
+
+Todas as 7 artes fotográficas oficiais do curso estão instaladas; nenhum SVG
+de capa de aula/módulo permanece. `mapa-tradicoes.svg` e
+`linha-tempo-xamanismo.svg` permanecem esquemáticos, como já determinado —
+não são capas e não devem virar fotografia.
+
+Migração de banco: `instalar_capas_v2_modulo1_xamanismo`
+(`xamanismo-modulo-1-capas-v2`), `instalar_capas_modulo2_xamanismo`
+(`xamanismo-modulo-2-capas-v1`), `instalar_capas_modulos_xamanismo`
+(`xamanismo-modulos-capas-v1`) e `instalar_capa_foto_aula_origem_termo_xama`
+(`xamanismo-aula-origem-termo-xama-foto-v1`), todas em
+`backend/lms_content_xamanismo.py` — idempotentes, via `UPDATE` (nunca
+`DELETE`+`INSERT`), preservando matrículas, progresso e tentativas de quiz já
+registrados. A capa de módulo é um campo novo (`curso_modulos.imagem`,
+adicionado via `ALTER TABLE` tolerante em `garantir_tabelas_lms`) e não
+existia antes desta atualização.
+
 ## 3. Prompts cinematográficos para produção futura
+
+**Status: histórico.** Todos os 6 arquivos referenciados nesta seção (3.1 a
+3.6, exceto o mapa/linha do tempo em 3.5/3.7, que permanecem esquemáticos) já
+foram entregues como fotografia oficial — ver seção 2b. Os prompts abaixo são
+mantidos como registro do briefing criativo original; as fotos realmente
+entregues divergem da diretriz "sem pessoas" abaixo (decisão de conteúdo da
+Mística Escola, documentada na seção 2b).
 
 Diretriz visual comum a todos os prompts abaixo — **manter em todos**:
 
