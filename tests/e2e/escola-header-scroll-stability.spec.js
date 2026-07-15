@@ -1,5 +1,10 @@
 const { test, expect } = require("@playwright/test");
 
+// A gravação de vídeo é uma opção que força worker/contexto próprio no
+// Playwright. Por isso precisa ficar no nível superior do arquivo, nunca
+// dentro de test.describe().
+test.use({ video: "on" });
+
 const paragrafoLongo = "O xamanismo reúne tradições diversas, transmitidas em contextos culturais próprios. Este conteúdo de teste cria altura suficiente para uma rolagem lenta e determinística sem alterar as regras do LMS.";
 const conteudoLongo = `<h2>Leitura estável</h2>${Array.from({ length: 45 }, (_, i) => `<p>${i + 1}. ${paragrafoLongo}</p>`).join("")}`;
 
@@ -151,7 +156,6 @@ for (const cenario of [
       reducedMotion: cenario.reducedMotion,
       hasTouch: Boolean(cenario.hasTouch),
       isMobile: Boolean(cenario.isMobile),
-      video: "on",
     });
 
     test("header compacto muda uma vez por travessia lenta do limite", async ({ page }, testInfo) => {
