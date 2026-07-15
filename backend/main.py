@@ -559,7 +559,18 @@ def estornar_venda(venda_id: int, payload: EstornoVendaIn | None = None, x_misti
     """Cancela uma venda de caixa já registrada no banco, devolvendo o estoque dos
     itens vendidos. Equivalente ao cancelamento com reposição que os pedidos do
     site já tinham (ver backend/order_status_routes.py::cancelar_com_reposicao),
-    agora disponível também para vendas."""
+    agora disponível também para vendas.
+
+    Atômico e idempotente: a checagem do status atual e a escrita da
+    transição para 'Cancelado' acontecem num único UPDATE com guarda no
+    próprio WHERE — nunca um SELECT de status seguido de um UPDATE
+    incondicional. Duas requisições concorrentes de estorno para a mesma
+    venda (duplo clique, retry de rede, ou uma corrida com
+    services.venda_service.cancelar_venda_service chamado localmente pelo
+    PDV sobre o mesmo banco) nunca decidem com base no mesmo estado
+    "antigo" lido por outra: só uma reivindica a transição (rowcount==1) e
+    devolve o estoque; a(s) outra(s) veem rowcount==0 e retornam o estado
+    JÁ ATUAL (ja_cancelada=True) sem repetir a reposição de estoque."""
     validar_site_api_key(x_mistica_api_key)
     payload = payload or EstornoVendaIn()
     agora = datetime.now().isoformat(timespec="seconds")
@@ -567,7 +578,13 @@ def estornar_venda(venda_id: int, payload: EstornoVendaIn | None = None, x_misti
         venda = conn.execute("SELECT id, status FROM vendas WHERE id=?", (venda_id,)).fetchone()
         if not venda:
             raise HTTPException(status_code=404, detail="Venda não encontrada")
-        ja_cancelada = str(venda["status"] or "").lower().startswith("cancel")
+        status_antes = str(venda["status"] or "")
+
+        claim = conn.execute(
+            "UPDATE vendas SET status='Cancelado' WHERE id=? AND lower(COALESCE(status,'')) NOT LIKE 'cancel%'",
+            (venda_id,),
+        )
+        ja_cancelada = claim.rowcount == 0
         if not ja_cancelada:
             itens = conn.execute(
                 "SELECT codigo_p, nome_p, quantidade FROM vendas_itens WHERE venda_id=? ORDER BY id ASC",
@@ -579,8 +596,7 @@ def estornar_venda(venda_id: int, payload: EstornoVendaIn | None = None, x_misti
                 if quantidade <= 0 or not codigo:
                     continue
                 conn.execute("UPDATE produtos SET quantidade = quantidade + ? WHERE codigo_p=?", (quantidade, codigo))
-        conn.execute("UPDATE vendas SET status='Cancelado' WHERE id=?", (venda_id,))
-        registrar_auditoria(conn, "venda", venda_id, "estornar", payload.usuario, antes={"status": venda["status"]}, depois={"status": "Cancelado", "ja_cancelada": ja_cancelada})
+            registrar_auditoria(conn, "venda", venda_id, "estornar", payload.usuario, antes={"status": status_antes}, depois={"status": "Cancelado", "ja_cancelada": False})
         conn.commit()
     return {
         "ok": True,

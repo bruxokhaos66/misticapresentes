@@ -2,7 +2,7 @@ from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
 import unicodedata
 
-from database import query_db
+from database import get_connection, query_db
 
 
 FORMAS_CAIXA_DETALHADAS = [
@@ -149,6 +149,23 @@ def resumo_fechamento_caixa():
     return {"caixa_id": cx_id, "entradas": float(entradas), "saidas": float(saidas), "saldo": float(saldo), "formas": formas, "formas_detalhadas": formas_detalhadas}
 
 
+def _reivindicar_fechamento_cursor(cur, caixa_id):
+    """Reivindica atomicamente a transição do caixa para 'Fechado'.
+
+    A checagem (caixa ainda aberto) e a escrita (marca Fechado) acontecem
+    no mesmo UPDATE, com guarda no próprio WHERE — nunca um SELECT de
+    status seguido de um UPDATE incondicional. Isso dá um ponto de corte
+    determinístico para a corrida entre um fechamento de caixa e um
+    estorno concorrente (services.venda_service.cancelar_venda_service):
+    ou o estorno reivindica seu UPDATE em vendas antes deste claim vencer
+    — e o lançamento de saída entra no caixa antes dele fechar —, ou este
+    claim vence primeiro e o estorno, ao checar 'status=Aberto' do caixa
+    dentro da própria transação, vê 'Fechado' e aborta (rollback) em vez
+    de lançar valor num caixa já encerrado. Nunca os dois half-completam."""
+    cur.execute("UPDATE caixa_diario SET status='Fechado' WHERE id=? AND status='Aberto'", (caixa_id,))
+    return cur.rowcount
+
+
 def fechar_caixa_conferido(caixa_id, saldo, formas, informado):
     formas = formas or {}
     informado = informado or {}
@@ -163,20 +180,44 @@ def fechar_caixa_conferido(caixa_id, saldo, formas, informado):
     total_informado = _centavos(informado.get("Dinheiro", 0.0)) + _centavos(informado.get("Pix", 0.0)) + _centavos(informado.get("Debito", 0.0)) + _centavos(credito_informado)
     diferenca = float(total_informado - total_sistema)
 
-    query_db(
-        """
-        UPDATE caixa_diario
-        SET status='Fechado', data_fechamento=?, saldo_final=?, dinheiro_sistema=?, pix_sistema=?, debito_sistema=?, credito_sistema=?, dinheiro_informado=?, pix_informado=?, debito_informado=?, credito_informado=?, diferenca_caixa=?
-        WHERE id=?
-        """,
-        (datetime.now().strftime("%d/%m/%Y %H:%M"), saldo, formas.get("Dinheiro", 0.0), formas.get("Pix", 0.0), formas.get("Debito", 0.0), credito_sistema, informado.get("Dinheiro", 0.0), informado.get("Pix", 0.0), informado.get("Debito", 0.0), credito_informado, diferenca, caixa_id),
-        commit=True,
-    )
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        if _reivindicar_fechamento_cursor(cur, caixa_id) != 1:
+            raise ValueError("Caixa ja esta fechado.")
+        cur.execute(
+            """
+            UPDATE caixa_diario
+            SET data_fechamento=?, saldo_final=?, dinheiro_sistema=?, pix_sistema=?, debito_sistema=?, credito_sistema=?, dinheiro_informado=?, pix_informado=?, debito_informado=?, credito_informado=?, diferenca_caixa=?
+            WHERE id=?
+            """,
+            (datetime.now().strftime("%d/%m/%Y %H:%M"), saldo, formas.get("Dinheiro", 0.0), formas.get("Pix", 0.0), formas.get("Debito", 0.0), credito_sistema, informado.get("Dinheiro", 0.0), informado.get("Pix", 0.0), informado.get("Debito", 0.0), credito_informado, diferenca, caixa_id),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
     return diferenca
 
 
 def fechar_caixa_simples(caixa_id, saldo):
-    query_db("UPDATE caixa_diario SET status='Fechado', data_fechamento=?, saldo_final=? WHERE id=?", (datetime.now().strftime("%d/%m/%Y %H:%M"), saldo, caixa_id), commit=True)
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        if _reivindicar_fechamento_cursor(cur, caixa_id) != 1:
+            raise ValueError("Caixa ja esta fechado.")
+        cur.execute(
+            "UPDATE caixa_diario SET data_fechamento=?, saldo_final=? WHERE id=?",
+            (datetime.now().strftime("%d/%m/%Y %H:%M"), saldo, caixa_id),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def lancar_fluxo(tipo, descricao, valor, caixa_id, rotulo=None, forma_pagamento=None):
