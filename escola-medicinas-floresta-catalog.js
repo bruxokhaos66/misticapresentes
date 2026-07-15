@@ -10,9 +10,11 @@
     card.className = "course-card is-free";
     card.dataset.course = "medicinas-floresta-introducao";
     const capa = window.MEDICINAS_FLORESTA_ASSETS?.curso || "";
-    const image = capa ? `,url('${capa}')` : "";
+    const cover = capa
+      ? `linear-gradient(180deg,rgba(9,12,8,.12),rgba(0,0,0,.82)),url('${capa}')`
+      : `radial-gradient(circle at 72% 28%,rgba(211,165,79,.25),transparent 12rem),linear-gradient(135deg,#101b12,#382018)`;
     card.innerHTML = `
-      <div class="course-card-cover" style="background-image:linear-gradient(180deg,rgba(19,35,22,.18),rgba(0,0,0,.9)),radial-gradient(circle at 72% 28%,rgba(211,165,79,.25),transparent 12rem),linear-gradient(135deg,#101b12,#382018)${image}">
+      <div class="course-card-cover" style="background-image:${cover}">
         <span class="course-card-badge">Aula gratuita</span>
         <span class="course-card-icon" aria-hidden="true">🌿</span>
       </div>
