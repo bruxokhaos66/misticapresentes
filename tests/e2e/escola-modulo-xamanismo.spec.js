@@ -72,3 +72,41 @@ test("módulo de Xamanismo renderiza responsivamente, sem console error e saniti
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
   expect(erros).toEqual([]);
 });
+
+// A capa da aula é sempre a primeira coisa visível do conteúdo (o
+// front-end a hoisteia para o topo, antes do <h1>) — nunca está abaixo da
+// dobra. Mesmo que o HTML de origem (banco, conteúdo já instalado antes da
+// correção) ainda traga loading="lazy" na <img>, o player precisa forçar
+// "eager": "lazy" numa imagem que já está na tela faz o navegador adiar o
+// carregamento, deixando só o fundo quase preto da moldura (.aula-imagem)
+// visível — um retângulo escuro entre a navegação lateral e o texto da
+// aula, exatamente onde a foto deveria aparecer.
+test("capa da aula nunca fica com loading=lazy, mesmo quando o conteúdo salvo já traz o atributo antigo", async ({ page }) => {
+  const cursoComCapaLazy = {
+    ...curso,
+    modulos: [
+      {
+        ...curso.modulos[0],
+        aulas: [
+          {
+            ...curso.modulos[0].aulas[0],
+            conteudo:
+              '<figure class="aula-imagem"><img src="assets/escola/xamanismo/modulo-1-aula-1-capa.webp" width="1200" height="630" loading="lazy" alt="capa"><figcaption>Legenda</figcaption></figure>' +
+              curso.modulos[0].aulas[0].conteudo,
+          },
+          curso.modulos[0].aulas[1],
+        ],
+      },
+      curso.modulos[1],
+    ],
+  };
+  await page.route("**/api/escola/cursos/xamanismo-introducao", route =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(cursoComCapaLazy) })
+  );
+
+  await page.goto("/escola-curso.html?curso=xamanismo-introducao");
+  const capaImg = page.locator(".aula-imagem img").first();
+  await expect(capaImg).toBeVisible();
+  await expect(capaImg).not.toHaveAttribute("loading", "lazy");
+  await expect(capaImg).toHaveAttribute("loading", "eager");
+});
