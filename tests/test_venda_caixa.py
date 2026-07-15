@@ -291,3 +291,79 @@ def test_resumo_fechamento_caixa_muitos_lancamentos_pequenos_fecha_exato(banco_t
     resumo = resumo_fechamento_caixa()
     assert resumo["saldo"] == 4.10
     assert resumo["formas"]["Dinheiro"] == 4.10
+
+
+def test_abrir_caixa_e_atomico_nao_duplica_caixa_aberto(banco_temporario):
+    """Regressão: abrir_caixa fazia SELECT (checagem) e dois INSERTs
+    (caixa_diario + lançamento inicial) em transações separadas — uma
+    segunda chamada concorrente podia passar na checagem antes do primeiro
+    INSERT commitar e abrir dois caixas 'Aberto' ao mesmo tempo. Agora a
+    checagem e o INSERT do caixa são um único INSERT...SELECT WHERE NOT
+    EXISTS, com rowcount como guarda."""
+    from database import query_db
+    from services.caixa_service import abrir_caixa, caixa_abertos_count
+
+    abrir_caixa(100.0, "Teste")
+    with pytest.raises(ValueError, match="Ja existe um caixa aberto"):
+        abrir_caixa(50.0, "Teste 2")
+
+    assert caixa_abertos_count() == 1
+    entradas_iniciais = query_db("SELECT COUNT(*) FROM fluxo_caixa WHERE descricao LIKE 'Abertura de Caixa%'")
+    assert entradas_iniciais[0][0] == 1
+
+
+def test_lancar_fluxo_apos_fechamento_e_rejeitado_sem_gravar(banco_temporario):
+    """Regressão: lancar_fluxo (sangria/reforço) gravava sem checar se o
+    caixa informado seguia aberto — uma sangria disparada perto do
+    fechamento podia ser persistida em fluxo_caixa depois do caixa já ter
+    sido marcado 'Fechado', fora do relatório de fechamento já salvo."""
+    from services.caixa_service import abrir_caixa, fechar_caixa_simples, lancar_fluxo
+
+    caixa_id = abrir_caixa(0.0, "Teste")
+    fechar_caixa_simples(caixa_id, 0.0)
+
+    with pytest.raises(ValueError, match="caixa foi fechado"):
+        lancar_fluxo("Saida", "Sangria tardia", 10.0, caixa_id)
+
+    saidas = [linha for linha in db_conn.query_db("SELECT tipo FROM fluxo_caixa WHERE caixa_id=? AND tipo='Saida'", (caixa_id,))]
+    assert saidas == []
+
+
+def test_marcar_conta_paga_e_atomico_nao_duplica_saida_no_caixa(banco_temporario):
+    """Regressão: marcar_conta_paga lia o status, checava 'paga' em Python e
+    só então fazia um UPDATE sem guarda de status no WHERE seguido de um
+    lancar_fluxo em transação separada — duas chamadas concorrentes para a
+    mesma conta podiam ambas passar na checagem e duplicar a saída
+    financeira. Agora o UPDATE reivindica o pagamento por rowcount e o
+    lançamento entra na mesma transação."""
+    from services.caixa_service import abrir_caixa, marcar_conta_paga, salvar_conta
+
+    caixa_id = abrir_caixa(0.0, "Teste")
+    salvar_conta("Fornecedor X", 150.0, "01/02/2026", "Insumos")
+    conta_id = db_conn.query_db("SELECT id FROM contas_a_pagar WHERE descricao=?", ("Fornecedor X",))[0][0]
+
+    assert marcar_conta_paga(conta_id, caixa_id, "Teste") is True
+    assert marcar_conta_paga(conta_id, caixa_id, "Teste") is True  # idempotente, não duplica
+
+    saidas = db_conn.query_db("SELECT valor FROM fluxo_caixa WHERE caixa_id=? AND tipo='Saida'", (caixa_id,))
+    assert len(saidas) == 1
+    assert saidas[0][0] == pytest.approx(150.0)
+
+
+def test_operacoes_financeiras_de_caixa_geram_trilha_de_auditoria(banco_temporario):
+    """Auditoria financeira: abrir/fechar caixa, sangria/reforço, estorno de
+    venda e conta paga precisam deixar rastro em audit_log — antes desta
+    correção, nenhum desses fluxos chamava registrar_auditoria."""
+    from database import query_db
+    from services.caixa_service import abrir_caixa, fechar_caixa_simples, lancar_fluxo, marcar_conta_paga, salvar_conta
+
+    caixa_id = abrir_caixa(100.0, "Teste")
+    lancar_fluxo("Entrada", "Reforço", 20.0, caixa_id)
+    salvar_conta("Fornecedor Y", 30.0, "01/02/2026", "Insumos")
+    conta_id = query_db("SELECT id FROM contas_a_pagar WHERE descricao=?", ("Fornecedor Y",))[0][0]
+    marcar_conta_paga(conta_id, caixa_id, "Teste")
+    fechar_caixa_simples(caixa_id, 90.0)
+
+    acoes = {row[0] for row in query_db("SELECT acao FROM audit_log WHERE entidade IN ('caixa', 'conta_a_pagar')")}
+    assert {"abrir", "lancar_fluxo", "fechar_simples"} <= acoes
+    assert "marcar_paga" in acoes

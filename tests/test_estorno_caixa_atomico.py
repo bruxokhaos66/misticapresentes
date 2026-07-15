@@ -431,6 +431,41 @@ def test_estorno_de_venda_com_pagamento_misto_lanca_saida_por_forma(banco_tempor
     assert _estoque(codigo) == 5
 
 
+def test_estorno_de_venda_mista_com_cartao_devolve_valor_com_taxa(banco_temporario):
+    """Regressão: services/venda_service.py::resumo_pagamentos_mistos grava a
+    forma com taxa como "Credito 1x R$ X,XX (inclui taxa R$ Y,YY)" — um
+    segundo "R$" só informativo. extrair_pagamentos_mistos precisa cortar no
+    PRIMEIRO "R$" (o valor pago) e não no último (a taxa), senão a parcela em
+    cartão é descartada do estorno e o caixa fecha com saldo inflado."""
+    codigo = _produto(quantidade=5, preco=100.0)
+    caixa_id = abrir_caixa(0.0, "Teste")
+    carrinho = [{"id": codigo, "n": "Produto", "q": 1, "p": 100.0, "t": 100.0}]
+    # Valor do Credito 1x já inclui a taxa fixa de R$ 1,50 (60 do produto +
+    # 1,50 de taxa), exatamente como normalizar_pagamentos_mistos exige.
+    calculo = calcular_total_venda_misto(carrinho, 0, [{"forma": "Dinheiro", "valor": 40}, {"forma": "Credito 1x", "valor": 61.5}])
+    venda_id = registrar_venda_service(
+        carrinho, "Consumidor Final", "01/01/2026 10:00", "2026-01-01 10:00:00",
+        calculo, "Misto", "Teste", caixa_id,
+        pagamentos_mistos=[{"forma": "Dinheiro", "valor": 40}, {"forma": "Credito 1x", "valor": 61.5}],
+    )
+    entradas_antes = sum(linha[2] for linha in _fluxo_caixa(caixa_id) if linha[0] == "Entrada")
+
+    cancelar_venda_service(venda_id, "Teste", caixa_id)
+
+    saidas = [linha for linha in _fluxo_caixa(caixa_id) if linha[0] == "Saida"]
+    # As duas parcelas (Dinheiro e Credito 1x, esta com taxa embutida) têm
+    # que ser estornadas — nenhuma pode ser descartada por causa do sufixo
+    # "(inclui taxa ...)".
+    assert len(saidas) == 2
+    valores = sorted(linha[2] for linha in saidas)
+    assert valores == [pytest.approx(40.0), pytest.approx(61.5)]
+    total_saidas = sum(linha[2] for linha in saidas)
+    # O caixa fecha zerado: nada de saldo inflado por parcela de cartão
+    # perdida no parsing do estorno.
+    assert total_saidas == pytest.approx(entradas_antes)
+    assert _estoque(codigo) == 5
+
+
 # 10 — estorno não grava em caixa diferente do informado, e não altera um
 # fechamento já concluído anteriormente
 

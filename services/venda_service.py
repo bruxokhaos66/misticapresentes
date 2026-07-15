@@ -2,6 +2,7 @@ from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
 import unicodedata
 
+from backend.audit import registrar_auditoria
 from database import get_connection
 from repositories import estoque as estoque_repo
 from repositories import vendas as vendas_repo
@@ -349,6 +350,7 @@ def cancelar_venda_service(venda_id, usuario, caixa_id=None):
         else:
             forma_fluxo = normalizar_forma_pagamento(forma_estorno)
             vendas_repo.inserir_fluxo_cursor(cur, "Saida", f"Estorno venda no {venda_id} ({forma_estorno})", valor_estorno, agora_data, agora_iso, caixa_id, forma_fluxo)
+        registrar_auditoria(conn, "venda", venda_id, "estornar", usuario, depois={"status": "Cancelado", "valor_estorno": valor_estorno, "caixa_id": caixa_id})
         conn.commit()
     except Exception:
         conn.rollback()
