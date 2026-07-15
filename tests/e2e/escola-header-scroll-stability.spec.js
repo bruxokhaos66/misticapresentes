@@ -47,7 +47,13 @@ async function abrirCurso(page) {
 }
 
 async function instalarMedicoes(page) {
-  await page.evaluate(() => {
+  await page.evaluate(async () => {
+    // A medição é específica da transição do header. Aguarda fontes e duas
+    // pinturas estáveis para não misturar CLS da carga inicial com o CLS das
+    // travessias que este teste realmente valida.
+    if (document.fonts?.ready) await document.fonts.ready;
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
     window.__mudancasClasseCompacta = [];
     window.__clsEscola = 0;
 
@@ -69,7 +75,11 @@ async function instalarMedicoes(page) {
           if (!entrada.hadRecentInput) window.__clsEscola += entrada.value;
         }
       });
-      try { observer.observe({ type: "layout-shift", buffered: true }); } catch { /* navegador sem suporte */ }
+      try {
+        // Não usa buffered:true: entradas anteriores pertencem à carga inicial,
+        // não às travessias do header avaliadas abaixo.
+        observer.observe({ type: "layout-shift" });
+      } catch { /* navegador sem suporte */ }
     }
   });
 }
