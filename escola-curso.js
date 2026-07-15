@@ -286,6 +286,19 @@
       const primeiro = tpl.content.firstElementChild;
       if (primeiro && primeiro.tagName === "FIGURE" && primeiro.classList.contains("aula-imagem")
           && !primeiro.classList.contains("aula-imagem-timeline") && !primeiro.classList.contains("aula-imagem-mapa")) {
+        // Esta é a capa que sobe para o topo do conteúdo: sempre a primeira
+        // coisa visível da aula, nunca abaixo da dobra. O HTML de origem
+        // marca a tag <img> com loading="lazy" (correto para imagens de
+        // meio de texto, como mapa/linha do tempo), mas como o conteúdo é
+        // injetado via innerHTML depois do fetch — nunca durante o parse
+        // inicial da página — o navegador não tem como pré-carregar essa
+        // imagem antecipadamente. Com "lazy" ela fica pendurada no
+        // IntersectionObserver e, até resolver, mostra só o fundo quase
+        // preto (#05070a) da moldura: um retângulo escuro no lugar da foto,
+        // logo ao lado da barra lateral e acima do texto da aula. Como essa
+        // capa é sempre a primeira coisa da tela, o carregamento deve ser
+        // imediato (eager), igual a qualquer imagem acima da dobra.
+        primeiro.querySelector("img")?.setAttribute("loading", "eager");
         capaAula = primeiro.outerHTML;
         primeiro.remove();
         restante = tpl.innerHTML;

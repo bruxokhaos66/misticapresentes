@@ -31,6 +31,7 @@ from backend.lms_content_xamanismo import (
     instalar_capas_modulos_xamanismo,
     instalar_capa_foto_aula_origem_termo_xama,
     instalar_legenda_imagem_exclusiva_xamanismo,
+    instalar_capa_loading_eager_xamanismo,
 )
 from backend.database import conectar, executar, listar, obter
 from backend.infra_diagnostics import banco_acessivel, disco_diretorio_disponivel
@@ -96,6 +97,7 @@ async def lifespan(app: FastAPI):
         instalar_capas_modulos_xamanismo(conn)
         instalar_capa_foto_aula_origem_termo_xama(conn)
         instalar_legenda_imagem_exclusiva_xamanismo(conn)
+        instalar_capa_loading_eager_xamanismo(conn)
     _verificar_persistencia_banco()
     migrar_musicas_blob_para_arquivo()
     garantir_admin_api()

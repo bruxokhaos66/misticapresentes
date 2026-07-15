@@ -1041,3 +1041,71 @@ def test_sete_webps_oficiais_existem_sao_validos_e_tem_1200x630():
             assert im.size == (1200, 630), f"{nome} tem tamanho {im.size}, esperado (1200, 630)"
     # o SVG substituído não deve mais existir no repositório
     assert not os.path.isfile(os.path.join(base, "aula-origem-termo-xama.svg"))
+
+
+# --- Migração: loading="eager" na capa (nunca "lazy", sempre a primeira ---
+# coisa visível da aula, acima da dobra) -------------------------------------
+
+def test_capas_fotograficas_carregam_com_loading_eager_nao_lazy():
+    """A <img> das 7 capas nunca deve ficar com loading="lazy": essa figura é
+    sempre hoisteada para o topo do conteúdo pelo front-end (a primeira coisa
+    visível da aula). "lazy" numa imagem que já está na tela faz o navegador
+    adiar o carregamento, deixando só o fundo quase preto da moldura visível
+    — um retângulo escuro entre a barra lateral e o texto da aula."""
+    _instalar_capas_fotograficas()
+    from backend.database import conectar
+
+    with conectar() as conn:
+        mod1 = conn.execute(
+            "SELECT id FROM curso_modulos WHERE slug=? AND ordem=0", (XAMANISMO,)
+        ).fetchone()
+        aulas_m1 = conn.execute(
+            "SELECT * FROM curso_aulas WHERE modulo_id=? ORDER BY ordem", (mod1["id"],)
+        ).fetchall()
+    for aula in aulas_m1:
+        assert 'loading="eager"' in aula["conteudo"]
+        assert 'loading="lazy"' not in aula["conteudo"]
+
+    _, aulas_m2 = _modulo2_do_banco()
+    for aula in aulas_m2:
+        # A capa (primeira figura, sempre acima da dobra) é sempre eager.
+        assert aula["conteudo"].count('loading="eager"') == 1
+
+    # Os infográficos de meio de texto (mapa/linha do tempo) continuam lazy
+    # de propósito: eles ficam abaixo da dobra, depois do texto, ao
+    # contrário da capa que abre a aula.
+    aula_com_mapa, aula_com_timeline = aulas_m2[1], aulas_m2[2]
+    assert "aula-imagem-mapa" in aula_com_mapa["conteudo"]
+    assert aula_com_mapa["conteudo"].count('loading="lazy"') == 1
+    assert "aula-imagem-timeline" in aula_com_timeline["conteudo"]
+    assert aula_com_timeline["conteudo"].count('loading="lazy"') == 1
+
+
+def test_migracao_de_loading_eager_e_idempotente_e_preserva_progresso():
+    from backend.database import conectar
+    from backend.lms_content_xamanismo import instalar_capa_loading_eager_xamanismo
+
+    _instalar_capas_fotograficas()
+    with conectar() as conn:
+        instalar_capa_loading_eager_xamanismo(conn)
+
+    aluno, _, _ = _aluno_logado(XAMANISMO)
+    with conectar() as conn:
+        aula1 = conn.execute(
+            "SELECT ca.id FROM curso_aulas ca JOIN curso_modulos cm ON cm.id=ca.modulo_id "
+            "WHERE cm.slug=? AND cm.ordem=0 ORDER BY ca.ordem LIMIT 1",
+            (XAMANISMO,),
+        ).fetchone()
+    aluno.post(f"/api/escola/aulas/{aula1['id']}/progresso", json={"status": "concluida", "percentual": 100})
+
+    with conectar() as conn:
+        progresso_antes = conn.execute(
+            "SELECT COUNT(*) AS n FROM aluno_aula_progresso WHERE aula_id=?", (aula1["id"],)
+        ).fetchone()["n"]
+        segunda = instalar_capa_loading_eager_xamanismo(conn)
+        progresso_depois = conn.execute(
+            "SELECT COUNT(*) AS n FROM aluno_aula_progresso WHERE aula_id=?", (aula1["id"],)
+        ).fetchone()["n"]
+
+    assert segunda is False
+    assert progresso_depois == progresso_antes

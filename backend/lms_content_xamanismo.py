@@ -48,6 +48,13 @@ VERSAO_AULA_ORIGEM_TERMO_XAMA_FOTO = "xamanismo-aula-origem-termo-xama-foto-v1"
 # são tocados por esta migração — continuam sendo ilustrações de fato.
 # UPDATE por id existente, nunca DELETE+INSERT.
 VERSAO_LEGENDA_IMAGEM_EXCLUSIVA = "xamanismo-legenda-imagem-exclusiva-v1"
+# Corrige loading="lazy" -> "eager" na <img> das 7 capas fotográficas: essa
+# figura é sempre a primeira coisa visível da aula (o front-end a hoisteia
+# para o topo do conteúdo), então "lazy" nunca deveria ter sido aplicado —
+# o navegador adia o carregamento de uma imagem que já está na tela, e o
+# fundo quase preto da moldura (#05070a) fica visível sozinho enquanto isso.
+# UPDATE por id existente, nunca DELETE+INSERT.
+VERSAO_CAPA_LOADING_EAGER = "xamanismo-capa-loading-eager-v1"
 
 
 def _agora() -> str:
@@ -55,9 +62,16 @@ def _agora() -> str:
 
 
 def _capa(arquivo: str, alt: str, legenda: str) -> str:
+    # loading="eager": esta figura é sempre a capa que o front-end (ver
+    # renderConteudoAula em escola-curso.js) hoisteia para o topo do
+    # conteúdo — a primeira coisa visível da aula, nunca abaixo da dobra.
+    # "lazy" nela faz o navegador adiar o carregamento de uma imagem que já
+    # está na tela, deixando por alguns instantes (ou indefinidamente, em
+    # conexões lentas) só o fundo quase preto da moldura (#05070a) visível
+    # — um retângulo escuro no lugar da foto.
     return (
         f'<figure class="aula-imagem">'
-        f'<img src="assets/escola/xamanismo/{arquivo}" width="1200" height="630" loading="lazy" alt="{alt}">'
+        f'<img src="assets/escola/xamanismo/{arquivo}" width="1200" height="630" loading="eager" alt="{alt}">'
         f'<figcaption>{legenda} <span class="aula-imagem-credito">Imagem exclusiva — Mística Escola.</span></figcaption>'
         f"</figure>"
     )
@@ -646,4 +660,33 @@ def instalar_legenda_imagem_exclusiva_xamanismo(conn) -> bool:
             conn.execute("UPDATE curso_aulas SET conteudo=? WHERE modulo_id=? AND ordem=?", (conteudo, modulo2_id, ordem))
 
     conn.execute("INSERT INTO lms_content_versions (versao,aplicada_em) VALUES (?,?)", (VERSAO_LEGENDA_IMAGEM_EXCLUSIVA, _agora()))
+    return True
+
+
+def instalar_capa_loading_eager_xamanismo(conn) -> bool:
+    """Corrige loading="lazy" -> "eager" na <img> das 7 capas fotográficas
+    (ver VERSAO_CAPA_LOADING_EAGER acima). As constantes AULA_* já foram
+    regravadas com o atributo novo; esta migração só propaga para bancos que
+    já tinham o conteúdo instalado. UPDATE por id existente (nunca
+    DELETE+INSERT), preservando matrículas, progresso e tentativas de quiz."""
+    from backend.lms import garantir_tabelas_lms
+
+    garantir_tabelas_lms(conn)
+    conn.execute("CREATE TABLE IF NOT EXISTS lms_content_versions (versao TEXT PRIMARY KEY, aplicada_em TEXT NOT NULL)")
+    if conn.execute("SELECT 1 FROM lms_content_versions WHERE versao=?", (VERSAO_CAPA_LOADING_EAGER,)).fetchone():
+        return False
+
+    modulo1 = conn.execute("SELECT id FROM curso_modulos WHERE slug=? AND ordem=0", (SLUG,)).fetchone()
+    if modulo1:
+        modulo1_id = int(modulo1["id"])
+        for conteudo, ordem in ((AULA_1, 0), (AULA_2, 1)):
+            conn.execute("UPDATE curso_aulas SET conteudo=? WHERE modulo_id=? AND ordem=?", (conteudo, modulo1_id, ordem))
+
+    modulo2 = conn.execute("SELECT id FROM curso_modulos WHERE slug=? AND ordem=1", (SLUG,)).fetchone()
+    if modulo2:
+        modulo2_id = int(modulo2["id"])
+        for conteudo, ordem in ((AULA_M2_1, 0), (AULA_M2_2, 1), (AULA_M2_3, 2)):
+            conn.execute("UPDATE curso_aulas SET conteudo=? WHERE modulo_id=? AND ordem=?", (conteudo, modulo2_id, ordem))
+
+    conn.execute("INSERT INTO lms_content_versions (versao,aplicada_em) VALUES (?,?)", (VERSAO_CAPA_LOADING_EAGER, _agora()))
     return True
