@@ -53,3 +53,20 @@ def validar_site_api_key(chave_recebida: str | None, mensagem_indisponivel: str 
         )
     if not chave_recebida or not any(secrets.compare_digest(str(chave_recebida), chave) for chave in chaves_validas):
         raise HTTPException(status_code=403, detail="Chave da API inválida.")
+
+
+def estorno_rest_habilitado() -> bool:
+    """Feature flag dedicada e independente de tudo o mais que já controla
+    acesso a rotas da API: NÃO é derivada de APP_ENV/IS_PRODUCTION, não pode
+    ser ligada por hostname nem por query string, e não usa a chave geral de
+    sincronização (MISTICA_SITE_API_KEY/MISTICA_SYNC_KEY) como autorização --
+    só a variável de ambiente abaixo, lida no processo do servidor.
+
+    Controla se a rota REST de estorno de vendas (POST
+    /api/vendas/{id}/estornar) fica disponível. Enquanto a issue #335 não
+    tiver a correção estrutural (associação venda->caixa_id para reverter
+    fluxo_caixa corretamente), essa rota devolve estoque mas não reverte o
+    lançamento financeiro do caixa original -- por isso o default, em
+    qualquer ambiente sem configuração explícita, é desligada."""
+    valor = os.environ.get("MISTICA_REST_ESTORNO_ENABLED", "").strip().lower()
+    return valor in {"1", "true", "yes", "on", "sim"}

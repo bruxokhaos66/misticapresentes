@@ -52,6 +52,10 @@ os.environ.setdefault("MISTICA_SITE_API_KEY", "test-api-key")
 os.environ.setdefault("MISTICA_SYNC_KEY", "test-api-key")
 os.environ.setdefault("MISTICA_PIX_WEBHOOK_SECRET", "test-estorno-cruzado-webhook-secret")
 os.environ.setdefault("MISTICA_PIX_KEY", "49999999999")
+# Esta suíte testa a concorrência entre os dois caminhos de estorno com a
+# rota REST habilitada pela feature flag (ver
+# backend/api_security.py::estorno_rest_habilitado, issue #335).
+os.environ.setdefault("MISTICA_REST_ESTORNO_ENABLED", "true")
 
 import importlib
 
