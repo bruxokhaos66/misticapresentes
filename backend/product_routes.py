@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field, field_validator
 from backend.audit import registrar_auditoria
 from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.database import conectar
+from backend.logging_config import get_logger
 from backend.panel_sessions import exigir_sessao_ou_chave_api
 from backend.preorder_checkout import registrar_checkout_publico
 from backend.product_commercial_rules import (
@@ -23,8 +24,12 @@ from backend.product_commercial_rules import (
     garantir_colunas_comerciais,
     normalizar_regra_encomenda,
 )
+from backend.product_image_storage import is_managed_by_storage
 from backend.rate_limit import limitar_requisicoes
 from backend.site_stock_routes import VendaSiteIn
+from backend.upload_routes import imagem_storage
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["produtos-completos"])
 limitar_checkout_publico = limitar_requisicoes("checkout_publico", limite=12, janela_segundos=60)
@@ -343,6 +348,16 @@ def atualizar_produto_completo(produto_id: int, produto: ProdutoCompletoIn, sess
         depois.update({"lucro": lucro, "sob_encomenda": bool(sob_encomenda), "limite_encomenda": limite_encomenda})
         registrar_auditoria(conn, "produto", produto_id, "atualizar", antes=dict(existente), depois=depois)
         conn.commit()
+        imagem_antiga = dict(existente).get("imagem_url") or ""
+    # A imagem antiga só é removida depois que o UPDATE já confirmou a nova
+    # URL no banco -- nunca antes, para não perder a imagem em uso se algo
+    # falhar no meio do caminho. Também nunca remove URLs externas/legadas
+    # que este storage não gerencia (Google Drive, links antigos, etc.).
+    if imagem_antiga and imagem_antiga != (produto.imagem_url or "") and is_managed_by_storage(imagem_storage, imagem_antiga):
+        try:
+            imagem_storage.delete(imagem_antiga)
+        except Exception:
+            logger.warning("falha ao remover imagem antiga do produto %s", produto_id, extra={"evento": "produto_imagem_antiga_nao_removida"})
     return {"ok": True, "id": produto_id, "status": "atualizado", "lucro": lucro,
             "sob_encomenda": bool(sob_encomenda), "limite_encomenda": limite_encomenda,
             "atualizado_em": agora}

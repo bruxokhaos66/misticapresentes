@@ -10,20 +10,38 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Header, HTTPException, Response, UploadFile
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field
 
 from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.drive_storage import drive_configured, upload_bytes_to_drive
 from backend.logging_config import get_logger
 from backend.panel_sessions import exigir_sessao_ou_chave_api
+from backend.product_image_storage import ProductImageStorage, ProductImageStorageError, is_managed_by_storage
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["uploads"])
 
 BASE_DIR = Path(__file__).resolve().parent
-UPLOAD_DIR = BASE_DIR / "uploads" / "produtos"
+
+
+def _diretorio_local_produtos() -> Path:
+    """Diretório usado quando o storage remoto (S3/R2) não está configurado.
+
+    Por padrão, cai no disco local do processo (BASE_DIR/uploads/produtos),
+    que em produção no Render é efêmero e some a cada deploy -- essa é a
+    causa raiz das imagens desaparecerem. Para sobreviver a reinícios sem
+    storage remoto, aponte PRODUCT_IMAGES_LOCAL_DIR para o disco persistente
+    (ex.: /data/uploads/produtos, no mesmo disco montado para o banco).
+    """
+    override = os.environ.get("PRODUCT_IMAGES_LOCAL_DIR", "").strip()
+    if override:
+        return Path(override)
+    return BASE_DIR / "uploads" / "produtos"
+
+
+UPLOAD_DIR = _diretorio_local_produtos()
 AUDIO_DIR = BASE_DIR / "uploads" / "musicas"
 AUDIO_LINKS_FILE = AUDIO_DIR / "links-diretos.txt"
 CURSOS_DIR = BASE_DIR / "uploads" / "cursos"
@@ -31,7 +49,11 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 CURSOS_DIR.mkdir(parents=True, exist_ok=True)
 
+imagem_storage = ProductImageStorage(local_dir=UPLOAD_DIR)
+
 MAX_IMAGE_BYTES = 4 * 1024 * 1024
+MAX_IMAGEM_PIXELS = 40_000_000
+MAX_IMAGEM_DIMENSAO = 2000
 MAX_AUDIO_BYTES = 30 * 1024 * 1024
 MAX_CURSO_DOC_BYTES = 20 * 1024 * 1024
 MAX_CURSO_VIDEO_BYTES = 150 * 1024 * 1024
@@ -132,12 +154,40 @@ def validar_imagem_real(data: bytes, content_type: str) -> None:
     try:
         imagem = Image.open(io.BytesIO(data))
         formato_real = imagem.format
+        largura, altura = imagem.size
+        if largura * altura > MAX_IMAGEM_PIXELS:
+            raise HTTPException(status_code=400, detail="Imagem excede a resolução máxima permitida.")
         imagem.verify()
     except (UnidentifiedImageError, OSError, ValueError):
         raise HTTPException(status_code=400, detail="Arquivo não é uma imagem válida.")
     esperado = FORMATOS_PIL_POR_TIPO.get(content_type)
     if esperado and formato_real != esperado:
         raise HTTPException(status_code=400, detail="Conteúdo do arquivo não corresponde ao formato de imagem declarado.")
+
+
+def normalizar_imagem(data: bytes, content_type: str) -> bytes:
+    """Corrige orientação EXIF, remove metadados (EXIF/geolocalização) e
+    limita as dimensões máximas. Reencodar sem repassar ``exif=`` já
+    descarta os metadados originais."""
+    formato = FORMATOS_PIL_POR_TIPO.get(content_type, "PNG")
+    with Image.open(io.BytesIO(data)) as imagem:
+        imagem = ImageOps.exif_transpose(imagem)
+        if formato == "JPEG" and imagem.mode != "RGB":
+            imagem = imagem.convert("RGB")
+        elif formato == "WEBP" and imagem.mode not in ("RGB", "RGBA"):
+            imagem = imagem.convert("RGBA" if "A" in imagem.getbands() else "RGB")
+        elif formato == "PNG" and imagem.mode not in ("RGB", "RGBA", "P", "L"):
+            imagem = imagem.convert("RGBA")
+        if imagem.width > MAX_IMAGEM_DIMENSAO or imagem.height > MAX_IMAGEM_DIMENSAO:
+            imagem.thumbnail((MAX_IMAGEM_DIMENSAO, MAX_IMAGEM_DIMENSAO), Image.LANCZOS)
+        buffer = io.BytesIO()
+        parametros = {"format": formato}
+        if formato == "JPEG":
+            parametros.update(quality=88, optimize=True)
+        elif formato == "WEBP":
+            parametros.update(quality=88)
+        imagem.save(buffer, **parametros)
+        return buffer.getvalue()
 
 
 def validar_audio_real(data: bytes, ext: str) -> None:
@@ -219,11 +269,24 @@ async def upload_imagem_produto(arquivo: UploadFile = File(...), produto_id: str
     if len(data) > MAX_IMAGE_BYTES:
         raise HTTPException(status_code=413, detail="Imagem muito grande. Limite: 4 MB.")
     validar_imagem_real(data, content_type)
+    try:
+        dados_normalizados = normalizar_imagem(data, content_type)
+    except (UnidentifiedImageError, OSError, ValueError):
+        raise HTTPException(status_code=400, detail="Arquivo não é uma imagem válida.")
     ext = ALLOWED_CONTENT_TYPES[content_type]
-    nome = f"{limpar_nome(produto_id)}-{uuid4().hex[:10]}{ext}"
-    destino = UPLOAD_DIR / nome
-    destino.write_bytes(data)
-    return {"ok": True, "filename": nome, "content_type": content_type, "size_bytes": len(data), "url": f"/uploads/produtos/{nome}"}
+    try:
+        resultado = imagem_storage.upload(dados_normalizados, produto_id=produto_id, ext=ext, content_type=content_type)
+    except ProductImageStorageError as exc:
+        logger.error("upload de imagem de produto falhou", extra={"evento": "upload_produto_falhou"})
+        raise HTTPException(status_code=502, detail="Falha ao salvar a imagem. A imagem anterior do produto foi mantida.") from exc
+    return {
+        "ok": True,
+        "filename": Path(resultado["key"]).name,
+        "content_type": content_type,
+        "size_bytes": len(dados_normalizados),
+        "url": resultado["url"],
+        "armazenamento": resultado["backend"],
+    }
 
 
 @router.post("/uploads/cursos")
