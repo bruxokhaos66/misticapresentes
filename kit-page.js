@@ -69,10 +69,21 @@
     `;
   }
 
+  // O 1º render() já usa o catálogo estático de fallback (app.js), então a
+  // vitrine por intenção nunca fica em branco na primeira pintura. Reagir a
+  // "mistica:catalog-state" (disparado por mobile-sync.js) em vez de
+  // re-renderizar em atrasos fixos evita repetir aqui o mesmo bug já
+  // corrigido na vitrine principal: um re-render em horário fixo podia cair
+  // bem no meio de uma falha transitória de sincronização — quando o
+  // catálogo real ainda não foi confirmado e products[] está temporariamente
+  // vazio — travando a página nessa foto vazia mesmo depois do catálogo
+  // real chegar. Só re-renderiza quando o catálogo oficial é de fato
+  // confirmado ("ready").
   function schedule() {
     render();
-    window.setTimeout(render, 250);
-    window.setTimeout(render, 900);
+    window.addEventListener("mistica:catalog-state", event => {
+      if (event.detail?.state === "ready") render();
+    });
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", schedule, { once: true });
