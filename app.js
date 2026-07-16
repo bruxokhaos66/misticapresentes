@@ -433,10 +433,31 @@ $("[data-print-last-receipt]")?.addEventListener("click", () => printReceipt());
 $("[data-send-last-receipt-whatsapp]")?.addEventListener("click", sendLastReceiptWhatsapp);
 $("[data-download-backup]")?.addEventListener("click", downloadBackup);
 $("[data-restore-backup]")?.addEventListener("click", restoreBackupInfo);
-$("[data-menu-toggle]")?.addEventListener("click", () => {
-  $("[data-nav-links]")?.classList.toggle("open");
-  $(".site-header")?.classList.toggle("menu-open");
-});
+(() => {
+  const toggleBtn = $("[data-menu-toggle]");
+  const navLinks = $("[data-nav-links]");
+  const header = $(".site-header");
+  if (!toggleBtn || !navLinks) return;
+  const setMenuOpen = open => {
+    navLinks.classList.toggle("open", open);
+    header?.classList.toggle("menu-open", open);
+    toggleBtn.setAttribute("aria-expanded", String(open));
+    toggleBtn.setAttribute("aria-label", open ? "Fechar menu" : "Abrir menu");
+    document.body.style.overflow = open ? "hidden" : "";
+  };
+  toggleBtn.addEventListener("click", () => setMenuOpen(!navLinks.classList.contains("open")));
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && navLinks.classList.contains("open")) setMenuOpen(false);
+  });
+  document.addEventListener("click", event => {
+    if (!navLinks.classList.contains("open")) return;
+    if (navLinks.contains(event.target) || toggleBtn.contains(event.target)) return;
+    setMenuOpen(false);
+  });
+  navLinks.addEventListener("click", event => {
+    if (event.target.closest("a")) setMenuOpen(false);
+  });
+})();
 if (supplierForm) supplierForm.addEventListener("submit", handleSupplierSubmit);
 if (adminLoginForm) adminLoginForm.addEventListener("submit", event => { event.preventDefault(); unlockAdmin(); });
 if (isisForm) isisForm.addEventListener("submit", handleIsisSubmit);
