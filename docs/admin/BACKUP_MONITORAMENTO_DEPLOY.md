@@ -26,11 +26,27 @@ Para ter uma cópia fora do servidor, foi criado:
 
 ### Como restaurar um backup
 
-1. Baixe o artifact mais recente em **Actions → Backup diário do banco →
-   (execução) → Artifacts**.
-2. Pare a API (ou coloque em manutenção).
-3. Substitua o arquivo apontado por `DB_PATH` pelo `.db` baixado.
-4. Reinicie a API e confira `/api/status`.
+Desde a Fase C (auditoria de produção/go-live), a restauração usa o
+procedimento seguro em `database/restore.py` / `scripts/restaurar_backup.py`
+em vez de substituir o arquivo do banco manualmente — restaurar por cima do
+arquivo em uso sem validação é o próprio risco que esse script elimina
+(checksum, `PRAGMA integrity_check`, tabelas essenciais e troca atômica só
+depois de tudo validado, sempre preservando uma cópia do banco anterior para
+rollback). Ver `docs/GO_LIVE_RUNBOOK_FASE_C.md` para o passo a passo completo
+de incidente/restore em produção.
+
+Resumo rápido (a partir de uma máquina com acesso ao disco/volume do Render,
+ex. um shell no próprio serviço ou um clone com o backup baixado):
+
+1. Baixe o backup (artifact do Actions, `/api/backup/download` ou o backup
+   automático em `BACKUP_DIRECTORY`).
+2. Rode em modo de validação (dry-run, não troca nada):
+   `python scripts/restaurar_backup.py --arquivo <nome_ou_caminho>`
+3. Se a validação passar, confirme a troca real:
+   `python scripts/restaurar_backup.py --arquivo <nome_ou_caminho> --confirmar`
+4. Reinicie a API e confira `/api/health/ready` e `/api/status`.
+5. Se algo estiver errado após a troca, reverta imediatamente:
+   `python scripts/restaurar_backup.py --rollback --confirmar`
 
 ## Monitoramento e alertas (UptimeRobot / Better Uptime)
 
