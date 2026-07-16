@@ -197,3 +197,13 @@ label { display: grid; gap: 7px; color: var(--muted); font-weight: 750; }
   .isis-panel-image, .isis-photo { min-height: 500px; }
   .checkout-actions .btn, .quick-actions .btn { width: 100%; }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
