@@ -64,21 +64,18 @@
     return data;
   }
 
-  function escapeHtml(value) {
-    return String(value == null ? "" : value)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
-  }
-
+  // products[] guarda texto puro (não escapado). Cada consumidor (cartão do
+  // catálogo, página de produto, carrinho etc.) escapa na hora de montar
+  // HTML — nunca aqui. Escapar aqui e de novo no consumidor gerava
+  // entidades duplicadas (ex.: "&amp;amp;") visíveis na tela; escapar só
+  // aqui e ler o valor via textContent em outro lugar mostrava a entidade
+  // crua (ex.: "&amp;"), já que textContent não decodifica HTML.
   function catalogText(value, fallback = "") {
     const normalized = String(value == null ? fallback : value)
       .replace(/[\u0000-\u001F\u007F]/g, " ")
       .replace(/\s+/g, " ")
       .trim();
-    return escapeHtml(normalized || fallback);
+    return normalized || fallback;
   }
 
   function fullUrl(path) {

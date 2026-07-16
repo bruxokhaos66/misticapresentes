@@ -39,10 +39,20 @@ test("dados do catálogo são exibidos como texto e não executam HTML", async (
 
   await page.goto("/index.html");
   await expect(page.locator(".product-card h3")).toContainText("Produto seguro");
-  await expect(page.locator(".product-card img")).toHaveCount(0);
+  // Sem imagem cadastrada (imagem_url inválida), o card usa a foto de
+  // fallback local da própria Mística — nunca dados vindos da API.
+  const img = page.locator(".product-card img");
+  await expect(img).toHaveCount(1);
+  await expect(img).toHaveAttribute("src", /\/assets\/images\/produto-sem-imagem\.webp$/);
   await page.waitForTimeout(200);
 
   expect(await page.evaluate(() => window.__catalogInjectionExecuted)).toBe(0);
   expect(await page.locator(".product-card script").count()).toBe(0);
-  expect(await page.locator(".product-card svg").count()).toBe(0);
+  // O único <svg> legítimo no card é a setinha estática do botão "Ver
+  // descrição" (sem atributos de evento). O payload injetado via categoria
+  // (<svg onload=...>) não pode aparecer como elemento SVG de verdade.
+  const svgs = page.locator(".product-card svg");
+  await expect(svgs).toHaveCount(1);
+  await expect(svgs.first()).toHaveClass(/product-desc-chevron/);
+  expect(await svgs.first().getAttribute("onload")).toBeNull();
 });

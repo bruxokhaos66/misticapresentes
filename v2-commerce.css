@@ -152,3 +152,111 @@
   .v2-product-toolbar { margin-top: -8px; padding: 14px; }
   .v2-chip { flex: 1 1 auto; text-align: center; }
 }
+
+/* ---------------------------------------------------------------------
+   Cards de produto compactos (estilo grandes e-commerces): a imagem tem
+   proporção fixa, o nome ocupa no máximo 3 linhas e a descrição fica
+   escondida numa "gaveta" (accordion) até o cliente pedir pra ver. Isso
+   resolve os cards gigantes de antes, onde a descrição inteira sempre
+   aparecia aberta.
+   --------------------------------------------------------------------- */
+.product-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+@media (max-width: 1180px) {
+  .product-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 860px) {
+  .product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .product-grid { grid-template-columns: 1fr; }
+}
+
+.product-card { overflow: hidden; cursor: default; }
+.product-card-body { display: flex; flex-direction: column; flex: 1; }
+
+.product-media-wrap { position: relative; }
+.product-media-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid rgba(242,201,109,.2);
+  background: radial-gradient(circle at 50% 35%, rgba(242,201,109,.16), transparent 38%), linear-gradient(145deg, rgba(10,12,8,.94), rgba(35,20,44,.76));
+}
+.product-photo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: contain;
+  object-position: center;
+  padding: 10px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  font-size: 0;
+  transition: transform .35s ease;
+  box-sizing: border-box;
+}
+.product-card:hover .product-photo { transform: scale(1.04); }
+.product-photo.is-fallback { padding: 22px; opacity: .92; }
+
+.product-card h3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: calc(1.28em * 2);
+  font-size: 1.08rem;
+  line-height: 1.28;
+}
+
+.product-price { margin-top: 4px; }
+.product-card .qty-row { margin-top: auto; }
+
+.product-desc-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px 14px;
+  border: 1px solid rgba(242,201,109,.26);
+  border-radius: 999px;
+  background: rgba(255,255,255,.03);
+  color: var(--gold-2, #ffe7a3);
+  font-weight: 850;
+  font-size: .84rem;
+  cursor: pointer;
+  transition: background .2s ease, border-color .2s ease, transform .15s ease;
+}
+.product-desc-toggle:hover { background: rgba(255,255,255,.07); border-color: rgba(242,201,109,.5); }
+.product-desc-toggle:active { transform: scale(.98); }
+.product-desc-chevron { width: 14px; height: 14px; transition: transform .3s ease; }
+.product-desc-toggle[aria-expanded="true"] .product-desc-chevron { transform: rotate(180deg); }
+
+/* Gaveta com animação suave via CSS Grid (0fr -> 1fr), sem precisar medir
+   altura em JS: cada card abre só a própria descrição, sem recarregar a
+   página e sem afetar os outros cards. */
+.product-desc-drawer {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows .38s cubic-bezier(.4, 0, .2, 1);
+}
+.product-desc-drawer.is-open { grid-template-rows: 1fr; }
+.product-desc-drawer-inner { overflow: hidden; }
+.product-desc-drawer-inner p {
+  margin: 10px 0 0;
+  color: var(--muted);
+  line-height: 1.55;
+  font-size: .92rem;
+}
+.product-encomenda-note { margin-top: 8px !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .product-desc-drawer, .product-desc-chevron, .product-photo, .product-card { transition: none; }
+}
