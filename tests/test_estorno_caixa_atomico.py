@@ -373,6 +373,34 @@ def test_estorno_apos_caixa_fechado_no_mesmo_caixa_e_rejeitado(banco_temporario)
     assert _status_venda(venda_id) == "Concluído"
 
 
+def test_registrar_venda_em_caixa_ja_fechado_e_rejeitado_sem_efeitos_parciais(banco_temporario):
+    """Produtor de fluxo_caixa sem guard, achado na revisão da Fase A
+    (PR #331): registrar_venda_service só checava `if not caixa_id`, sem
+    conferir se o caixa_id informado continua 'Aberto' dentro da transação
+    -- diferente de cancelar_venda_service, que já tinha essa guarda. Uma
+    venda podia terminar de gravar sua entrada financeira num caixa que
+    fechou durante a operação. Corrigido para abortar (rollback total: nem
+    venda, nem baixa de estoque, nem fluxo_caixa) quando o caixa não está
+    mais aberto."""
+    codigo = _produto(quantidade=5)
+    caixa_id = abrir_caixa(0.0, "Teste")
+    fechar_caixa_simples(caixa_id, 0.0)
+
+    carrinho = [{"id": codigo, "n": "Produto", "q": 1, "p": 50.0, "t": 50.0}]
+    calculo = calcular_total_venda(carrinho, 0, "Dinheiro")
+    with pytest.raises(ValueError, match="caixa foi fechado"):
+        registrar_venda_service(
+            carrinho, "Consumidor Final", "01/01/2026 10:00", "2026-01-01 10:00:00",
+            calculo, "Dinheiro", "Teste", caixa_id,
+        )
+
+    # Rollback total: nada de venda registrada, estoque intacto, nenhuma
+    # entrada de R$ 50 em fluxo_caixa (só a abertura de R$ 0 permanece).
+    assert _estoque(codigo) == 5
+    entradas = [l for l in _fluxo_caixa(caixa_id) if l[0] == "Entrada"]
+    assert all(l[2] != 50.0 for l in entradas)
+
+
 # 9 — integridade financeira: forma de pagamento original é preservada e o
 # valor estornado vem do banco (nunca de entrada externa), para dinheiro,
 # Pix, cartão, misto, com desconto e com acréscimo (taxa de cartão).
@@ -429,6 +457,108 @@ def test_estorno_de_venda_com_pagamento_misto_lanca_saida_por_forma(banco_tempor
     valores = sorted(linha[2] for linha in saidas)
     assert valores == [pytest.approx(40.0), pytest.approx(60.0)]
     assert _estoque(codigo) == 5
+
+
+def test_estorno_de_venda_mista_com_cartao_devolve_valor_com_taxa(banco_temporario):
+    """Regressão: services/venda_service.py::resumo_pagamentos_mistos grava a
+    forma com taxa como "Credito 1x R$ X,XX (inclui taxa R$ Y,YY)" — um
+    segundo "R$" só informativo. extrair_pagamentos_mistos precisa cortar no
+    PRIMEIRO "R$" (o valor pago) e não no último (a taxa), senão a parcela em
+    cartão é descartada do estorno e o caixa fecha com saldo inflado."""
+    codigo = _produto(quantidade=5, preco=100.0)
+    caixa_id = abrir_caixa(0.0, "Teste")
+    carrinho = [{"id": codigo, "n": "Produto", "q": 1, "p": 100.0, "t": 100.0}]
+    # Valor do Credito 1x já inclui a taxa fixa de R$ 1,50 (60 do produto +
+    # 1,50 de taxa), exatamente como normalizar_pagamentos_mistos exige.
+    calculo = calcular_total_venda_misto(carrinho, 0, [{"forma": "Dinheiro", "valor": 40}, {"forma": "Credito 1x", "valor": 61.5}])
+    venda_id = registrar_venda_service(
+        carrinho, "Consumidor Final", "01/01/2026 10:00", "2026-01-01 10:00:00",
+        calculo, "Misto", "Teste", caixa_id,
+        pagamentos_mistos=[{"forma": "Dinheiro", "valor": 40}, {"forma": "Credito 1x", "valor": 61.5}],
+    )
+    entradas_antes = sum(linha[2] for linha in _fluxo_caixa(caixa_id) if linha[0] == "Entrada")
+
+    cancelar_venda_service(venda_id, "Teste", caixa_id)
+
+    saidas = [linha for linha in _fluxo_caixa(caixa_id) if linha[0] == "Saida"]
+    # As duas parcelas (Dinheiro e Credito 1x, esta com taxa embutida) têm
+    # que ser estornadas — nenhuma pode ser descartada por causa do sufixo
+    # "(inclui taxa ...)".
+    assert len(saidas) == 2
+    valores = sorted(linha[2] for linha in saidas)
+    assert valores == [pytest.approx(40.0), pytest.approx(61.5)]
+    total_saidas = sum(linha[2] for linha in saidas)
+    # O caixa fecha zerado: nada de saldo inflado por parcela de cartão
+    # perdida no parsing do estorno.
+    assert total_saidas == pytest.approx(entradas_antes)
+    assert _estoque(codigo) == 5
+
+
+def test_estorno_de_venda_mista_com_valor_corrompido_falha_sem_gravar_nada(banco_temporario):
+    """Invariante do estorno misto (Fase A, PR #331): a soma das parcelas
+    extraídas de forma_pagamento tem que bater com o total_final autoritativo
+    da venda. Se um registro histórico/corrompido tiver uma parcela com valor
+    divergente da soma real da venda, o estorno tem que FALHAR por inteiro
+    (rollback completo, nada gravado em fluxo_caixa) — nunca seguir
+    parcialmente com um valor incorreto."""
+    codigo = _produto(quantidade=5, preco=100.0)
+    caixa_id = abrir_caixa(0.0, "Teste")
+    carrinho = [{"id": codigo, "n": "Produto", "q": 1, "p": 100.0, "t": 100.0}]
+    calculo = calcular_total_venda_misto(carrinho, 0, [{"forma": "Dinheiro", "valor": 40}, {"forma": "Pix", "valor": 60}])
+    venda_id = registrar_venda_service(
+        carrinho, "Consumidor Final", "01/01/2026 10:00", "2026-01-01 10:00:00",
+        calculo, "Misto", "Teste", caixa_id,
+        pagamentos_mistos=[{"forma": "Dinheiro", "valor": 40}, {"forma": "Pix", "valor": 60}],
+    )
+    from database import query_db
+    # Corrompe a forma_pagamento gravada para divergir do total_final real
+    # (simula um registro histórico com valor de parcela adulterado/truncado).
+    query_db(
+        "UPDATE vendas SET forma_pagamento=? WHERE id=?",
+        ("Misto: Dinheiro R$ 10,00 + Pix R$ 60,00", venda_id),
+        commit=True,
+    )
+
+    with pytest.raises(ValueError, match="diverge"):
+        cancelar_venda_service(venda_id, "Teste", caixa_id)
+
+    # Rollback completo: venda continua "Concluído" e nada foi gravado em
+    # fluxo_caixa; estoque não foi devolvido.
+    assert _status_venda(venda_id) == "Concluído"
+    saidas = [linha for linha in _fluxo_caixa(caixa_id) if linha[0] == "Saida"]
+    assert saidas == []
+    assert _estoque(codigo) == 4
+
+
+def test_estorno_de_venda_mista_com_forma_ilegivel_falha_de_forma_observavel(banco_temporario):
+    """Formato corrompido tem que falhar de forma OBSERVÁVEL (ValueError),
+    nunca retornar silenciosamente lista vazia/incompleta e seguir como se a
+    venda não fosse mista (o que faria o estorno usar o total_final inteiro
+    numa única forma de pagamento errada)."""
+    codigo = _produto(quantidade=5, preco=100.0)
+    caixa_id = abrir_caixa(0.0, "Teste")
+    carrinho = [{"id": codigo, "n": "Produto", "q": 1, "p": 100.0, "t": 100.0}]
+    calculo = calcular_total_venda_misto(carrinho, 0, [{"forma": "Dinheiro", "valor": 40}, {"forma": "Pix", "valor": 60}])
+    venda_id = registrar_venda_service(
+        carrinho, "Consumidor Final", "01/01/2026 10:00", "2026-01-01 10:00:00",
+        calculo, "Misto", "Teste", caixa_id,
+        pagamentos_mistos=[{"forma": "Dinheiro", "valor": 40}, {"forma": "Pix", "valor": 60}],
+    )
+    from database import query_db
+    # forma_pagamento começa com "Misto:" mas não tem nenhum "R$" utilizável
+    # -> extrair_pagamentos_mistos retornaria [] hoje; o guard tem que barrar.
+    query_db(
+        "UPDATE vendas SET forma_pagamento=? WHERE id=?",
+        ("Misto: texto corrompido sem valores", venda_id),
+        commit=True,
+    )
+
+    with pytest.raises(ValueError, match="Falha ao interpretar"):
+        cancelar_venda_service(venda_id, "Teste", caixa_id)
+
+    assert _status_venda(venda_id) == "Concluído"
+    assert [linha for linha in _fluxo_caixa(caixa_id) if linha[0] == "Saida"] == []
+    assert _estoque(codigo) == 4
 
 
 # 10 — estorno não grava em caixa diferente do informado, e não altera um

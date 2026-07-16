@@ -291,3 +291,236 @@ def test_resumo_fechamento_caixa_muitos_lancamentos_pequenos_fecha_exato(banco_t
     resumo = resumo_fechamento_caixa()
     assert resumo["saldo"] == 4.10
     assert resumo["formas"]["Dinheiro"] == 4.10
+
+
+def test_abrir_caixa_e_atomico_nao_duplica_caixa_aberto(banco_temporario):
+    """Regressão: abrir_caixa fazia SELECT (checagem) e dois INSERTs
+    (caixa_diario + lançamento inicial) em transações separadas — uma
+    segunda chamada concorrente podia passar na checagem antes do primeiro
+    INSERT commitar e abrir dois caixas 'Aberto' ao mesmo tempo. Agora a
+    checagem e o INSERT do caixa são um único INSERT...SELECT WHERE NOT
+    EXISTS, com rowcount como guarda."""
+    from database import query_db
+    from services.caixa_service import abrir_caixa, caixa_abertos_count
+
+    abrir_caixa(100.0, "Teste")
+    with pytest.raises(ValueError, match="Ja existe um caixa aberto"):
+        abrir_caixa(50.0, "Teste 2")
+
+    assert caixa_abertos_count() == 1
+    entradas_iniciais = query_db("SELECT COUNT(*) FROM fluxo_caixa WHERE descricao LIKE 'Abertura de Caixa%'")
+    assert entradas_iniciais[0][0] == 1
+
+
+def test_lancar_fluxo_apos_fechamento_e_rejeitado_sem_gravar(banco_temporario):
+    """Regressão: lancar_fluxo (sangria/reforço) gravava sem checar se o
+    caixa informado seguia aberto — uma sangria disparada perto do
+    fechamento podia ser persistida em fluxo_caixa depois do caixa já ter
+    sido marcado 'Fechado', fora do relatório de fechamento já salvo."""
+    from services.caixa_service import abrir_caixa, fechar_caixa_simples, lancar_fluxo
+
+    caixa_id = abrir_caixa(0.0, "Teste")
+    fechar_caixa_simples(caixa_id, 0.0)
+
+    with pytest.raises(ValueError, match="caixa foi fechado"):
+        lancar_fluxo("Saida", "Sangria tardia", 10.0, caixa_id)
+
+    saidas = [linha for linha in db_conn.query_db("SELECT tipo FROM fluxo_caixa WHERE caixa_id=? AND tipo='Saida'", (caixa_id,))]
+    assert saidas == []
+
+
+def test_marcar_conta_paga_e_atomico_nao_duplica_saida_no_caixa(banco_temporario):
+    """Regressão: marcar_conta_paga lia o status, checava 'paga' em Python e
+    só então fazia um UPDATE sem guarda de status no WHERE seguido de um
+    lancar_fluxo em transação separada — duas chamadas concorrentes para a
+    mesma conta podiam ambas passar na checagem e duplicar a saída
+    financeira. Agora o UPDATE reivindica o pagamento por rowcount e o
+    lançamento entra na mesma transação."""
+    from services.caixa_service import abrir_caixa, marcar_conta_paga, salvar_conta
+
+    caixa_id = abrir_caixa(0.0, "Teste")
+    salvar_conta("Fornecedor X", 150.0, "01/02/2026", "Insumos")
+    conta_id = db_conn.query_db("SELECT id FROM contas_a_pagar WHERE descricao=?", ("Fornecedor X",))[0][0]
+
+    assert marcar_conta_paga(conta_id, caixa_id, "Teste") is True
+    assert marcar_conta_paga(conta_id, caixa_id, "Teste") is True  # idempotente, não duplica
+
+    saidas = db_conn.query_db("SELECT valor FROM fluxo_caixa WHERE caixa_id=? AND tipo='Saida'", (caixa_id,))
+    assert len(saidas) == 1
+    assert saidas[0][0] == pytest.approx(150.0)
+
+
+def test_marcar_conta_paga_sem_caixa_aberto_falha_sem_marcar_paga(banco_temporario):
+    """services/caixa_service.py::marcar_conta_paga não pode marcar uma conta
+    como paga sem nenhum caixa aberto para receber o lançamento financeiro
+    (defesa em profundidade: a UI já bloqueia isso, mas o service não pode
+    depender só do chamador). Antes desta validação, cx_id=None fazia a
+    função marcar a conta 'Paga' silenciosamente sem gravar nada em
+    fluxo_caixa — pagamento sem rastro financeiro."""
+    from services.caixa_service import marcar_conta_paga, salvar_conta
+
+    salvar_conta("Fornecedor Sem Caixa", 50.0, "01/02/2026", "Insumos")
+    conta_id = db_conn.query_db("SELECT id FROM contas_a_pagar WHERE descricao=?", ("Fornecedor Sem Caixa",))[0][0]
+
+    with pytest.raises(ValueError, match="caixa"):
+        marcar_conta_paga(conta_id, None, "Teste")
+
+    status = db_conn.query_db("SELECT status FROM contas_a_pagar WHERE id=?", (conta_id,))[0][0]
+    assert status == "Pendente"
+
+
+def test_marcar_conta_paga_com_valor_zero_ou_negativo_falha(banco_temporario):
+    """Conta com valor zero/negativo (cadastro corrompido/manipulado) não
+    pode ser paga silenciosamente."""
+    from services.caixa_service import abrir_caixa, marcar_conta_paga, salvar_conta
+
+    caixa_id = abrir_caixa(0.0, "Teste")
+    salvar_conta("Fornecedor Zero", 0.0, "01/02/2026", "Insumos")
+    conta_id = db_conn.query_db("SELECT id FROM contas_a_pagar WHERE descricao=?", ("Fornecedor Zero",))[0][0]
+
+    with pytest.raises(ValueError, match="valor invalido"):
+        marcar_conta_paga(conta_id, caixa_id, "Teste")
+
+    saidas = db_conn.query_db("SELECT valor FROM fluxo_caixa WHERE caixa_id=? AND tipo='Saida'", (caixa_id,))
+    assert saidas == []
+
+
+def test_marcar_conta_paga_conta_inexistente_falha(banco_temporario):
+    from services.caixa_service import abrir_caixa, marcar_conta_paga
+
+    caixa_id = abrir_caixa(0.0, "Teste")
+    with pytest.raises(ValueError, match="Conta nao localizada"):
+        marcar_conta_paga(999999, caixa_id, "Teste")
+
+
+def test_marcar_conta_paga_caixa_ja_fechado_no_id_informado_falha(banco_temporario):
+    """Se o caixa_id explicitamente informado já está fechado (não é mais o
+    ativo), a saída financeira não pode ser lançada nele; a operação tem que
+    abortar por inteiro (a conta não pode ficar marcada 'Paga' sem o
+    lançamento correspondente)."""
+    from services.caixa_service import abrir_caixa, fechar_caixa_simples, marcar_conta_paga, salvar_conta
+
+    caixa_id = abrir_caixa(0.0, "Teste")
+    fechar_caixa_simples(caixa_id, 0.0)
+    salvar_conta("Fornecedor Caixa Fechado", 50.0, "01/02/2026", "Insumos")
+    conta_id = db_conn.query_db("SELECT id FROM contas_a_pagar WHERE descricao=?", ("Fornecedor Caixa Fechado",))[0][0]
+
+    with pytest.raises(ValueError, match="fechado"):
+        marcar_conta_paga(conta_id, caixa_id, "Teste")
+
+    status = db_conn.query_db("SELECT status FROM contas_a_pagar WHERE id=?", (conta_id,))[0][0]
+    assert status == "Pendente"
+
+
+def test_marcar_conta_paga_retry_sequencial_e_idempotente(banco_temporario):
+    from services.caixa_service import abrir_caixa, marcar_conta_paga, salvar_conta
+
+    caixa_id = abrir_caixa(0.0, "Teste")
+    salvar_conta("Fornecedor Retry", 75.0, "01/02/2026", "Insumos")
+    conta_id = db_conn.query_db("SELECT id FROM contas_a_pagar WHERE descricao=?", ("Fornecedor Retry",))[0][0]
+
+    for _ in range(4):
+        assert marcar_conta_paga(conta_id, caixa_id, "Teste") is True
+
+    saidas = db_conn.query_db("SELECT valor FROM fluxo_caixa WHERE caixa_id=? AND tipo='Saida'", (caixa_id,))
+    assert len(saidas) == 1
+    assert saidas[0][0] == pytest.approx(75.0)
+
+
+def test_marcar_conta_paga_duas_chamadas_simultaneas_so_uma_lanca_saida(banco_temporario):
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+    from services.caixa_service import abrir_caixa, marcar_conta_paga, salvar_conta
+
+    caixa_id = abrir_caixa(0.0, "Teste")
+    salvar_conta("Fornecedor Concorrente", 88.0, "01/02/2026", "Insumos")
+    conta_id = db_conn.query_db("SELECT id FROM contas_a_pagar WHERE descricao=?", ("Fornecedor Concorrente",))[0][0]
+
+    barreira = threading.Barrier(2)
+
+    def pagar():
+        barreira.wait(timeout=10)
+        return marcar_conta_paga(conta_id, caixa_id, "Teste")
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        resultados = [f.result(timeout=20) for f in [executor.submit(pagar) for _ in range(2)]]
+
+    assert resultados == [True, True]
+    saidas = db_conn.query_db("SELECT valor FROM fluxo_caixa WHERE caixa_id=? AND tipo='Saida'", (caixa_id,))
+    assert len(saidas) == 1  # nunca duplicado, mesmo com duas chamadas concorrentes
+    assert saidas[0][0] == pytest.approx(88.0)
+
+
+def test_marcar_conta_paga_dados_vem_do_banco_nao_do_chamador(banco_temporario):
+    """valor/vencimento/fornecedor sempre vêm da linha lida do banco
+    (obter_conta) — a assinatura de marcar_conta_paga nem aceita esses
+    campos como parâmetro, então não há como um chamador malicioso/errado
+    adulterar o valor lançado no fluxo_caixa."""
+    import inspect
+    from services.caixa_service import marcar_conta_paga
+
+    parametros = set(inspect.signature(marcar_conta_paga).parameters)
+    assert parametros == {"conta_id", "caixa_id", "operador"}
+
+
+def test_operacoes_financeiras_de_caixa_geram_trilha_de_auditoria(banco_temporario):
+    """Auditoria financeira: abrir/fechar caixa, sangria/reforço, estorno de
+    venda e conta paga precisam deixar rastro em audit_log — antes desta
+    correção, nenhum desses fluxos chamava registrar_auditoria."""
+    from database import query_db
+    from services.caixa_service import abrir_caixa, fechar_caixa_simples, lancar_fluxo, marcar_conta_paga, salvar_conta
+
+    caixa_id = abrir_caixa(100.0, "Teste")
+    lancar_fluxo("Entrada", "Reforço", 20.0, caixa_id)
+    salvar_conta("Fornecedor Y", 30.0, "01/02/2026", "Insumos")
+    conta_id = query_db("SELECT id FROM contas_a_pagar WHERE descricao=?", ("Fornecedor Y",))[0][0]
+    marcar_conta_paga(conta_id, caixa_id, "Teste")
+    fechar_caixa_simples(caixa_id, 90.0)
+
+    acoes = {row[0] for row in query_db("SELECT acao FROM audit_log WHERE entidade IN ('caixa', 'conta_a_pagar')")}
+    assert {"abrir", "lancar_fluxo", "fechar_simples"} <= acoes
+    assert "marcar_paga" in acoes
+
+
+def test_fechar_caixa_conferido_gera_trilha_de_auditoria_com_operador(banco_temporario):
+    """Teste dedicado (faltava): fechar_caixa_conferido precisa gravar em
+    audit_log como os demais fluxos financeiros, e (Fase A, PR #331) agora
+    aceita e registra o operador responsável -- antes, fechar_caixa_conferido/
+    fechar_caixa_simples/lancar_fluxo não recebiam operador nenhum e a
+    auditoria caía sempre no valor padrão 'Sistema', perdendo quem realmente
+    executou a ação."""
+    from database import query_db
+    from services.caixa_service import abrir_caixa, resumo_fechamento_caixa, fechar_caixa_conferido
+
+    caixa_id = abrir_caixa(100.0, "Operadora Ana")
+    resumo = resumo_fechamento_caixa()
+    formas = resumo["formas_detalhadas"]
+    informado = dict(formas)
+
+    fechar_caixa_conferido(caixa_id, resumo["saldo"], formas, informado, "Operadora Ana")
+
+    linha = query_db(
+        "SELECT acao, usuario FROM audit_log WHERE entidade='caixa' AND entidade_id=? AND acao='fechar_conferido'",
+        (str(caixa_id),),
+    )
+    assert len(linha) == 1
+    assert linha[0][1] == "Operadora Ana"
+
+
+def test_operador_e_registrado_em_fechar_simples_e_lancar_fluxo(banco_temporario):
+    """Confirma que o operador passado explicitamente (não mais só o padrão
+    'Sistema') chega até audit_log em fechar_caixa_simples e lancar_fluxo."""
+    from database import query_db
+    from services.caixa_service import abrir_caixa, fechar_caixa_simples, lancar_fluxo
+
+    caixa_id = abrir_caixa(0.0, "Operador Bruno")
+    lancar_fluxo("Entrada", "Reforço", 10.0, caixa_id, operador="Operador Bruno")
+    fechar_caixa_simples(caixa_id, 10.0, "Operador Bruno")
+
+    linhas = query_db(
+        "SELECT acao, usuario FROM audit_log WHERE entidade='caixa' AND entidade_id=? AND acao IN ('lancar_fluxo','fechar_simples')",
+        (str(caixa_id),),
+    )
+    acoes_usuarios = {(a, u) for a, u in linhas}
+    assert ("lancar_fluxo", "Operador Bruno") in acoes_usuarios
+    assert ("fechar_simples", "Operador Bruno") in acoes_usuarios

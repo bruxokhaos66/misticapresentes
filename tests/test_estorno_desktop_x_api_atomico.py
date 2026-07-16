@@ -20,6 +20,24 @@ corretamente e de forma exclusiva, mas nenhum lançamento financeiro de
 estorno é criado. Isso é verificado explicitamente abaixo para não regredir
 silenciosamente caso a API passe a gravar fluxo_caixa no futuro sem os
 mesmos testes de exclusão mútua.
+
+Nota sobre flake pré-existente (investigado na Fase A, PR #331): o CI
+relatou um `threading.BrokenBarrierError` intermitente em
+`test_api_x_api_no_banco_compartilhado`. Reprodução estatística mostrou que
+o mesmo erro ocorre também em `origin/main` ANTES das mudanças da Fase A —
+este arquivo não foi alterado pelo PR #331 e a Fase A não toca nada usado
+aqui. A causa raiz não era só timeout apertado: os dois threads faziam
+`with TestClient(main.app) as thread_client:` (o que dispara o
+lifespan/startup do FastAPI, incluindo inicialização de banco e logging)
+*dentro* do trecho cronometrado pela barreira — sob CI compartilhado, esse
+startup concorrente pode variar bem mais que os poucos segundos que a
+corrida em si leva, e um simples aumento de timeout (10s -> 30s) não foi
+suficiente (voltou a falhar com o mesmo erro). A correção definitiva foi
+tirar a criação do `TestClient` de dentro do bloco cronometrado,
+pré-aquecendo os dois clients ANTES da barreira: assim `barreira.wait`
+só precisa cobrir o skew de agendamento das threads até o POST em si, não
+mais o startup do app. Nenhuma asserção nem a semântica do teste mudou —
+a corrida real do POST concorrente continua sendo exercida.
 """
 
 import os
@@ -130,7 +148,7 @@ def test_desktop_x_desktop_no_banco_compartilhado(banco_compartilhado):
     barreira = threading.Barrier(2)
 
     def estornar():
-        barreira.wait(timeout=10)
+        barreira.wait(timeout=30)
         try:
             venda_service.cancelar_venda_service(venda_id, "Teste", caixa_id)
             return "ok"
@@ -138,7 +156,7 @@ def test_desktop_x_desktop_no_banco_compartilhado(banco_compartilhado):
             return str(exc)
 
     with ThreadPoolExecutor(max_workers=2) as executor:
-        resultados = [f.result(timeout=20) for f in [executor.submit(estornar) for _ in range(2)]]
+        resultados = [f.result(timeout=45) for f in [executor.submit(estornar) for _ in range(2)]]
 
     assert sorted(resultados) == ["Venda ja cancelada.", "ok"]
     assert _estoque(codigo) == 5
@@ -154,13 +172,21 @@ def test_api_x_api_no_banco_compartilhado(banco_compartilhado):
     venda_id = _venda_direto(codigo, caixa_id)
     barreira = threading.Barrier(2)
 
-    def enviar():
-        with TestClient(main.app) as thread_client:
-            barreira.wait(timeout=10)
-            return thread_client.post(f"/api/vendas/{venda_id}/estornar", headers=HEADERS, json={"usuario": "Teste"})
+    # O startup do TestClient (lifespan do FastAPI) é feito ANTES da
+    # barreira, fora do trecho cronometrado: assim a janela do barrier só
+    # precisa cobrir o skew de agendamento das threads até o POST, não a
+    # inicialização do app (que sob CI compartilhado/GIL pode variar bem
+    # mais que os poucos segundos que a corrida em si leva).
+    def enviar(cliente):
+        barreira.wait(timeout=30)
+        return cliente.post(f"/api/vendas/{venda_id}/estornar", headers=HEADERS, json={"usuario": "Teste"})
 
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        respostas = [f.result(timeout=20) for f in [executor.submit(enviar) for _ in range(2)]]
+    with TestClient(main.app) as cliente_a, TestClient(main.app) as cliente_b:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            respostas = [
+                f.result(timeout=45)
+                for f in [executor.submit(enviar, cliente_a), executor.submit(enviar, cliente_b)]
+            ]
 
     for resposta in respostas:
         assert resposta.status_code == 200, resposta.text
@@ -184,25 +210,25 @@ def test_desktop_x_api_apenas_um_vence_e_nao_duplica_efeitos(banco_compartilhado
         resultado = {}
 
         def estornar_desktop():
-            barreira.wait(timeout=10)
+            barreira.wait(timeout=30)
             try:
                 venda_service.cancelar_venda_service(venda_id, "Teste", caixa_id)
                 resultado["desktop"] = "ok"
             except ValueError as exc:
                 resultado["desktop"] = str(exc)
 
-        def estornar_api():
-            with TestClient(main.app) as thread_client:
-                barreira.wait(timeout=10)
-                resp = thread_client.post(f"/api/vendas/{venda_id}/estornar", headers=HEADERS, json={"usuario": "Teste"})
-                resultado["api_status"] = resp.status_code
-                resultado["api_ja_cancelada"] = resp.json().get("ja_cancelada") if resp.status_code == 200 else None
+        def estornar_api(cliente):
+            barreira.wait(timeout=30)
+            resp = cliente.post(f"/api/vendas/{venda_id}/estornar", headers=HEADERS, json={"usuario": "Teste"})
+            resultado["api_status"] = resp.status_code
+            resultado["api_ja_cancelada"] = resp.json().get("ja_cancelada") if resp.status_code == 200 else None
 
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            f1 = executor.submit(estornar_desktop)
-            f2 = executor.submit(estornar_api)
-            f1.result(timeout=20)
-            f2.result(timeout=20)
+        with TestClient(main.app) as cliente_api:
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                f1 = executor.submit(estornar_desktop)
+                f2 = executor.submit(estornar_api, cliente_api)
+                f1.result(timeout=45)
+                f2.result(timeout=45)
 
         # Exclusão mútua: exatamente um dos dois caminhos reivindicou a
         # transição (rowcount==1); o outro observa o estado JÁ cancelado.

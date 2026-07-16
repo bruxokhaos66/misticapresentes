@@ -2,6 +2,7 @@ from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
 import unicodedata
 
+from backend.audit import registrar_auditoria
 from database import get_connection, query_db
 
 
@@ -65,12 +66,41 @@ def caixa_abertos_count():
 
 
 def abrir_caixa(valor_inicial, operador, descricao="Abertura de Caixa"):
-    if obter_caixa_id_ativo():
-        raise ValueError("Ja existe um caixa aberto. Feche o caixa atual antes de abrir outro.")
+    """Abre o caixa de forma atômica: a checagem de que não há caixa aberto e
+    o INSERT que abre um novo ficam na mesma transação, com uma guarda por
+    subquery no próprio INSERT — nunca um SELECT seguido de um INSERT
+    incondicional em conexões/commits separados. Duas aberturas concorrentes
+    (duplo clique, dois operadores) nunca criam dois caixas 'Aberto'
+    simultâneos: só uma reivindica a linha (rowcount==1) e grava o
+    lançamento inicial de saldo na mesma transação; a outra vê rowcount==0 e
+    aborta sem deixar caixa aberto sem lançamento inicial (efeito parcial)."""
     data_ini = datetime.now().strftime("%d/%m/%Y %H:%M")
-    query_db("INSERT INTO caixa_diario (data_abertura, saldo_inicial, status, operador) VALUES (?,?,?,?)", (data_ini, float(valor_inicial or 0), "Aberto", operador), commit=True)
-    cx_id = obter_caixa_id_ativo()
-    query_db("INSERT INTO fluxo_caixa (tipo, descricao, valor, data_hora, caixa_id, forma_pagamento) VALUES (?,?,?,?,?,?)", ("Entrada", descricao, float(valor_inicial or 0), data_ini, cx_id, "Dinheiro"), commit=True)
+    valor_inicial = float(valor_inicial or 0)
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """
+            INSERT INTO caixa_diario (data_abertura, saldo_inicial, status, operador)
+            SELECT ?, ?, 'Aberto', ?
+            WHERE NOT EXISTS (SELECT 1 FROM caixa_diario WHERE status='Aberto')
+            """,
+            (data_ini, valor_inicial, operador),
+        )
+        if cur.rowcount != 1:
+            raise ValueError("Ja existe um caixa aberto. Feche o caixa atual antes de abrir outro.")
+        cx_id = cur.lastrowid
+        cur.execute(
+            "INSERT INTO fluxo_caixa (tipo, descricao, valor, data_hora, caixa_id, forma_pagamento) VALUES (?,?,?,?,?,?)",
+            ("Entrada", descricao, valor_inicial, data_ini, cx_id, "Dinheiro"),
+        )
+        registrar_auditoria(conn, "caixa", cx_id, "abrir", operador, depois={"saldo_inicial": valor_inicial})
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
     return cx_id
 
 
@@ -166,7 +196,7 @@ def _reivindicar_fechamento_cursor(cur, caixa_id):
     return cur.rowcount
 
 
-def fechar_caixa_conferido(caixa_id, saldo, formas, informado):
+def fechar_caixa_conferido(caixa_id, saldo, formas, informado, operador=None):
     formas = formas or {}
     informado = informado or {}
     credito_sistema = formas.get("Credito", None)
@@ -193,6 +223,7 @@ def fechar_caixa_conferido(caixa_id, saldo, formas, informado):
             """,
             (datetime.now().strftime("%d/%m/%Y %H:%M"), saldo, formas.get("Dinheiro", 0.0), formas.get("Pix", 0.0), formas.get("Debito", 0.0), credito_sistema, informado.get("Dinheiro", 0.0), informado.get("Pix", 0.0), informado.get("Debito", 0.0), credito_informado, diferenca, caixa_id),
         )
+        registrar_auditoria(conn, "caixa", caixa_id, "fechar_conferido", operador, depois={"saldo_final": saldo, "formas_sistema": formas, "formas_informado": informado, "diferenca": diferenca})
         conn.commit()
     except Exception:
         conn.rollback()
@@ -202,7 +233,7 @@ def fechar_caixa_conferido(caixa_id, saldo, formas, informado):
     return diferenca
 
 
-def fechar_caixa_simples(caixa_id, saldo):
+def fechar_caixa_simples(caixa_id, saldo, operador=None):
     conn = get_connection()
     cur = conn.cursor()
     try:
@@ -212,6 +243,7 @@ def fechar_caixa_simples(caixa_id, saldo):
             "UPDATE caixa_diario SET data_fechamento=?, saldo_final=? WHERE id=?",
             (datetime.now().strftime("%d/%m/%Y %H:%M"), saldo, caixa_id),
         )
+        registrar_auditoria(conn, "caixa", caixa_id, "fechar_simples", operador, depois={"saldo_final": saldo})
         conn.commit()
     except Exception:
         conn.rollback()
@@ -220,16 +252,37 @@ def fechar_caixa_simples(caixa_id, saldo):
         conn.close()
 
 
-def lancar_fluxo(tipo, descricao, valor, caixa_id, rotulo=None, forma_pagamento=None):
+def lancar_fluxo(tipo, descricao, valor, caixa_id, rotulo=None, forma_pagamento=None, operador=None):
+    """Lança sangria/reforço no caixa aberto. A checagem de que o caixa
+    informado segue 'Aberto' e o INSERT do lançamento acontecem na mesma
+    transação (subquery no próprio INSERT + rowcount), para que um
+    fechamento de caixa concorrente nunca fique com um lançamento gravado
+    depois que o caixa já foi marcado 'Fechado' (mesma classe de corrida já
+    fechada em cancelar_venda_service/fechar_caixa_*)."""
     if not caixa_id:
         raise ValueError("Abra o caixa antes de fazer lançamentos.")
     rotulo = rotulo or ("Reforco de caixa" if tipo == "Entrada" else "Sangria")
     forma_pagamento = normalizar_forma_caixa(forma_pagamento) if forma_pagamento else forma_pagamento
-    query_db(
-        "INSERT INTO fluxo_caixa (tipo, descricao, valor, data_hora, data_iso, caixa_id, forma_pagamento) VALUES (?,?,?,?,?,?,?)",
-        (tipo, f"{rotulo}: {descricao}", float(valor or 0), datetime.now().strftime("%d/%m/%Y %H:%M"), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), caixa_id, forma_pagamento),
-        commit=True,
-    )
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """
+            INSERT INTO fluxo_caixa (tipo, descricao, valor, data_hora, data_iso, caixa_id, forma_pagamento)
+            SELECT ?, ?, ?, ?, ?, ?, ?
+            WHERE EXISTS (SELECT 1 FROM caixa_diario WHERE id=? AND status='Aberto')
+            """,
+            (tipo, f"{rotulo}: {descricao}", float(valor or 0), datetime.now().strftime("%d/%m/%Y %H:%M"), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), caixa_id, forma_pagamento, caixa_id),
+        )
+        if cur.rowcount != 1:
+            raise ValueError("O caixa foi fechado durante a operação; lançamento cancelado. Reabra o caixa e tente novamente.")
+        registrar_auditoria(conn, "caixa", caixa_id, "lancar_fluxo", operador, depois={"tipo": tipo, "rotulo": rotulo, "valor": float(valor or 0)})
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def listar_fluxo(caixa_id=None):
@@ -254,16 +307,52 @@ def obter_conta(conta_id):
 
 
 def marcar_conta_paga(conta_id, caixa_id=None, operador="Sistema"):
+    """Marca uma conta a pagar como paga e lança a saída correspondente no
+    caixa, de forma atômica: a reivindicação do pagamento (UPDATE com guarda
+    de status no WHERE, checado por rowcount) e o lançamento da saída no
+    caixa acontecem na mesma transação/conexão. Duas chamadas concorrentes
+    (duplo clique, dois operadores) para a mesma conta nunca decidem com
+    base no mesmo estado "antigo": só uma reivindica (rowcount==1) e lança a
+    saída; a outra vê rowcount==0 e retorna sem repetir o lançamento
+    financeiro."""
     conta = obter_conta(conta_id)
     if not conta:
         raise ValueError("Conta nao localizada.")
     _, descricao, valor, vencimento, categoria, status = conta
-    if str(status or "").lower() == "paga":
-        return True
-    query_db("UPDATE contas_a_pagar SET status='Paga' WHERE id=?", (conta_id,), commit=True)
+    valor = float(valor or 0)
+    if valor <= 0:
+        raise ValueError("Conta com valor invalido (zero ou negativo); corrija o cadastro antes de pagar.")
     cx_id = caixa_id or obter_caixa_id_ativo()
-    if cx_id:
-        lancar_fluxo("Saida", f"Conta paga: {descricao}", float(valor or 0), cx_id, rotulo="Conta a pagar", forma_pagamento="Dinheiro")
+    if not cx_id:
+        raise ValueError("Abra o caixa antes de marcar uma conta como paga.")
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("UPDATE contas_a_pagar SET status='Paga' WHERE id=? AND status!='Paga'", (conta_id,))
+        if cur.rowcount != 1:
+            conn.rollback()
+            return True
+
+        if cx_id:
+            cur.execute(
+                """
+                INSERT INTO fluxo_caixa (tipo, descricao, valor, data_hora, data_iso, caixa_id, forma_pagamento)
+                SELECT 'Saida', ?, ?, ?, ?, ?, 'Dinheiro'
+                WHERE EXISTS (SELECT 1 FROM caixa_diario WHERE id=? AND status='Aberto')
+                """,
+                (f"Conta a pagar: Conta paga: {descricao}", valor, datetime.now().strftime("%d/%m/%Y %H:%M"), datetime.now().strftime("%Y-%m-%d %H:%M:%S"), cx_id, cx_id),
+            )
+            if cur.rowcount != 1:
+                raise ValueError("O caixa foi fechado durante a operação; pagamento cancelado. Reabra o caixa e tente novamente.")
+
+        registrar_auditoria(conn, "conta_a_pagar", conta_id, "marcar_paga", operador, depois={"valor": valor, "caixa_id": cx_id})
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
     return True
 
 
