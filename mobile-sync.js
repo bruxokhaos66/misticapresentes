@@ -209,12 +209,22 @@
     return true;
   }
 
-  // Idempotency-Key da tentativa de checkout atual. Fica só em memória
-  // (nunca em localStorage): reenviar a mesma tentativa (retry de rede,
-  // clique duplo) usa a mesma chave, então o backend devolve sempre o mesmo
-  // pedido em vez de criar um novo. Uma chave nova só é gerada quando o
-  // pedido é criado com sucesso, o carrinho muda/é limpo, ou o cliente inicia
-  // uma nova tentativa depois de um erro definitivo (ver app.js).
+  // Idempotency-Key da tentativa de checkout atual. Fica em memória e é
+  // espelhada via window.misticaSecureStorage (site-config.js), junto com a
+  // assinatura do carrinho que a gerou: reenviar a mesma tentativa (retry de
+  // rede, clique duplo, F5 depois de gerar o Pix, ou uma segunda aba com o
+  // mesmo carrinho) reaproveita a mesma chave, então o backend devolve
+  // sempre o mesmo pedido em vez de criar um novo e reservar estoque em
+  // dobro. Uma chave nova só é gerada quando o conteúdo do carrinho muda
+  // (ver window.misticaResetIdempotencyKey em app.js) ou quando a chave
+  // expira (CHECKOUT_KEY_TTL_MS).
+  // Menor que MISTICA_MINUTOS_EXPIRACAO_PEDIDO (padrão 30min no backend):
+  // garante que a chave local sempre expira ANTES do pedido correspondente no
+  // servidor, então nunca é reaproveitada apontando para um pedido já
+  // cancelado/expirado (o que devolveria um Pix "morto" ao cliente). Depois
+  // desse prazo, um novo clique gera uma chave nova e um pedido novo, como
+  // esperado para um Pix que realmente já venceu.
+  const CHECKOUT_KEY_TTL_MS = 20 * 60 * 1000;
   let idempotencyKeyAtual = null;
 
   function gerarIdempotencyKey() {
@@ -231,13 +241,49 @@
     return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
   }
 
-  function idempotencyKeyDaTentativa() {
-    if (!idempotencyKeyAtual) idempotencyKeyAtual = gerarIdempotencyKey();
+  function assinaturaCarrinho(itensPedido) {
+    return itensPedido
+      .map(item => `${item.produto_id}:${item.quantidade}`)
+      .sort()
+      .join("|");
+  }
+
+  function lerChaveArmazenada() {
+    const armazenada = window.misticaSecureStorage?.getCheckoutIdempotency?.();
+    if (!armazenada) return null;
+    if (Date.now() - armazenada.ts > CHECKOUT_KEY_TTL_MS) return null;
+    return armazenada;
+  }
+
+  function gravarChaveArmazenada(key, signature) {
+    window.misticaSecureStorage?.setCheckoutIdempotency?.(key, signature);
+  }
+
+  function limparChaveArmazenada() {
+    window.misticaSecureStorage?.clearCheckoutIdempotency?.();
+  }
+
+  // Recupera (ou cria) a Idempotency-Key para o conteúdo exato do carrinho
+  // enviado. Reload da página e múltiplas abas com o mesmo carrinho
+  // convergem para a mesma chave (localStorage é compartilhado entre abas da
+  // mesma origem); um carrinho diferente sempre gera uma chave nova.
+  function idempotencyKeyParaItens(itensPedido) {
+    const signature = assinaturaCarrinho(itensPedido);
+    if (idempotencyKeyAtual) return idempotencyKeyAtual;
+
+    const armazenada = lerChaveArmazenada();
+    if (armazenada && armazenada.signature === signature) {
+      idempotencyKeyAtual = armazenada.key;
+    } else {
+      idempotencyKeyAtual = gerarIdempotencyKey();
+      gravarChaveArmazenada(idempotencyKeyAtual, signature);
+    }
     return idempotencyKeyAtual;
   }
 
   function reiniciarIdempotencyKey() {
     idempotencyKeyAtual = null;
+    limparChaveArmazenada();
   }
 
   async function criarPedidoNoServidor(itensCarrinho) {
@@ -245,6 +291,7 @@
     if (!Array.isArray(itensCarrinho) || !itensCarrinho.length) throw new Error("Carrinho vazio.");
 
     const cienteSobEncomenda = confirmarCondicoesEncomenda(itensCarrinho);
+    const itensPedido = montarItensPedido(itensCarrinho);
     const dataIso = new Date().toISOString();
     const payload = {
       origem: "site",
@@ -258,12 +305,12 @@
       dia_operacional: dataIso.slice(0, 10),
       cupom: window.misticaCupomAtivo || null,
       ciente_sob_encomenda: cienteSobEncomenda,
-      itens: montarItensPedido(itensCarrinho),
+      itens: itensPedido,
     };
 
     const resposta = await api("/api/checkout/pedidos", {
       method: "POST",
-      headers: { "Idempotency-Key": idempotencyKeyDaTentativa() },
+      headers: { "Idempotency-Key": idempotencyKeyParaItens(itensPedido) },
       body: JSON.stringify(payload),
     });
 
@@ -271,8 +318,14 @@
       throw new Error("O servidor não retornou um Pix válido para este pedido.");
     }
 
-    // Pedido criado com sucesso: a próxima compra deve usar uma chave nova.
-    reiniciarIdempotencyKey();
+    // A chave usada NÃO é reiniciada aqui: o carrinho continua intacto após
+    // o Pix ser gerado (por desenho, para permitir nova tentativa em caso de
+    // falha de pagamento), então gerar o Pix de novo para o mesmo carrinho
+    // (reload da página, segunda aba, novo clique) deve reaproveitar a mesma
+    // chave e recuperar o MESMO pedido em vez de reservar estoque em dobro.
+    // A chave só é descartada quando o carrinho muda de fato (ver
+    // window.misticaResetIdempotencyKey, chamado em app.js ao
+    // adicionar/remover/limpar itens) ou quando expira (CHECKOUT_KEY_TTL_MS).
 
     return {
       id: resposta.id,

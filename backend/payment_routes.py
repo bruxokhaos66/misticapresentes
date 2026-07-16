@@ -471,6 +471,35 @@ def listar_pagamentos(venda_id: Optional[int] = None, limite: int = Query(100, g
     return [dict(row) for row in rows]
 
 
+@router.get("/pagamentos/estornos-pendentes")
+def listar_estornos_pendentes(limite: int = Query(100, ge=1, le=500), sessao: dict = Depends(exigir_sessao_ou_chave_api())):
+    """Pedidos cancelados que tiveram algum pagamento 'Confirmado' e ainda
+    não têm nenhum pagamento marcado como 'Estornado' para o mesmo pedido.
+
+    Cancelar um pedido pago (backend/order_status_routes.py::
+    cancelar_com_reposicao) nunca estorna o pagamento automaticamente — fica
+    só registrado em auditoria. Sem esta rota, a única forma de descobrir
+    dinheiro recebido sem devolução formal era cruzar manualmente GET
+    /api/pedidos e GET /api/pagamentos. Marcar o estorno continua sendo feito
+    pela rota já existente PUT /api/pagamentos/{id}/status (status
+    'Estornado'), que remove o pedido desta lista."""
+    with conectar() as conn:
+        rows = conn.execute(
+            """
+            SELECT v.id AS venda_id, v.cliente, v.telefone, v.total_final, v.data_venda,
+                   (SELECT MAX(p.data_hora) FROM pagamentos p WHERE p.venda_id = v.id AND p.status = 'Confirmado') AS pago_em
+            FROM pedidos v
+            WHERE lower(COALESCE(v.status, '')) LIKE 'cancel%'
+              AND EXISTS (SELECT 1 FROM pagamentos p WHERE p.venda_id = v.id AND p.status = 'Confirmado')
+              AND NOT EXISTS (SELECT 1 FROM pagamentos p WHERE p.venda_id = v.id AND p.status = 'Estornado')
+            ORDER BY v.id DESC
+            LIMIT ?
+            """,
+            (limite,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
 @router.put("/pagamentos/{pagamento_id}/status", dependencies=[Depends(limitar_status_pagamento)])
 def atualizar_status_pagamento(pagamento_id: int, payload: PagamentoStatusIn, x_mistica_api_key: str | None = Header(default=None)):
     validar_site_api_key(x_mistica_api_key)
