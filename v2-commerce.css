@@ -209,12 +209,12 @@
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  min-height: calc(1.28em * 2);
+  min-height: calc(1.28em * 3);
   font-size: 1.08rem;
   line-height: 1.28;
 }
 
-.product-price { margin-top: 4px; }
+.product-card .product-price { margin-top: 4px; }
 .product-card .qty-row { margin-top: auto; }
 
 .product-desc-toggle {

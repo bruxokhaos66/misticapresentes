@@ -161,17 +161,21 @@ function productCardHtml(product) {
   const imgSrc = escapeHtml(product.imageUrl || PRODUCT_FALLBACK_IMAGE);
   const media = `<div class="product-media-frame"><img class="product-photo" src="${imgSrc}" alt="${name}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='${PRODUCT_FALLBACK_IMAGE}';this.classList.add('is-fallback');">${isBestSeller(product) ? `<span class="product-badge-best">${escapeHtml(productBadgeText(product))}</span>` : ""}</div>`;
   const descId = `desc-${id}`;
-  return `<article class="product-card" data-category="${escapeHtml(product.category || "")}" data-best-seller="${isBestSeller(product)}">${media}<div class="product-card-body"><p class="eyebrow">${escapeHtml(product.category)}</p><h3>${name}</h3>${socialProofHtml(product)}<strong class="product-price">${currency.format(product.price)}</strong><span class="stock-badge ${available <= storeConfig.minStock ? "stock-low" : ""}">Estoque: ${available}</span><div class="qty-row"><input id="qty-${id}" type="number" min="1" max="${available}" step="1" value="1" aria-label="Quantidade de ${name}" ${disabled} /><button class="btn" type="button" onclick="addToCart('${product.id}')" ${disabled}>Adicionar</button></div><button class="btn btn-ghost btn-full" type="button" onclick="buyProductWhatsapp('${product.id}')">Comprar pelo WhatsApp</button><button class="product-desc-toggle" type="button" aria-expanded="${openProductDrawers.has(product.id)}" aria-controls="${descId}" onclick="toggleProductDescription('${product.id}')"><span>Ver descrição</span><svg class="product-desc-chevron" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 7l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="product-desc-drawer${openProductDrawers.has(product.id) ? " is-open" : ""}" id="${descId}"><div class="product-desc-drawer-inner"><p>${escapeHtml(product.description)}</p></div></div></div></article>`;
+  return `<article class="product-card" data-category="${escapeHtml(product.category || "")}" data-best-seller="${isBestSeller(product)}">${media}<div class="product-card-body"><p class="eyebrow">${escapeHtml(product.category)}</p><h3>${name}</h3>${socialProofHtml(product)}<strong class="product-price">${currency.format(product.price)}</strong><span class="stock-badge ${available <= storeConfig.minStock ? "stock-low" : ""}">Estoque: ${available}</span><div class="qty-row"><input id="qty-${id}" type="number" min="1" max="${available}" step="1" value="1" aria-label="Quantidade de ${name}" ${disabled} /><button class="btn" type="button" onclick="addToCart('${product.id}')" ${disabled}>Adicionar</button></div><button class="btn btn-ghost btn-full" type="button" onclick="buyProductWhatsapp('${product.id}')">Comprar pelo WhatsApp</button><button class="product-desc-toggle" type="button" aria-expanded="${openProductDrawers.has(product.id)}" aria-controls="${descId}" onclick="toggleProductDescription('${product.id}')"><span>Ver descrição</span><svg class="product-desc-chevron" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 7l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="product-desc-drawer${openProductDrawers.has(product.id) ? " is-open" : ""}" id="${descId}"${openProductDrawers.has(product.id) ? "" : ' aria-hidden="true"'}><div class="product-desc-drawer-inner"><p>${escapeHtml(product.description)}</p></div></div></div></article>`;
 }
 const openProductDrawers = new Set();
 function toggleProductDescription(productId) {
-  const card = document.querySelector(`[data-product-grid] [aria-controls="desc-${safeId(productId)}"]`)?.closest(".product-card");
+  // Sem escopo em [data-product-grid]: o mesmo productCardHtml() é usado na
+  // vitrine principal (com data-product-grid) e em kit.html (kit-page.js),
+  // cujo grid só tem a classe .product-grid, sem esse atributo.
+  const card = document.querySelector(`[aria-controls="desc-${safeId(productId)}"]`)?.closest(".product-card");
   if (!card) return;
   const drawer = card.querySelector(".product-desc-drawer");
   const toggle = card.querySelector(".product-desc-toggle");
   const willOpen = !drawer.classList.contains("is-open");
   drawer.classList.toggle("is-open", willOpen);
   toggle.setAttribute("aria-expanded", String(willOpen));
+  if (willOpen) drawer.removeAttribute("aria-hidden"); else drawer.setAttribute("aria-hidden", "true");
   if (willOpen) openProductDrawers.add(productId); else openProductDrawers.delete(productId);
 }
 window.toggleProductDescription = toggleProductDescription;

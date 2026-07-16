@@ -34,17 +34,6 @@
   object-fit: cover;
 }
 
-.product-page-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 5rem;
-  min-height: 320px;
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  background: var(--panel);
-}
-
 .product-page-thumbs {
   display: flex;
   gap: 10px;
@@ -225,8 +214,7 @@
     grid-template-columns: 1fr;
   }
 
-  .product-page-photo,
-  .product-page-icon {
+  .product-page-photo {
     max-height: 320px;
   }
 

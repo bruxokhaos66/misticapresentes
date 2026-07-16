@@ -12,7 +12,7 @@
   // src válido: sem isso, o navegador mostra o alt em texto gigante
   // ocupando o card inteiro quando a imagem falha.
   const FALLBACK_IMAGE = (typeof window !== 'undefined' && window.PRODUCT_FALLBACK_IMAGE) || '/assets/images/produto-sem-imagem.webp';
-  const onErrorFallback = (large) => `this.onerror=null;this.src='${FALLBACK_IMAGE}';this.classList.add('is-fallback');${large ? "this.closest('.product-inspector-gallery, .product-inspector-photo')?.classList?.add('is-fallback');" : ''}`;
+  const onErrorFallback = "this.onerror=null;this.src='" + FALLBACK_IMAGE + "';this.classList.add('is-fallback');";
 
   function productMedia(product, large = false) {
     // product.images é o nome real gravado por mobile-sync.js normalizarProduto();
@@ -20,14 +20,14 @@
     const image = product.imageUrl || product.images?.[0] || '';
     const src = image ? esc(image) : FALLBACK_IMAGE;
     const cls = large ? 'product-inspector-photo' : 'product-photo';
-    return `<img class="${cls}" src="${src}" alt="${esc(product.name || 'Produto Mística Presentes')}" loading="lazy" decoding="async" onerror="${onErrorFallback(large)}">`;
+    return `<img class="${cls}" src="${src}" alt="${esc(product.name || 'Produto Mística Presentes')}" loading="lazy" decoding="async" onerror="${onErrorFallback}">`;
   }
 
   function galleryHtml(product) {
     const images = [product.imageUrl, ...(product.images || [])].filter(Boolean);
     const unique = [...new Set(images)];
     if (!unique.length) return '';
-    return `<div class="product-inspector-gallery">${unique.map((url) => `<button type="button" data-inspector-gallery="${esc(url)}"><img src="${esc(url)}" alt="Imagem de ${esc(product.name)}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='${FALLBACK_IMAGE}';"></button>`).join('')}</div>`;
+    return `<div class="product-inspector-gallery">${unique.map((url) => `<button type="button" data-inspector-gallery="${esc(url)}"><img src="${esc(url)}" alt="Imagem de ${esc(product.name)}" loading="lazy" decoding="async" onerror="${onErrorFallback}"></button>`).join('')}</div>`;
   }
 
   function ensureModal() {
@@ -44,7 +44,7 @@
       const galleryButton = event.target.closest('[data-inspector-gallery]');
       if (galleryButton) {
         const img = modal.querySelector('[data-inspector-main-media]');
-        if (img) img.innerHTML = `<img class="product-inspector-photo" src="${esc(galleryButton.dataset.inspectorGallery)}" alt="Imagem ampliada" loading="lazy">`;
+        if (img) img.innerHTML = `<img class="product-inspector-photo" src="${esc(galleryButton.dataset.inspectorGallery)}" alt="Imagem ampliada" loading="lazy" decoding="async" onerror="${onErrorFallback}">`;
       }
     });
     document.addEventListener('keydown', (event) => {
@@ -134,7 +134,7 @@
         ? `<span class="stock-badge">${esc(t.ESTOQUE_NOTE)}</span>`
         : `<span class="stock-badge ${available <= storeConfig.minStock ? 'stock-low' : ''}">Estoque: ${available}</span>`;
       const descriptionText = product.description || 'Produto selecionado pela Mística Presentes.';
-      const drawer = `<button class="product-desc-toggle" type="button" aria-expanded="${isOpen}" aria-controls="${descId}" onclick="toggleProductDescription('${esc(product.id)}')"><span>Ver descrição</span><svg class="product-desc-chevron" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 7l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="product-desc-drawer${isOpen ? ' is-open' : ''}" id="${descId}"><div class="product-desc-drawer-inner"><p>${esc(descriptionText)}</p>${encomendaNote}</div></div>`;
+      const drawer = `<button class="product-desc-toggle" type="button" aria-expanded="${isOpen}" aria-controls="${descId}" onclick="toggleProductDescription('${esc(product.id)}')"><span>Ver descrição</span><svg class="product-desc-chevron" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 7l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="product-desc-drawer${isOpen ? ' is-open' : ''}" id="${descId}"${isOpen ? '' : ' aria-hidden="true"'}><div class="product-desc-drawer-inner"><p>${esc(descriptionText)}</p>${encomendaNote}</div></div>`;
       return `<article class="product-card" data-category="${esc(product.category || '')}" data-best-seller="${typeof isBestSeller === 'function' ? isBestSeller(product) : false}">${bestSeller}${encomendaBadge}${media}<div class="product-card-body"><p class="eyebrow">${esc(product.category)}</p><h3>${esc(product.name)}</h3>${rating}<strong class="product-price">${currency.format(product.price)}</strong>${stockBadge}<div class="qty-row"><input id="qty-${id}" type="number" min="1" max="${available}" step="1" value="1" aria-label="Quantidade de ${esc(product.name)}" ${disabled} /><button class="btn" type="button" onclick="addToCart('${esc(product.id)}')" ${disabled}>Adicionar</button></div><button class="btn btn-ghost btn-full" type="button" onclick="buyProductWhatsapp('${esc(product.id)}')">Comprar pelo WhatsApp</button>${drawer}</div></article>`;
     }).join('');
   }
