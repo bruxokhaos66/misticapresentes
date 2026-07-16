@@ -1,13 +1,4 @@
 (() => {
-  const categoryRules = [
-    { match: /incenso|aroma|ess[eê]ncia|via aroma|perfume/i, icon: '🌿', tone: 'aromas', label: 'Aromas' },
-    { match: /cristal|pedra|quartzo|ametista|energia/i, icon: '💎', tone: 'cristais', label: 'Cristais' },
-    { match: /vela|luz|chama|ritual/i, icon: '🕯️', tone: 'velas', label: 'Velas' },
-    { match: /banho|erva|limpeza|defuma/i, icon: '🍃', tone: 'ervas', label: 'Ervas' },
-    { match: /kit|presente|combo/i, icon: '🎁', tone: 'kits', label: 'Kits' },
-    { match: /f[eé]|prote[cç][aã]o|guia|santo|or[aã][cç][aã]o/i, icon: '🙏', tone: 'fe', label: 'Fé' },
-  ];
-
   const ready = (fn) => document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', fn) : fn();
   const clean = (value) => String(value ?? '');
   const safeId = (value) => clean(value).replace(/[^a-zA-Z0-9_-]/g, '');
@@ -15,26 +6,28 @@
   const esc = (value) => clean(value).replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
   const encomenda = () => window.misticaEncomenda || null;
   const isSobEncomenda = (product) => Boolean(encomenda()?.isSobEncomenda?.(product));
-
-  function categoryInfo(product) {
-    const source = `${product.category || ''} ${product.name || ''} ${product.description || ''}`;
-    return categoryRules.find((rule) => rule.match.test(source)) || { icon: product.icon || '✨', tone: 'mistico', label: product.category || 'Mística' };
-  }
+  // Imagem local, sempre disponível, usada sempre que o produto não tem
+  // foto cadastrada OU a foto cadastrada falha ao carregar (404, CORS,
+  // link quebrado etc. — ver onerror abaixo). Nunca deixamos o <img> sem
+  // src válido: sem isso, o navegador mostra o alt em texto gigante
+  // ocupando o card inteiro quando a imagem falha.
+  const FALLBACK_IMAGE = (typeof window !== 'undefined' && window.PRODUCT_FALLBACK_IMAGE) || '/assets/images/produto-sem-imagem.webp';
+  const onErrorFallback = "this.onerror=null;this.src='" + FALLBACK_IMAGE + "';this.classList.add('is-fallback');";
 
   function productMedia(product, large = false) {
-    const info = categoryInfo(product);
-    const image = product.imageUrl || product.gallery?.[0] || '';
-    if (image) {
-      return `<img class="${large ? 'product-inspector-photo' : 'product-photo'}" src="${esc(image)}" alt="${esc(product.name)}" loading="lazy">`;
-    }
-    return `<div class="${large ? 'product-inspector-category-image' : 'product-category-image'} category-${info.tone}" role="img" aria-label="Imagem da categoria ${esc(info.label)}"><span>${info.icon}</span><strong>${esc(info.label)}</strong></div>`;
+    // product.images é o nome real gravado por mobile-sync.js normalizarProduto();
+    // "gallery" nunca existiu nesse objeto (mismatch corrigido aqui).
+    const image = product.imageUrl || product.images?.[0] || '';
+    const src = image ? esc(image) : FALLBACK_IMAGE;
+    const cls = large ? 'product-inspector-photo' : 'product-photo';
+    return `<img class="${cls}" src="${src}" alt="${esc(product.name || 'Produto Mística Presentes')}" loading="lazy" decoding="async" onerror="${onErrorFallback}">`;
   }
 
   function galleryHtml(product) {
-    const images = [product.imageUrl, ...(product.gallery || [])].filter(Boolean);
+    const images = [product.imageUrl, ...(product.images || [])].filter(Boolean);
     const unique = [...new Set(images)];
     if (!unique.length) return '';
-    return `<div class="product-inspector-gallery">${unique.map((url) => `<button type="button" data-inspector-gallery="${esc(url)}"><img src="${esc(url)}" alt="Imagem de ${esc(product.name)}" loading="lazy"></button>`).join('')}</div>`;
+    return `<div class="product-inspector-gallery">${unique.map((url) => `<button type="button" data-inspector-gallery="${esc(url)}"><img src="${esc(url)}" alt="Imagem de ${esc(product.name)}" loading="lazy" decoding="async" onerror="${onErrorFallback}"></button>`).join('')}</div>`;
   }
 
   function ensureModal() {
@@ -51,7 +44,7 @@
       const galleryButton = event.target.closest('[data-inspector-gallery]');
       if (galleryButton) {
         const img = modal.querySelector('[data-inspector-main-media]');
-        if (img) img.innerHTML = `<img class="product-inspector-photo" src="${esc(galleryButton.dataset.inspectorGallery)}" alt="Imagem ampliada" loading="lazy">`;
+        if (img) img.innerHTML = `<img class="product-inspector-photo" src="${esc(galleryButton.dataset.inspectorGallery)}" alt="Imagem ampliada" loading="lazy" decoding="async" onerror="${onErrorFallback}">`;
       }
     });
     document.addEventListener('keydown', (event) => {
@@ -112,12 +105,25 @@
     document.body.classList.add('product-inspector-open');
   };
 
+  // Descrição fica escondida por padrão (gaveta/accordion) — só a foto,
+  // categoria, nome, preço e os botões de ação aparecem de cara. O estado
+  // aberto/fechado de cada card é lembrado aqui: sempre que o grid inteiro é
+  // reconstruído (ex.: depois de "Adicionar ao carrinho", que chama
+  // renderProducts() de novo), a gaveta que o cliente já tinha aberto
+  // continua aberta — só o toggle isolado (clique em "Ver descrição") evita
+  // reconstruir o grid inteiro, pra animação ficar suave e não mexer nos
+  // outros cards.
+  const openDrawers = (typeof window !== 'undefined' && window.openProductDrawers) || new Set();
+
   function renderProductsWithInspector() {
     if (!productGrid) return;
     productGrid.innerHTML = products.map((product) => {
       const available = getStock(product.id);
       const disabled = available <= 0 ? 'disabled' : '';
-      const media = `<div class="product-media-wrap">${productMedia(product)}<button class="product-zoom-button" type="button" onclick="inspectProduct('${esc(product.id)}')" aria-label="Inspecionar ${esc(product.name)}">🔍</button></div>`;
+      const id = safeId(product.id);
+      const descId = `desc-${id}`;
+      const isOpen = openDrawers.has(product.id);
+      const media = `<div class="product-media-wrap"><div class="product-media-frame">${productMedia(product)}</div><button class="product-zoom-button" type="button" onclick="inspectProduct('${esc(product.id)}')" aria-label="Inspecionar ${esc(product.name)}">🔍</button></div>`;
       const bestSeller = typeof isBestSeller === 'function' && isBestSeller(product) ? `<span class="product-badge-best">${esc(typeof productBadgeText === 'function' ? productBadgeText(product) : product.selo)}</span>` : '';
       const rating = typeof socialProofHtml === 'function' ? socialProofHtml(product) : '';
       const sob = isSobEncomenda(product);
@@ -127,7 +133,9 @@
       const stockBadge = sob && t
         ? `<span class="stock-badge">${esc(t.ESTOQUE_NOTE)}</span>`
         : `<span class="stock-badge ${available <= storeConfig.minStock ? 'stock-low' : ''}">Estoque: ${available}</span>`;
-      return `<article class="product-card" data-category="${esc(product.category || '')}" data-best-seller="${typeof isBestSeller === 'function' ? isBestSeller(product) : false}">${bestSeller}${encomendaBadge}${media}<div><p class="eyebrow">${esc(product.category)}</p><h3>${esc(product.name)}</h3>${rating}<p>${esc(product.description)}</p>${encomendaNote}</div><strong class="product-price">${currency.format(product.price)}</strong>${stockBadge}<div class="qty-row"><input id="qty-${safeId(product.id)}" type="number" min="1" max="${available}" step="1" value="1" aria-label="Quantidade de ${esc(product.name)}" ${disabled} /><button class="btn" type="button" onclick="addToCart('${esc(product.id)}')" ${disabled}>Adicionar</button></div><button class="btn btn-ghost btn-full" type="button" onclick="buyProductWhatsapp('${esc(product.id)}')">Comprar pelo WhatsApp</button></article>`;
+      const descriptionText = product.description || 'Produto selecionado pela Mística Presentes.';
+      const drawer = `<button class="product-desc-toggle" type="button" aria-expanded="${isOpen}" aria-controls="${descId}" onclick="toggleProductDescription('${esc(product.id)}')"><span>Ver descrição</span><svg class="product-desc-chevron" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 7l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="product-desc-drawer${isOpen ? ' is-open' : ''}" id="${descId}"${isOpen ? '' : ' aria-hidden="true"'}><div class="product-desc-drawer-inner"><p>${esc(descriptionText)}</p>${encomendaNote}</div></div>`;
+      return `<article class="product-card" data-category="${esc(product.category || '')}" data-best-seller="${typeof isBestSeller === 'function' ? isBestSeller(product) : false}">${bestSeller}${encomendaBadge}${media}<div class="product-card-body"><p class="eyebrow">${esc(product.category)}</p><h3>${esc(product.name)}</h3>${rating}<strong class="product-price">${currency.format(product.price)}</strong>${stockBadge}<div class="qty-row"><input id="qty-${id}" type="number" min="1" max="${available}" step="1" value="1" aria-label="Quantidade de ${esc(product.name)}" ${disabled} /><button class="btn" type="button" onclick="addToCart('${esc(product.id)}')" ${disabled}>Adicionar</button></div><button class="btn btn-ghost btn-full" type="button" onclick="buyProductWhatsapp('${esc(product.id)}')">Comprar pelo WhatsApp</button>${drawer}</div></article>`;
     }).join('');
   }
 

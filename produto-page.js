@@ -117,6 +117,9 @@
 
   function renderProduct(product) {
     const root = document.getElementById("produtoPageRoot");
+    const esc = window.escapeHtml || (value => String(value ?? ""));
+    const fallbackImg = window.PRODUCT_FALLBACK_IMAGE || "/assets/images/produto-sem-imagem.webp";
+    const onerror = `this.onerror=null;this.src='${fallbackImg}';this.classList.add('is-fallback');`;
     const images = productImages(product);
     const stock = available(product);
     const related = relatedProducts(product);
@@ -130,35 +133,34 @@
     const t = window.misticaEncomenda || null;
     const sob = Boolean(t && t.isSobEncomenda(product));
 
-    const mainPhoto = images[0]
-      ? `<img class="product-page-photo" id="productMainPhoto" src="${images[0]}" alt="${product.name}" loading="eager">`
-      : `<div class="product-image product-page-icon" id="productMainPhoto">${product.icon || "✨"}</div>`;
+    const mainSrc = esc(images[0] || fallbackImg);
+    const mainPhoto = `<img class="product-page-photo" id="productMainPhoto" src="${mainSrc}" alt="${esc(product.name)}" loading="eager" decoding="async" onerror="${onerror}">`;
 
     const thumbs = images.length > 1
-      ? `<div class="product-page-thumbs">${images.map((src, i) => `<button type="button" class="product-page-thumb${i === 0 ? " is-active" : ""}" data-src="${src}"><img src="${src}" alt="${product.name} - foto ${i + 1}" loading="lazy"></button>`).join("")}</div>`
+      ? `<div class="product-page-thumbs">${images.map((src, i) => `<button type="button" class="product-page-thumb${i === 0 ? " is-active" : ""}" data-src="${esc(src)}"><img src="${esc(src)}" alt="${esc(product.name)} - foto ${i + 1}" loading="lazy" decoding="async" onerror="${onerror}"></button>`).join("")}</div>`
       : "";
 
     root.innerHTML = `
       <article class="product-page-card">
         <div class="product-page-media">
-          ${bestSeller ? `<span class="product-badge-best">${badgeText}</span>` : ""}
+          ${bestSeller ? `<span class="product-badge-best">${esc(badgeText)}</span>` : ""}
           ${mainPhoto}
           ${thumbs}
         </div>
         <div class="product-page-info">
-          <p class="eyebrow">${product.category || "Produto"}</p>
-          <h1>${product.name}</h1>
-          <p>${product.description || "Produto especial selecionado pela Mística Presentes."}</p>
+          <p class="eyebrow">${esc(product.category || "Produto")}</p>
+          <h1>${esc(product.name)}</h1>
+          <p>${esc(product.description || "Produto especial selecionado pela Mística Presentes.")}</p>
           <strong class="product-price">${money(product.price)}</strong>
-          <span class="stock-badge ${!sob && stock <= storeConfig.minStock ? "stock-low" : ""}">${sob ? (t.ESTOQUE_NOTE) : (stock > 0 ? `Estoque: ${stock}` : "Sob encomenda")}</span>
-          ${sob ? `<span class="product-badge-encomenda" style="position:static;align-self:flex-start">${t.BADGE}</span>` : ""}
+          <span class="stock-badge ${!sob && stock <= storeConfig.minStock ? "stock-low" : ""}">${sob ? esc(t.ESTOQUE_NOTE) : (stock > 0 ? `Estoque: ${stock}` : "Sob encomenda")}</span>
+          ${sob ? `<span class="product-badge-encomenda" style="position:static;align-self:flex-start">${esc(t.BADGE)}</span>` : ""}
           <div class="product-page-buy">
-            <input id="qty-${cartId}" class="product-page-qty" type="number" min="1" max="${Math.max(stock, 1)}" step="1" value="1" aria-label="Quantidade de ${product.name}" ${stock <= 0 ? "disabled" : ""}>
+            <input id="qty-${cartId}" class="product-page-qty" type="number" min="1" max="${Math.max(stock, 1)}" step="1" value="1" aria-label="Quantidade de ${esc(product.name)}" ${stock <= 0 ? "disabled" : ""}>
             <button class="btn" type="button" id="addProductToCart" ${stock <= 0 ? "disabled" : ""}>${stock > 0 ? "Adicionar ao carrinho" : "Sob encomenda"}</button>
           </div>
           <p class="product-page-buy-feedback" id="addProductFeedback" role="status" hidden></p>
           <div class="product-page-actions">
-            <a class="btn btn-ghost" href="${whatsappUrl(product)}" target="_blank" rel="noopener" id="buyProductWhatsapp">Comprar pelo WhatsApp</a>
+            <a class="btn btn-ghost" href="${esc(whatsappUrl(product))}" target="_blank" rel="noopener" id="buyProductWhatsapp">Comprar pelo WhatsApp</a>
             <a class="btn btn-ghost" href="#checkout-jump" id="goToCartFromProduct">Ir para o carrinho</a>
             <button class="btn btn-ghost" type="button" id="copyProductLink">Copiar link</button>
           </div>
