@@ -33,7 +33,7 @@ function respostaPedido(id, txid) {
 }
 
 test.describe("checkout público: Idempotency-Key e acompanhamento por txid", () => {
-  test("envia Idempotency-Key, reaproveita a chave num retry e usa uma chave nova após o sucesso", async ({ page }) => {
+  test("envia Idempotency-Key, reaproveita a chave num retry e mantém a mesma chave para o carrinho inalterado após o sucesso", async ({ page }) => {
     await prepararCatalogo(page);
     const chavesRecebidas = [];
     let contador = 0;
@@ -70,11 +70,13 @@ test.describe("checkout público: Idempotency-Key e acompanhamento por txid", ()
     expect(chavesRecebidas[1]).toBe(chavesRecebidas[0]);
     await expect(page.locator("#pixStatus")).toContainText("aguardando pagamento", { ignoreCase: true });
 
-    // Nova compra após o sucesso: deve usar uma chave diferente.
+    // Gerar o Pix de novo para o MESMO carrinho após o sucesso (ex.: reload
+    // da página ou clique repetido) deve reaproveitar a mesma chave — nunca
+    // criar um segundo pedido/reserva de estoque para o mesmo conteúdo (ver
+    // Fase B: achado de duplicidade em refresh/múltiplas abas).
     await gerarPix.click();
     await expect.poll(() => chavesRecebidas.length).toBe(3);
-    expect(chavesRecebidas[2]).toBeTruthy();
-    expect(chavesRecebidas[2]).not.toBe(chavesRecebidas[1]);
+    expect(chavesRecebidas[2]).toBe(chavesRecebidas[1]);
   });
 
   test("mudar o carrinho entre duas tentativas usa uma Idempotency-Key diferente", async ({ page }) => {

@@ -72,6 +72,43 @@ window.misticaSiteConfig = {
     try { localStorage.removeItem(CART_KEY); } catch {}
   }
 
+  const CHECKOUT_IDEMPOTENCY_KEY = "misticaCheckoutIdempotency";
+
+  // Guarda a Idempotency-Key da tentativa de checkout em curso, junto com a
+  // assinatura do carrinho que a gerou, para que um reload da página ou uma
+  // segunda aba com o mesmo carrinho reaproveitem a mesma chave em vez de
+  // criar um segundo pedido/reserva de estoque (ver mobile-sync.js). Nunca
+  // contém dado sensível (nome, telefone, endereço, valor) — só a chave
+  // opaca e a assinatura id:quantidade dos itens.
+  function sanitizeCheckoutIdempotency(value) {
+    if (!value || typeof value !== "object") return null;
+    const { key, signature, ts } = value;
+    if (typeof key !== "string" || !key.trim()) return null;
+    if (typeof signature !== "string") return null;
+    if (!Number.isFinite(ts)) return null;
+    return { key, signature, ts };
+  }
+
+  function getCheckoutIdempotency() {
+    let raw = null;
+    try { raw = localStorage.getItem(CHECKOUT_IDEMPOTENCY_KEY); } catch { return null; }
+    if (!raw) return null;
+    let parsed;
+    try { parsed = JSON.parse(raw); } catch { return null; }
+    return sanitizeCheckoutIdempotency(parsed);
+  }
+
+  function setCheckoutIdempotency(key, signature) {
+    const limpo = sanitizeCheckoutIdempotency({ key, signature, ts: Date.now() });
+    if (!limpo) return null;
+    try { localStorage.setItem(CHECKOUT_IDEMPOTENCY_KEY, JSON.stringify(limpo)); } catch {}
+    return limpo;
+  }
+
+  function clearCheckoutIdempotency() {
+    try { localStorage.removeItem(CHECKOUT_IDEMPOTENCY_KEY); } catch {}
+  }
+
   function removeForbiddenKeys() {
     let removidas = 0;
     FORBIDDEN_KEYS.forEach(key => {
@@ -119,6 +156,10 @@ window.misticaSiteConfig = {
     clearCart,
     sanitizeCart: sanitizeCartList,
     removeForbiddenKeys,
+    CHECKOUT_IDEMPOTENCY_KEY,
+    getCheckoutIdempotency,
+    setCheckoutIdempotency,
+    clearCheckoutIdempotency,
   });
   // Não editável e não redefinível: nenhum script carregado depois pode
   // trocar window.misticaSecureStorage por uma implementação diferente
