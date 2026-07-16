@@ -191,6 +191,19 @@ window.misticaSiteConfig = {
     }
 
     if (!grid || state === "ready") return;
+    // mobile-sync.js dispara "loading"/"error" a cada sincronização (a cada
+    // 15s, para sempre, inclusive quando tudo está bem) e também numa falha
+    // passageira de rede depois de um catálogo já confirmado. Se a vitrine já
+    // tem produtos reais renderizados, apagar tudo aqui pra colocar um aviso
+    // é o que fazia os cards desaparecerem, a seção seguinte subir e, no
+    // próximo sync com sucesso, tudo reaparecer empurrando a página de
+    // novo — o "piscar/pular" da vitrine. Uma vez que o catálogo já foi
+    // confirmado (existe ao menos um card real), este aviso só faz sentido
+    // enquanto NADA ainda foi mostrado (1º carregamento); depois disso, o
+    // botão de Pix já fica bloqueado acima e o selo flutuante do
+    // mobile-sync.js (#mobileSyncStatus) já avisa da instabilidade, sem
+    // remover o que já está em tela.
+    if (grid.querySelector(".product-card")) return;
     grid.replaceChildren();
     const notice = document.createElement("div");
     notice.className = "warning-box";
