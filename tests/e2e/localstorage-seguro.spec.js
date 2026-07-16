@@ -219,7 +219,7 @@ test.describe("persistência segura do navegador", () => {
     await prepararCatalogo(page);
     await page.goto("/index.html");
     await expect.poll(() => page.evaluate(() => window.misticaCatalogState)).toBe("ready");
-    await expect(page.locator("#cartList")).toContainText("Nenhum produto adicionado");
+    await expect(page.locator("#cartList")).toContainText("Seu carrinho está vazio");
   });
 
   test("Pix, txid, acompanhamento e resposta do pedido nunca são persistidos (localStorage, sessionStorage, cookies, IndexedDB)", async ({ page }) => {
