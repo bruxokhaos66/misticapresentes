@@ -195,8 +195,8 @@ def _storage_remoto_falso(monkeypatch, tmp_path):
         bucket="mistica-produtos-teste",
         endpoint="https://exemplo.r2.cloudflarestorage.com",
         region="auto",
-        access_key="chave-teste",
-        secret_key="segredo-teste",
+        access_key="chave-teste",  # pragma: allowlist secret
+        secret_key="segredo-teste",  # pragma: allowlist secret
         public_base_url="https://cdn.exemplo.com/produtos",
         prefix="produtos",
         timeout=5.0,
