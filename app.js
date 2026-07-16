@@ -202,7 +202,15 @@ function updateCheckoutEncomendaBox() {
   const check = document.getElementById("encomendaConfirm");
   if (check && !show) check.checked = false;
 }
-function renderCart() { updateCartCount(); renderCrossSell(); updateCheckoutEncomendaBox(); if (!cartList || !cartTotal) return; if (!cartReady) { cartList.innerHTML = `<div class="cart-item"><span>Carregando catálogo oficial para exibir seu carrinho...</span></div>`; cartTotal.textContent = currency.format(0); return; } if (!cart.length) cartList.innerHTML = `<div class="cart-item"><span>Nenhum produto adicionado ainda.</span></div>`; else cartList.innerHTML = cart.map(item => `<div class="cart-item"><div><strong>${escapeHtml(item.name)}</strong><span>${item.qty}x ${currency.format(item.price)} = ${currency.format(item.price * item.qty)}</span>${cartItemIsEncomenda(item) ? `<span class="cart-encomenda-tag">${escapeHtml((window.misticaEncomenda && window.misticaEncomenda.BADGE) || "Sob encomenda")}</span>` : ""}</div><button class="cart-remove" type="button" onclick="removeFromCart('${item.id}')">Remover</button></div>`).join(""); cartTotal.textContent = currency.format(getTotal()); }
+function updatePixPanelVisibility() {
+  const panel = document.querySelector(".pix-panel");
+  if (panel) panel.hidden = !cart.length;
+  const generateBtn = document.querySelector("[data-generate-pix]");
+  if (generateBtn) generateBtn.disabled = !cart.length;
+  const whatsappBtn = document.querySelector("[data-send-sale-whatsapp]");
+  if (whatsappBtn) whatsappBtn.disabled = !cart.length;
+}
+function renderCart() { updateCartCount(); renderCrossSell(); updateCheckoutEncomendaBox(); updatePixPanelVisibility(); if (!cartList || !cartTotal) return; if (!cartReady) { cartList.innerHTML = `<div class="cart-item"><span>Carregando catálogo oficial para exibir seu carrinho...</span></div>`; cartTotal.textContent = currency.format(0); return; } if (!cart.length) cartList.innerHTML = `<div class="cart-empty"><p>Seu carrinho está vazio. Explore nossos produtos e encontre algo especial para sua intenção.</p><a class="btn btn-small" href="#produtos">Ver produtos</a></div>`; else cartList.innerHTML = cart.map(item => `<div class="cart-item"><div><strong>${escapeHtml(item.name)}</strong><span>${item.qty}x ${currency.format(item.price)} = ${currency.format(item.price * item.qty)}</span>${cartItemIsEncomenda(item) ? `<span class="cart-encomenda-tag">${escapeHtml((window.misticaEncomenda && window.misticaEncomenda.BADGE) || "Sob encomenda")}</span>` : ""}</div><button class="cart-remove" type="button" onclick="removeFromCart('${item.id}')">Remover</button></div>`).join(""); cartTotal.textContent = currency.format(getTotal()); }
 
 // Cross-sell no carrinho: sugere até 4 produtos disponíveis que ainda não
 // estão no carrinho, priorizando categorias diferentes das já escolhidas
