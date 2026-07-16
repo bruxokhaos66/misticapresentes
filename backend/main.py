@@ -68,10 +68,17 @@ def _verificar_persistencia_banco() -> None:
     """
     from config import DB_PATH
 
-    db_path = str(DB_PATH)
     env_configurada = bool(
         os.environ.get("MISTICA_DB_PATH", "").strip() or os.environ.get("DATABASE_PATH", "").strip()
     )
+    # Resolve symlinks antes de comparar o prefixo: um MISTICA_DB_PATH que
+    # aponte, por symlink, para /data (ex.: um caminho de conveniência em
+    # ~/app/dados -> /data) não pode ser confundido com disco efêmero só
+    # porque a string bruta não começa com um dos prefixos conhecidos.
+    try:
+        db_path = str(Path(DB_PATH).resolve())
+    except OSError:
+        db_path = str(DB_PATH)
     parece_persistente = env_configurada and db_path.startswith(("/data", "/var/data", "/mnt"))
     if parece_persistente:
         logger.info(

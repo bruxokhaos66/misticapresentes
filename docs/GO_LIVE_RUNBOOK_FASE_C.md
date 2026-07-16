@@ -86,10 +86,63 @@ site estático (GitHub Pages). Complementa (não substitui)
   apareceu logo após um restore recente, ou
   `scripts/restaurar_backup.py --arquivo <backup_anterior_ao_incidente> --confirmar`
   para voltar a um snapshot conhecido bom. Sempre validar em dry-run
-  primeiro (sem `--confirmar`).
+  primeiro (sem `--confirmar`), e seguir a seção **"Restore em produção com
+  a API ativa"** abaixo antes de confirmar — o script troca o arquivo de
+  forma atômica, mas não pausa sozinho a aplicação.
 - **Comunicação**: registrar o incidente (issue no GitHub ou canal
   operacional interno) com horário, sintoma, ação tomada e resultado —
   mesmo que resolvido rapidamente, para alimentar a auditoria periódica.
+
+## Restore em produção com a API ativa — estratégia explícita
+
+O `os.replace()` usado por `database/restore.py` é atômico no nível do
+sistema de arquivos: nenhum leitor jamais vê um arquivo parcialmente
+escrito, e uma conexão SQLite já aberta antes da troca mantém seu próprio
+descritor (aponta para o arquivo antigo até ser fechada). Isso resolve o
+problema de leitura concorrente, mas **não resolve escrita concorrente**:
+qualquer requisição que a API estiver processando no exato momento da troca
+e que só grave/commit *depois* do `os.replace` grava no arquivo antigo, que
+neste ponto já foi desvinculado do caminho — esse dado nunca chega ao banco
+restaurado e não há como recuperá-lo depois. `backend/database.py::conectar()`
+abre uma conexão nova por operação (não há conexão global de longa duração),
+o que **reduz** a janela de risco a "operações em andamento no instante da
+troca", mas não a elimina, porque não há nenhum mecanismo de bloqueio de
+escrita a nível de aplicação durante o restore — o lock exclusivo de
+`database/restore.py` só impede dois restores/backups simultâneos entre si,
+nunca impede a API de continuar aceitando pedidos, pagamentos ou baixas de
+estoque durante a troca.
+
+**Por isso, todo restore em produção exige parar a aceitação de escritas
+antes de confirmar a troca:**
+
+1. **Colocar o serviço em manutenção** no Render (Dashboard → Suspend, ou
+   escalar réplicas para zero) — não basta parar de mandar tráfego externo,
+   é preciso que o processo pare de aceitar/completar requisições.
+2. **Aguardar o dreno de requisições em andamento** (alguns segundos a
+   poucos minutos, conforme o timeout configurado) antes de considerar o
+   processo realmente parado.
+3. **Confirmar que nenhum worker periódico está no meio de uma escrita**:
+   como o processo foi suspenso no passo 1, `_expirar_pedidos_periodicamente`
+   e `scheduler_backup` também param — não há como (nem é necessário) parar
+   esses workers individualmente sem parar o processo inteiro.
+4. **Rodar o restore com o processo suspenso**: `scripts/restaurar_backup.py
+   --arquivo <backup> --confirmar` (ou `--rollback --confirmar`). O script já
+   remove os arquivos `-wal`/`-shm` antigos após a troca, então a próxima
+   conexão aberta pelo processo reiniciado começa um WAL limpo sobre o banco
+   restaurado.
+5. **Reiniciar/retomar o serviço** no Render.
+6. **Validar `/api/health/ready`** antes de liberar tráfego novamente —
+   `200` confirma banco acessível, gravável, migrations aplicadas e disco
+   persistente saudável.
+7. **Se algo estiver errado**, `scripts/restaurar_backup.py --rollback
+   --confirmar` com o processo novamente suspenso, repetindo os passos
+   2–6.
+
+Não afirmar (nem operar como se fosse verdade) que a troca é seguro fazer
+com a API recebendo tráfego normalmente: a atomicidade do `os.replace` evita
+corrupção de arquivo, mas não evita perda silenciosa de escritas em voo. Um
+restore feito sem suspender o serviço deve ser tratado como incidente
+(possível perda de dados na janela da troca), não como operação de rotina.
 
 ## Incidentes
 

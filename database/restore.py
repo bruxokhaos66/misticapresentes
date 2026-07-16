@@ -47,6 +47,7 @@ TABELAS_ESSENCIAIS = [
     "vendas",
     "vendas_itens",
     "usuarios",
+    "pedidos",
 ]
 
 
@@ -78,6 +79,38 @@ class ResultadoRestore:
     copia_anterior: Optional[str] = None
     motivo: Optional[str] = None
     data_hora: str = field(default_factory=lambda: datetime.now().isoformat(timespec="seconds"))
+
+
+def _motivo_seguro(exc: Exception) -> str:
+    """Categoria segura para logs/auditoria: nunca a mensagem crua da exceção.
+
+    `str(exc)` de erros de sistema de arquivos (FileNotFoundError,
+    PermissionError, OSError) costuma incluir o caminho absoluto envolvido
+    -- exatamente o tipo de dado que a auditoria de restore não pode
+    persistir. Só o nome da classe da exceção é gravado.
+    """
+    return exc.__class__.__name__
+
+
+def _fsync_arquivo(caminho: Path) -> None:
+    """Força os dados do arquivo para o disco antes de qualquer troca atômica
+    depender dele -- sem isso, um `os.replace` bem-sucedido não garante que
+    o conteúdo do arquivo temporário já esteja durável em caso de queda de
+    energia logo após a troca."""
+    fd = os.open(str(caminho), os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _fsync_diretorio(diretorio: Path) -> None:
+    """Força a entrada de diretório (o próprio rename) para o disco."""
+    fd = os.open(str(diretorio), os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
 
 
 def _registrar_falha(mensagem: str) -> None:
@@ -135,6 +168,13 @@ def _checksum_sha256(caminho) -> str:
         for bloco in iter(lambda: f.read(1024 * 1024), b""):
             digest.update(bloco)
     return digest.hexdigest()
+
+
+def _gravar_checksum_sidecar(caminho: Path, checksum: str) -> None:
+    try:
+        Path(f"{caminho}.sha256").write_text(f"{checksum}  {caminho.name}\n", encoding="utf-8")
+    except OSError:
+        pass
 
 
 def _ler_checksum_esperado(caminho_backup: Path) -> Optional[str]:
@@ -200,12 +240,24 @@ def listar_backups_disponiveis(diretorio=None) -> list[dict]:
     return sorted(candidatos, key=lambda c: c["modificado_em"], reverse=True)
 
 
-def validar_candidato_restore(caminho_backup, checksum_esperado: Optional[str] = None) -> ResultadoValidacao:
+def validar_candidato_restore(
+    caminho_backup, checksum_esperado: Optional[str] = None, *, exigir_checksum: bool = True
+) -> ResultadoValidacao:
     """Valida um backup candidato sem tocar no banco em uso.
 
     Confere, nesta ordem: existência do arquivo, checksum SHA-256 (contra o
-    `.sha256` irmão ou o valor informado), assinatura de arquivo SQLite,
+    `.sha256` irmão ou o valor informado) -- calculado e comparado ANTES de
+    abrir o arquivo como banco (a leitura da assinatura SQLite e o
+    `sqlite3.connect` só acontecem depois) --, assinatura de arquivo SQLite,
     PRAGMA integrity_check e presença das tabelas essenciais.
+
+    Por padrão (`exigir_checksum=True`) a ausência de um checksum -- nem
+    `.sha256` irmão nem `checksum_esperado` informado -- já é motivo de
+    reprovação: todo backup produzido por `database/backup.py` sempre grava
+    um `.sha256`, então um candidato sem checksum é atípico (cópia manual,
+    backup de outra origem) e não deve ser restaurado silenciosamente sem
+    verificação. `exigir_checksum=False` existe só para cenários explícitos
+    (ex.: testar um arquivo cuja origem já foi validada por outro meio).
     """
     caminho_backup = Path(caminho_backup)
     if not caminho_backup.exists() or not caminho_backup.is_file():
@@ -218,6 +270,8 @@ def validar_candidato_restore(caminho_backup, checksum_esperado: Optional[str] =
         real = _checksum_sha256(caminho_backup)
         if real.lower() != str(esperado).lower():
             return ResultadoValidacao(False, "checksum_invalido")
+    elif exigir_checksum:
+        return ResultadoValidacao(False, "checksum_ausente")
 
     try:
         with open(caminho_backup, "rb") as f:
@@ -253,6 +307,7 @@ def restaurar_backup(
     *,
     db_path=None,
     checksum_esperado: Optional[str] = None,
+    exigir_checksum: bool = True,
     usuario: str = "sistema",
 ) -> ResultadoRestore:
     """Executa o procedimento completo de restore, com troca atômica e rollback disponível.
@@ -279,9 +334,18 @@ def restaurar_backup(
             if not caminho_backup.exists():
                 return ResultadoRestore(status="erro", motivo="backup_nao_encontrado", backup_origem=str(caminho_backup.name))
 
+            # O `.sha256` irmão (quando existe) fica ao lado do backup
+            # ORIGINAL -- lido antes de copiar, porque o arquivo temporário
+            # isolado não tem esse sidecar e não deve ganhar uma cópia dele
+            # (evita confundir o checksum do candidato com o de qualquer
+            # outro arquivo que por acaso caia no mesmo diretório de estado).
+            checksum_do_sidecar = checksum_esperado or _ler_checksum_esperado(caminho_backup)
+
             shutil.copy2(caminho_backup, temporario)
 
-            validacao = validar_candidato_restore(temporario, checksum_esperado=checksum_esperado)
+            validacao = validar_candidato_restore(
+                temporario, checksum_esperado=checksum_do_sidecar, exigir_checksum=exigir_checksum
+            )
             if not validacao.valido:
                 return ResultadoRestore(
                     status="erro",
@@ -291,17 +355,29 @@ def restaurar_backup(
 
             checksum = _checksum_sha256(temporario)
 
+            # Sincroniza o conteúdo validado para o disco ANTES de qualquer
+            # troca depender dele -- sem isso, um os.replace bem-sucedido não
+            # garante que os dados já estejam duráveis se o processo/host
+            # cair logo em seguida.
+            _fsync_arquivo(temporario)
+
             # 8)/9) cópia do banco anterior antes de qualquer troca -- garante
             # rollback mesmo que o processo seja interrompido logo depois.
             copia_anterior = None
             if db_path.exists():
                 copia_anterior = db_path.parent / f"{db_path.name}.antes_do_restore_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
                 shutil.copy2(db_path, copia_anterior)
+                _fsync_arquivo(copia_anterior)
+                # Sem isso, o rollback não teria como verificar o checksum da
+                # própria cópia preservada (nenhum backup externo grava esse
+                # sidecar para ela) e falharia por "checksum_ausente".
+                _gravar_checksum_sidecar(copia_anterior, _checksum_sha256(copia_anterior))
 
             # Troca atômica: os.replace substitui o alvo de uma vez (mesma
             # partição), nunca deixando o banco em um estado parcialmente
             # escrito visível para outro processo.
             os.replace(temporario, db_path)
+            _fsync_diretorio(db_path.parent)
 
             # Arquivos de WAL/SHM da versão anterior não correspondem ao
             # conteúdo recém-trocado; remover para que a próxima conexão
@@ -328,16 +404,23 @@ def restaurar_backup(
             )
             return resultado
         except Exception as exc:
-            _registrar_falha(f"usuario={usuario} backup={caminho_backup.name} erro={exc}")
-            _registrar_historico(
-                diretorio_estado,
-                acao="restore",
-                status="erro",
-                backup_origem=caminho_backup.name,
-                motivo=str(exc),
-                usuario=usuario,
-            )
-            return ResultadoRestore(status="erro", motivo=f"falha_inesperada: {exc}", backup_origem=caminho_backup.name)
+            motivo_seguro = _motivo_seguro(exc)
+            _registrar_falha(f"usuario={usuario} backup={caminho_backup.name} erro={motivo_seguro}")
+            try:
+                _registrar_historico(
+                    diretorio_estado,
+                    acao="restore",
+                    status="erro",
+                    backup_origem=caminho_backup.name,
+                    motivo=motivo_seguro,
+                    usuario=usuario,
+                )
+            except Exception:
+                # Uma falha secundária ao registrar o histórico (ex.: mesmo
+                # disco cheio/somente leitura que causou a falha original)
+                # nunca pode mascarar o erro real do restore.
+                pass
+            return ResultadoRestore(status="erro", motivo=f"falha_inesperada:{motivo_seguro}", backup_origem=caminho_backup.name)
         finally:
             temporario.unlink(missing_ok=True)
 
@@ -375,7 +458,9 @@ def reverter_ultimo_restore(db_path=None, *, copia_anterior: Optional[str] = Non
         try:
             temporario = diretorio_estado / f".{db_path.name}.rollback_{uuid_hex()}.tmp"
             shutil.copy2(caminho_copia, temporario)
+            _fsync_arquivo(temporario)
             os.replace(temporario, db_path)
+            _fsync_diretorio(diretorio_estado)
             for sufixo in ("-wal", "-shm"):
                 Path(str(db_path) + sufixo).unlink(missing_ok=True)
 
@@ -389,8 +474,9 @@ def reverter_ultimo_restore(db_path=None, *, copia_anterior: Optional[str] = Non
             )
             return resultado
         except Exception as exc:
-            _registrar_falha(f"rollback usuario={usuario} copia={nome_copia} erro={exc}")
-            return ResultadoRestore(status="erro", motivo=f"falha_inesperada: {exc}")
+            motivo_seguro = _motivo_seguro(exc)
+            _registrar_falha(f"rollback usuario={usuario} copia={nome_copia} erro={motivo_seguro}")
+            return ResultadoRestore(status="erro", motivo=f"falha_inesperada:{motivo_seguro}")
 
 
 def uuid_hex() -> str:
