@@ -61,6 +61,11 @@ services:
         value: true
       # Nao ha retencao remota na aplicacao: configure Object Lifecycle Rules
       # no bucket R2, preferencialmente limitadas ao BACKUP_PREFIX.
+      # Rota REST de estorno (POST /api/vendas/{id}/estornar): mantenha false
+      # em producao ate a issue #335 ser corrigida (a rota devolve estoque mas
+      # nao reverte o lancamento financeiro do caixa original).
+      - key: MISTICA_REST_ESTORNO_ENABLED
+        value: false
     disk:
       name: mistica-dados
       mountPath: /data

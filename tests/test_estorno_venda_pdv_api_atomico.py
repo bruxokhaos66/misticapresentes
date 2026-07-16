@@ -28,6 +28,11 @@ os.environ.setdefault("MISTICA_SITE_API_KEY", "test-api-key")
 os.environ.setdefault("MISTICA_SYNC_KEY", "test-api-key")
 os.environ.setdefault("MISTICA_PIX_WEBHOOK_SECRET", "test-estorno-caixa-webhook-secret")
 os.environ.setdefault("MISTICA_PIX_KEY", "49999999999")
+# Esta suíte testa o comportamento da rota REST de estorno com a feature flag
+# ligada (ver backend/api_security.py::estorno_rest_habilitado e
+# tests/test_estorno_rest_feature_flag.py para o comportamento com a flag
+# desligada, que é o default em produção -- issue #335).
+os.environ.setdefault("MISTICA_REST_ESTORNO_ENABLED", "true")
 
 from backend.database import conectar  # noqa: E402
 

@@ -156,6 +156,7 @@ restore feito sem suspender o serviço deve ser tratado como incidente
 | Estoque incorreto | Consultar `movimentacao_estoque` para reconstruir o histórico do produto afetado antes de qualquer ajuste manual. |
 | Login indisponível | Checar `painel_login_tentativas` (bloqueio por rate limit) e `/api/health/ready` (banco acessível). |
 | Disco cheio | `/api/diagnostico/sistema` reporta `classificacao: "critico"`; liberar espaço (backups antigos além da retenção) ou aumentar o disco no Render antes que escritas comecem a falhar. |
+| Estorno feito pela rota REST (`POST /api/vendas/{id}/estornar`) | Essa rota fica desligada por padrão (`MISTICA_REST_ESTORNO_ENABLED=false`, ver issue #335) porque devolve estoque mas não reverte o lançamento em `fluxo_caixa`. Se em algum momento a flag tiver sido ligada e um estorno passar por ela, concilie manualmente o caixa do turno em que a venda original foi lançada (lançar a saída correspondente à mão) antes de fechar esse caixa. |
 
 ## Observações sobre o que este runbook cobre
 

@@ -39,7 +39,7 @@ from backend.logging_config import configurar_logging, get_logger
 from backend.order_status_routes import expirar_pedidos_pendentes, router as order_status_router
 from backend.panel_sessions import exigir_sessao_ou_chave_api, validar_sessao
 from backend.payment_routes import router as payment_router
-from backend.api_security import APP_ENV, ORIGENS_PERMITIDAS, validar_site_api_key as validar_chave_api
+from backend.api_security import APP_ENV, ORIGENS_PERMITIDAS, estorno_rest_habilitado, validar_site_api_key as validar_chave_api
 from backend.product_routes import router as product_router, validar_site_api_key
 from backend.review_routes import router as review_router
 from backend.upload_routes import CURSOS_DIR, router as upload_router
@@ -594,7 +594,17 @@ def estornar_venda(venda_id: int, payload: EstornoVendaIn | None = None, x_misti
     PDV sobre o mesmo banco) nunca decidem com base no mesmo estado
     "antigo" lido por outra: só uma reivindica a transição (rowcount==1) e
     devolve o estoque; a(s) outra(s) veem rowcount==0 e retornam o estado
-    JÁ ATUAL (ja_cancelada=True) sem repetir a reposição de estoque."""
+    JÁ ATUAL (ja_cancelada=True) sem repetir a reposição de estoque.
+
+    Uso temporário e restrito até resolução da issue #335: esta rota não
+    associa a venda ao caixa_id original e por isso não reverte o
+    lançamento financeiro em fluxo_caixa (só devolve estoque). Fica atrás de
+    MISTICA_REST_ESTORNO_ENABLED (default desligada em qualquer ambiente) --
+    ver backend/api_security.py::estorno_rest_habilitado. Com a flag
+    desligada, retorna 404 antes de tocar em qualquer estado (venda, estoque,
+    fluxo_caixa, auditoria) para não anunciar que a operação existe."""
+    if not estorno_rest_habilitado():
+        raise HTTPException(status_code=404)
     validar_site_api_key(x_mistica_api_key)
     payload = payload or EstornoVendaIn()
     agora = datetime.now().isoformat(timespec="seconds")
