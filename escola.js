@@ -540,3 +540,32 @@
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", renderCatalog, { once: true });
   else renderCatalog();
 })();
+
+// Menu mobile do cabeçalho (mesmo comportamento usado em app.js nas demais
+// páginas): abre/fecha, sincroniza aria-expanded, fecha com Escape, clique
+// fora ou ao escolher um link, e bloqueia o scroll de fundo enquanto aberto.
+(() => {
+  const toggleBtn = document.querySelector("[data-menu-toggle]");
+  const navLinks = document.querySelector("[data-nav-links]");
+  const header = document.querySelector(".site-header");
+  if (!toggleBtn || !navLinks) return;
+  const setMenuOpen = open => {
+    navLinks.classList.toggle("open", open);
+    header?.classList.toggle("menu-open", open);
+    toggleBtn.setAttribute("aria-expanded", String(open));
+    toggleBtn.setAttribute("aria-label", open ? "Fechar menu" : "Abrir menu");
+    document.body.style.overflow = open ? "hidden" : "";
+  };
+  toggleBtn.addEventListener("click", () => setMenuOpen(!navLinks.classList.contains("open")));
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && navLinks.classList.contains("open")) setMenuOpen(false);
+  });
+  document.addEventListener("click", event => {
+    if (!navLinks.classList.contains("open")) return;
+    if (navLinks.contains(event.target) || toggleBtn.contains(event.target)) return;
+    setMenuOpen(false);
+  });
+  navLinks.addEventListener("click", event => {
+    if (event.target.closest("a")) setMenuOpen(false);
+  });
+})();

@@ -61,7 +61,7 @@ p { color: var(--muted); }
 .brand-mark span { color: var(--gold-strong); font-family: Cinzel, serif; font-size: 2rem; line-height: 1; }
 .brand-copy { display: grid; line-height: 1; }
 .brand-copy strong { font-family: Cinzel, serif; color: var(--gold-strong); font-size: clamp(1.14rem, 2vw, 1.62rem); letter-spacing: 0.06em; white-space: nowrap; }
-.brand-copy small { margin-top: 8px; color: var(--sage); font-size: 0.63rem; font-weight: 900; letter-spacing: 0.16em; text-transform: uppercase; }
+.brand-copy small { margin-top: 8px; color: var(--sage); font-size: 0.72rem; font-weight: 900; letter-spacing: 0.16em; text-transform: uppercase; }
 .nav-links { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .nav-links a { padding: 10px 12px; color: #f3e8cc; text-decoration: none; font-size: 0.78rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.06em; border-radius: 999px; }
 .nav-links a:hover { background: rgba(255,255,255,.055); }
@@ -70,7 +70,7 @@ p { color: var(--muted); }
 .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; border: 1px solid rgba(240, 197, 106, 0.58); border-radius: 999px; background: linear-gradient(135deg, #fff0b2, #d8a846 62%, #fff1bd); color: #171007; padding: 12px 20px; cursor: pointer; text-decoration: none; font-weight: 900; box-shadow: 0 16px 38px rgba(240, 197, 106, 0.18); transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease; }
 .btn:hover { transform: translateY(-1px); box-shadow: 0 18px 46px rgba(240,197,106,.24); }
 .btn-ghost { background: rgba(255, 255, 255, 0.04); color: var(--gold-strong); box-shadow: none; }
-.btn-small { min-height: 40px; padding: 9px 16px !important; color: #171007 !important; }
+.btn-small { min-height: 44px; padding: 9px 16px !important; color: #171007 !important; }
 .btn-full { width: 100%; }
 
 .hero-section { position: relative; overflow: hidden; padding: clamp(50px, 6.8vw, 88px) 0 clamp(40px, 5vw, 68px); }
@@ -193,4 +193,14 @@ input:focus, textarea:focus, select:focus { border-color: rgba(240,197,106,.72);
   .inline-form, .qty-row { grid-template-columns: 1fr; }
   .cart-item, .stock-item { align-items: flex-start; flex-direction: column; }
   .floating-whatsapp { left: 12px; right: 12px; bottom: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

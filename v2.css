@@ -56,6 +56,8 @@ button, input, textarea { font: inherit; }
 .btn-small { min-height: 44px; padding-inline: 22px; }
 .btn-ghost { color: var(--gold-2); background: rgba(5,5,8,.45); }
 .btn-full { width: 100%; }
+.btn:disabled, .btn-ghost:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
+.btn:disabled:hover { transform: none; }
 .section { padding: clamp(64px, 7vw, 104px) 0; }
 .eyebrow { display: inline-flex; width: fit-content; align-items: center; border: 1px solid rgba(189,209,122,.32); border-radius: 999px; padding: 8px 13px; color: #def19b; background: rgba(189,209,122,.08); font-size: .74rem; font-weight: 950; letter-spacing: .12em; text-transform: uppercase; }
 .hero-section { min-height: clamp(650px, 78vh, 830px); display: grid; align-items: center; padding: clamp(48px, 6vw, 82px) 0; }
@@ -114,6 +116,8 @@ label { display: grid; gap: 7px; color: var(--muted); font-weight: 750; }
 .cart-list, .history-list, .stock-list, .client-list, .isis-chat { display: grid; gap: 10px; }
 .cart-item, .history-item, .stock-item, .client-item, .isis-message { border: 1px solid rgba(242,201,109,.18); border-radius: 18px; padding: 14px; background: rgba(0,0,0,.18); }
 .cart-item, .stock-item { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.cart-empty { display: grid; justify-items: center; gap: 14px; padding: 28px 14px; text-align: center; border: 1px dashed rgba(242,201,109,.28); border-radius: 18px; background: rgba(0,0,0,.14); }
+.cart-empty p { margin: 0; color: var(--muted); font-size: .95rem; line-height: 1.5; }
 .cart-item span, .history-item span, .stock-item span { color: var(--muted); }
 .cart-remove { border: 1px solid rgba(242,201,109,.22); border-radius: 999px; padding: 8px 10px; color: var(--gold-2); background: transparent; cursor: pointer; }
 /* Carrinho flutuante com contador */
@@ -192,4 +196,14 @@ label { display: grid; gap: 7px; color: var(--muted); font-weight: 750; }
   .inline-form { grid-template-columns: 1fr; }
   .isis-panel-image, .isis-photo { min-height: 500px; }
   .checkout-actions .btn, .quick-actions .btn { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
