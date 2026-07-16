@@ -42,7 +42,7 @@ from backend.payment_routes import router as payment_router
 from backend.api_security import APP_ENV, ORIGENS_PERMITIDAS, estorno_rest_habilitado, validar_site_api_key as validar_chave_api
 from backend.product_routes import router as product_router, validar_site_api_key
 from backend.review_routes import router as review_router
-from backend.upload_routes import CURSOS_DIR, router as upload_router
+from backend.upload_routes import CURSOS_DIR, UPLOAD_DIR as PRODUTOS_UPLOAD_DIR, router as upload_router
 from backend.user_sync_routes import router as user_sync_router
 from backend.site_stock_routes import router as site_stock_router
 from backend.system_status_routes import router as system_status_router
@@ -213,9 +213,13 @@ UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 # único StaticFiles público, então quem tivesse a URL do material -- que
 # pode vazar por histórico do navegador, log de rede ou print -- baixava o
 # conteúdo pago sem ter comprado.
-(UPLOADS_DIR / "produtos").mkdir(parents=True, exist_ok=True)
+# PRODUTOS_UPLOAD_DIR (backend.upload_routes.UPLOAD_DIR) é o mesmo diretório
+# usado pela camada de storage local (backend/product_image_storage.py) --
+# quando o storage remoto S3/R2 não está configurado, é para lá que os
+# uploads de imagem de produto são gravados, e é de lá que este mount serve.
+PRODUTOS_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 (UPLOADS_DIR / "musicas").mkdir(parents=True, exist_ok=True)
-app.mount("/uploads/produtos", StaticFiles(directory=str(UPLOADS_DIR / "produtos")), name="uploads-produtos")
+app.mount("/uploads/produtos", StaticFiles(directory=str(PRODUTOS_UPLOAD_DIR)), name="uploads-produtos")
 app.mount("/uploads/musicas", StaticFiles(directory=str(UPLOADS_DIR / "musicas")), name="uploads-musicas")
 
 

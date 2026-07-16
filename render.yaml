@@ -61,6 +61,38 @@ services:
         value: true
       # Nao ha retencao remota na aplicacao: configure Object Lifecycle Rules
       # no bucket R2, preferencialmente limitadas ao BACKUP_PREFIX.
+      #
+      # Imagens de produtos enviadas pelo painel (backend/product_image_storage.py).
+      # Causa raiz do problema de imagens somem apos deploy: o endpoint de
+      # upload gravava em backend/uploads/produtos, dentro do codigo da
+      # aplicacao -- fora do disco persistente 'mistica-dados' (mountPath
+      # /data, abaixo), esse diretorio e recriado vazio a cada deploy. Ative
+      # o storage remoto (S3/R2) preenchendo as variaveis abaixo com um
+      # bucket e credenciais PROPRIOS (nao reaproveite BACKUP_*: escopo e
+      # prefixo diferentes). Enquanto ficar desativado, o fallback local
+      # grava em PRODUCT_IMAGES_LOCAL_DIR -- aponte para o disco persistente
+      # (ex.: /data/uploads/produtos) para ao menos sobreviver a reinicios.
+      - key: PRODUCT_IMAGES_STORAGE_ENABLED
+        value: false
+      - key: PRODUCT_IMAGES_BUCKET
+        sync: false
+      - key: PRODUCT_IMAGES_ENDPOINT
+        sync: false
+      - key: PRODUCT_IMAGES_REGION
+        value: auto
+      - key: PRODUCT_IMAGES_ACCESS_KEY_ID
+        sync: false
+      - key: PRODUCT_IMAGES_SECRET_ACCESS_KEY
+        sync: false
+      # Dominio publico (custom domain/CDN) que serve o bucket, sem barra final.
+      - key: PRODUCT_IMAGES_PUBLIC_BASE_URL
+        sync: false
+      - key: PRODUCT_IMAGES_PREFIX
+        value: produtos
+      - key: PRODUCT_IMAGES_UPLOAD_TIMEOUT
+        value: "15"
+      - key: PRODUCT_IMAGES_LOCAL_DIR
+        value: /data/uploads/produtos
       # Rota REST de estorno (POST /api/vendas/{id}/estornar): mantenha false
       # em producao ate a issue #335 ser corrigida (a rota devolve estoque mas
       # nao reverte o lancamento financeiro do caixa original).
