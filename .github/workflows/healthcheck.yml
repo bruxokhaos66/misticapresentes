@@ -10,16 +10,16 @@ permissions:
 
 jobs:
   healthcheck:
-    name: Checar /api/health
+    name: Checar /api/health/ready
     runs-on: ubuntu-latest
     steps:
-      - name: Chamar /api/health
+      - name: Chamar /api/health/ready
         id: check
         env:
           MISTICA_API_URL: ${{ vars.MISTICA_API_URL || 'https://api.misticaesotericos.com.br' }}
         run: |
           set +e
-          status=$(curl -fsS -m 15 -o /tmp/health.json -w "%{http_code}" "${MISTICA_API_URL}/api/health")
+          status=$(curl -fsS -m 15 -o /tmp/health.json -w "%{http_code}" "${MISTICA_API_URL}/api/health/ready")
           code=$?
           echo "http_status=${status}" >> "$GITHUB_OUTPUT"
           if [ $code -ne 0 ] || [ "$status" != "200" ]; then
@@ -41,7 +41,7 @@ jobs:
               labels: "healthcheck",
             });
             const existing = issues.find(issue => issue.title === title);
-            const body = `A checagem automática de \`/api/health\` falhou (status HTTP: ${{ steps.check.outputs.http_status }}) em ${new Date().toISOString()}.\n\nVeja docs/admin/BACKUP_MONITORAMENTO_DEPLOY.md para o passo a passo de rollback.`;
+            const body = `A checagem automática de \`/api/health/ready\` falhou (status HTTP: ${{ steps.check.outputs.http_status }}) em ${new Date().toISOString()}. Isso indica banco inacessível/não gravável, migrations pendentes ou disco persistente indisponível -- não só o processo parado.\n\nVeja docs/admin/BACKUP_MONITORAMENTO_DEPLOY.md e docs/GO_LIVE_RUNBOOK_FASE_C.md para o passo a passo de diagnóstico/rollback.`;
             if (existing) {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,

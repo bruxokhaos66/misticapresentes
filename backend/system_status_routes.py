@@ -6,12 +6,14 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Header, HTTPException
+from fastapi.responses import JSONResponse
 
 from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.database import conectar
-from backend.infra_diagnostics import banco_acessivel, diagnostico_disco_completo
+from backend.infra_diagnostics import banco_acessivel, diagnostico_disco_completo, escrita_disco_segura
 from backend.logging_config import get_logger
 from config import API_URL, DB_PATH, OFFICIAL_DOMAIN, SERVER_URL
+from database.backup import backup_habilitado
 
 logger = get_logger(__name__)
 
@@ -59,6 +61,60 @@ def status_publico():
         "app": "Mística Presentes",
         "data_hora": datetime.now().isoformat(timespec="seconds"),
     }
+
+
+TABELAS_MIGRATIONS_OBRIGATORIAS = [
+    "produtos",
+    "clientes",
+    "vendas",
+    "vendas_itens",
+    "usuarios",
+    "pedidos",
+]
+
+
+@router.api_route("/health/live", methods=["GET", "HEAD"])
+def health_live():
+    """Só confirma que o processo está vivo e respondendo -- sem tocar banco
+    ou disco. Usado por orquestradores para decidir se o processo deve ser
+    reiniciado (liveness probe), não se deve receber tráfego."""
+    return {"status": "ok", "service": "mistica-api"}
+
+
+@router.api_route("/health/ready", methods=["GET", "HEAD"])
+def health_ready():
+    """Confirma que o processo está pronto para receber tráfego real:
+    banco acessível E gravável, migrations essenciais aplicadas e disco
+    persistente com espaço saudável. Nunca retorna 200 se o banco estiver
+    inutilizável -- rota pública, então a resposta só traz booleans/códigos
+    curtos, nunca caminhos, mensagens de exceção ou stack trace."""
+    banco_ok = banco_acessivel()
+
+    migrations_ok = False
+    if banco_ok:
+        try:
+            with conectar() as conn:
+                migrations_ok = all(tabela_existe(conn, t) for t in TABELAS_MIGRATIONS_OBRIGATORIAS)
+        except Exception:
+            migrations_ok = False
+
+    escrita_ok, _motivo_escrita = escrita_disco_segura()
+    disco = diagnostico_disco_completo()
+    disco_ok = disco["acessivel"] and disco["classificacao"] != "critico"
+
+    pronto = banco_ok and migrations_ok and escrita_ok and disco_ok
+    corpo = {
+        "status": "ok" if pronto else "error",
+        "service": "mistica-api",
+        "banco_acessivel": banco_ok,
+        "banco_gravavel": escrita_ok,
+        "migrations_aplicadas": migrations_ok,
+        "disco_persistente_ok": disco_ok,
+        "backup_configurado": backup_habilitado(),
+    }
+    if not pronto:
+        return JSONResponse(status_code=503, content=corpo)
+    return corpo
 
 
 @router.get("/diagnostico/sistema")
