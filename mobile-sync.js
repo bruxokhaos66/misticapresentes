@@ -120,11 +120,39 @@
     };
   }
 
+  // Fica true assim que o catálogo oficial é confirmado pela primeira vez
+  // nesta página. Distingue duas situações bem diferentes numa falha de
+  // sincronização:
+  //  - catálogo NUNCA confirmado (1º carregamento falhou): não há nada
+  //    autoritativo pra mostrar, então a vitrine deve mesmo ficar vazia e
+  //    bloqueada (evita exibir os produtos estáticos de exemplo de app.js
+  //    como se fossem o catálogo real).
+  //  - catálogo já confirmado antes e a sincronização seguinte falhou
+  //    (timeout, instabilidade momentânea, celular com conexão fraca): esse
+  //    erro é transitório e não pode apagar o que já está confirmado em
+  //    tela. O sync roda a cada 15s (SYNC_INTERVAL_MS) para sempre, então
+  //    tratar qualquer falha passageira como "catálogo vazio" fazia a
+  //    vitrine inteira desaparecer, o conteúdo abaixo subir pra ocupar o
+  //    espaço e, no sync seguinte com sucesso, tudo reaparecer empurrando a
+  //    página de novo — o "piscar/pular" reportado.
+  let catalogoConfirmado = false;
+  // Assinatura do último catálogo já aplicado. O sync roda a cada 15s
+  // (SYNC_INTERVAL_MS) para sempre, mesmo sem nenhuma mudança real no
+  // estoque/preço/produtos; sem essa checagem, cada sync bem-sucedido
+  // reconstruía o grid inteiro (innerHTML) à toa, destruindo e recriando
+  // todo <img> da vitrine — uma fonte extra de "piscar" independente da
+  // troca de catálogo em si. Só reconstrói quando algo de fato mudou.
+  let ultimaAssinaturaCatalogo = null;
+
   function aplicarProdutos(lista) {
     if (!Array.isArray(lista) || typeof products === "undefined") {
       throw new Error("Resposta inválida do catálogo.");
     }
     const novos = lista.map(normalizarProduto).filter(product => product.apiId && product.codigo && Number.isFinite(product.price));
+    catalogoConfirmado = true;
+    const assinatura = JSON.stringify(novos);
+    if (assinatura === ultimaAssinaturaCatalogo) return;
+    ultimaAssinaturaCatalogo = assinatura;
     products.splice(0, products.length, ...novos);
     stock = novos.reduce((map, product) => {
       map[product.id] = product.stock;
@@ -151,14 +179,20 @@
   async function sincronizarAgora() {
     if (syncRunning) return;
     syncRunning = true;
-    setCatalogState("loading", "Carregando catálogo oficial...");
+    if (!catalogoConfirmado) setCatalogState("loading", "Carregando catálogo oficial...");
     try {
       const produtos = await api("/api/produtos?limite=500");
       aplicarProdutos(produtos);
       setCatalogState("ready", produtos.length ? "Online" : "Catálogo sem produtos disponíveis no momento.");
     } catch (error) {
-      clearCatalog();
-      setCatalogState("error", "Catálogo indisponível. Compras e Pix estão temporariamente bloqueados.");
+      if (catalogoConfirmado) {
+        // Catálogo já confirmado antes: mantém o que já está em tela e só
+        // avisa da instabilidade, sem apagar nada.
+        setCatalogState("error", "Falha ao atualizar o catálogo. Exibindo o último catálogo confirmado; compras e Pix ficam bloqueados até a reconexão.");
+      } else {
+        clearCatalog();
+        setCatalogState("error", "Catálogo indisponível. Compras e Pix estão temporariamente bloqueados.");
+      }
       console.error("Falha ao carregar catálogo oficial:", error);
     } finally {
       syncRunning = false;
