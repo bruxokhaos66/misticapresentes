@@ -353,6 +353,148 @@ def test_endpoints_administrativos_exigem_sessao_admin():
     assert client.post("/api/isis2/homolog-testers/1").status_code == 401
     assert client.delete("/api/isis2/homolog-testers/1").status_code == 401
     assert client.post("/api/isis2/homolog-testers/revogar-todos").status_code == 401
+    assert client.get("/api/isis2/homolog/buscar-alunos?q=ab").status_code == 401
+
+
+def test_usuario_comum_aluno_nao_administra():
+    """Sessão de aluno (não admin) não passa em exigir_perfil('adm') --
+    mesmo um aluno já autorizado como testador não pode se auto-promover a
+    administrador da homologação."""
+    limpar_estado_homolog()
+    _aluno_id, token = criar_aluno_com_sessao()
+    resposta = client.get(
+        "/api/isis2/homolog-testers", cookies={"mistica_aluno_sessao": token}
+    )
+    assert resposta.status_code == 401
+    client.cookies.clear()
+
+
+def test_admin_consulta_estado():
+    limpar_estado_homolog()
+    client.cookies.clear()
+    criar_admin_com_sessao()
+    resposta = client.get("/api/isis2/homolog/estado")
+    assert resposta.status_code == 200
+    assert resposta.json() == {"ativo": False, "total_testadores": 0}
+    client.cookies.clear()
+
+
+def test_adicionar_testador_com_id_inexistente_devolve_404():
+    limpar_estado_homolog()
+    client.cookies.clear()
+    criar_admin_com_sessao()
+    resposta = client.post("/api/isis2/homolog-testers/999999999", headers=ORIGIN_HEADER)
+    assert resposta.status_code == 404
+    client.cookies.clear()
+
+
+def test_conta_com_matricula_suspensa_pode_ser_buscada_e_autorizada():
+    """Suspensão (alunos_cursos.suspenso) é por curso, não uma flag global
+    do aluno -- a homologação é uma autorização independente da matrícula
+    (mesmo um aluno sem nenhum curso ativo pode ser testador). Confirma que
+    a busca/inclusão não quebra nem se comporta de forma diferente para uma
+    conta com curso suspenso."""
+    limpar_estado_homolog()
+    from backend.database import conectar
+    from backend.aluno_auth import garantir_tabelas_alunos
+
+    client.cookies.clear()
+    criar_admin_com_sessao()
+    aluno_id, token = criar_aluno_com_sessao()
+    with conectar() as conn:
+        garantir_tabelas_alunos(conn)
+        conn.execute(
+            "INSERT INTO alunos_cursos (aluno_id, slug, liberado_em, suspenso) VALUES (?,?,?,1)",
+            (aluno_id, "xamanismo-introducao", "2026-01-01 00:00:00"),
+        )
+        email_aluno = conn.execute("SELECT email FROM alunos WHERE id=?", (aluno_id,)).fetchone()["email"]
+
+    # Busca pelo e-mail (único por teste, ao contrário do nome genérico
+    # compartilhado por criar_aluno_com_sessao) -- evita que o LIMIT 20 da
+    # busca corte o resultado quando a suíte já acumulou muitos alunos com
+    # o mesmo nome "Aluna Teste Homolog".
+    resposta_busca = client.get(f"/api/isis2/homolog/buscar-alunos?q={email_aluno}")
+    assert resposta_busca.status_code == 200
+    assert any(item["aluno_id"] == aluno_id for item in resposta_busca.json())
+
+    resposta_add = client.post(f"/api/isis2/homolog-testers/{aluno_id}", headers=ORIGIN_HEADER)
+    assert resposta_add.status_code == 200
+
+    client.post("/api/isis2/homolog/ativar", headers=ORIGIN_HEADER)
+    client.cookies.clear()
+    resposta_config = client.get("/api/isis2/homolog-config", cookies={"mistica_aluno_sessao": token})
+    assert resposta_config.json() == CONFIG_ATIVADA
+
+
+def test_sessao_admin_expirada_nao_administra():
+    limpar_estado_homolog()
+    from backend.database import conectar
+
+    login = criar_admin_com_sessao()
+    with conectar() as conn:
+        conn.execute(
+            "UPDATE painel_sessoes SET expira_em='2000-01-01 00:00:00' WHERE login=?",
+            (login,),
+        )
+    resposta = client.get("/api/isis2/homolog/estado")
+    assert resposta.status_code == 401
+    client.cookies.clear()
+
+
+def test_busca_termo_curto_nao_devolve_lista(monkeypatch):
+    limpar_estado_homolog()
+    client.cookies.clear()
+    criar_admin_com_sessao()
+    resposta = client.get("/api/isis2/homolog/buscar-alunos?q=a")
+    assert resposta.status_code == 200
+    assert resposta.json() == []
+    client.cookies.clear()
+
+
+def test_busca_por_nome_ou_email_nunca_quebra_com_payload_de_xss():
+    """O backend devolve o nome/e-mail crus em JSON (nunca HTML) -- a
+    sanitização acontece no render do painel (isis2-homolog-admin.js). Aqui
+    só confirmamos que o payload malicioso não quebra a busca nem é alterado
+    silenciosamente pelo servidor."""
+    limpar_estado_homolog()
+    from backend.database import conectar
+    from backend.aluno_auth import garantir_tabelas_alunos
+
+    client.cookies.clear()
+    criar_admin_com_sessao()
+    nome_malicioso = '<img src=x onerror="window.__xss=1">Aluna XSS'
+    with conectar() as conn:
+        garantir_tabelas_alunos(conn)
+        cur = conn.execute(
+            "INSERT INTO alunos (nome, email, criado_em) VALUES (?,?,?)",
+            (nome_malicioso, f"xss-{uuid.uuid4().hex[:8]}@exemplo.com", "2026-01-01 00:00:00"),
+        )
+        aluno_id = int(cur.lastrowid)
+
+    resposta = client.get("/api/isis2/homolog/buscar-alunos?q=Aluna XSS")
+    assert resposta.status_code == 200
+    encontrado = next(item for item in resposta.json() if item["aluno_id"] == aluno_id)
+    assert encontrado["nome"] == nome_malicioso
+    client.cookies.clear()
+
+
+def test_falha_ao_carregar_estado_nunca_reporta_ativo(monkeypatch):
+    """Mesmo com sessão admin válida, se homolog_ativo() explodir, o
+    endpoint de estado responde 200 com ativo=False (fail-safe) -- nunca
+    deixa escapar uma exceção que o painel (ou um script mais simples)
+    pudesse interpretar como sucesso/ativo por omissão."""
+    limpar_estado_homolog()
+    client.cookies.clear()
+    criar_admin_com_sessao()
+
+    def _explode(*args, **kwargs):
+        raise RuntimeError("falha simulada de infraestrutura")
+
+    monkeypatch.setattr(isis2_homolog, "homolog_ativo", _explode)
+    resposta = client.get("/api/isis2/homolog/estado")
+    assert resposta.status_code == 200
+    assert resposta.json() == {"ativo": False, "total_testadores": 0}
+    client.cookies.clear()
 
 
 def test_admin_gerencia_allowlist_fim_a_fim():
