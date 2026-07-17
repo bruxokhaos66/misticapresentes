@@ -16,6 +16,7 @@ Esta pasta concentra planos e documentos operacionais relacionados ao Admin, ped
 - `PRODUTOS_API_ADMIN.md` — cadastro completo de produtos pela API e Admin.
 - `UPLOAD_IMAGENS_PRODUTOS.md` — upload real de imagens de produtos.
 - `BACKUP_MONITORAMENTO_DEPLOY.md` — backup automático fora do Render, monitoramento com UptimeRobot, rollback manual de deploy e auditoria periódica automatizada.
+- `ISIS_CHAT_HOMOLOGACAO.md` — homologação controlada do chat inteligente da Isis 2.0 (recomendação de produtos, modo determinístico, flags, limites, painel admin).
 
 ## Regra daqui para frente
 
