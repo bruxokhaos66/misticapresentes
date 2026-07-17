@@ -418,6 +418,7 @@ window.misticaSiteConfig = {
     loadScript("misticaAdminProductsScript", "v2-admin-products.js?v=20260708-admin-products");
     loadScript("misticaCoursesScript", "v2-courses.js?v=20260711-convite");
     loadScript("misticaCampaignAdminScript", "campaign-admin.js?v=20260711-campanhas");
+    loadScript("misticaIsis2HomologAdminScript", "isis2-homolog-admin.js?v=20260717-isis2-homolog-admin");
   };
 
   const iniciar = () => {
