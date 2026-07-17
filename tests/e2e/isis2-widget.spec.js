@@ -217,6 +217,74 @@ test.describe("Isis 2.0 - widget flutuante", () => {
   });
 });
 
+test.describe("Isis 2.0 - restauração de foco", () => {
+  test("não há foco automático no primeiro carregamento da página", async ({ page }) => {
+    await irParaHomeComCatalogo(page);
+    const idAtivo = await page.evaluate(() => document.activeElement?.id || document.activeElement?.tagName);
+    expect(idAtivo).not.toBe("isis2-input");
+  });
+
+  test("foco vai para o campo de mensagem ao abrir, e volta ao botão flutuante ao fechar com o botão minimizar", async ({ page }) => {
+    await irParaHomeComCatalogo(page);
+    await page.locator("#isis2-toggle").click();
+    await expect(page.locator("#isis2-input")).toBeFocused({ timeout: 2000 });
+
+    await page.locator(".isis2-minimize").click();
+    await expect(page.locator("#isis2-toggle")).toBeFocused();
+  });
+
+  test("Escape fecha e restaura o foco ao acionador real (o botão clicado), não a um elemento anterior arbitrário", async ({ page }) => {
+    // Nota técnica: um clique real move o foco do navegador para o
+    // elemento clicado ANTES do listener de clique rodar — então
+    // "o elemento focado antes de abrir" (document.activeElement dentro
+    // de openPanel()) já é o próprio botão que acionou a abertura, não
+    // um elemento anterior qualquer. É esse o comportamento correto e
+    // esperado por "o foco retorna ao acionador".
+    await irParaHomeComCatalogo(page);
+    await page.locator('a[href="#produtos"]').first().focus();
+    await page.locator("#isis2-toggle").click();
+    await expect(page.locator("#isis2-input")).toBeFocused();
+
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#isis2-toggle")).toBeFocused();
+  });
+
+  test("acionador diferente do botão flutuante (nota da Isis 1) também recebe o foco de volta ao fechar", async ({ page }) => {
+    await irParaHomeComCatalogo(page);
+    await page.locator("#isis2-open-from-legacy").click();
+    await expect(page.locator("#isis2-input")).toBeFocused();
+
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#isis2-open-from-legacy")).toBeFocused();
+  });
+
+  test("múltiplos ciclos de abrir/fechar não deixam o foco perdido nem lançam exceção", async ({ page }) => {
+    await irParaHomeComCatalogo(page);
+    const erros = [];
+    page.on("pageerror", err => erros.push(String(err)));
+
+    for (let i = 0; i < 4; i += 1) {
+      await page.locator("#isis2-toggle").click();
+      await expect(page.locator("#isis2-input")).toBeFocused();
+      await page.keyboard.press("Escape");
+      await expect(page.locator("#isis2-toggle")).toBeFocused();
+    }
+    expect(erros).toEqual([]);
+  });
+
+  test("fallback para a Isis 1: elementos escondidos (chat legado) não prendem o foco depois que a Isis 2.0 assume", async ({ page }) => {
+    await irParaHomeComCatalogo(page);
+    // #isisForm foi escondido (hidden) pela convivência com a Isis 1;
+    // não deve ser alcançável por Tab nem reter foco.
+    const focavel = await page.evaluate(() => {
+      const form = document.querySelector("#isisForm");
+      if (!form) return null;
+      return form.hidden === true;
+    });
+    expect(focavel).toBe(true);
+  });
+});
+
 test.describe("Isis 2.0 - XSS e renderização segura", () => {
   test("nome/descrição maliciosos do catálogo nunca executam script dentro do widget", async ({ page }) => {
     const payloadImg = '<img src=x onerror="window.__isis2XssFired=1">';

@@ -71,7 +71,7 @@
       window.Isis2.Analytics.track("safety_crisis_detected", {});
       return {
         kind: "safety_crisis",
-        text: "Sinto muito que você esteja passando por isso. Eu sou uma assistente de loja e não tenho como ajudar numa emergência — por favor, fale agora com alguém de confiança ou busque ajuda profissional. No Brasil, o CVV (Centro de Valorização da Vida) atende de graça pelo telefone 188, 24h por dia, todos os dias. Em emergência imediata, ligue 192 (SAMU) ou vá ao pronto-socorro mais próximo.",
+        text: "Sinto muito que você esteja passando por isso — o que você sente é sério e importa. Eu sou só uma assistente de loja, não tenho preparo para isso e não posso prometer sigilo nem substituir apoio profissional: por favor, fale agora com alguém de confiança e busque ajuda especializada. No Brasil, o CVV (Centro de Valorização da Vida) acolhe de graça pelo telefone 188, 24h por dia, todos os dias — mas ele não substitui atendimento médico de emergência. Se houver risco imediato ou perigo neste momento, ligue 190 (Polícia Militar) ou 192 (SAMU), ou vá agora a uma UPA, pronto atendimento ou hospital mais próximo.",
         products: [],
         complements: [],
         quickReplies: [],

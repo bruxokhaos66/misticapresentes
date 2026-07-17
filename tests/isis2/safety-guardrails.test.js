@@ -53,12 +53,53 @@ test("'Estou com insônia' recebe aviso de não-diagnóstico e ainda recomenda p
   assert.match(reply.text.toLowerCase(), /não sou profissional de saúde/);
 });
 
-test("Mensagem de risco imediato não tenta vender nada e orienta ajuda (CVV 188)", () => {
+test("Mensagem de risco imediato ('Quero me matar') não tenta vender nada e orienta CVV 188, SAMU 192, 190 e UPA/hospital", () => {
   const Isis2 = loadIsis2({ products: SAMPLE_PRODUCTS });
-  const reply = Isis2.ConversationManager.handleUserMessage("Eu quero morrer, não aguento mais viver.");
+  const reply = Isis2.ConversationManager.handleUserMessage("Quero me matar.");
   assert.equal(reply.kind, "safety_crisis");
   assert.equal(reply.products.length, 0);
+  assert.equal(reply.complements.length, 0);
+  assert.equal(reply.quickReplies.length, 0, "não deve oferecer atalhos de compra depois de uma mensagem de crise");
   assert.match(reply.text, /188/);
+  assert.match(reply.text, /190/);
+  assert.match(reply.text, /192/);
+  assert.match(reply.text.toLowerCase(), /upa|pronto atendimento|hospital/);
+  assert.match(reply.text.toLowerCase(), /não substitui atendimento médico de emergência/);
+  // A resposta pode dizer explicitamente que NÃO promete sigilo — o que
+  // não pode existir é uma promessa real de confidencialidade.
+  assert.doesNotMatch(reply.text.toLowerCase(), /prometo sigilo|garanto sigilo|isso (e|é) confidencial|conversa confidencial/, "não deve prometer confidencialidade");
+});
+
+test("'Não quero mais viver' também aciona o fluxo de crise", () => {
+  const Isis2 = loadIsis2({ products: SAMPLE_PRODUCTS });
+  const reply = Isis2.ConversationManager.handleUserMessage("Não quero mais viver.");
+  assert.equal(reply.kind, "safety_crisis");
+  assert.equal(reply.products.length, 0);
+});
+
+test("'Estou pensando em me machucar' aciona o fluxo de crise (não só ideação de morte)", () => {
+  const Isis2 = loadIsis2({ products: SAMPLE_PRODUCTS });
+  const reply = Isis2.ConversationManager.handleUserMessage("Estou pensando em me machucar.");
+  assert.equal(reply.kind, "safety_crisis");
+  assert.equal(reply.products.length, 0);
+});
+
+test("Crise não retorna automaticamente ao catálogo — a resposta seguinte da Isis continua acolhedora, não empurra produto", () => {
+  const Isis2 = loadIsis2({ products: SAMPLE_PRODUCTS });
+  const primeira = Isis2.ConversationManager.handleUserMessage("Quero me matar.");
+  assert.equal(primeira.kind, "safety_crisis");
+  // Uma mensagem de agradecimento/saudação logo depois não deveria virar
+  // gancho para reabrir a vitrine automaticamente — cada mensagem nova é
+  // avaliada por si só, sem retomar recomendação pendente da crise.
+  const seguinte = Isis2.ConversationManager.handleUserMessage("Obrigado.");
+  assert.equal(seguinte.kind, "thanks");
+  assert.equal(seguinte.products.length, 0);
+});
+
+test("Palavra isolada e fora de contexto ('vou morrer de vergonha') não deveria disparar o fluxo de crise", () => {
+  const Isis2 = loadIsis2({ products: SAMPLE_PRODUCTS });
+  const reply = Isis2.ConversationManager.handleUserMessage("Vou morrer de vergonha se comprar isso errado, quero um incenso para relaxar.");
+  assert.notEqual(reply.kind, "safety_crisis");
 });
 
 test("Pergunta sobre dose/preparo de rapé/ayahuasca nunca recebe instrução de uso", () => {

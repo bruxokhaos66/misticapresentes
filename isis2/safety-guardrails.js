@@ -18,9 +18,13 @@
   }
 
   // Risco imediato: nunca tenta vender nada, só acolhe e orienta ajuda.
+  // Frases completas de propósito (não palavras soltas como "morrer"
+  // sozinha) para não disparar o fluxo de emergência por engano num
+  // contexto ambíguo/não relacionado.
   const CRISIS_PATTERNS = [
     /quero morrer/, /me matar/, /vou me matar/, /nao aguento mais viver/, /não aguento mais viver/,
     /suicid/, /acabar com (a minha vida|tudo|minha vida)/, /nao quero mais viver/, /não quero mais viver/,
+    /me machucar/, /se machucar/, /me cortar/, /me ferir/, /automutila/,
   ];
 
   // Termos de saúde mental comuns: segue para a recomendação normal, mas
