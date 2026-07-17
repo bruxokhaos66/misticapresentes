@@ -346,4 +346,34 @@ test.describe("Isis 2.0 — Escola — Refinamento (Fase 2.1)", () => {
     }
     expect(nonGetRequests).toEqual([]);
   });
+
+  test("refinamento ligado: XSS no título/resumo/módulo devolvido pelo endpoint público de detalhe nunca executa nem vira HTML", async ({ page }) => {
+    await servirSiteConfig(page, { isis2: true, escola: true, refinamento: true });
+    await page.route("**/api/alunos/me", route => route.fulfill({ status: 401, contentType: "application/json", body: "{}" }));
+    await page.route("**/api/escola/publico/cursos/**", route => route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        slug: "xamanismo-introducao",
+        titulo: "<img src=x onerror=alert(1)>Xamanismo",
+        resumo: "<script>alert(2)</script>resumo malicioso",
+        para_quem_e: "\"><svg onload=alert(3)>",
+        modulos: [{ titulo: "<a href=\"javascript:alert(4)\">Módulo</a>", aulas: [{ titulo: "Aula" }] }],
+      }),
+    }));
+    let dialogFired = false;
+    page.on("dialog", async dialog => { dialogFired = true; await dialog.dismiss(); });
+    await page.goto("/escola.html");
+    await dismissConsent(page);
+    await page.locator("#isis2-toggle").click();
+    await page.locator("#isis2-input").fill("Quais são os módulos do curso de xamanismo?");
+    await page.locator("#isis2-form button[type=submit]").click();
+    await page.waitForTimeout(700);
+    expect(dialogFired).toBe(false);
+    await expect(page.locator("#isis2-messages img")).toHaveCount(0);
+    await expect(page.locator("#isis2-messages script")).toHaveCount(0);
+    await expect(page.locator("#isis2-messages svg")).toHaveCount(0);
+    const hrefs = await page.evaluate(() => Array.from(document.querySelectorAll("#isis2-root a[href]")).map(a => a.getAttribute("href")));
+    expect(hrefs.every(href => !href.toLowerCase().startsWith("javascript:"))).toBe(true);
+  });
 });

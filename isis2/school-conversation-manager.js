@@ -498,6 +498,7 @@
   }
 
   function reviewContentReply() {
+    analytics().trackSchoolEvent("isis_study_path_suggested", { kind: "review" });
     return baseReply({
       kind: "school_review_content",
       text: "Posso ajudar a revisar: me diga o tema ou módulo que você quer relembrar, que eu explico os conceitos principais de novo — sem repetir a avaliação, só o conteúdo da aula.",
@@ -507,12 +508,14 @@
   async function resumeStudiesReply() {
     const authed = await student().isAuthenticated();
     if (!authed) {
+      analytics().trackSchoolEvent("isis_study_path_suggested", { kind: "resume_not_authenticated" });
       return baseReply({
         kind: "school_resume_not_authenticated",
         text: "Para eu retomar exatamente de onde você parou, preciso que você esteja logado — entre na sua conta ou abra \"Meus cursos\". Enquanto isso, posso te mostrar o catálogo ou recomendar por onde começar.",
         actions: [{ label: "Abrir Meus cursos", url: nav().myCoursesUrl() }],
       });
     }
+    analytics().trackSchoolEvent("isis_study_path_suggested", { kind: "resume" });
     return nextLessonReply();
   }
 

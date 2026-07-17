@@ -103,6 +103,13 @@
     try {
       const raw = storage.getItem(STORAGE_KEY);
       memoryState = raw ? { ...emptyState(), ...JSON.parse(raw) } : emptyState();
+      // A allowlist da Escola (sanitizeSchoolPartial) só protegia escritas
+      // via updateSchool(); um objeto "school" antigo/adulterado já salvo
+      // em sessionStorage (ex.: de uma versão anterior sem allowlist)
+      // passava direto por aqui sem filtro. Sanitiza também na leitura,
+      // para que a garantia "allowlist fechada" valha para todo o ciclo de
+      // vida do dado, não só para escritas novas.
+      memoryState.school = { ...emptySchoolState(), ...sanitizeSchoolPartial(memoryState.school), updatedAt: memoryState.school?.updatedAt ?? null };
     } catch {
       memoryState = emptyState();
     }
