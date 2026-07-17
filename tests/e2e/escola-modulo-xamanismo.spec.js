@@ -67,6 +67,13 @@ test("módulo de Xamanismo renderiza responsivamente, sem console error e saniti
   await page.route("**/api/escola/cursos/xamanismo-introducao", route =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(curso) })
   );
+  // isis2/isis2-homolog-gate.js (sempre carregado) consulta este endpoint
+  // quando a flag estática está desligada; sem mock, a chamada real ao
+  // domínio da API é bloqueada por CORS no ambiente de teste e vira um
+  // erro de console alheio ao que este teste audita.
+  await page.route("**/api/isis2/homolog-config", route =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ enabled: false, escola: false, refinamento: false, homologacao: false }) })
+  );
 
   await page.goto("/escola-curso.html?curso=xamanismo-introducao");
   await expect(page.getByRole("heading", { name: "O que é o Xamanismo?", level: 1 })).toBeVisible();

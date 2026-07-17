@@ -40,6 +40,15 @@ async function abrirCurso(page) {
   await page.route("**/api/escola/cursos/xamanismo-introducao", rota =>
     rota.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(curso) })
   );
+  // isis2/isis2-homolog-gate.js (sempre carregado, ver isis2/README.md)
+  // consulta este endpoint quando a flag estática está desligada; sem
+  // mock, a chamada real ao domínio da API é bloqueada por CORS no
+  // ambiente de teste e o navegador loga um erro de console -- o que
+  // faria esta suíte (que audita "zero erros de console") falhar por um
+  // motivo alheio ao que ela testa.
+  await page.route("**/api/isis2/homolog-config", rota =>
+    rota.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ enabled: false, escola: false, refinamento: false, homologacao: false }) })
+  );
   await page.goto("/escola-curso.html?curso=xamanismo-introducao");
   await expect(page.locator("[data-header-sentinel]")).toHaveCount(1);
   await expect(page.locator(".aula-hero")).toBeVisible();
