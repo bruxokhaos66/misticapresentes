@@ -52,13 +52,29 @@
     return { total, media };
   }
 
+  // Compara por String() de propósito: o catálogo sincronizado
+  // (mobile-sync.js) sempre usa IDs string ("api-123"), mas essa
+  // comparação tolera também um ID numérico eventual sem quebrar.
   function byId(id) {
-    return catalog().find(product => product.id === id) || null;
+    return catalog().find(product => String(product.id) === String(id)) || null;
+  }
+
+  // Deduplica por ID: se o catálogo de origem (API) trouxer o mesmo
+  // produto duas vezes, a Isis nunca deve recomendar/exibir o mesmo item
+  // repetido — mantém a primeira ocorrência.
+  function dedupeById(list) {
+    const seen = new Set();
+    return list.filter(product => {
+      const key = String(product.id);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   }
 
   function listAll({ onlyInStock = true } = {}) {
-    const all = catalog();
-    return onlyInStock ? all.filter(product => stockOf(product) > 0) : all.slice();
+    const all = dedupeById(catalog());
+    return onlyInStock ? all.filter(product => stockOf(product) > 0) : all;
   }
 
   function categories() {

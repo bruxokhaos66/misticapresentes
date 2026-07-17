@@ -14,9 +14,23 @@ function createMemoryStorage() {
   };
 }
 
-function loadIsis2({ products = [], stock = null } = {}) {
+// Simula os <input id="qty-<id>"> que app.js renderiza por produto na
+// grade da vitrine (ver app.js#productCardHtml). CartAssistant.add()
+// depende desse elemento existir na página para poder chamar
+// window.addToCart com segurança — em testes unitários, `withQtyInputs`
+// decide para quais produtos esse input "existe" (por padrão, todos).
+function createDocumentStub({ withQtyInputs = [] } = {}) {
+  const inputs = new Map(withQtyInputs.map(id => [`qty-${id}`, { value: "1" }]));
+  return {
+    getElementById: id => inputs.get(id) || null,
+    querySelector: () => null,
+  };
+}
+
+function loadIsis2({ products = [], stock = null, qtyInputsFor = null } = {}) {
   delete require.cache[require.resolve("../../../isis2/product-knowledge.js")];
   delete require.cache[require.resolve("../../../isis2/intent-engine.js")];
+  delete require.cache[require.resolve("../../../isis2/safety-guardrails.js")];
   delete require.cache[require.resolve("../../../isis2/recommendation-engine.js")];
   delete require.cache[require.resolve("../../../isis2/context-memory.js")];
   delete require.cache[require.resolve("../../../isis2/analytics.js")];
@@ -39,21 +53,35 @@ function loadIsis2({ products = [], stock = null } = {}) {
   };
   global.cart = [];
   global.window.cart = global.cart;
+  // Réplica fiel de app.js#addToCart: lê a quantidade do <input
+  // id="qty-<id>">, valida contra o estoque (getStock) e a quantidade já
+  // no carrinho, e só adiciona se for um inteiro >=1 dentro do estoque
+  // disponível — sem aceitar parâmetro de quantidade direto, exatamente
+  // como o comportamento real que o Cart Assistant precisa respeitar.
   global.window.addToCart = productId => {
     const product = products.find(item => item.id === productId);
     if (!product) return;
+    const input = global.document.getElementById(`qty-${productId}`);
+    if (!input) return;
+    const qty = Number.parseInt(input.value, 10);
+    const available = global.getStock(productId);
     const existing = global.cart.find(item => item.id === productId);
-    if (existing) existing.qty += 1;
-    else global.cart.push({ id: product.id, name: product.name, price: product.price, qty: 1 });
+    const inCart = existing?.qty || 0;
+    if (!Number.isInteger(qty) || qty < 1) return;
+    if (qty + inCart > available) return;
+    if (existing) existing.qty += qty;
+    else global.cart.push({ id: product.id, name: product.name, price: product.price, qty });
   };
   global.window.removeFromCart = productId => {
     global.cart = global.cart.filter(item => item.id !== productId);
     global.window.cart = global.cart;
   };
   global.window.products = products;
+  global.document = createDocumentStub({ withQtyInputs: qtyInputsFor || products.map(p => p.id) });
 
   require("../../../isis2/product-knowledge.js");
   require("../../../isis2/intent-engine.js");
+  require("../../../isis2/safety-guardrails.js");
   require("../../../isis2/recommendation-engine.js");
   require("../../../isis2/context-memory.js");
   require("../../../isis2/analytics.js");

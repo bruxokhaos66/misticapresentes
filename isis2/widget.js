@@ -161,6 +161,12 @@
       if (result.ok) {
         addButton.textContent = "Adicionado ✓";
         addButton.disabled = true;
+      } else if (result.reason === "rejected_by_store") {
+        addButton.textContent = "Sem estoque suficiente";
+        addButton.disabled = true;
+      } else if (result.reason === "not_addable_here") {
+        addButton.textContent = "Adicione pela página do produto";
+        addButton.disabled = true;
       }
       return;
     }
@@ -220,7 +226,10 @@
   }
 
   function mount() {
-    if (mounted) return;
+    if (mounted) return true;
+    // Não monta sem o catálogo real disponível: preferimos deixar a Isis
+    // 1 (fallback) sozinha a mostrar um widget vazio/quebrado.
+    if (!window.Isis2.ProductKnowledge || !window.Isis2.ProductKnowledge.hasCatalog()) return false;
     mounted = true;
     els = buildDom();
     els.toggle.addEventListener("click", togglePanel);
@@ -236,7 +245,12 @@
       /* ignora indisponibilidade de storage */
     }
     if (startedOpen) openPanel();
+    return true;
   }
 
-  window.Isis2.Widget = { mount };
+  function isMounted() {
+    return mounted;
+  }
+
+  window.Isis2.Widget = { mount, isMounted, open: openPanel };
 })();

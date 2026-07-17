@@ -202,6 +202,19 @@
   font-size: 1em;
 }
 
+/* Nota exibida no lugar do chat embutido da Isis 1 quando a Isis 2.0
+   assume (feature flag ligada + montagem confirmada). Ver
+   isis2-bootstrap.js#deactivateLegacyChat. */
+.isis2-legacy-notice {
+  border: 1px dashed var(--border, rgba(240, 197, 106, 0.22));
+  border-radius: 16px;
+  padding: 16px;
+  margin-top: 12px;
+  text-align: center;
+  color: var(--muted-strong, #efe1c5);
+}
+.isis2-legacy-notice p { margin: 0 0 10px; }
+
 @media (max-width: 420px) {
   #isis2-root { right: 10px; bottom: 10px; }
   .isis2-panel { right: 10px; bottom: 10px; width: calc(100vw - 20px); }

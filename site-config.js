@@ -14,7 +14,16 @@ window.misticaSiteConfig = {
   // Deixe em branco para manter o analytics público desativado. Preencha
   // com o ID real (ex.: "G-XXXXXXX" e "000000000000000") para ativar.
   gaMeasurementId: "",
-  metaPixelId: ""
+  metaPixelId: "",
+  // Feature flag pública da Isis 2.0 (isis2/README.md). Não é segredo,
+  // não depende de query string nem de localStorage — é lida uma única
+  // vez, de forma síncrona, deste arquivo estático. Default false:
+  // mantém só a Isis 1 (isis-guided.js) até a habilitação explícita por
+  // ambiente. Para homologar, edite este valor para true no deploy de
+  // homologação; para produção, só depois de validado em homolog.
+  isis2: {
+    enabled: false
+  }
 };
 
 // Persistência segura do navegador. Este bloco roda de forma síncrona, no
