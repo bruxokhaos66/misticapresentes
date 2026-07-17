@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import secrets
 import unicodedata
 
 
@@ -32,9 +33,14 @@ def _crc16(payload: str) -> str:
 
 
 def montar_txid_pedido(pedido_id: int) -> str:
-    """Gera um txid determinístico e ligado ao id real do pedido, para que o Pix
-    exibido ao cliente e o pedido persistido no banco sejam sempre o mesmo."""
-    return _sanitizar_texto_pix(f"MISTICA{pedido_id:09d}", 25) or "MISTICA"
+    """Gera um txid aleatório e imprevisível, gravado uma única vez no pedido
+    e devolvido ao cliente. É usado tanto no payload Pix quanto como o único
+    segredo que libera o acompanhamento/recibo público do pedido — por isso
+    nunca pode ser derivado do id sequencial do pedido, que é público (aparece
+    na própria URL). O `pedido_id` é aceito só para manter a assinatura da
+    função estável para os chamadores existentes."""
+    del pedido_id
+    return _sanitizar_texto_pix(secrets.token_hex(11), 25) or "MISTICA"
 
 
 def config_pix() -> dict:
