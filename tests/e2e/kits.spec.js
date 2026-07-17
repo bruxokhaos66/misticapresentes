@@ -21,7 +21,13 @@ test.describe("Kits por intenção", () => {
       page.waitForURL(/intencao=amor/),
       page.locator(".isis-followup-chips a", { hasText: "Amor" }).click(),
     ]);
-    await page.waitForLoadState("networkidle");
+    // Não usa waitForLoadState("networkidle") aqui: o player ambiente
+    // (v2-shamanic-player.js) mantém uma conexão de rede em aberto para o
+    // áudio de fundo (preload="metadata"), que nunca fica ociosa sob o
+    // servidor estático de teste (python -m http.server, sem suporte a
+    // Range/206) -- fazia esta espera nunca resolver e o teste sempre
+    // estourar o timeout. `toHaveTitle` já espera (com retry) o título
+    // real da página mudar, sem depender de rede ociosa.
     await expect(page).toHaveTitle(/Amor/);
   });
 
