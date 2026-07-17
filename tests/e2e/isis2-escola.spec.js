@@ -44,6 +44,17 @@ const CURSO_PUBLICO = {
 };
 
 async function mockEscolaApis(page, { autenticado = false } = {}) {
+  // O portão de homologação (isis2/isis2-homolog-gate.js) sempre consulta
+  // este endpoint quando a flag estática de site-config.js está desligada
+  // -- ver backend/isis2_homolog.py. Estes testes de Fase 2/2.1 não
+  // exercitam a homologação (ver tests/e2e/isis2-homolog.spec.js), então
+  // respondemos sempre com a configuração desativada, igual ao fail-safe
+  // real do backend, evitando uma chamada de rede real/pendurada.
+  await page.route("**/api/isis2/homolog-config", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ enabled: false, escola: false, refinamento: false, homologacao: false }),
+  }));
   await page.route("**/api/alunos/me", route => route.fulfill({
     status: autenticado ? 200 : 401,
     contentType: "application/json",
