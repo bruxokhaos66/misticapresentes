@@ -18,7 +18,7 @@
       : "";
     card.innerHTML = `
       ${cover}
-      <span class="escola-badge gratuito">Aula gratuita</span>
+      <span class="escola-badge gratuito">Gratuito</span>
       <div class="escola-card-icon" aria-hidden="true">🌿</div>
       <div class="escola-card-tags"><span>Rapé</span><span>Ayahuasca</span><span>Iniciante</span></div>
       <h3>Medicinas da Floresta: primeiros caminhos</h3>

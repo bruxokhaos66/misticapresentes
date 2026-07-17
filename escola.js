@@ -358,12 +358,11 @@
           <div class="escola-card-actions">
             <a class="btn btn-full" href="escola-curso.html?curso=${encodeURIComponent(curso.slug)}">Começar agora</a>
           </div>
-          <p class="escola-card-note">As partes introdutórias não exigem cadastro nem login.</p>
+          <p class="escola-card-note" aria-hidden="true">&nbsp;</p>
         </article>`;
     }
-    // Somente o curso com LMS (partes introdutórias públicas) tem observação
-    // de rodapé com texto; nos demais o espaço é reservado, mas vazio, para
-    // que os botões fiquem na mesma posição vertical em todos os cards.
+    // O rodapé abaixo do botão fica reservado, mas vazio, em todos os
+    // cards, para que os botões fiquem na mesma posição vertical.
     const primaryAction = curso.tipo === "gratuito"
       ? `<button class="btn btn-full" type="button" data-action="ver">Acessar curso grátis</button>`
       : `<button class="btn btn-full" type="button" data-action="comprar">Comprar acesso</button>`;
