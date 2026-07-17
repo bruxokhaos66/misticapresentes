@@ -10,10 +10,18 @@ test("ContextMemory nunca guarda campos fora da lista permitida (sem dados pesso
   const state = Isis2.ContextMemory.registerMessage(detection);
   const allowedKeys = new Set([
     "startedAt", "messageCount", "lastIntentId", "categoryOfInterest",
-    "budget", "viewedProductIds", "cartAddedIds",
+    "budget", "viewedProductIds", "cartAddedIds", "school",
   ]);
   Object.keys(state).forEach(key => assert.ok(allowedKeys.has(key), `campo inesperado: ${key}`));
   assert.equal(state.lastIntentId, "calma");
+
+  // "school" (Fase 2 — Escola) também é uma lista fechada, sem dado
+  // pessoal, nota de avaliação ou texto de conversa.
+  const allowedSchoolKeys = new Set([
+    "updatedAt", "courseOfInterest", "studentLevel", "viewedCourseSlug",
+    "currentModuleId", "currentLessonId", "educationalIntent", "presentedCourseIds",
+  ]);
+  Object.keys(state.school).forEach(key => assert.ok(allowedSchoolKeys.has(key), `campo inesperado em school: ${key}`));
 });
 
 test("ContextMemory.addViewedProduct e addCartAdd deduplicam e persistem", () => {

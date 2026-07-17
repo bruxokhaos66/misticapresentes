@@ -53,6 +53,14 @@
     }
   ];
 
+  // Exposição somente-leitura do catálogo real para a Isis 2.0 — Escola
+  // (isis2/school-knowledge.js, Fase 2). Congelado para que nenhum script
+  // consumidor possa alterar o catálogo em memória; a única fonte que
+  // grava aqui continua sendo este arquivo. Sem isso, o School Knowledge
+  // teria que reimplementar/duplicar esta lista (proibido pela auditoria:
+  // "nunca criar dados fictícios em produção").
+  window.MISTICA_ESCOLA_CURSOS = Object.freeze(cursos.map(curso => Object.freeze({ ...curso })));
+
   const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
   // Estado do aluno logado (nulo enquanto não carregado ou deslogado).

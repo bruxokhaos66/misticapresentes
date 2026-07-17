@@ -51,9 +51,36 @@
     }
   }
 
+  // Guarda de-dupe em memória (não em storage — só precisa durar o tempo
+  // de um remount/clique duplo dentro da mesma execução da página).
+  const recentDedupeKeys = new Set();
+
+  // Eventos da Escola (Fase 2) usam nomes fixos do briefing
+  // ("isis_school_opened" etc., sem o "2" do prefixo comercial
+  // "isis2_*") — trackSchoolEvent envia o nome exato, sem prefixo
+  // automático, mas reaproveita a mesma infraestrutura (contador local +
+  // misticaTrack + gate de consentimento já existente). dedupeKey opcional
+  // evita contar duas vezes o mesmo evento em remontagem/clique duplo
+  // (ex.: "isis_school_opened:<slug>" só dispara uma vez por essa chave).
+  function trackSchoolEvent(eventName, payload = {}, { dedupeKey = null } = {}) {
+    if (dedupeKey) {
+      const key = `${eventName}:${dedupeKey}`;
+      if (recentDedupeKeys.has(key)) return;
+      recentDedupeKeys.add(key);
+    }
+    const data = load();
+    data[eventName] = (data[eventName] || 0) + 1;
+    save(data);
+    try {
+      window.misticaTrack?.(eventName, payload);
+    } catch {
+      /* nunca deixa telemetria quebrar a conversa */
+    }
+  }
+
   function getMetrics() {
     return { ...load() };
   }
 
-  window.Isis2.Analytics = { track, getMetrics };
+  window.Isis2.Analytics = { track, trackSchoolEvent, getMetrics };
 })();

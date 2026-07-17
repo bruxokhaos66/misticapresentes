@@ -193,7 +193,20 @@
     };
   }
 
+  // Fase 2 — Especialista da Mística Escola: nas páginas autorizadas
+  // (escola.html/escola-curso.html), com as duas feature flags ligadas,
+  // a conversa inteira é delegada ao School Conversation Manager — um
+  // orquestrador irmão deste, não uma reescrita. Fora dessas páginas (ou
+  // com qualquer uma das flags desligada), este arquivo comercial segue
+  // se comportando exatamente como na Fase 1, sem nenhuma mudança de
+  // comportamento.
+  function schoolActive() {
+    return Boolean(window.Isis2.SchoolMode && window.Isis2.SchoolMode.isActive() && window.Isis2.SchoolConversationManager);
+  }
+
   function handleUserMessage(text) {
+    if (schoolActive()) return window.Isis2.SchoolConversationManager.handleUserMessage(text);
+
     const detection = window.Isis2.IntentEngine.detect(text);
     window.Isis2.ContextMemory.registerMessage(detection);
     window.Isis2.Analytics.track("message_sent", { intent: detection.primaryIntent?.id || null });
@@ -222,12 +235,14 @@
   }
 
   function handleIntentShortcut(intentId) {
+    if (schoolActive()) return window.Isis2.SchoolConversationManager.handleIntentShortcut(intentId);
     const intent = window.Isis2.IntentEngine.INTENTS.find(item => item.id === intentId);
     if (!intent) return null;
     return handleUserMessage(intent.label);
   }
 
   function startConversation() {
+    if (schoolActive()) return window.Isis2.SchoolConversationManager.startConversation();
     window.Isis2.Analytics.track("conversation_started", {});
     return greetingReply();
   }

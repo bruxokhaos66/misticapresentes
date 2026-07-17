@@ -283,14 +283,413 @@ característica de produto.
 - **Fase 1.1 (gap conhecido)**: comandos de carrinho em texto livre
   ("remova tudo", "troque 2 por 5") — hoje o carrinho só muda pelos
   botões dos cards recomendados.
-- **Fase 2**: expandir o widget para as páginas de categoria/Escola
-  Mística; correlacionar `Analytics` com o funil de checkout para medir
-  conversão real e abandono.
 - **Fase 3**: motor de afinidade de complementos aprendido a partir de
-  vendas reais (hoje é uma tabela de regras em `product-knowledge.js`).
+  vendas reais (hoje é uma tabela de regras em `product-knowledge.js`);
+  Escola: motor de recomendação aprendido a partir de conclusões reais.
 - **Fase 4**: RAG sobre a base de conhecimento (descrições, dúvidas
   frequentes, avaliações), com backend próprio para custodiar a chave do
   provedor de IA — nunca no navegador.
 - **Fora de escopo permanente nesta iniciativa**: qualquer recurso
   administrativo, acesso a dados de clientes/vendas/fornecedores, ou
-  execução de comandos — a Isis 2.0 é só uma consultora de vitrine.
+  execução de comandos — a Isis 2.0 é só uma consultora de vitrine/tutora
+  de conteúdo, nunca um painel de gestão.
+
+---
+
+# Fase 2 — Especialista da Mística Escola
+
+Expande a Isis 2.0 para as páginas da Escola Mística (`escola.html`,
+`escola-curso.html`): apresenta cursos, explica módulos/aulas, recomenda
+uma trilha, ajuda o aluno a achar seus cursos e — só quando autenticado —
+consulta progresso, próxima aula e motivo de bloqueio de módulo. Aditiva
+à Fase 1: mesmo widget, mesmo `ConversationManager` como ponto de
+entrada, nenhum arquivo da Fase 1 foi reescrito — só uma delegação
+condicional (ver "Arquitetura" abaixo) e extensões pontuais em
+`context-memory.js`, `analytics.js` e `widget.js`.
+
+## Feature flag — MISTICA_ISIS2_ESCOLA_ENABLED
+
+`window.misticaSiteConfig.isis2.escola.enabled` em `site-config.js`.
+Default **`false`**. Regras (testadas em
+`tests/e2e/isis2-escola.spec.js` e `tests/isis2/school-conversation-manager.test.js`):
+
+- depende também de `isis2.enabled === true` — com a flag geral
+  desligada, a flag da Escola nunca é avaliada (`school-mode.js#isActive`
+  faz `flagsEnabled() && isSchoolPage()`, nessa ordem);
+- só ativa nas páginas autorizadas: `escola.html` e `escola-curso.html`
+  (`window.location.pathname`, nunca query string);
+- nunca lida de query string nem de `localStorage`/`sessionStorage`;
+- não contém segredo — é só um booleano de apresentação, igual à flag
+  geral;
+- configurável estaticamente no `site-config.js` publicado por ambiente,
+  mesmo processo já documentado para `MISTICA_ISIS2_ENABLED` acima.
+
+Comportamento (ver `isis2-loader.js#schoolPageActive`):
+
+```
+MISTICA_ISIS2_ENABLED=false
+→ Isis 2.0 não carrega (nem a comercial, nem a Escola).
+
+MISTICA_ISIS2_ENABLED=true, MISTICA_ISIS2_ESCOLA_ENABLED=false
+→ Isis 2.0 comercial funciona normalmente onde já funcionava
+  (index/kit/produto); nas páginas da Escola, o widget só monta se
+  houver catálogo comercial disponível ali (hoje não há), então na
+  prática a Escola não ganha assistente nenhum — fallback seguro: a
+  experiência atual da Escola (sem Isis) continua exatamente igual.
+
+Ambas true
+→ nas páginas da Escola, os módulos da Fase 2 são baixados e o widget
+  passa a responder no domínio de cursos; fora dessas páginas, nada muda.
+```
+
+## Escopo permitido
+
+Só `escola.html` e `escola-curso.html` (`isis2-loader.js#SCHOOL_PAGES`).
+Não foi adicionado a checkout, admin (`admin.html`, `escola-admin.html`)
+nem a nenhuma outra página. Páginas públicas de curso específicas por
+módulo (`escola-incensos.html`, `escola-medicinas-floresta.html`) **não**
+foram incluídas nesta fase — não usam a plataforma de estudo (LMS) real
+(`escola-curso.js`), então ficam fora do escopo "fonte oficial de dados"
+até que migrem para lá; documentado como gap conhecido, não fingido como
+resolvido.
+
+## Arquitetura
+
+Módulos novos (mesmo padrão: script clássico, registra em
+`window.Isis2.<Nome>`, sem `import`):
+
+```
+isis2/
+├── school-mode.js                 School Mode — decide se a Escola está ativa (flags + página)
+├── school-knowledge.js            School Knowledge — catálogo real de cursos + APIs de curso
+├── student-context.js             Student Context — sessão do aluno, "meus cursos", curso com progresso
+├── course-recommendation-engine.js Course Recommendation Engine — ranking + justificativa
+├── progress-assistant.js          Progress Assistant — traduz o payload do backend em explicação simples
+├── lesson-navigation.js           Lesson Navigation — URLs seguras (rota fixa + slug validado)
+├── assessment-safety.js           Assessment Safety — guardrail de proteção acadêmica
+├── school-intent-engine.js        School Intent Engine — intenções do domínio de cursos, PT-BR informal
+└── school-conversation-manager.js School Conversation Manager — orquestra os módulos acima
+```
+
+Reaproveitados sem duplicar (nenhum arquivo novo reimplementa o que já
+existe):
+
+- **Conversation Manager** (`conversation-manager.js`): ganhou só 3
+  branches de delegação (`schoolActive()` no topo de
+  `handleUserMessage`/`handleIntentShortcut`/`startConversation`) — se
+  `SchoolMode.isActive()`, delega 100% ao `SchoolConversationManager` e
+  retorna; senão, comportamento da Fase 1 é idêntico, sem nenhuma outra
+  mudança de lógica;
+- **Safety Guardrails** (`safety-guardrails.js`): reaproveitado
+  verbatim — `SchoolConversationManager` chama o mesmo `classify(text)`
+  antes de qualquer recomendação de curso, com textos de resposta
+  adaptados ao contexto educacional (nunca duplicando a classificação);
+- **Context Memory** (`context-memory.js`): estendido com um sub-objeto
+  fechado `school` (ver "Memória de sessão" abaixo) — a memória
+  comercial da Fase 1 não mudou de formato (só ganhou um campo a mais no
+  objeto raiz, testado no allowlist de campos permitidos);
+- **Analytics** (`analytics.js`): ganhou `trackSchoolEvent(name, payload,
+  {dedupeKey})`, que envia o nome exato pedido pelo briefing da Escola
+  (sem o prefixo automático `isis2_`), reaproveitando a mesma
+  infraestrutura (contador local + `misticaTrack` + gate de
+  consentimento). Guardrails de segurança do domínio da Escola
+  (crise/saúde) continuam usando o `track()` comercial existente, para
+  reaproveitar a mesma taxonomia de eventos da Fase 1 em vez de inventar
+  nomes novos fora da lista pedida;
+- **Widget (UI)** (`widget.js`): sem novo componente visual — só passou
+  a suportar dois campos extras na resposta (`reply.courses`,
+  `reply.actions`), renderizados com as mesmas classes CSS dos cards de
+  produto (`isis2-card`, `isis2-btn`); `mount()` passou a aceitar
+  catálogo comercial OU catálogo da Escola como fonte válida
+  (`hasUsableCatalog()`); `respondTo()` passou a aceitar tanto uma
+  resposta síncrona (Fase 1) quanto uma Promise (Fase 2, que consulta
+  APIs reais) via `Promise.resolve(...)`;
+- **Feature flags** (`isis2-loader.js`, `site-config.js`): a Escola é
+  uma segunda camada de módulos injetada pelo mesmo loader único, nunca
+  um segundo `<script>` estático nas páginas — ver "Feature flag" acima.
+
+### Por que o Intent Engine da Escola é um módulo irmão, não uma extensão do comercial
+
+`intent-engine.js` (Fase 1) já tem um contrato estável e testado para o
+domínio comercial (orçamento, exclusão de produto, combo). O vocabulário
+da Escola (módulo, aula, avaliação, matrícula, bloqueio) não tem
+equivalente ali, e misturar os dois domínios no mesmo arquivo aumentaria
+o risco de regressão na Isis comercial só para adicionar cursos. Por
+isso `school-intent-engine.js` é um módulo irmão, com a mesma técnica
+(regras + normalização PT-BR), registrado à parte
+(`window.Isis2.SchoolIntentEngine`). Essa é uma decisão de design
+explícita, não um esquecimento — sinalizada aqui para a auditoria.
+
+### Fluxo de uma mensagem na Escola
+
+```
+usuário digita           Widget (UI)
+     │                        │
+     ▼                        ▼
+handleUserMessage(text) → Conversation Manager
+     │
+     └─ schoolActive()? → School Conversation Manager
+              ├─ Assessment Safety.classify(text)   → bloqueia resposta de avaliação
+              ├─ Safety Guardrails.classify(text)   → reaproveitado da Fase 1
+              ├─ School Intent Engine.detect(text)  → intenção do domínio de cursos
+              ├─ School Knowledge / Course Recommendation Engine  → catálogo real
+              ├─ Student Context (só quando autenticado)          → APIs reais
+              ├─ Progress Assistant                                → traduz o payload
+              ├─ Context Memory.updateSchool(...)                  → memória mínima
+              └─ Analytics.trackSchoolEvent(...)                   → eventos sem PII
+                                   │
+                                   ▼
+                    {text, courses, actions, quickReplies}
+                                   │
+                                   ▼
+                         Widget renderiza a resposta
+```
+
+## Fonte oficial de dados
+
+Nenhum dado é inventado. Mapeamento real observado em
+`escola.js`/`escola-curso.js` (comentado em cada módulo consumidor):
+
+| Dado | Fonte real |
+|---|---|
+| Catálogo público de cursos (slug, título, tipo, preço, tags, resumo) | `window.MISTICA_ESCOLA_CURSOS`, exposto por `escola.js` (a mesma lista renderizada em `escola.html`; congelada, somente leitura) |
+| Detalhe público de um curso (visitante) | `GET /api/escola/publico/cursos/:slug` |
+| Detalhe de um curso com progresso real (aluno autenticado) | `GET /api/escola/cursos/:slug` — 401 sem sessão, 403 sem acesso liberado |
+| "Meus cursos" (matrículas, percentual, aulas concluídas) | `GET /api/escola/meus-cursos` — 401 sem sessão |
+| Quem está logado | `GET /api/alunos/me` |
+| Módulos, aulas, status (concluída/em andamento), bloqueio (`liberado`) | dentro do payload de `GET /api/escola/cursos/:slug` |
+| Avaliação (quiz): nota mínima, perguntas | `GET /api/escola/quizzes/:id/iniciar` — **não é chamado pela Isis** (ver nota abaixo) |
+| Certificado | `GET /api/cursos/:slug/certificado` (link direto, não uma pergunta da Isis) |
+
+**Por que a Isis nunca chama `/api/escola/quizzes/:id/iniciar`**: essa
+rota inicia uma sessão de avaliação no backend (`sessao_id`), e não há
+garantia documentada de que isso seja livre de efeito colateral (pode
+contar como o início de uma tentativa). Chamar essa rota "só para saber
+a nota mínima" arriscaria consumir uma tentativa do aluno sem ele ter
+pedido — por isso `gradeReply()`/`attemptsReply()` admitem que não têm
+esse número na conversa e direcionam o aluno a abrir a avaliação de
+verdade, em vez de arriscar. Documentado em `progress-assistant.js`.
+
+A Isis nunca lê texto renderizado da página como fonte de verdade — só
+`window.MISTICA_ESCOLA_CURSOS` (dado estruturado, mesma fonte do HTML) e
+as APIs acima.
+
+## Comportamento — visitante não autenticado
+
+Pode: ver catálogo, comparar cursos, pedir recomendação por tema/nível,
+saber quantidade de módulos/aulas de um curso público
+(`fetchPublicDetail`), ser direcionado à matrícula. Não pode: consultar
+progresso (a Isis nunca chama `courseDetail`/`myCourses` fingindo
+sessão — o próprio `fetch` com `credentials:"include"` simplesmente volta
+401 sem cookie de sessão, e a resposta explica que é preciso entrar),
+nem ver dado de outro aluno (não existe nenhum caminho de código que
+aceite um identificador de aluno vindo do usuário — a única "identidade"
+é o cookie de sessão do próprio navegador, decidido pelo backend).
+
+## Comportamento — aluno autenticado
+
+`StudentContext` consulta sempre com `credentials: "include"` (cookie de
+sessão real, não token no cliente) e nunca decide autorização sozinho:
+todo 401/403 é repassado como veio do backend. Respostas de progresso
+citam explicitamente que o dado "é da sua conta, consultado agora" —
+nunca fingem saber algo sem ter chamado a API na hora.
+
+## Intenções implementadas
+
+`school-intent-engine.js#detect` reconhece (com tolerância a erro de
+digitação simples via variações de grafia e raízes de palavra — ex.:
+"xamanicmo" ainda casa com o tema xamanismo): catálogo de cursos, melhor
+curso para começar (+ nível iniciante), tema de interesse (xamanismo,
+cristais, aromaterapia, rapé, ayahuasca, cosmologia), "meus cursos",
+próximo módulo/próxima aula ("terminei a aula, o que faço agora?"),
+quanto já concluí, módulo bloqueado (motivo), nota mínima, tentativas
+restantes, matrícula suspensa — ver testes em
+`tests/isis2/school-conversation-manager.test.js`.
+
+## Recomendação de cursos
+
+`course-recommendation-engine.js#recommend` pontua por tema
+(`SchoolKnowledge#searchByTerms`), filtra por nível iniciante quando
+pedido (tag `"Iniciante"` do catálogo real, nunca suposição), e — quando
+o aluno está autenticado — nunca sugere de novo um curso já
+adquirido/concluído (`StudentContext.myCourses()`). Sempre explica o
+motivo (`"Recomendo começar por X porque..."`, texto construído a partir
+de sinais reais: tema batido, tag de iniciante, primeira posição no
+ranking) e nunca inventa duração, certificado, preço ou pré-requisito
+fora do catálogo/API.
+
+## Navegação assistida
+
+`lesson-navigation.js` é o único módulo que constrói URL. Contrato:
+
+- só aceita um `slug` que exista de fato em `SchoolKnowledge.bySlug()`
+  (`isKnownCourse`) — qualquer slug desconhecido, path traversal ou URL
+  absoluta retorna `null`, nunca uma URL montada;
+- toda URL gerada é relativa às duas páginas autorizadas
+  (`escola.html`, `escola-curso.html?curso=<slug>`);
+- o widget (`widget.js#isSafeSchoolUrl`) valida de novo, em defesa
+  profunda, com uma regex fechada antes de renderizar qualquer `href` —
+  mesmo que um módulo upstream tivesse um bug, a UI não renderizaria uma
+  URL fora do padrão;
+- nunca `javascript:`, nunca HTML não escapado (`escapeHtml` em todo
+  texto vindo de API antes de entrar no DOM, igual à Fase 1).
+
+**Limitação documentada**: a rota real de player (`escola-curso.js`)
+sempre abre a primeira aula pendente automaticamente — não existe hoje
+parâmetro de URL para "aula X" ou "módulo Y" específico. Por isso
+"continuar", "próxima aula" e "abrir módulo" apontam todos para a mesma
+URL do curso; é o player (com o progresso real do backend) quem decide a
+aula exata. Não fingimos ter granularidade que a rota atual não tem.
+
+## Progresso e desbloqueio
+
+`progress-assistant.js` é só leitura: nunca marca aula concluída, libera
+módulo, altera nota, reseta tentativa ou contorna suspensão — cada
+consulta reflete exatamente o que `GET /api/escola/cursos/:slug` devolve
+naquele momento. Motivo de bloqueio é descrito de forma genérica e
+verdadeira ("o módulo anterior ainda não foi concluído"), sem inventar
+nota mínima/tentativas quando o payload não traz esses campos.
+
+## Avaliações — proteção acadêmica
+
+`assessment-safety.js#classify` bloqueia dois padrões, testados em
+`tests/isis2/assessment-safety.test.js` e no E2E:
+
+1. pedido explícito de gabarito/resposta certa (regex de frases como
+   "qual a alternativa correta", "me dá a resposta", "gabarito");
+2. pergunta de múltipla escolha colada (2+ linhas no formato `a)`/`b)`/`c)`
+   junto de contexto de avaliação ou `?`).
+
+Quando classificado, a Isis nunca resolve a questão, nunca indica a
+alternativa correta — oferece revisar o conteúdo ou propor perguntas de
+estudo (não idênticas à avaliação). O evento `isis_assessment_help_blocked`
+é disparado sem nenhum trecho da pergunta.
+
+Dúvidas comuns de conteúdo ("pode explicar de novo o que é rapé?") não
+são bloqueadas — só o pedido de resposta direta de avaliação.
+
+## Conteúdo sensível
+
+Reaproveita 100% o `safety-guardrails.js` da Fase 1 (crise, alegação
+médica, saúde mental, substâncias/rapé/ayahuasca/medicinas da floresta)
+com textos de resposta adaptados ao tom educacional da Escola. Nenhuma
+regra nova foi criada — as mesmas garantias testadas na Fase 1 (nunca
+promete cura, nunca recomenda parar tratamento, nunca dá dose/preparo)
+valem aqui.
+
+## Memória de sessão
+
+`context-memory.js` ganhou um sub-objeto fechado `school` dentro do
+mesmo `sessionStorage` (`isis2_session`), com expiração própria de
+**45 minutos** (`SCHOOL_TTL_MS`), mais estrita que a memória comercial
+(que só "expira" ao fechar a aba):
+
+```
+courseOfInterest, studentLevel, viewedCourseSlug, currentModuleId,
+currentLessonId, educationalIntent, presentedCourseIds (máx. 10)
+```
+
+Nunca guarda: resposta de avaliação, nota, texto integral de conversa,
+dado pessoal, token, cookie ou conteúdo médico — testado no allowlist de
+campos em `tests/isis2/context-memory-and-cart.test.js` (agora cobre os
+dois sub-objetos, comercial e escola).
+
+## Estados de erro
+
+Tratados explicitamente em `school-conversation-manager.js` (nunca
+inventa resposta quando a API falha):
+
+| Estado | Resposta |
+|---|---|
+| API indisponível (erro de rede) | `"Não consegui consultar seu progresso agora. Tente novamente em alguns instantes ou abra "Meus cursos"."` |
+| Não autenticado / sessão expirada (401) | explica que precisa entrar, nunca mostra número de progresso |
+| Matrícula suspensa/sem acesso (403) | repassa a mensagem real do backend (`body.detail`) |
+| Curso fora de foco (pergunta de progresso sem contexto) | pergunta de qual curso o aluno está falando, nunca adivinha |
+| Progresso ausente/incompleto no payload | mensagem de erro genérica, nunca `NaN%`/`undefined` |
+| Nota mínima / tentativas restantes indisponíveis nesta camada | admite a lacuna (ver nota sobre `/quizzes/:id/iniciar` acima) |
+
+## Analytics
+
+`Analytics.trackSchoolEvent` (nomes exatos, sem prefixo automático):
+`isis_school_opened` (de-dupe por sessão), `isis_school_intent`
+(categoria da intenção, nunca o texto), `isis_course_recommended`
+(contagem), `isis_course_opened` (clique em "Ver curso", de-dupe por
+slug), `isis_resume_course_clicked`, `isis_progress_consulted`,
+`isis_assessment_help_blocked` (payload vazio, nunca a pergunta). Os
+guardrails de segurança (crise/saúde/substância) continuam usando o
+`track()` comercial existente da Fase 1 (`isis2_safety_*`), para não
+duplicar taxonomia. Nenhum evento carrega e-mail, nome, nota detalhada,
+conteúdo de avaliação ou identificador persistente.
+
+## Interface
+
+Reaproveita o widget da Fase 1 (`widget.css`, `widget.js`) sem nenhum
+componente novo — cards e botões de curso usam as mesmas classes CSS dos
+cards de produto. Chips rápidos da Escola
+(`school-conversation-manager.js#QUICK_REPLIES`): "Ver meus cursos",
+"Continuar estudando", "Qual curso começar?", "Como funcionam os
+módulos?", "Por que minha aula está bloqueada?". Teclado, foco,
+`prefers-reduced-motion`, zoom 200% e não sobreposição de player/mobile
+já eram garantidos pela Fase 1 e não foram alterados — cobertos de novo
+em `tests/e2e/isis2-escola.spec.js` para confirmar que continuam válidos
+nas páginas da Escola especificamente.
+
+## Segurança
+
+- **IDOR/dado de outro aluno**: impossível por construção — nenhuma
+  função de `StudentContext`/`SchoolKnowledge` aceita um identificador de
+  aluno vindo do cliente; toda consulta autenticada usa só o cookie de
+  sessão (`credentials:"include"`) e a autorização é 100% decidida pelo
+  backend (401/403 repassados como vieram);
+- **Alteração de `aluno_id`**: não existe no cliente — não há campo de
+  ID de aluno em nenhum payload enviado pela Isis (a Isis nunca envia
+  `POST`/`PUT`/`DELETE`, só `GET`);
+- **Endpoints administrativos/professor**: nenhum módulo da Fase 2 chama
+  `/api/escola/quizzes/*/enviar`, rotas de admin ou de correção — só
+  leitura de rotas de aluno;
+- **XSS**: todo texto de curso/módulo/aula vindo de API passa por
+  `escapeHtml()` no `widget.js` antes de `innerHTML` (mesma função da
+  Fase 1), testado em `tests/e2e/isis2-escola.spec.js`;
+- **URL arbitrária/`javascript:`**: ver "Navegação assistida" acima —
+  validação em duas camadas (`lesson-navigation.js` + `widget.js`);
+- **Progresso manipulado pelo navegador**: impossível — a Isis nunca
+  escreve progresso, nunca lê `localStorage`/`sessionStorage` como fonte
+  de autorização (só como memória de conversa, nunca decide acesso a
+  conteúdo a partir dela).
+
+## Testes
+
+- **Unitários** (`tests/isis2/*.test.js`, Node `node:test`, 114 testes
+  no total, +37 novos desta fase): `school-conversation-manager.test.js`
+  (catálogo, recomendação por tema/iniciante, curso já
+  concluído/adquirido, catálogo indisponível, não autenticado, sessão
+  expirada, progresso, próxima aula, módulo bloqueado, nota
+  mínima/tentativas admitidamente desconhecidas, matrícula suspensa, API
+  indisponível, dados incompletos, pedido de resposta de avaliação,
+  conteúdo sensível, URL maliciosa, analytics sem PII, de-dupe de
+  evento), `assessment-safety.test.js` (guardrail acadêmico, navegação
+  segura, catálogo real vs. inexistente, expiração/limite da memória da
+  Escola). Rodar com `npm run test:isis2`.
+- **E2E** (`tests/e2e/isis2-escola.spec.js`, Playwright): feature flags
+  (as duas independentes, impossível ligar por query
+  string/localStorage), visitante não autenticado (saudação, recomendação
+  real, tentativa de consultar progresso sem login), aluno autenticado
+  (meus cursos reais, abrir próxima aula por link seguro, módulo
+  bloqueado), avaliação ativa sem resposta direta, XSS (título malicioso
+  vindo da API), ausência de `javascript:` em qualquer link sugerido,
+  teclado/Escape, restauração de foco, mobile 390×844 sem rolagem
+  horizontal, zoom 200%. Rodar com `npx playwright test
+  tests/e2e/isis2-escola.spec.js`.
+- Suítes existentes da Fase 1 (62 testes unitários + 16 E2E) foram
+  reexecutadas após todas as mudanças desta fase e continuam passando —
+  ver relatório técnico do PR para o resultado completo.
+
+## Riscos conhecidos e mitigação (Fase 2)
+
+| Risco | Mitigação nesta fase |
+|---|---|
+| Nota mínima e tentativas restantes não aparecem no payload de listagem do curso (só ao abrir a avaliação de fato) | A Isis admite a lacuna em vez de arriscar chamar `/quizzes/:id/iniciar` "só para checar", o que poderia consumir uma tentativa sem o aluno pedir |
+| Rota de player não tem parâmetro de aula/módulo específico na URL | "Continuar"/"próxima aula" apontam para a URL do curso; documentado como limitação da rota atual, não da Isis |
+| Páginas de curso fora do LMS real (`escola-incensos.html`, `escola-medicinas-floresta.html`) não têm assistente | Fora de escopo desta fase — não usam `escola-curso.js`/APIs reais de progresso; entrariam numa fase futura só depois de migrarem para o LMS |
+| `AssessmentSafety` é heurística (regex), pode deixar passar uma pergunta de avaliação reformulada de forma muito diferente do padrão observado, ou bloquear uma dúvida legítima de conteúdo em formato de múltipla escolha | Documentado como heurística, não um classificador perfeito; erra para o lado de proteger (mais falso-positivo bloqueando dúvida legítima do que falso-negativo entregando resposta) — revisão de padrões reais fica como acompanhamento pós-deploy |
+| Cobertura de teste da Fase 2 é representativa, não exaustiva dos ~40 cenários enumerados no briefing (ex.: tablet, todas as 22 combinações de E2E) | Priorizados os cenários de maior risco (segurança, autorização, dado de outro aluno, XSS, flags); ver checklist completo no relatório do PR para o que ficou fora desta rodada |

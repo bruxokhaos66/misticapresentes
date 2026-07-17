@@ -12,6 +12,14 @@
 
   const STORAGE_KEY = "isis2_session";
 
+  // Memória da Escola (Fase 2): expira sozinha depois de
+  // SCHOOL_TTL_MS mesmo dentro da mesma aba/sessionStorage — mais estrito
+  // que a memória comercial (que só "expira" ao fechar a aba). Nunca
+  // guarda resposta de avaliação, nota completa, texto integral de
+  // conversa, dado pessoal, token, cookie ou conteúdo médico.
+  const SCHOOL_TTL_MS = 45 * 60 * 1000;
+  const SCHOOL_LIST_MAX = 10;
+
   function emptyState() {
     return {
       startedAt: new Date().toISOString(),
@@ -21,6 +29,20 @@
       budget: null,
       viewedProductIds: [],
       cartAddedIds: [],
+      school: emptySchoolState(),
+    };
+  }
+
+  function emptySchoolState() {
+    return {
+      updatedAt: null,
+      courseOfInterest: null,
+      studentLevel: null,
+      viewedCourseSlug: null,
+      currentModuleId: null,
+      currentLessonId: null,
+      educationalIntent: null,
+      presentedCourseIds: [],
     };
   }
 
@@ -104,6 +126,49 @@
     return get();
   }
 
+  // ---- Memória da Escola (Fase 2) ----------------------------------------
+
+  function schoolExpired(school) {
+    if (!school || !school.updatedAt) return false;
+    return Date.now() - new Date(school.updatedAt).getTime() > SCHOOL_TTL_MS;
+  }
+
+  // Devolve a memória da Escola, ou o estado vazio se ela expirou (sem
+  // apagar o resto da sessão comercial).
+  function getSchool() {
+    const state = load();
+    if (!state.school) state.school = emptySchoolState();
+    if (schoolExpired(state.school)) {
+      state.school = emptySchoolState();
+      persist();
+    }
+    return { ...state.school };
+  }
+
+  function updateSchool(partial) {
+    const state = load();
+    if (!state.school || schoolExpired(state.school)) state.school = emptySchoolState();
+    Object.assign(state.school, partial, { updatedAt: new Date().toISOString() });
+    persist();
+    return getSchool();
+  }
+
+  function addPresentedCourse(slug) {
+    if (!slug) return;
+    const state = load();
+    if (!state.school || schoolExpired(state.school)) state.school = emptySchoolState();
+    state.school.presentedCourseIds = addUnique(state.school.presentedCourseIds, slug, SCHOOL_LIST_MAX);
+    state.school.updatedAt = new Date().toISOString();
+    persist();
+  }
+
+  function resetSchool() {
+    const state = load();
+    state.school = emptySchoolState();
+    persist();
+    return getSchool();
+  }
+
   window.Isis2.ContextMemory = {
     get,
     update,
@@ -111,5 +176,9 @@
     addCartAdd,
     registerMessage,
     reset,
+    getSchool,
+    updateSchool,
+    addPresentedCourse,
+    resetSchool,
   };
 })();
