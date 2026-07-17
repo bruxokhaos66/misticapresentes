@@ -1025,3 +1025,189 @@ ambiente.
 | Medição de performance (Lighthouse, bundle, requisições) do estado "refinamento ligado" não foi executada nesta sessão | Ambiente desta sessão não tinha `npm install` nem o servidor Lighthouse configurados de forma estável a tempo; recomenda-se medir em CI/homologação antes de qualquer promoção de ambiente |
 | Cobertura de teste E2E da Fase 2.1 é representativa, não exaustiva das ~30 combinações listadas no briefing (viewports completos, tablet dedicado, todas as combinações de auth × intent) | Priorizados os cenários de maior risco (flags, negação, comparação, detalhe indisponível, GET-only); ver checklist completo no relatório do PR para o que ficou fora desta rodada |
 | `explainBlockedModule()` só repassa `motivo`/`motivo_bloqueio` se a API real do backend passar a expor esses campos — hoje (mesmo payload observado na Fase 2) o backend normalmente não envia nenhum dos dois | Documentado como "pronto para quando a API expuser o motivo", não uma funcionalidade nova de verdade sem uma mudança correspondente no backend — comportamento atual seguro (nunca deduz) preservado |
+
+## Fase 3 — Estúdio Inteligente de Conteúdo
+
+Infraestrutura de backend (fora do namespace `window.Isis2`, que é só
+frontend) para a Isis gerar diariamente dois **rascunhos** — nunca
+publicação automática: "Bom dia" (frase original + legenda + hashtags +
+texto alternativo + prompt visual + imagem premium em Feed 1080×1350 e
+Story 1080×1920) e "Produto do dia" (produto escolhido por pontuação,
+nunca inventado, com justificativa e fontes registradas). Fluxo
+obrigatório: geração → aviso ao admin → revisão → aprovação/rejeição →
+publicação **manual** por fora do sistema.
+
+### Feature flags — todas desligadas por padrão
+
+`backend/isis_content_flags.py` (mesmo padrão de
+`backend.api_security.estorno_rest_habilitado`: cada flag só é lida da
+variável de ambiente do processo, nunca de query string/header/hostname):
+
+- `MISTICA_ISIS_CONTENT_STUDIO_ENABLED` — libera as rotas administrativas
+  (`/api/admin/isis-conteudo/*`) e o painel `isis-conteudo-admin.html`;
+- `MISTICA_ISIS_CONTENT_AUTO_GENERATION_ENABLED` — libera um acionamento
+  externo (cron do provedor de hospedagem) chamar a geração diária às
+  08:00 America/Sao_Paulo; **nenhum agendador roda dentro do processo
+  nesta fase** — sem algo externo chamando a rota, nada é gerado por
+  conta própria, mesmo com a flag ligada;
+- `MISTICA_ISIS_CONTENT_IMAGE_GENERATION_ENABLED` — libera chamar o
+  `ImageAIProvider` de fato; desligada, o rascunho fica só com o prompt
+  visual salvo, sem imagem;
+- `MISTICA_ISIS_CONTENT_AUTO_PUBLISH_ENABLED` — **sem nenhum caminho de
+  código implementado nesta fase**; existe só para deixar explícito, em
+  qualquer auditoria, que nenhuma rota publica em rede social.
+
+### Arquitetura (backend)
+
+```
+backend/isis_content_flags.py     Feature flags (4 interruptores independentes)
+backend/isis_ai_providers.py      TextAIProvider/ImageAIProvider/TrendResearchProvider + OpenAI + timeout/retry/orçamento/logs
+backend/isis_trend_research.py    Camada desacoplada de tendências (histórico interno hoje; Google Trends etc. como extensão futura)
+backend/isis_content_scoring.py   Pontuação pura do "Produto do dia" (estoque, vendas, favoritos, sazonalidade, rotação, margem com peso limitado…)
+backend/isis_content_storage.py   Upload de imagem do estúdio (MIME real, tamanho, extensão, integridade, sem path traversal)
+backend/isis_content_studio.py    Orquestrador diário — idempotente por dia, nunca publica
+backend/isis_content_routes.py    Rotas /api/admin/isis-conteudo/* (sessão de admin obrigatória; 404 com a flag desligada)
+isis-conteudo-admin.html/.js/.css Painel "Conteúdos da Isis" (calendário de rascunhos, edição, aprovação/rejeição, publicação manual)
+```
+
+Tabelas novas (`database/migrations.py`): `isis_content_jobs`,
+`isis_content_drafts`, `isis_content_assets`, `isis_content_sources`,
+`isis_content_product_history`, `isis_content_approvals`,
+`isis_content_ai_usage`, além da coluna `produtos.isis_oculto` (distinta
+de `ativo`: permite ocultar um produto só das divulgações da Isis sem
+desativá-lo no catálogo). Todas nascem vazias — criar a estrutura não
+ativa nenhum comportamento novo.
+
+### Segurança
+
+Chave de IA nunca exposta ao frontend (toda geração ocorre no backend);
+orçamento diário de IA (`ISIS_CONTENT_AI_DAILY_BUDGET_USD`) checado antes
+de qualquer chamada de rede; logs de consumo nunca incluem o prompt nem a
+resposta gerada; todo texto (de IA ou digitado por um admin) passa por
+`sanitizar_texto` antes de ser persistido (proteção contra XSS
+armazenado); upload de imagem nunca aceita nome de arquivo vindo de fora
+(elimina path traversal por construção); rotas exigem sessão de
+administrador e checam a feature flag antes de qualquer leitura/escrita,
+devolvendo 404 genérico quando desligada (mesmo padrão de
+`MISTICA_REST_ESTORNO_ENABLED`); nunca divulga produto inativo, oculto
+para a Isis, ou sem estoque (salvo regra explícita), e nunca inventa
+preço/desconto.
+
+### Testes (Fase 3)
+
+`tests/test_isis_content_flags.py`, `tests/test_isis_content_scoring.py`,
+`tests/test_isis_content_studio.py`, `tests/test_isis_content_ai_providers.py`,
+`tests/test_isis_content_storage.py`, `tests/test_isis_content_routes.py`
+(pytest); `tests/isis2/isis-conteudo-admin.test.js` (node:test);
+`tests/e2e/isis-conteudo-admin.spec.js` (Playwright, backend sempre
+mockado via `page.route`).
+
+### Limitações conhecidas (Fase 3)
+
+| Limitação | Detalhe |
+|---|---|
+| Sinais de `visualizações`/`favoritos`/`carrinhos` do mecanismo de pontuação não têm coleta real ainda | `backend/isis_content_scoring.py` já aceita esses sinais (peso próprio na fórmula) e trata a ausência como 0 — a integração de analytics real é um ponto de extensão futuro, fora do escopo desta fase |
+| Nenhum agendador roda dentro do processo | A geração diária automática depende de algo externo (cron do provedor de hospedagem, GitHub Actions) chamar `POST /api/admin/isis-conteudo/gerar-diario`; decisão deliberada para não introduzir um processo de longa duração nesta fase |
+| `SemFontesExternasTrendProvider` (Google Trends/tendências públicas) é um placeholder que sempre devolve lista vazia | Documentado como ponto de extensão; qualquer integração real exige revisão dos termos de uso da fonte antes de ligar |
+| Falha parcial em "regenerar imagem" (uma variante gerada, a outra falha) não deixa arquivo órfão nem apaga assets antigos antes dos novos existirem, mas ainda não é atômico entre storage e banco no sentido estrito (uma falha de disco entre salvar o arquivo novo e o `INSERT` deixaria um arquivo sem linha) | Risco residual baixo (uploads são poucos KB, disco íntegro é o caso comum); ver `backend/isis_content_routes.py::regenerar_imagem` e `tests/test_isis_content_routes.py` |
+
+### Auditoria arquitetural (Fase 3 — revisão pós-implementação)
+
+Uma auditoria dedicada revisou o código real (não só a descrição do PR) nas
+16 frentes do checklist de arquitetura/segurança/escala. Achados corrigidos
+nesta revisão:
+
+- **Concorrência (ALTO)**: duas chamadas simultâneas de geração diária para
+  o mesmo dia (dois admins clicando "gerar", ou um retry de rede) faziam a
+  2ª/3ª/4ª chamada propagar `sqlite3.IntegrityError` da restrição `UNIQUE`
+  de `isis_content_jobs.data_referencia` em vez de reaproveitar o job já
+  criado. Corrigido capturando o conflito e devolvendo o job existente —
+  ver `backend/isis_content_studio.py::gerar_conteudos_do_dia` e
+  `tests/test_isis_content_studio.py::test_chamadas_concorrentes_no_mesmo_dia_nunca_lancam_erro_de_integridade`.
+- **Integridade/escala (ALTO)**: `forcar=True` apagava só a linha de
+  `isis_content_jobs`, deixando rascunhos/assets/fontes/histórico de
+  produto antigos órfãos (apontando para um job inexistente) — cada
+  regeneração forçada duplicava rascunhos do mesmo dia e contava o produto
+  como "divulgado" duas vezes, distorcendo a pontuação de rotação a cada
+  chamada. Corrigido com uma função de exclusão em cascata explícita — ver
+  `_apagar_job_em_cascata` e `test_forcar_recriar_nao_deixa_rascunhos_ou_historico_orfaos`.
+- **Seleção de produto incompleta (MÉDIO)**: a elegibilidade não verificava
+  se o produto tinha imagem cadastrada, contrariando o requisito "produto
+  escolhido... possui imagem". Corrigido em
+  `backend/isis_content_scoring.py::elegivel`.
+- **Armazenamento (MÉDIO)**: `regenerar-imagem` apagava os assets antigos
+  do banco antes de confirmar que os novos foram gerados com sucesso (uma
+  falha na 2ª variante deixava a 1ª órfã, com arquivo já salvo no storage
+  mas sem linha no banco) e nunca removia o arquivo físico antigo do
+  storage ao substituir por um novo (acúmulo de blobs órfãos). Corrigido
+  invertendo a ordem (gera tudo antes de tocar no que existe) e chamando
+  `remover_asset` nos arquivos antigos só depois do sucesso — ver
+  `backend/isis_content_routes.py::regenerar_imagem`.
+- **Eficiência/escala (CRÍTICO por efeito colateral)**: `database.migrations.init_db()`
+  reexecutava dezenas de instruções DDL a cada `backend.database.conectar()`
+  (uma conexão por requisição HTTP). Isso pré-existia à Fase 3, mas as ~15
+  instruções novas desta fase aumentaram a contenção de lock do SQLite sob
+  carga concorrente o suficiente para causar falhas intermitentes em rotas
+  que tratam qualquer erro como "desativado" (fail-closed), observadas em
+  `tests/test_isis2_homolog.py` (3 testes ficavam flakiness quando a suíte
+  completa via CI roda em paralelo com as tarefas periódicas do lifespan).
+  Corrigido com uma cache por `DB_PATH` em `init_db()` (invalidada se o
+  arquivo do banco não existir mais, preservando o comportamento de
+  recriação após disco efêmero coberto por
+  `tests/test_persistencia_banco.py`). Efeito colateral positivo: a suíte
+  completa de testes caiu de mais de 900s para ~130s.
+
+Achados **documentados, mas deliberadamente não implementados** nesta
+revisão (ver "Evolução futura da Isis" abaixo): um registro central de
+jobs (`IsisMission`/`IsisJob`), um "Índice de Oportunidade" combinando
+mais sinais de pontuação, e coleta real de visualizações/favoritos/
+carrinho — nenhum é um defeito desta fase, apenas extensões que
+aumentariam o escopo sem benefício imediato comprovado.
+
+Confirmado nesta auditoria, sem necessidade de correção: nenhuma
+publicação automática existe em nenhum caminho de código (busca por
+"Instagram", "Graph API", "Facebook", "publish", "auto_publish", "social
+token", "webhook", "Meta" no diretório do estúdio não encontra nenhuma
+chamada de rede de publicação); prompts injetados por conteúdo externo
+não têm superfície de execução (nenhuma resposta de IA é interpretada
+como comando, e a única fonte de tendência ativa hoje é interna); chave
+de IA e prompts nunca aparecem em log; orçamento diário é checado antes
+de qualquer chamada de rede.
+
+## Evolução futura da Isis (proposta, fora da Fase 3)
+
+Os itens abaixo são **só propostas documentadas** — nenhum foi
+implementado nesta fase, e implementá-los não está autorizado até uma
+fase futura dedicada, com sua própria revisão de escopo e segurança:
+
+- **Scheduler central / registro de jobs (`IsisMission`/`IsisJob`)**: hoje
+  o orquestrador (`backend/isis_content_studio.py`) tem exatamente dois
+  tipos de conteúdo, hardcoded. Adicionar Stories, Reels, campanha
+  sazonal, blog, newsletter, resumo diário de vendas/estoque, campanha de
+  curso, SEO, WhatsApp, Facebook, Pinterest ou TikTok como novos "jobs"
+  se beneficiaria de um registro central com tipo, agenda (diária/
+  semanal/mensal, com timezone), status por execução, prioridade, feature
+  flag própria, limite de custo e política de retry por job — permitindo
+  pausar um job individualmente sem afetar os demais. Prematuro agora:
+  com só 2 tipos de conteúdo, a abstração pagaria um custo de
+  complexidade sem um segundo caso de uso real para validar o desenho.
+- **Índice de Oportunidade**: um índice único combinando tendência,
+  vendas, visualizações, carrinho, favoritos, estoque, margem,
+  sazonalidade, novidade, tempo desde a última divulgação e desempenho de
+  campanhas anteriores — evolução natural de `backend/isis_content_scoring.py`,
+  que já centraliza pesos e fórmula, mas hoje pontua só para escolher o
+  "produto do dia", não como métrica exposta no painel.
+- **Painel executivo**: dashboard consolidado de desempenho do conteúdo
+  gerado (aprovação, tempo de resposta do admin, taxa de rejeição, custo
+  acumulado por período).
+- **`InstagramGraphPublisher` (ou equivalente por rede social)**: a
+  implementação real de publicação, sempre exigindo o fluxo de aprovação
+  humana já existente como pré-requisito, e uma feature flag própria
+  (`MISTICA_ISIS_CONTENT_AUTO_PUBLISH_ENABLED` já reservada, sem nenhum
+  caminho de código nesta fase).
+- **Análise de vendas e de estoque** como tipos de conteúdo adicionais
+  (resumo diário para o admin, não para redes sociais).
+- Coleta real de sinais de **visualizações/favoritos/carrinho** para
+  alimentar a pontuação hoje aceita, mas sempre zerada.
+
+Nenhum destes itens faz parte da Fase 3 atual.

@@ -23,6 +23,7 @@ from backend.campaign_routes import router as campaign_router
 from backend.course_routes import router as course_router
 from backend.lms_routes import router as lms_router
 from backend.lms_admin_routes import router as lms_admin_router
+from backend.isis_content_routes import router as isis_content_router
 from backend.lms_content_xamanismo import (
     instalar_conteudo_xamanismo,
     instalar_conteudo_modulo2_xamanismo,
@@ -272,6 +273,7 @@ app.include_router(review_router)
 app.include_router(campaign_router)
 app.include_router(lms_router)
 app.include_router(lms_admin_router)
+app.include_router(isis_content_router)
 app.include_router(isis2_homolog_router)
 
 
