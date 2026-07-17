@@ -193,7 +193,7 @@
   min-height: 0;
   object-fit: contain;
   object-position: center;
-  padding: 10px;
+  padding: 6px;
   border: none;
   border-radius: 0;
   background: transparent;
@@ -214,8 +214,21 @@
   line-height: 1.28;
 }
 
-.product-card .product-price { margin-top: 4px; }
-.product-card .qty-row { margin-top: auto; }
+.product-card .product-price {
+  margin-top: 4px;
+  font-size: 1.5rem;
+  font-weight: 900;
+  text-shadow: 0 0 22px rgba(242,201,109,.18);
+}
+.product-card .qty-row { margin-top: auto; align-items: stretch; }
+.product-card .qty-row .btn {
+  font-size: .92rem;
+  letter-spacing: .01em;
+  box-shadow: 0 14px 34px rgba(242,201,109,.16);
+}
+.product-card:hover {
+  box-shadow: var(--shadow), 0 0 0 1px rgba(242,201,109,.14);
+}
 
 .product-desc-toggle {
   display: flex;

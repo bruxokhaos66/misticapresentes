@@ -97,6 +97,8 @@
 
 .product-page-buy .btn {
   flex: 1;
+  font-size: .96rem;
+  box-shadow: 0 16px 40px rgba(240,197,106,.2);
 }
 
 .product-page-buy-feedback {
