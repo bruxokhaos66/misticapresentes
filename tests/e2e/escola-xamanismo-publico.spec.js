@@ -113,6 +113,13 @@ async function mockApiAnonima(page) {
   await page.route("**/api/escola/publico/cursos/xamanismo-introducao", route =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(arvorePublica) })
   );
+  // isis2/isis2-homolog-gate.js (sempre carregado) consulta este endpoint
+  // quando a flag estática está desligada; sem mock, a chamada real ao
+  // domínio da API é bloqueada por CORS no ambiente de teste e vira um
+  // erro de console alheio ao que esta suíte audita.
+  await page.route("**/api/isis2/homolog-config", route =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ enabled: false, escola: false, refinamento: false, homologacao: false }) })
+  );
 }
 
 // "Failed to load resource" é o diagnóstico automático do Chromium para toda

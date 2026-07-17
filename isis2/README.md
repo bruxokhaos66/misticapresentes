@@ -17,17 +17,61 @@ estático público, carregado antes de qualquer outro script). Default
   (testado em `tests/e2e/isis2-widget.spec.js`);
 - determinística: mesmo valor em todo carregamento da página, não muda em
   runtime por ação do usuário;
-- com a flag desligada, `isis2/isis2-loader.js` (o único script sempre
-  baixado) sai sem fazer nada — nenhum outro arquivo da Isis 2.0 é
-  requisitado, e a Isis 1 (`isis-guided.js`) segue como está.
+- com a flag desligada, `isis2/isis2-homolog-gate.js` (o único script
+  sempre baixado) sai sem carregar nenhum outro arquivo da Isis 2.0 — a
+  menos que o backend autorize a homologação para a sessão atual (ver
+  seção abaixo) — e a Isis 1 (`isis-guided.js`) segue como está.
 
-**Como habilitar em homologação/produção**: como o site é estático (sem
-build por ambiente), a flag é ligada editando o valor no `site-config.js`
-publicado naquele ambiente (`enabled: true`) antes do deploy — o mesmo
-arquivo, sem lógica condicional de servidor. Recomendação: ligar primeiro
-num deploy de homologação, validar, e só then promover para produção.
-Nunca ligar via parâmetro de URL nem hack de navegador — isso é
-intencionalmente impossível por design.
+**Produção**: a flag em `site-config.js` fica **sempre `false`**. Não é
+editada manualmente por ambiente — o site publicado (GitHub Pages,
+domínio único `www.misticaesotericos.com.br`) é o mesmo para todo mundo.
+
+## Homologação controlada (mesmo domínio de produção)
+
+Como o projeto não tem hoje um segundo domínio/serviço Render dedicado a
+staging (GitHub Pages publica só a branch `main`; o Render roda um único
+serviço web), a homologação real da Isis 2.0 completa acontece no MESMO
+domínio de produção, para uma allowlist fechada de contas autorizadas —
+nunca para o público geral. Mecanismo (Opção B do plano de homologação):
+
+1. `index.html`/`kit.html`/`produto.html`/`escola.html`/`escola-curso.html`
+   carregam `isis2/isis2-homolog-gate.js` no lugar do antigo
+   `isis2-loader.js` estático.
+2. Com a flag estática desligada (sempre, em produção), o portão faz
+   `GET /api/isis2/homolog-config` com `credentials: "include"` — ou seja,
+   usa o cookie de sessão HttpOnly **já existente** (painel admin ou aluno
+   logado), nunca lê query string, hash, header customizado, localStorage
+   ou sessionStorage.
+3. `backend/isis2_homolog.py` decide no servidor: só responde
+   `{enabled:true, escola:true, refinamento:true, homologacao:true}` se
+   (a) o interruptor global estiver ligado (tabela
+   `isis2_homolog_config`, por padrão desligado) **e** (b) a sessão for de
+   um admin **ou** de um aluno presente na allowlist fechada (tabela
+   `isis2_homolog_testers`). Qualquer outro caso — visitante anônimo,
+   sessão expirada, aluno fora da allowlist, erro de banco, exceção —
+   responde a configuração desativada com HTTP 200 (fail-safe: nunca
+   ativa por omissão).
+4. Só quando a resposta confirma `enabled` e `homologacao` como `true`, o
+   portão sobrescreve `window.misticaSiteConfig.isis2` em runtime, injeta
+   `isis2-loader.js` (o restante da Isis 2.0 carrega normalmente a partir
+   daí) e mostra o indicador "Isis em homologação" no canto inferior
+   esquerdo da tela.
+
+Administração da allowlist (todas as rotas exigem sessão de admin):
+
+| Ação | Rota |
+| --- | --- |
+| Ligar o interruptor global | `POST /api/isis2/homolog/ativar` |
+| **Desligar imediatamente (sem deploy)** | `POST /api/isis2/homolog/desativar` |
+| Consultar estado | `GET /api/isis2/homolog/estado` |
+| Listar testadores autorizados | `GET /api/isis2/homolog-testers` |
+| Autorizar um aluno (por ID interno) | `POST /api/isis2/homolog-testers/{aluno_id}` |
+| Revogar um aluno | `DELETE /api/isis2/homolog-testers/{aluno_id}` |
+| Revogar todos de uma vez | `POST /api/isis2/homolog-testers/revogar-todos` |
+
+Ver `docs/isis2-homologacao-checklist.md` para o roteiro manual completo de
+testes e `tests/test_isis2_homolog.py` / `tests/isis2/homolog-gate.test.js`
+/ `tests/e2e/isis2-homolog.spec.js` para a cobertura automatizada.
 
 ## Convivência com a Isis 1 (chat legado)
 

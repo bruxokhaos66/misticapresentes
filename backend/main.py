@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from backend.aluno_auth import _validar_sessao_aluno, aluno_tem_acesso, router as aluno_router
+from backend.isis2_homolog import router as isis2_homolog_router
 from backend.audio_table import migrar_musicas_blob_para_arquivo
 from backend.audit import registrar_auditoria
 from backend.backup_routes import router as backup_router
@@ -273,6 +274,7 @@ app.include_router(campaign_router)
 app.include_router(lms_router)
 app.include_router(lms_admin_router)
 app.include_router(isis_content_router)
+app.include_router(isis2_homolog_router)
 
 
 class ProdutoIn(BaseModel):

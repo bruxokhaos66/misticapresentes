@@ -31,6 +31,17 @@ async function prepararCatalogo(page, produtos = [PRODUTO_API]) {
     contentType: "application/json",
     body: JSON.stringify(produtos),
   }));
+  // O portão de homologação (isis2/isis2-homolog-gate.js) sempre consulta
+  // este endpoint quando a flag estática está desligada (ver
+  // backend/isis2_homolog.py). Nestes testes de widget não estamos
+  // exercitando a homologação (ver tests/e2e/isis2-homolog.spec.js para
+  // isso) — só evitamos uma chamada de rede real/pendurada, respondendo
+  // sempre com a configuração desativada, igual ao fail-safe do backend.
+  await page.route("**/api/isis2/homolog-config", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ enabled: false, escola: false, refinamento: false, homologacao: false }),
+  }));
 }
 
 // A flag pública fica em site-config.js (window.misticaSiteConfig.isis2
@@ -71,7 +82,7 @@ test.describe("Isis 2.0 - feature flag", () => {
     await expect(page.locator("#isisForm")).toBeVisible();
   });
 
-  test("com a flag desligada, nenhum outro arquivo da Isis 2.0 é baixado (só o loader)", async ({ page }) => {
+  test("com a flag desligada, nenhum outro arquivo da Isis 2.0 é baixado (só o portão de homologação)", async ({ page }) => {
     const isis2Requests = [];
     page.on("request", req => {
       const url = req.url();
@@ -79,8 +90,17 @@ test.describe("Isis 2.0 - feature flag", () => {
     });
     await irParaHomeComCatalogo(page, { isis2: false });
     await page.waitForTimeout(500);
-    const naoLoader = isis2Requests.filter(url => !url.includes("isis2-loader.js"));
-    expect(naoLoader, `requisições inesperadas: ${JSON.stringify(naoLoader)}`).toEqual([]);
+    // Com a flag estática desligada, o único arquivo estático baixado é o
+    // portão (isis2-homolog-gate.js); ele também consulta o backend uma
+    // única vez (GET /api/isis2/homolog-config, mockado acima como
+    // desautorizado) -- e todo o resto (~60KB de módulos) nunca é
+    // requisitado.
+    const inesperados = isis2Requests.filter(
+      url => !url.includes("isis2-homolog-gate.js") && !url.includes("/api/isis2/homolog-config")
+    );
+    expect(inesperados, `requisições inesperadas: ${JSON.stringify(inesperados)}`).toEqual([]);
+    const chamadasConfig = isis2Requests.filter(url => url.includes("/api/isis2/homolog-config"));
+    expect(chamadasConfig).toHaveLength(1);
   });
 
   test("flag não pode ser ligada por query string", async ({ page }) => {
