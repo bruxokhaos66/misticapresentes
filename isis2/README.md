@@ -693,3 +693,291 @@ nas páginas da Escola especificamente.
 | Páginas de curso fora do LMS real (`escola-incensos.html`, `escola-medicinas-floresta.html`) não têm assistente | Fora de escopo desta fase — não usam `escola-curso.js`/APIs reais de progresso; entrariam numa fase futura só depois de migrarem para o LMS |
 | `AssessmentSafety` é heurística (regex), pode deixar passar uma pergunta de avaliação reformulada de forma muito diferente do padrão observado, ou bloquear uma dúvida legítima de conteúdo em formato de múltipla escolha | Documentado como heurística, não um classificador perfeito; erra para o lado de proteger (mais falso-positivo bloqueando dúvida legítima do que falso-negativo entregando resposta) — revisão de padrões reais fica como acompanhamento pós-deploy |
 | Cobertura de teste da Fase 2 é representativa, não exaustiva dos ~40 cenários enumerados no briefing (ex.: tablet, todas as 22 combinações de E2E) | Priorizados os cenários de maior risco (segurança, autorização, dado de outro aluno, XSS, flags); ver checklist completo no relatório do PR para o que ficou fora desta rodada |
+
+# Fase 2.1 — Refinamento da Especialista da Mística Escola
+
+## Objetivo
+
+Aprimorar a qualidade, precisão e naturalidade da Isis nas páginas da
+Mística Escola **sem alterar a arquitetura principal** da Fase 2: mesmos
+módulos, mesmo Conversation Manager comercial delegando para o da Escola,
+mesma Widget, mesmas feature flags de base. A Fase 2.1 adiciona módulos
+"irmãos" novos e amplia módulos existentes de forma aditiva — nada foi
+reescrito do zero, nenhum contrato de entrada/saída dos módulos da Fase 2
+mudou. Com a flag de refinamento desligada (default), o comportamento é
+byte-a-byte o mesmo da Fase 2.
+
+## Feature flag — MISTICA_ISIS2_ESCOLA_REFINAMENTO_ENABLED
+
+`site-config.js`, `window.misticaSiteConfig.isis2.escola.refinamento.enabled`
+(booleano, default `false`). Lida uma única vez, de forma síncrona, deste
+arquivo estático — nunca por query string, hash, atributo HTML,
+`localStorage`, `sessionStorage` ou cookie, e nunca tratada como segredo
+(é o mesmo padrão das duas flags anteriores). Não é ativada
+automaticamente em produção; só passa a `true` depois de um deploy manual
+e deliberado do arquivo, tipicamente primeiro em homologação.
+
+Depende, nessa ordem, de:
+
+1. `isis2.enabled === true` (Fase 1);
+2. `isis2.escola.enabled === true` (Fase 2);
+3. `isis2.escola.refinamento.enabled === true` (Fase 2.1).
+
+`window.Isis2.SchoolMode.isRefinementActive()` encapsula essa checagem
+(`isis2-loader.js` usa a mesma lógica para decidir se baixa os 4 módulos
+novos — ver "Arquitetura" abaixo). Com qualquer uma das três desligada,
+`isRefinementActive()` é sempre `false`.
+
+### Matriz de ativação
+
+| `isis2` | `escola` | `refinamento` | Resultado |
+|---|---|---|---|
+| false | false | false | Isis 2.0 não carrega |
+| true | false | true | Refinamento não carrega (Escola desligada) |
+| true | true | false | Comportamento da Fase 2, inalterado |
+| true | true | true | Comportamento refinado da Fase 2.1 |
+
+Com a flag de refinamento desligada, nenhum dos 4 módulos novos é sequer
+baixado (`isis2-loader.js`), e nenhuma requisição adicional acontece —
+confirmado pelo teste E2E "zero requisição extra ao endpoint público sem
+pedido explícito" e pelo teste unitário de regressão byte-a-byte (mesma
+resposta da Fase 2 para o mesmo pedido).
+
+## Arquitetura
+
+Módulos novos (aditivos, carregados só com a flag ligada):
+
+- `negation-parser.js` — interpreta negações/exclusões/preferências da
+  mensagem, devolve uma estrutura fechada e limitada.
+- `course-payload-normalizer.js` — valida e normaliza com rigor o payload
+  do endpoint público de detalhe de curso.
+- `school-public-detail.js` — consulta esse endpoint sob demanda, com
+  cache curto, timeout, `AbortController` e tratamento explícito de cada
+  falha.
+- `course-comparison-engine.js` — compara até 3 cursos usando só
+  atributos disponíveis, sem eleger vencedor absoluto.
+
+Módulos existentes da Fase 2 ampliados de forma aditiva (mesma função
+exportada, parâmetros novos sempre opcionais):
+
+- `school-intent-engine.js` — vocabulário novo (comparação, detalhe/
+  estrutura de curso, aulas, acesso, dificuldade/nível, revisão de
+  conteúdo, retomada dos estudos), resolução de intenção primária por
+  ordem de prioridade explícita (`PRIORITY_ORDER`) para evitar colisão
+  entre intenções concorrentes na mesma frase, e uma lista completa de
+  intenções combinadas (`matchedIntents`) para não perder contexto em
+  pedidos compostos.
+- `course-recommendation-engine.js` — aceita um parâmetro `preferences`
+  opcional (estrutura do `negation-parser.js`) para excluir/priorizar
+  tema e nível sem nunca cair de volta para "qualquer curso" quando a
+  exclusão elimina todas as opções.
+- `assessment-safety.js` — muitos padrões novos de contorno indireto
+  (ver "Proteção acadêmica" abaixo) e uma segunda função,
+  `isLegitimateStudyRequest()`, que nunca afrouxa `classify()` — só
+  reconhece pedidos explícitos de conteúdo inédito de estudo.
+- `progress-assistant.js` — `explainBlockedModule()` agora repassa o
+  motivo exato quando a API o informa (`motivo`/`motivo_bloqueio`), e só
+  cai no texto genérico do briefing quando a API não informa nada.
+- `context-memory.js` — sub-objeto `school` ganhou 7 campos novos, todos
+  numa allowlist fechada que descarta silenciosamente qualquer chave fora
+  dela (`sanitizeSchoolPartial`).
+- `analytics.js` — allowlist de campos por evento novo
+  (`SCHOOL_EVENT_FIELD_ALLOWLIST`) e lista fechada de categorias de erro
+  (`ERROR_REASON_ALLOWLIST`).
+- `school-conversation-manager.js` — todo o roteamento novo (negações,
+  comparação, detalhe público, acesso, nível, revisão, retomada,
+  indisponibilidade, curso concluído) fica atrás de
+  `refinementActive()`; com a flag desligada, o dispatch é idêntico ao
+  da Fase 2 (mesmas funções, mesma ordem, preservadas sem alteração de
+  comportamento).
+
+`isis2-loader.js` só injeta os 4 módulos novos quando
+`isRefinementActive()`-equivalente é verdadeiro na página atual (mesma
+checagem replicada ali, sem depender de rede — ver comentário no
+próprio arquivo).
+
+## Ordem de prioridade (guardrails antes de tudo)
+
+`school-conversation-manager.js#handleUserMessage` roda, nessa ordem fixa,
+independente da flag de refinamento: **crise → segurança/saúde → proteção
+acadêmica → intenção educacional (School Intent Engine, incluindo as
+intenções novas) → recomendação → comercial**. O School Intent Engine
+nunca executa antes dos guardrails críticos — mesmo uma frase como
+"quero morrer, qual é a próxima aula?" é interceptada pelo guardrail de
+crise antes de qualquer roteamento de intenção (testado em
+`school-refinamento.test.js`).
+
+## Negações e exclusões
+
+`negation-parser.js#parse(texto)` devolve sempre a mesma estrutura
+fechada e limitada (nunca o texto integral da conversa):
+
+```javascript
+{
+  includeTopics: [],
+  excludeTopics: [],
+  includeLevels: [],
+  excludeLevels: [],
+  excludeCourseIds: [],
+  completedCourseIds: [],
+  wantsRestart: false,
+  wantsResume: false,
+}
+```
+
+Reconhece, além da palavra "não": `sem`, `evite`/`evita`, `menos`,
+`exceto`/`tirando`/`fora` (inclusive no padrão "qualquer um, exceto X"),
+`não gosto`, `não tenho interesse`, `não preciso`, e marcadores de curso
+já cursado (`já fiz`, `já concluí`, `já tenho`, `não preciso repetir`).
+Também distingue "continuar de onde parei" (`wantsResume`) de "começar do
+zero" (`wantsRestart`). Exclusão sempre vence conflito com inclusão do
+mesmo termo. `resolveCompletedCourseIds()` resolve tema/nível "já
+cursado" contra o catálogo real — nunca inventa um ID de curso.
+
+`school-conversation-manager.js#buildPreferences()` acumula a exclusão da
+mensagem atual com o que já estava salvo na sessão (`ContextMemory`,
+TTL de 45min), então "não quero cristais" dito uma vez continua valendo
+nas próximas recomendações da mesma sessão, sem precisar repetir.
+
+## Recomendação e comparação
+
+`course-recommendation-engine.js#recommend(detection, { preferences })`
+nunca ignora uma exclusão "para sempre apresentar alguma recomendação":
+se toda opção do tema pedido também bate com uma exclusão, o resultado é
+`note: "no_match"` e a Isis diz claramente "Não encontrei no catálogo
+atual um curso que combine com todas essas preferências." — nunca sugere
+de volta o que foi excluído.
+
+`course-comparison-engine.js#compare()` compara até 3 cursos usando só
+tema/nível/resumo do catálogo (mais módulos/aulas quando o detalhe
+público foi consultado). Campo ausente vira exatamente "Essa informação
+não está disponível no catálogo atual." — nunca inventado. Nunca elege um
+vencedor absoluto; a conclusão é sempre contextual ("Para quem está
+começando... Para quem já possui base...").
+
+## Endpoint público de detalhe
+
+`GET /api/escola/publico/cursos/:slug`, só chamado quando o cliente pede
+detalhes/módulos/aulas/estrutura/descrição/comparação — nunca ao abrir o
+widget, nunca para todos os cursos de uma vez (`school-public-detail.js`).
+Cache curto (3 minutos) por slug, timeout de 6 segundos via
+`AbortController`, e cada falha tratada explicitamente com uma categoria
+fechada (`timeout | offline | invalid_payload | not_found | rate_limited
+| server_error | unauthorized | forbidden`). Em qualquer falha, a Isis diz
+exatamente: "Não consegui consultar os detalhes completos desse curso
+agora. Posso mostrar as informações básicas disponíveis ou você pode
+tentar novamente mais tarde." — nunca inventa um detalhe que a API não
+confirmou.
+
+`course-payload-normalizer.js` valida tipo, tamanho, formato de cada
+campo antes de qualquer renderização, ignora campos desconhecidos, e
+nunca deixa passar um valor tratado como HTML confiável — a Widget usa
+`textContent`/atributos escapados para todo texto vindo da API (nunca
+`innerHTML`), igual à Fase 2.
+
+## Proteção acadêmica reforçada
+
+`assessment-safety.js` ganhou detecção para: confirmação de alternativa,
+eliminação de opções, "segunda melhor resposta", tradução/codificação da
+resposta (inclusive código Morse), pedido de responder só com a letra,
+tentativa de fingir que não é avaliação, pedido de ordenar alternativas,
+pedido de porcentagem/probabilidade de acerto, e pedido de confirmar uma
+resposta já escolhida — nenhum padrão da Fase 2 foi removido ou
+afrouxado, só adicionado (`classify()` continua um superconjunto estrito
+do que já bloqueava). `isLegitimateStudyRequest()` é uma função separada,
+nova, que só reconhece pedidos explícitos de conteúdo inédito ("crie uma
+pergunta de múltipla escolha para eu treinar", "explique a diferença
+entre X e Y", "quero revisar o conceito de Z") — nunca é usada para
+liberar algo que `classify()` bloqueou; existe só para a Isis reconhecer
+e responder melhor a estudo genuinamente legítimo. Em caso de ambiguidade
+real, o bloqueio prevalece (erra para o lado seguro).
+
+## Memória refinada
+
+`context-memory.js`, sub-objeto `school`, 7 campos novos, todos numa
+allowlist fechada (`SCHOOL_FIELD_ALLOWLIST`) que descarta silenciosamente
+qualquer chave fora dela: `includeTopics`, `excludeTopics`,
+`includeLevels`, `excludeLevels`, `lastRecommendedCourseIds`,
+`lastComparedCourseIds`, `lastPublicCourseSlug`. Listas limitadas a 10
+itens (`SCHOOL_LIST_MAX`), strings normalizadas, mesmo TTL de 45 minutos
+da Fase 2, mesma limpeza em logout/troca de conta/sessão expirada
+(`resetSchool()`, já disparado por `escola.js#resetIsis2SchoolIdentity`).
+Nunca guarda resposta de avaliação, nota, texto integral da conversa,
+e-mail, nome, ID de aluno, token ou cookie — `excludeCourseIds` e
+`completedCourseIds` do `negation-parser.js` são deliberadamente
+transitórios (só duram o turno atual), não entram na allowlist de
+persistência.
+
+## Analytics
+
+Eventos novos, cada um com allowlist de campos fechada
+(`SCHOOL_EVENT_FIELD_ALLOWLIST` em `analytics.js`):
+`isis_school_refinement_intent` (`intent`), `isis_course_comparison`
+(`count`), `isis_course_detail_consulted` (`cached`),
+`isis_course_exclusion_applied` (`excludedCount`),
+`isis_study_path_suggested` (`kind`), `isis_assessment_bypass_blocked`
+(sem payload), `isis_school_api_unavailable` (`reason`, restrito à lista
+fechada de categorias de erro). Nenhum evento carrega texto digitado,
+questão, resposta, alternativa, descrição completa, nome, e-mail, ID de
+aluno, nota, progresso detalhado, token, cookie ou condição médica —
+qualquer campo fora da allowlist do evento é descartado antes de chegar
+em `misticaTrack`/`sessionStorage`.
+
+## Segurança e privacidade
+
+Reaproveita integralmente as garantias da Fase 2 (IDOR impossível por
+construção, XSS coberto por `textContent`/normalização, nenhuma escrita,
+URL sempre validada contra o catálogo real) e adiciona: validação
+rigorosa do payload público (nunca confia em status 200 sozinho),
+`AbortController`/timeout no novo endpoint, e allowlists fechadas tanto
+na memória quanto no analytics dos campos novos. Nenhuma chave, segredo,
+ou credencial nova foi introduzida — a flag de refinamento não é tratada
+como segredo, igual às duas anteriores.
+
+## Performance
+
+O endpoint de detalhe é lazy — só consultado quando o cliente pede
+detalhe/estrutura/comparação de um curso específico, nunca para todo o
+catálogo. Com a flag de refinamento desligada, o comportamento (bundle,
+requisições, LCP/CLS) é idêntico à Fase 2: os 4 módulos novos não são
+sequer baixados. Medição completa de Lighthouse/bundle para o estado
+"refinamento ligado" não foi executada nesta sessão (ver limitações
+abaixo e o relatório do PR) — recomenda-se rodar `npm run
+test:lighthouse` em CI/homologação antes de qualquer promoção de
+ambiente.
+
+## Testes (Fase 2.1)
+
+- **Unitários** (`tests/isis2/school-refinamento.test.js`, +49 testes
+  novos, node:test): matriz de flags, negação/exclusão (todos os
+  exemplos do briefing), recomendação com exclusão (incluindo o caso
+  "nenhuma opção sobra"), comparação (dois cursos, campo ausente, sem
+  contexto suficiente), detalhe público (sucesso, 401/403/404/429/500,
+  JSON inválido, HTML inesperado, corpo vazio, payload incompleto, curso
+  removido, slug inválido, offline, timeout via `AbortController`, cache
+  e `fresh:true`, GET-only), normalizer (campos desconhecidos, tipos
+  errados, slug/título inválidos), proteção acadêmica reforçada (todas
+  as frases do briefing, mais confirmação de que o guardrail antigo não
+  foi afrouxado), ordem de prioridade (crise e proteção acadêmica antes
+  do refinamento), memória (allowlist, limite de 10, limpeza),
+  analytics (payload mínimo, categorias de erro controladas), retomada
+  dos estudos (autenticado/não autenticado), módulo bloqueado (motivo
+  real da API vs. texto genérico), navegação segura, GET-only.
+- **E2E** (`tests/e2e/isis2-escola.spec.js`, describe "Refinamento (Fase
+  2.1)"): flag desligada sem requisição extra, dependência das três
+  flags, negação respeitada, comparação sem vencedor absoluto, detalhe
+  indisponível com a mensagem padrão, GET-only com as intenções novas.
+- Toda a suíte da Fase 1 e da Fase 2 (166 testes unitários no total, 117
+  pré-existentes + 49 novos) foi reexecutada após as mudanças desta fase
+  e continua passando — ver relatório técnico do PR para o resultado
+  completo, incluindo E2E.
+
+## Limitações conhecidas (Fase 2.1)
+
+| Limitação | Detalhe |
+|---|---|
+| `NegationParser` é heurístico (regex sobre um vocabulário fechado de temas/níveis), não um parser sintático completo | Cobre os exemplos do briefing e variações comuns, mas uma negação com estrutura muito incomum pode não ser reconhecida — nesse caso a Isis simplesmente não aplica a exclusão (não é o mesmo risco que inventar dado; na pior hipótese, recomenda algo que o aluno não queria, corrigível pedindo de novo) |
+| `CourseComparisonEngine` resolve os cursos a comparar por correspondência de título/tema no texto, não por um seletor explícito de UI | Em frases muito ambíguas ("compare os dois"), pode não identificar 2-3 cursos e pedir contexto em vez de adivinhar — comportamento deliberado (nunca compara ao acaso) |
+| Medição de performance (Lighthouse, bundle, requisições) do estado "refinamento ligado" não foi executada nesta sessão | Ambiente desta sessão não tinha `npm install` nem o servidor Lighthouse configurados de forma estável a tempo; recomenda-se medir em CI/homologação antes de qualquer promoção de ambiente |
+| Cobertura de teste E2E da Fase 2.1 é representativa, não exaustiva das ~30 combinações listadas no briefing (viewports completos, tablet dedicado, todas as combinações de auth × intent) | Priorizados os cenários de maior risco (flags, negação, comparação, detalhe indisponível, GET-only); ver checklist completo no relatório do PR para o que ficou fora desta rodada |
+| `explainBlockedModule()` só repassa `motivo`/`motivo_bloqueio` se a API real do backend passar a expor esses campos — hoje (mesmo payload observado na Fase 2) o backend normalmente não envia nenhum dos dois | Documentado como "pronto para quando a API expuser o motivo", não uma funcionalidade nova de verdade sem uma mudança correspondente no backend — comportamento atual seguro (nunca deduz) preservado |
