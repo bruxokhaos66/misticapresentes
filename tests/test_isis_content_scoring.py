@@ -13,7 +13,17 @@ from backend.isis_content_scoring import (
 
 
 def _produto(**kwargs):
-    base = {"id": 1, "nome": "Produto", "ativo": 1, "isis_oculto": 0, "quantidade": 10, "preco": 50.0, "custo": 20.0, "categoria": "Velas"}
+    base = {
+        "id": 1,
+        "nome": "Produto",
+        "ativo": 1,
+        "isis_oculto": 0,
+        "quantidade": 10,
+        "preco": 50.0,
+        "custo": 20.0,
+        "categoria": "Velas",
+        "imagem_url": "/uploads/produtos/exemplo.jpg",
+    }
     base.update(kwargs)
     return base
 
@@ -38,6 +48,24 @@ def test_produto_sem_estoque_e_inelegivel_por_padrao():
 
 def test_produto_sem_estoque_pode_ser_liberado_por_regra_explicita():
     pode, motivo = elegivel(_produto(quantidade=0), permitir_sem_estoque=True)
+    assert pode is True
+    assert motivo is None
+
+
+def test_produto_sem_imagem_e_inelegivel():
+    pode, motivo = elegivel(_produto(imagem_url=""))
+    assert pode is False
+    assert "imagem" in motivo
+
+
+def test_produto_com_imagens_json_vazia_e_inelegivel():
+    pode, motivo = elegivel(_produto(imagem_url="", imagens_json="[]"))
+    assert pode is False
+    assert "imagem" in motivo
+
+
+def test_produto_com_imagens_json_preenchida_e_elegivel_sem_imagem_url():
+    pode, motivo = elegivel(_produto(imagem_url="", imagens_json='["/uploads/produtos/a.jpg"]'))
     assert pode is True
     assert motivo is None
 

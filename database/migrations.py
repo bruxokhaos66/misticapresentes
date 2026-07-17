@@ -2,7 +2,10 @@ import os
 import secrets
 
 from config import DOCS_PATH, hash_password_pbkdf2
+from . import connection as _connection
 from .connection import query_db
+
+_BANCOS_MIGRADOS: set[str] = set()
 
 
 def _exec_tolerante(sql, params=None):
@@ -132,6 +135,30 @@ def _backfill_tipo_item_pedidos_itens():
 
 
 def init_db():
+    """Aplica todas as migrações (todas idempotentes: `CREATE TABLE IF NOT
+    EXISTS` / `ALTER TABLE` tolerante a coluna já existente).
+
+    `backend.database.conectar()` chama `init_db()` a cada conexão aberta
+    (uma por requisição HTTP, mais as tarefas periódicas do lifespan) --
+    sem cache, isso reexecuta dezenas de instruções DDL por requisição. Sob
+    carga concorrente (tarefa periódica + requisições simultâneas), a
+    contenção de lock resultante já foi observada causando falhas
+    intermitentes em rotas que tratam qualquer erro como "desativado"
+    (fail-closed), como `backend.isis2_homolog`. Por isso o corpo real só
+    roda uma vez por `DB_PATH` neste processo; chamadas repetidas para o
+    mesmo caminho (o caso comum) são no-op.
+
+    A cache é invalidada se o arquivo do banco não existir mais no disco --
+    disco efêmero (ver `tests/test_persistencia_banco.py`) pode fazer o
+    arquivo desaparecer entre uma chamada e outra sem que `DB_PATH` mude;
+    tratar só a string do caminho como chave de cache, sem checar o disco,
+    deixaria o schema sem ser recriado depois desse tipo de restart."""
+    db_path_atual = _connection.DB_PATH
+    if db_path_atual in _BANCOS_MIGRADOS and not os.path.exists(db_path_atual):
+        _BANCOS_MIGRADOS.discard(db_path_atual)
+    if db_path_atual in _BANCOS_MIGRADOS:
+        return
+
     query_db("CREATE TABLE IF NOT EXISTS produtos (id INTEGER PRIMARY KEY, codigo_p TEXT, nome TEXT, preco REAL, quantidade INTEGER, categoria TEXT)", commit=True)
     query_db("CREATE TABLE IF NOT EXISTS categorias (id INTEGER PRIMARY KEY, nome TEXT UNIQUE)", commit=True)
     query_db(
@@ -500,6 +527,8 @@ def init_db():
                 print(f"[migrations] falha ao inserir categoria padrão '{c}': {exc}")
 
     _criar_tabelas_isis_content_studio()
+
+    _BANCOS_MIGRADOS.add(db_path_atual)
 
 
 def _criar_tabelas_isis_content_studio():

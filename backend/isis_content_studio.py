@@ -16,6 +16,7 @@ roda por conta própria.
 from __future__ import annotations
 
 import re
+import sqlite3
 from datetime import datetime, timedelta
 
 from backend.database import conectar
@@ -294,10 +295,33 @@ def _gerar_draft_produto_do_dia(conn, *, job_id: int, data_referencia: str, text
     return draft_id
 
 
+def _apagar_job_em_cascata(conn, job_id: int) -> None:
+    """Remove um job e tudo que depende dele (drafts, assets, fontes,
+    aprovações, histórico de produto), nesta ordem, para nunca deixar
+    rascunho/asset órfão apontando para um job inexistente -- o SQLite
+    aqui não tem `ON DELETE CASCADE` configurado nas FKs existentes, então
+    a cascata é feita explicitamente."""
+    draft_ids = [row["id"] for row in conn.execute("SELECT id FROM isis_content_drafts WHERE job_id=?", (job_id,)).fetchall()]
+    for draft_id in draft_ids:
+        conn.execute("DELETE FROM isis_content_assets WHERE draft_id=?", (draft_id,))
+        conn.execute("DELETE FROM isis_content_sources WHERE draft_id=?", (draft_id,))
+        conn.execute("DELETE FROM isis_content_approvals WHERE draft_id=?", (draft_id,))
+        conn.execute("DELETE FROM isis_content_product_history WHERE draft_id=?", (draft_id,))
+    conn.execute("DELETE FROM isis_content_drafts WHERE job_id=?", (job_id,))
+    conn.execute("DELETE FROM isis_content_jobs WHERE id=?", (job_id,))
+
+
 def gerar_conteudos_do_dia(data_referencia: str | None = None, *, forcar: bool = False) -> dict:
     """Gera (idempotentemente) os dois rascunhos do dia. Levanta
     `ContentStudioDesativadoError` se `MISTICA_ISIS_CONTENT_STUDIO_ENABLED`
-    estiver desligada -- quem chama nunca deve contornar essa checagem."""
+    estiver desligada -- quem chama nunca deve contornar essa checagem.
+
+    Concorrência: `isis_content_jobs.data_referencia` é `UNIQUE`, então duas
+    chamadas concorrentes para o mesmo dia (ex.: dois admins clicando "gerar"
+    ao mesmo tempo, ou um retry de rede) nunca duplicam o job -- a segunda a
+    tentar inserir recebe `IntegrityError` do SQLite, que é tratado abaixo
+    reaproveitando o job que a primeira já criou, em vez de vazar um erro
+    500 para quem chamou."""
     if not content_studio_habilitado():
         raise ContentStudioDesativadoError("Estúdio de Conteúdo da Isis está desativado.")
 
@@ -309,9 +333,26 @@ def gerar_conteudos_do_dia(data_referencia: str | None = None, *, forcar: bool =
             return {"job_id": job_atual["id"], "data_referencia": data_referencia, "reaproveitado": True, "drafts": [dict(d) for d in drafts]}
 
         if job_atual and forcar:
-            conn.execute("DELETE FROM isis_content_jobs WHERE id=?", (job_atual["id"],))
+            _apagar_job_em_cascata(conn, job_atual["id"])
 
-        job_id = _criar_job(conn, data_referencia)
+        try:
+            job_id = _criar_job(conn, data_referencia)
+        except sqlite3.IntegrityError:
+            # Outra chamada concorrente já criou o job para este dia entre o
+            # SELECT acima e este INSERT -- reaproveita o que ela criou (ou
+            # está criando) em vez de propagar o erro de UNIQUE constraint.
+            job_existente_da_corrida = _job_existente(conn, data_referencia)
+            drafts = conn.execute(
+                "SELECT id, tipo FROM isis_content_drafts WHERE job_id=?",
+                (job_existente_da_corrida["id"],),
+            ).fetchall()
+            return {
+                "job_id": job_existente_da_corrida["id"],
+                "data_referencia": data_referencia,
+                "reaproveitado": True,
+                "drafts": [dict(d) for d in drafts],
+            }
+
         text_provider = obter_text_provider()
         indice_dia = datetime.now().timetuple().tm_yday
 

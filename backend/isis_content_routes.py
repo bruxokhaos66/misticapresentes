@@ -22,7 +22,7 @@ from backend.audit import registrar_auditoria
 from backend.database import conectar
 from backend.isis_ai_providers import AIProviderIndisponivelError, obter_image_provider, obter_text_provider
 from backend.isis_content_flags import resumo_flags, content_studio_habilitado
-from backend.isis_content_storage import VARIANTES_PERMITIDAS, IsisContentStorageError, salvar_asset
+from backend.isis_content_storage import VARIANTES_PERMITIDAS, IsisContentStorageError, remover_asset, salvar_asset
 from backend.isis_content_studio import ContentStudioDesativadoError, gerar_conteudos_do_dia, sanitizar_texto
 from backend.logging_config import get_logger
 from backend.panel_sessions import exigir_perfil
@@ -181,23 +181,35 @@ def regenerar_imagem(draft_id: int, sessao: dict = Depends(exigir_admin)):
 
     image_provider = obter_image_provider()
     novos_assets = []
+    # Gera e sobe todas as variantes ANTES de tocar nos assets antigos (DB ou
+    # storage): se uma variante falhar no meio, os assets antigos continuam
+    # intactos e nenhum arquivo novo fica órfão (sem linha no banco) -- ver
+    # regressão coberta por tests/test_isis_content_routes.py.
+    for variante, (largura, altura) in VARIANTES_PERMITIDAS.items():
+        try:
+            resultado_imagem = image_provider.gerar_imagem(draft["prompt_visual"] or "", largura=largura, altura=altura)
+            asset = salvar_asset(resultado_imagem.dados, draft_id=draft_id, variante=variante, content_type=resultado_imagem.mime_type)
+        except (AIProviderIndisponivelError, IsisContentStorageError) as exc:
+            for asset_parcial in novos_assets:
+                remover_asset(asset_parcial["arquivo"])
+            raise HTTPException(status_code=503, detail="Provedor de IA de imagem indisponível agora. Tente novamente em instantes.") from exc
+        asset["variante"] = variante
+        novos_assets.append(asset)
+
     with conectar() as conn:
+        assets_antigos = [dict(a) for a in conn.execute("SELECT * FROM isis_content_assets WHERE draft_id=?", (draft_id,)).fetchall()]
         conn.execute("DELETE FROM isis_content_assets WHERE draft_id=?", (draft_id,))
-        for variante, (largura, altura) in VARIANTES_PERMITIDAS.items():
-            try:
-                resultado_imagem = image_provider.gerar_imagem(draft["prompt_visual"] or "", largura=largura, altura=altura)
-                asset = salvar_asset(resultado_imagem.dados, draft_id=draft_id, variante=variante, content_type=resultado_imagem.mime_type)
-            except (AIProviderIndisponivelError, IsisContentStorageError) as exc:
-                raise HTTPException(status_code=503, detail="Provedor de IA de imagem indisponível agora. Tente novamente em instantes.") from exc
+        for asset in novos_assets:
             conn.execute(
                 """
                 INSERT INTO isis_content_assets (draft_id, variante, largura, altura, arquivo, mime_type, tamanho_bytes, hash_sha256, criado_em)
                 VALUES (?,?,?,?,?,?,?,?,?)
                 """,
-                (draft_id, variante, asset["largura"], asset["altura"], asset["arquivo"], asset["mime_type"], asset["tamanho_bytes"], asset["hash_sha256"], datetime.now().isoformat(timespec="seconds")),
+                (draft_id, asset["variante"], asset["largura"], asset["altura"], asset["arquivo"], asset["mime_type"], asset["tamanho_bytes"], asset["hash_sha256"], datetime.now().isoformat(timespec="seconds")),
             )
-            novos_assets.append(asset)
         registrar_auditoria(conn, "isis_content_draft", draft_id, "regenerar_imagem", _usuario(sessao))
+    for asset_antigo in assets_antigos:
+        remover_asset(asset_antigo["arquivo"])
     return {"ok": True, "assets": novos_assets}
 
 

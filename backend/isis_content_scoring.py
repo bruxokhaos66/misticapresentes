@@ -57,6 +57,13 @@ def _normalizar(valor: float, maximo: float) -> float:
     return max(0.0, min(1.0, valor / maximo))
 
 
+def _tem_imagem(produto: dict) -> bool:
+    if str(produto.get("imagem_url") or "").strip():
+        return True
+    imagens_json = produto.get("imagens_json")
+    return bool(str(imagens_json or "").strip() and str(imagens_json).strip() not in ("[]", "null"))
+
+
 def elegivel(produto: dict, *, permitir_sem_estoque: bool = False) -> tuple[bool, str | None]:
     if not int(produto.get("ativo", 1) or 0):
         return False, "produto inativo"
@@ -65,6 +72,8 @@ def elegivel(produto: dict, *, permitir_sem_estoque: bool = False) -> tuple[bool
     estoque = produto.get("quantidade")
     if not permitir_sem_estoque and (estoque is None or int(estoque) <= 0):
         return False, "produto sem estoque"
+    if not _tem_imagem(produto):
+        return False, "produto sem imagem cadastrada"
     return True, None
 
 
