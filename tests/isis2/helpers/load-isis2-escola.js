@@ -24,6 +24,14 @@ const MODULE_FILES = [
   "../../../isis2/progress-assistant.js",
   "../../../isis2/assessment-safety.js",
   "../../../isis2/school-intent-engine.js",
+  // Fase 2.1 — Refinamento. Sempre carregados no harness de teste (para
+  // poder testar os dois estados da flag), mas na produção real só são
+  // baixados quando MISTICA_ISIS2_ESCOLA_REFINAMENTO_ENABLED está ligada
+  // (ver isis2-loader.js).
+  "../../../isis2/negation-parser.js",
+  "../../../isis2/course-payload-normalizer.js",
+  "../../../isis2/school-public-detail.js",
+  "../../../isis2/course-comparison-engine.js",
   "../../../isis2/school-conversation-manager.js",
   "../../../isis2/conversation-manager.js",
 ];
@@ -40,6 +48,7 @@ function loadIsis2Escola({
   query = "",
   isis2Enabled = true,
   escolaEnabled = true,
+  refinamentoEnabled = false,
   cursos = CURSOS_REAIS,
   fetchImpl = null,
 } = {}) {
@@ -49,9 +58,16 @@ function loadIsis2Escola({
   global.window.Isis2 = undefined;
   global.window.sessionStorage = createMemoryStorage();
   global.window.misticaTrack = undefined;
+  if (!("onLine" in (global.window.navigator || {}))) {
+    try {
+      Object.defineProperty(global.window, "navigator", { value: { onLine: true }, configurable: true });
+    } catch {
+      /* Node >= 21 já expõe navigator.onLine real; segue sem sobrescrever */
+    }
+  }
   global.window.misticaSiteConfig = {
     apiBaseUrl: "https://api.misticaesotericos.com.br",
-    isis2: { enabled: isis2Enabled, escola: { enabled: escolaEnabled } },
+    isis2: { enabled: isis2Enabled, escola: { enabled: escolaEnabled, refinamento: { enabled: refinamentoEnabled } } },
   };
   global.window.location = { pathname, href: `https://www.misticaesotericos.com.br${pathname}${query}`, search: query };
   function deepFreeze(value) {
@@ -78,20 +94,55 @@ function loadIsis2Escola({
 
 // fetch mock helper: mapeia "METHOD path" (prefixo de path) para uma
 // resposta { status, body }. Usado pelos testes para simular
-// 200/401/403/500/timeout sem bater em rede real.
+// 200/401/403/500/timeout sem bater em rede real. Também aceita
+// "network_error" (rejeita a promise) e "hang" (nunca resolve — usado
+// para testar o AbortController/timeout de school-public-detail.js).
+// Rotas podem customizar contentType/rawText para simular JSON inválido,
+// HTML inesperado ou corpo vazio.
 function mockFetch(routes) {
-  return async (url, options = {}) => {
+  return (url, options = {}) => {
     const method = (options.method || "GET").toUpperCase();
     const path = String(url).replace("https://api.misticaesotericos.com.br", "");
     const key = Object.keys(routes).find(k => {
       const [routeMethod, routePath] = k.split(" ");
       return routeMethod === method && path.startsWith(routePath);
     });
-    if (!key) return { ok: false, status: 404, json: async () => ({ detail: "not found" }) };
+    if (!key) {
+      return Promise.resolve(fakeResponse({ status: 404, body: { detail: "not found" } }));
+    }
     const route = routes[key];
-    if (route === "network_error") throw new Error("network down");
-    const status = route.status ?? 200;
-    return { ok: status >= 200 && status < 300, status, json: async () => route.body ?? {} };
+    if (route === "network_error") return Promise.reject(new Error("network down"));
+    if (route === "hang") {
+      return new Promise((resolve, reject) => {
+        if (options.signal) {
+          options.signal.addEventListener("abort", () => {
+            const err = new Error("aborted");
+            err.name = "AbortError";
+            reject(err);
+          });
+        }
+      });
+    }
+    return Promise.resolve(fakeResponse(route));
+  };
+}
+
+function fakeResponse(route) {
+  const status = route.status ?? 200;
+  const contentType = route.contentType ?? "application/json";
+  const rawText = route.rawText !== undefined ? route.rawText : JSON.stringify(route.body ?? {});
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: { get: name => (String(name).toLowerCase() === "content-type" ? contentType : null) },
+    json: async () => {
+      try {
+        return JSON.parse(rawText);
+      } catch {
+        return {};
+      }
+    },
+    text: async () => rawText,
   };
 }
 
