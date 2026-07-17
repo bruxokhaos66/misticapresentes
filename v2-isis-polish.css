@@ -218,7 +218,7 @@
 }
 
 .isis-feature-grid article { min-height: 138px; }
-.isis-feature-grid { gap: 16px !important; }
+.isis-feature-grid { gap: 16px; }
 .isis-chat { border: 1px solid rgba(242,201,109,.16); border-radius: 20px; padding: 14px; background: rgba(0,0,0,.14); max-height: 420px; overflow-y: auto; }
 .isis-message { line-height: 1.55; }
 

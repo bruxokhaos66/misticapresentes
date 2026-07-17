@@ -226,9 +226,6 @@
   letter-spacing: .01em;
   box-shadow: 0 14px 34px rgba(242,201,109,.16);
 }
-.product-card:hover {
-  box-shadow: var(--shadow), 0 0 0 1px rgba(242,201,109,.14);
-}
 
 .product-desc-toggle {
   display: flex;
