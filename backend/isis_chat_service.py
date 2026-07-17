@@ -54,6 +54,27 @@ def contem_dado_sensivel(texto: str) -> bool:
     return bool(_INFORMACOES_SENSIVEIS.search(texto or ""))
 
 
+def _resumo_estruturado(intent_resultado) -> str:
+    """Resumo curto e seguro para armazenar (histórico resumido/sessão):
+    só a intenção (vocabulário fechado) e os sinais estruturados já
+    extraídos (aroma/finalidade, também vocabulário fechado, e faixa de
+    preço, numérica) -- nunca o texto livre digitado pelo cliente.
+    `termo_busca` é a mensagem inteira normalizada; guardá-lo (mesmo
+    truncado a 60-100 caracteres) equivaleria, na prática, a armazenar o
+    texto integral da maioria das mensagens reais, o que contraria a
+    política de retenção documentada (nunca guardar a conversa completa)."""
+    partes = [intent_resultado.intent]
+    if intent_resultado.aroma:
+        partes.append(f"aroma={intent_resultado.aroma}")
+    if intent_resultado.finalidade:
+        partes.append(f"finalidade={intent_resultado.finalidade}")
+    if intent_resultado.preco_min is not None:
+        partes.append(f"preco_min={intent_resultado.preco_min}")
+    if intent_resultado.preco_max is not None:
+        partes.append(f"preco_max={intent_resultado.preco_max}")
+    return " ".join(partes)
+
+
 def _registrar_metrica(conn, evento: str, *, intent: str | None = None) -> None:
     conn.execute(
         "INSERT INTO isis_chat_metrics (evento, intent, valor, criado_em) VALUES (?,?,1,?)",
@@ -92,8 +113,9 @@ def processar_mensagem(conn, sessao: SessaoChat, texto_bruto: str, *, base_url: 
 
     resposta = _montar_resposta(conn, sessao, intent_resultado, base_url=base_url)
 
-    registrar_mensagem(conn, sessao, papel="usuario", intent=intent_resultado.intent, resumo_curto=intent_resultado.termo_busca[:100])
-    novo_resumo = provider.summarize_session(sessao.resumo, f"{intent_resultado.intent}:{intent_resultado.termo_busca[:60]}")
+    resumo_seguro = _resumo_estruturado(intent_resultado)
+    registrar_mensagem(conn, sessao, papel="usuario", intent=intent_resultado.intent, resumo_curto=resumo_seguro)
+    novo_resumo = provider.summarize_session(sessao.resumo, resumo_seguro)
     atualizar_estado_sessao(
         conn,
         sessao.session_id,

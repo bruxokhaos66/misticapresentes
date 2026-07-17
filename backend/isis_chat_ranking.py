@@ -125,29 +125,39 @@ def rankear_produtos(produtos: list[dict], *, termo_busca: str = "", aroma: str 
     return escolhidos
 
 
+def _centavos(valor: float) -> int:
+    """Converte para centavos com arredondamento bancário-simples (padrão
+    `round`), evitando que a soma acumulada em float (ex.: 19.9 + 25.1
+    pode chegar a 44.99999999999999 em ponto flutuante) exclua por engano
+    um item que deveria caber exatamente no orçamento, ou aceite por
+    engano um item que estoura o orçamento por uma fração de centavo."""
+    return round((valor or 0) * 100)
+
+
 def montar_kit(produtos: list[dict], *, orcamento_max: float, limite_itens: int = 4) -> dict | None:
     """Kit sugerido: composição temporária de produtos ativos que respeita
     o orçamento informado, sem exceder, sem inventar desconto -- só a soma
     real dos preços. Não cria produto nem pedido."""
+    orcamento_centavos = _centavos(orcamento_max)
     disponiveis = sorted((p for p in produtos if p.get("disponivel")), key=lambda p: p.get("preco") or 0)
     escolhidos: list[dict] = []
-    total = 0.0
+    total_centavos = 0
     for produto in disponiveis:
-        preco = float(produto.get("preco") or 0)
-        if preco <= 0:
+        preco_centavos = _centavos(produto.get("preco") or 0)
+        if preco_centavos <= 0:
             continue
-        if total + preco > orcamento_max:
+        if total_centavos + preco_centavos > orcamento_centavos:
             continue
         categorias_no_kit = {p.get("categoria") for p in escolhidos}
         if produto.get("categoria") in categorias_no_kit:
             continue
         escolhidos.append(produto)
-        total += preco
+        total_centavos += preco_centavos
         if len(escolhidos) >= limite_itens:
             break
     if not escolhidos:
         return None
-    return {"itens": escolhidos, "valor_total": round(total, 2), "orcamento_max": orcamento_max}
+    return {"itens": escolhidos, "valor_total": total_centavos / 100, "orcamento_max": orcamento_max}
 
 
 def comparar_produtos(produtos: list[dict]) -> dict:

@@ -117,5 +117,7 @@ def buscar_cursos_ativos(conn, *, termo: str = "") -> list[dict]:
 
 
 def curso_url(curso: dict, *, base_url: str = "") -> str:
+    from urllib.parse import quote
+
     base = base_url.rstrip("/") if base_url else ""
-    return f"{base}/escola-curso.html?curso={curso['slug']}"
+    return f"{base}/escola-curso.html?curso={quote(str(curso['slug']), safe='')}"

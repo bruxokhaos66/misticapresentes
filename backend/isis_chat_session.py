@@ -17,7 +17,7 @@ import secrets
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
-from backend.isis_chat_flags import max_sessoes_por_hora, sessao_ttl_minutos
+from backend.isis_chat_flags import max_mensagens_por_sessao, max_sessoes_por_hora, sessao_ttl_minutos
 
 _FORMATO_DATA = "%Y-%m-%d %H:%M:%S"
 
@@ -64,6 +64,7 @@ def garantir_tabelas_isis_chat(conn) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_isis_chat_sessions_status ON isis_chat_sessions(status)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_isis_chat_sessions_criado ON isis_chat_sessions(criado_em)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_isis_chat_sessions_user_ref ON isis_chat_sessions(user_ref)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_isis_chat_sessions_intent ON isis_chat_sessions(intent_atual)")
 
     conn.execute(
         """
@@ -79,6 +80,7 @@ def garantir_tabelas_isis_chat(conn) -> None:
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_isis_chat_msg_session ON isis_chat_messages_summary(session_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_isis_chat_msg_criado ON isis_chat_messages_summary(criado_em)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_isis_chat_msg_intent ON isis_chat_messages_summary(intent)")
 
     conn.execute(
         """
@@ -109,6 +111,7 @@ def garantir_tabelas_isis_chat(conn) -> None:
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_isis_chat_metrics_evento ON isis_chat_metrics(evento)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_isis_chat_metrics_criado ON isis_chat_metrics(criado_em)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_isis_chat_metrics_intent ON isis_chat_metrics(intent)")
 
     conn.execute(
         """
@@ -174,25 +177,38 @@ class SessaoChat:
 
 
 def criar_sessao(conn, *, user_type: str, user_ref: str) -> SessaoChat:
+    """Cria a sessão só se a conta ainda não atingiu o limite por hora.
+
+    A checagem antiga (SELECT COUNT(*) seguido de um INSERT separado)
+    tinha a mesma janela de corrida do limite de mensagens: duas
+    requisições concorrentes de criação de sessão para a mesma conta
+    podiam ler a mesma contagem e ambas passar. Aqui o `INSERT ... SELECT
+    ... WHERE` faz SQLite avaliar a contagem e inserir a linha numa única
+    instrução atômica -- a segunda requisição concorrente, executada
+    depois da primeira já ter commitado sua própria sessão, enxerga a
+    contagem já atualizada e falha com `rowcount == 0`."""
     agora = _agora()
     limite_inferior = agora - timedelta(hours=1)
-    total_recente = conn.execute(
-        "SELECT COUNT(*) AS total FROM isis_chat_sessions WHERE user_ref=? AND criado_em>=?",
-        (user_ref, _txt(limite_inferior)),
-    ).fetchone()
-    if int(total_recente["total"] or 0) >= max_sessoes_por_hora():
-        raise LimiteSessaoPorHoraExcedido()
-
     session_id = secrets.token_urlsafe(24)
     expira_em = agora + timedelta(minutes=sessao_ttl_minutos())
-    conn.execute(
+
+    cur = conn.execute(
         """
         INSERT INTO isis_chat_sessions
             (session_id, user_type, user_ref, status, contador_mensagens, criado_em, expira_em, ultimo_acesso)
-        VALUES (?,?,?,'ativa',0,?,?,?)
+        SELECT ?, ?, ?, 'ativa', 0, ?, ?, ?
+        WHERE (
+            SELECT COUNT(*) FROM isis_chat_sessions WHERE user_ref=? AND criado_em>=?
+        ) < ?
         """,
-        (session_id, user_type, user_ref, _txt(agora), _txt(expira_em), _txt(agora)),
+        (
+            session_id, user_type, user_ref, _txt(agora), _txt(expira_em), _txt(agora),
+            user_ref, _txt(limite_inferior), max_sessoes_por_hora(),
+        ),
     )
+    if cur.rowcount == 0:
+        raise LimiteSessaoPorHoraExcedido()
+
     conn.execute(
         "INSERT INTO isis_chat_metrics (evento, valor, criado_em) VALUES ('sessao_iniciada', 1, ?)",
         (_txt(agora),),
@@ -242,22 +258,38 @@ def tocar_sessao(conn, session_id: str) -> None:
 
 
 def registrar_mensagem(conn, sessao: SessaoChat, *, papel: str, intent: str | None, resumo_curto: str) -> int:
-    """Incrementa o contador e grava só um resumo curto (nunca o texto
-    integral do usuário) -- devolve o novo total de mensagens da sessão."""
-    from backend.isis_chat_flags import max_mensagens_por_sessao
+    """Incrementa o contador atomicamente (UPDATE...WHERE contador <
+    limite, numa única instrução) e grava só um resumo curto (nunca o
+    texto integral do usuário) -- devolve o novo total de mensagens da
+    sessão.
 
-    if sessao.contador_mensagens >= max_mensagens_por_sessao():
+    A checagem "sessao.contador_mensagens >= limite" feita só em memória
+    (valor lido no início da requisição) seria uma janela clássica de
+    TOCTOU: duas requisições concorrentes para a mesma sessão poderiam
+    ler o mesmo valor, passar na checagem e ultrapassar o limite. O
+    `WHERE contador_mensagens < ?` faz SQLite avaliar a condição e
+    escrever atomicamente na mesma instrução -- a segunda requisição
+    concorrente, ao tentar depois da primeira já ter incrementado, não
+    encontra mais nenhuma linha que satisfaça o `WHERE` e falha com
+    `rowcount == 0`."""
+    limite = max_mensagens_por_sessao()
+    agora = _agora()
+    cur = conn.execute(
+        "UPDATE isis_chat_sessions SET contador_mensagens = contador_mensagens + 1 "
+        "WHERE session_id=? AND contador_mensagens < ?",
+        (sessao.session_id, limite),
+    )
+    if cur.rowcount == 0:
         raise LimiteMensagensExcedido()
 
-    agora = _agora()
-    novo_total = sessao.contador_mensagens + 1
-    conn.execute(
-        "UPDATE isis_chat_sessions SET contador_mensagens=? WHERE session_id=?",
-        (novo_total, sessao.session_id),
-    )
+    linha = conn.execute(
+        "SELECT contador_mensagens FROM isis_chat_sessions WHERE session_id=?", (sessao.session_id,)
+    ).fetchone()
+    novo_total = int(linha["contador_mensagens"]) if linha else sessao.contador_mensagens + 1
+
     conn.execute(
         "INSERT INTO isis_chat_messages_summary (session_id, papel, intent, resumo, criado_em) VALUES (?,?,?,?,?)",
-        (sessao.session_id, papel, intent, (resumo_curto or "")[:280], _txt(agora)),
+        (sessao.session_id, papel, intent, (resumo_curto or "")[:80], _txt(agora)),
     )
     return novo_total
 
