@@ -79,3 +79,44 @@ test("CartAssistant.subtotal nunca calcula preço a partir de texto da conversa,
   Isis2.CartAssistant.add("incenso-natural", 3);
   assert.equal(Isis2.CartAssistant.subtotal(), 12.9 * 3);
 });
+
+test("Adicione 0 unidades: normalizado para o mínimo seguro (1), nunca vira item de quantidade zero", () => {
+  const Isis2 = loadIsis2({ products: SAMPLE_PRODUCTS });
+  const result = Isis2.CartAssistant.add("incenso-natural", 0);
+  assert.equal(result.ok, true);
+  assert.equal(result.added, 1);
+});
+
+test("Adicione 2.7 unidades (decimal): arredonda para baixo, nunca fraciona um item físico", () => {
+  const Isis2 = loadIsis2({ products: SAMPLE_PRODUCTS });
+  const result = Isis2.CartAssistant.add("incenso-natural", 2.7);
+  assert.equal(result.ok, true);
+  assert.equal(result.added, 2);
+});
+
+test("Adicione NaN unidades: normalizado para o mínimo seguro, nunca propaga NaN ao carrinho", () => {
+  const Isis2 = loadIsis2({ products: SAMPLE_PRODUCTS });
+  const result = Isis2.CartAssistant.add("incenso-natural", NaN);
+  assert.equal(result.ok, true);
+  assert.equal(result.added, 1);
+  assert.equal(Number.isNaN(Isis2.CartAssistant.subtotal()), false);
+});
+
+test("Adicione Infinity unidades: nunca aceito ao pé da letra (valor não-finito cai no mínimo seguro, não vira pedido infinito)", () => {
+  const Isis2 = loadIsis2({ products: SAMPLE_PRODUCTS });
+  const result = Isis2.CartAssistant.add("incenso-natural", Infinity);
+  // Infinity não é um inteiro finito válido: normalizeQty() trata como
+  // entrada inválida e cai no mínimo seguro (1) — nunca tenta pedir uma
+  // quantidade infinita ao carrinho real.
+  assert.equal(result.ok, true);
+  assert.equal(result.added, 1);
+});
+
+test("ID malformado (objeto, undefined, string vazia) nunca chega a window.addToCart", () => {
+  const Isis2 = loadIsis2({ products: SAMPLE_PRODUCTS });
+  [undefined, null, "", {}, ["incenso-natural"]].forEach(idRuim => {
+    const result = Isis2.CartAssistant.add(idRuim, 1);
+    assert.equal(result.ok, false);
+  });
+  assert.equal(Isis2.CartAssistant.itemCount(), 0);
+});

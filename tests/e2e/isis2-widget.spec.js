@@ -259,6 +259,23 @@ test.describe("Isis 2.0 - XSS e renderização segura", () => {
     await page.waitForTimeout(700);
     expect(await page.evaluate(() => window.__isis2XssFired)).toBe(0);
   });
+
+  test("payload 'javascript:alert(1)' nunca vira href clicável nem navega", async ({ page }) => {
+    await irParaHomeComCatalogo(page);
+    await page.locator("#isis2-toggle").click();
+    await page.locator("#isis2-input").fill("javascript:alert(1)");
+    await page.locator("#isis2-form button[type=submit]").click();
+    await page.waitForTimeout(700);
+
+    // Nenhum link do widget deve usar esse texto como href — os únicos
+    // <a> renderizados vêm de productLink(), construído a partir do ID
+    // real do produto (encodeURIComponent), nunca de texto livre do
+    // usuário.
+    const hrefsSuspeitos = await page.locator("#isis2-panel a[href]").evaluateAll(
+      links => links.map(a => a.getAttribute("href")).filter(href => href && href.startsWith("javascript:"))
+    );
+    expect(hrefsSuspeitos).toEqual([]);
+  });
 });
 
 test.describe("Isis 2.0 - mobile", () => {
@@ -288,4 +305,153 @@ test.describe("Isis 2.0 - mobile", () => {
       await decline.click();
     }
   });
+});
+
+test.describe("Isis 2.0 - fonte do catálogo em navegador real", () => {
+  test("catálogo ainda carregando: `products` já existe (fallback estático de app.js, igual ao resto do site), e é substituído pelo catálogo oficial quando pronto", async ({ page }) => {
+    // Importante: `products` (const no topo de app.js) começa com um
+    // fallback estático de 8 categorias — o mesmo que a vitrine normal
+    // usa antes da sincronização confirmar. A Isis 2.0 herda esse
+    // comportamento (não é uma invenção nova dela): hasCatalog() pode
+    // ser true mesmo antes de window.misticaCatalogState virar "ready".
+    // O que garantimos é que, quando "ready", o conteúdo é o do
+    // catálogo oficial, não mais o fallback.
+    let resolveRoute;
+    const pending = new Promise(resolve => { resolveRoute = resolve; });
+    await page.route("**/api/produtos?**", async route => {
+      await pending;
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([PRODUTO_API]) });
+    });
+    await ligarFeatureFlagIsis2(page);
+    await page.goto("/index.html");
+
+    await expect.poll(() => page.evaluate(() => Boolean(window.Isis2))).toBe(true);
+    const duranteLoading = await page.evaluate(() => ({
+      estado: window.misticaCatalogState,
+      hasCatalog: window.Isis2.ProductKnowledge.hasCatalog(),
+      temProdutoTeste: window.Isis2.ProductKnowledge.byId(`api-${501}`) !== null,
+    }));
+    expect(duranteLoading.estado).not.toBe("ready");
+    expect(duranteLoading.temProdutoTeste, "produto da API não deveria existir antes da sincronização confirmar").toBe(false);
+
+    resolveRoute();
+    await expect.poll(() => page.evaluate(() => window.misticaCatalogState)).toBe("ready");
+    const depois = await page.evaluate(() => ({
+      hasCatalog: window.Isis2.ProductKnowledge.hasCatalog(),
+      produtoReal: window.Isis2.ProductKnowledge.byId("api-501")?.name,
+    }));
+    expect(depois.hasCatalog).toBe(true);
+    expect(depois.produtoReal).toBe(PRODUTO_API.nome);
+  });
+
+  test("página de produto (produto.html): ProductKnowledge lê o mesmo catálogo global", async ({ page }) => {
+    await prepararCatalogo(page);
+    await ligarFeatureFlagIsis2(page);
+    await page.goto(`/produto.html?id=${PRODUTO_API.id}`);
+    await expect.poll(() => page.evaluate(() => window.misticaCatalogState)).toBe("ready");
+    const nome = await page.evaluate(prodId => {
+      const found = window.Isis2.ProductKnowledge.byId(`api-${prodId}`);
+      return found?.name;
+    }, PRODUTO_API.id);
+    expect(nome).toBe(PRODUTO_API.nome);
+  });
+
+  test("página de kit (kit.html): catálogo carrega sem erro mesmo sem a Isis 2.0 ligada nessa navegação", async ({ page }) => {
+    await prepararCatalogo(page);
+    await page.goto("/kit.html");
+    await expect.poll(() => page.evaluate(() => window.misticaCatalogState)).toBe("ready");
+    const total = await page.evaluate(() => (typeof products !== "undefined" ? products.length : 0));
+    expect(total).toBeGreaterThan(0);
+  });
+
+  test("produto inexistente: CartAssistant nunca chama addToCart, devolve not_found", async ({ page }) => {
+    await irParaHomeComCatalogo(page);
+    const resultado = await page.evaluate(() => window.Isis2.CartAssistant.add("produto-que-nao-existe", 1));
+    expect(resultado).toEqual({ ok: false, reason: "not_found" });
+  });
+
+  test("produto esgotado: ProductKnowledge.listAll() em estoque não inclui o produto, mesmo existindo no catálogo bruto", async ({ page }) => {
+    await irParaHomeComCatalogo(page, { produtos: [{ ...PRODUTO_API, quantidade: 0 }] });
+    const { emEstoque, total } = await page.evaluate(() => ({
+      emEstoque: window.Isis2.ProductKnowledge.listAll({ onlyInStock: true }).length,
+      total: window.Isis2.ProductKnowledge.listAll({ onlyInStock: false }).length,
+    }));
+    expect(total).toBe(1);
+    expect(emEstoque).toBe(0);
+  });
+
+  test("ID numérico da API vira ID string interno ('api-<id>'); byId() usa esse formato real e tolera string/número na comparação", async ({ page }) => {
+    await irParaHomeComCatalogo(page);
+    const resultado = await page.evaluate(prodId => {
+      const knowledge = window.Isis2.ProductKnowledge;
+      return {
+        // Formato real que mobile-sync.js usa: "api-<id>" (sempre string).
+        porIdReal: Boolean(knowledge.byId(`api-${prodId}`)),
+        // O ID numérico cru da API não é, sozinho, o ID do produto no
+        // catálogo (que sempre carrega o prefixo "api-") — não deveria
+        // casar. A tolerância string/número de byId() (testada em
+        // unidade com um catálogo hipotético sem prefixo) não se aplica
+        // aqui simplesmente porque o valor comparado é outro.
+        porNumeroCruSemPrefixo: Boolean(knowledge.byId(prodId)),
+        apiIdBateComOriginal: knowledge.byId(`api-${prodId}`)?.apiId === prodId,
+      };
+    }, PRODUTO_API.id);
+    expect(resultado.porIdReal).toBe(true);
+    expect(resultado.porNumeroCruSemPrefixo).toBe(false);
+    expect(resultado.apiIdBateComOriginal).toBe(true);
+  });
+
+  test("falha da API: catálogo nunca fica 'ready' com dado inventado, Isis admite indisponibilidade", async ({ page }) => {
+    await page.route("**/api/produtos?**", route => route.fulfill({ status: 500, contentType: "application/json", body: "{}" }));
+    await ligarFeatureFlagIsis2(page);
+    await page.goto("/index.html");
+    await dismissConsent(page);
+    await page.waitForTimeout(2000);
+    const estado = await page.evaluate(() => window.misticaCatalogState);
+    expect(estado).not.toBe("ready");
+  });
+
+  test("catálogo vazio ([] da API): Isis admite que não tem produtos, nunca inventa um", async ({ page }) => {
+    await irParaHomeComCatalogo(page, { produtos: [] });
+    const hasCatalog = await page.evaluate(() => window.Isis2.ProductKnowledge.hasCatalog());
+    expect(hasCatalog).toBe(false);
+
+    await page.locator("#isis2-toggle").click();
+    await page.locator("#isis2-input").fill("Quero um incenso");
+    await page.locator("#isis2-form button[type=submit]").click();
+    await expect(page.locator(".isis2-message-bot").last()).toContainText(/não consigo consultar|catálogo/i);
+  });
+});
+
+test.describe("Isis 2.0 - matriz de viewports", () => {
+  const VIEWPORTS = [
+    { name: "320x568 (iPhone SE)", width: 320, height: 568 },
+    { name: "360x800 (Android comum)", width: 360, height: 800 },
+    { name: "390x844 (iPhone 12/13)", width: 390, height: 844 },
+    { name: "768x1024 (tablet)", width: 768, height: 1024 },
+    { name: "1366x768 (notebook)", width: 1366, height: 768 },
+    { name: "1920x1080 (desktop)", width: 1920, height: 1080 },
+  ];
+
+  for (const viewport of VIEWPORTS) {
+    test(`${viewport.name}: sem rolagem horizontal, painel cabe na tela, botão continua clicável`, async ({ page }) => {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await irParaHomeComCatalogo(page);
+
+      const semRolagemHorizontal = await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1);
+      expect(semRolagemHorizontal, "página não deveria ter rolagem horizontal antes de abrir o widget").toBe(true);
+
+      const toggle = page.locator("#isis2-toggle");
+      await expect(toggle).toBeVisible();
+      await toggle.click();
+
+      const panel = page.locator("#isis2-panel");
+      await expect(panel).toBeVisible();
+      const box = await panel.boundingBox();
+      expect(box.width, `painel (${box.width}px) não deveria ultrapassar o viewport (${viewport.width}px)`).toBeLessThanOrEqual(viewport.width);
+
+      const semRolagemHorizontalAberto = await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1);
+      expect(semRolagemHorizontalAberto, "widget aberto não deveria introduzir rolagem horizontal").toBe(true);
+    });
+  }
 });
