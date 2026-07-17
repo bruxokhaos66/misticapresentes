@@ -107,6 +107,31 @@ def test_status_id_inexistente_sem_txid_tambem_retorna_403_generico():
     assert resposta.status_code == 403
 
 
+def test_pix_txid_nao_e_previsivel_a_partir_do_id_do_pedido():
+    """Regressão: o pix_txid é o único segredo que protege o acompanhamento
+    público do pedido (ver test_status_com_txid_invalido_retorna_403). Ele
+    não pode ser derivado do id do pedido — que é público, aparece na própria
+    URL /api/pedidos/{id}/status — nem seguir um padrão adivinhável."""
+    produto = criar_produto()
+    criado = postar_checkout(payload_checkout(produto), 106, uuid.uuid4().hex)
+    assert criado.status_code == 200, criado.text
+    dados = criado.json()
+    venda_id = dados["id"]
+    txid = dados["pix_txid"]
+    assert txid
+
+    padrao_adivinhavel = f"MISTICA{venda_id:09d}"
+    assert txid != padrao_adivinhavel
+    resposta_com_padrao_antigo = consultar_status(venda_id, txid=padrao_adivinhavel)
+    assert resposta_com_padrao_antigo.status_code == 403
+
+    outro = criar_produto()
+    criado2 = postar_checkout(payload_checkout(outro), 107, uuid.uuid4().hex)
+    assert criado2.status_code == 200, criado2.text
+    txid2 = criado2.json()["pix_txid"]
+    assert txid2 != txid
+
+
 def test_admin_autenticado_acessa_status_sem_txid():
     produto = criar_produto()
     criado = postar_checkout(payload_checkout(produto), 104, uuid.uuid4().hex)
