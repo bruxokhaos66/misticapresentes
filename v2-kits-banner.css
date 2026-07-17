@@ -152,9 +152,9 @@
 
 .kit-intent-label {
   color: #fdf3dc;
-  font-size: clamp(.6rem, .74vw, .72rem);
+  font-size: clamp(.68rem, .82vw, .8rem);
   font-weight: 900;
-  letter-spacing: .08em;
+  letter-spacing: .07em;
   text-transform: uppercase;
   line-height: 1.3;
   text-shadow: 0 2px 12px rgba(0, 0, 0, .9);

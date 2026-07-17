@@ -93,7 +93,7 @@ button, input, textarea { font: inherit; }
 .category-grid > a { display: block; text-decoration: none; color: inherit; }
 .category-grid article, .confidence-grid article { padding: 22px 20px; }
 .category-grid article span { font-size: 2rem; }
-.category-grid article strong, .confidence-grid article strong { display: block; margin: 10px 0 7px; color: var(--gold-2); font-family: Cinzel, serif; }
+.category-grid article strong, .confidence-grid article strong { display: block; margin: 10px 0 7px; color: var(--gold-2); font-family: Cinzel, serif; font-size: 1.06rem; }
 .category-grid article p, .confidence-grid article span { color: var(--muted); font-size: .96rem; line-height: 1.5; }
 .confidence-grid { grid-template-columns: repeat(4, 1fr); }
 .product-grid { grid-template-columns: repeat(auto-fit, minmax(255px, 1fr)); align-items: stretch; }
