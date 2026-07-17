@@ -498,3 +498,157 @@ def init_db():
         except Exception as exc:
             if "unique" not in str(exc).lower():
                 print(f"[migrations] falha ao inserir categoria padrão '{c}': {exc}")
+
+    _criar_tabelas_isis_content_studio()
+
+
+def _criar_tabelas_isis_content_studio():
+    """Isis 2.0 — Fase 3 (Estúdio Inteligente de Conteúdo).
+
+    Infraestrutura de rascunhos diários (nunca publicação automática — ver
+    MISTICA_ISIS_CONTENT_AUTO_PUBLISH_ENABLED em backend/isis_content_flags.py).
+    Todas as tabelas nascem vazias e as feature flags nascem desligadas: criar
+    a estrutura aqui não ativa nenhum comportamento novo.
+    """
+    query_db(
+        """
+        CREATE TABLE IF NOT EXISTS isis_content_jobs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            data_referencia TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pendente',
+            iniciado_em TEXT,
+            concluido_em TEXT,
+            erro TEXT,
+            criado_em TEXT NOT NULL
+        )
+        """,
+        commit=True,
+    )
+    _exec_tolerante("CREATE UNIQUE INDEX IF NOT EXISTS ux_isis_content_jobs_data ON isis_content_jobs(data_referencia)")
+
+    query_db(
+        """
+        CREATE TABLE IF NOT EXISTS isis_content_drafts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_id INTEGER,
+            data_referencia TEXT NOT NULL,
+            tipo TEXT NOT NULL,
+            frase_original TEXT,
+            legenda TEXT,
+            legenda_curta TEXT,
+            hashtags TEXT,
+            texto_alternativo TEXT,
+            prompt_visual TEXT,
+            produto_id INTEGER,
+            produto_codigo TEXT,
+            produto_nome TEXT,
+            justificativa TEXT,
+            custo_estimado REAL DEFAULT 0,
+            provedor_texto TEXT,
+            provedor_imagem TEXT,
+            status TEXT NOT NULL DEFAULT 'rascunho',
+            aprovado_por TEXT,
+            aprovado_em TEXT,
+            rejeitado_por TEXT,
+            rejeitado_em TEXT,
+            motivo_rejeicao TEXT,
+            publicado_em TEXT,
+            publicado_por TEXT,
+            criado_em TEXT NOT NULL,
+            atualizado_em TEXT
+        )
+        """,
+        commit=True,
+    )
+    _exec_tolerante("CREATE INDEX IF NOT EXISTS idx_isis_content_drafts_data ON isis_content_drafts(data_referencia, tipo)")
+    _exec_tolerante("CREATE INDEX IF NOT EXISTS idx_isis_content_drafts_status ON isis_content_drafts(status)")
+    _exec_tolerante("CREATE INDEX IF NOT EXISTS idx_isis_content_drafts_job ON isis_content_drafts(job_id)")
+
+    query_db(
+        """
+        CREATE TABLE IF NOT EXISTS isis_content_assets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            draft_id INTEGER NOT NULL,
+            variante TEXT NOT NULL,
+            largura INTEGER,
+            altura INTEGER,
+            arquivo TEXT,
+            mime_type TEXT,
+            tamanho_bytes INTEGER,
+            hash_sha256 TEXT,
+            criado_em TEXT NOT NULL,
+            FOREIGN KEY (draft_id) REFERENCES isis_content_drafts(id)
+        )
+        """,
+        commit=True,
+    )
+    _exec_tolerante("CREATE INDEX IF NOT EXISTS idx_isis_content_assets_draft ON isis_content_assets(draft_id)")
+
+    query_db(
+        """
+        CREATE TABLE IF NOT EXISTS isis_content_sources (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            draft_id INTEGER NOT NULL,
+            tipo TEXT NOT NULL,
+            descricao TEXT,
+            url TEXT,
+            confiavel INTEGER DEFAULT 0,
+            criado_em TEXT NOT NULL,
+            FOREIGN KEY (draft_id) REFERENCES isis_content_drafts(id)
+        )
+        """,
+        commit=True,
+    )
+    _exec_tolerante("CREATE INDEX IF NOT EXISTS idx_isis_content_sources_draft ON isis_content_sources(draft_id)")
+
+    query_db(
+        """
+        CREATE TABLE IF NOT EXISTS isis_content_product_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            produto_id INTEGER NOT NULL,
+            draft_id INTEGER,
+            divulgado_em TEXT NOT NULL,
+            motivo TEXT
+        )
+        """,
+        commit=True,
+    )
+    _exec_tolerante("CREATE INDEX IF NOT EXISTS idx_isis_content_prod_hist_produto ON isis_content_product_history(produto_id, divulgado_em)")
+
+    query_db(
+        """
+        CREATE TABLE IF NOT EXISTS isis_content_approvals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            draft_id INTEGER NOT NULL,
+            acao TEXT NOT NULL,
+            usuario TEXT,
+            detalhe TEXT,
+            criado_em TEXT NOT NULL,
+            FOREIGN KEY (draft_id) REFERENCES isis_content_drafts(id)
+        )
+        """,
+        commit=True,
+    )
+    _exec_tolerante("CREATE INDEX IF NOT EXISTS idx_isis_content_approvals_draft ON isis_content_approvals(draft_id)")
+
+    query_db(
+        """
+        CREATE TABLE IF NOT EXISTS isis_content_ai_usage (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            data_referencia TEXT NOT NULL,
+            provedor TEXT NOT NULL,
+            tipo TEXT NOT NULL,
+            custo_estimado REAL DEFAULT 0,
+            unidades REAL DEFAULT 0,
+            sucesso INTEGER DEFAULT 1,
+            criado_em TEXT NOT NULL
+        )
+        """,
+        commit=True,
+    )
+    _exec_tolerante("CREATE INDEX IF NOT EXISTS idx_isis_content_ai_usage_data ON isis_content_ai_usage(data_referencia, provedor)")
+
+    # Sinal explícito de visibilidade do produto para a Isis (distinto de
+    # `ativo`, que já existe): produto pode estar ativo no catálogo mas
+    # oculto de divulgações automáticas por decisão comercial.
+    _exec_tolerante("ALTER TABLE produtos ADD COLUMN isis_oculto INTEGER DEFAULT 0")

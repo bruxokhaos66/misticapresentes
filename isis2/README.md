@@ -981,3 +981,86 @@ ambiente.
 | Medição de performance (Lighthouse, bundle, requisições) do estado "refinamento ligado" não foi executada nesta sessão | Ambiente desta sessão não tinha `npm install` nem o servidor Lighthouse configurados de forma estável a tempo; recomenda-se medir em CI/homologação antes de qualquer promoção de ambiente |
 | Cobertura de teste E2E da Fase 2.1 é representativa, não exaustiva das ~30 combinações listadas no briefing (viewports completos, tablet dedicado, todas as combinações de auth × intent) | Priorizados os cenários de maior risco (flags, negação, comparação, detalhe indisponível, GET-only); ver checklist completo no relatório do PR para o que ficou fora desta rodada |
 | `explainBlockedModule()` só repassa `motivo`/`motivo_bloqueio` se a API real do backend passar a expor esses campos — hoje (mesmo payload observado na Fase 2) o backend normalmente não envia nenhum dos dois | Documentado como "pronto para quando a API expuser o motivo", não uma funcionalidade nova de verdade sem uma mudança correspondente no backend — comportamento atual seguro (nunca deduz) preservado |
+
+## Fase 3 — Estúdio Inteligente de Conteúdo
+
+Infraestrutura de backend (fora do namespace `window.Isis2`, que é só
+frontend) para a Isis gerar diariamente dois **rascunhos** — nunca
+publicação automática: "Bom dia" (frase original + legenda + hashtags +
+texto alternativo + prompt visual + imagem premium em Feed 1080×1350 e
+Story 1080×1920) e "Produto do dia" (produto escolhido por pontuação,
+nunca inventado, com justificativa e fontes registradas). Fluxo
+obrigatório: geração → aviso ao admin → revisão → aprovação/rejeição →
+publicação **manual** por fora do sistema.
+
+### Feature flags — todas desligadas por padrão
+
+`backend/isis_content_flags.py` (mesmo padrão de
+`backend.api_security.estorno_rest_habilitado`: cada flag só é lida da
+variável de ambiente do processo, nunca de query string/header/hostname):
+
+- `MISTICA_ISIS_CONTENT_STUDIO_ENABLED` — libera as rotas administrativas
+  (`/api/admin/isis-conteudo/*`) e o painel `isis-conteudo-admin.html`;
+- `MISTICA_ISIS_CONTENT_AUTO_GENERATION_ENABLED` — libera um acionamento
+  externo (cron do provedor de hospedagem) chamar a geração diária às
+  08:00 America/Sao_Paulo; **nenhum agendador roda dentro do processo
+  nesta fase** — sem algo externo chamando a rota, nada é gerado por
+  conta própria, mesmo com a flag ligada;
+- `MISTICA_ISIS_CONTENT_IMAGE_GENERATION_ENABLED` — libera chamar o
+  `ImageAIProvider` de fato; desligada, o rascunho fica só com o prompt
+  visual salvo, sem imagem;
+- `MISTICA_ISIS_CONTENT_AUTO_PUBLISH_ENABLED` — **sem nenhum caminho de
+  código implementado nesta fase**; existe só para deixar explícito, em
+  qualquer auditoria, que nenhuma rota publica em rede social.
+
+### Arquitetura (backend)
+
+```
+backend/isis_content_flags.py     Feature flags (4 interruptores independentes)
+backend/isis_ai_providers.py      TextAIProvider/ImageAIProvider/TrendResearchProvider + OpenAI + timeout/retry/orçamento/logs
+backend/isis_trend_research.py    Camada desacoplada de tendências (histórico interno hoje; Google Trends etc. como extensão futura)
+backend/isis_content_scoring.py   Pontuação pura do "Produto do dia" (estoque, vendas, favoritos, sazonalidade, rotação, margem com peso limitado…)
+backend/isis_content_storage.py   Upload de imagem do estúdio (MIME real, tamanho, extensão, integridade, sem path traversal)
+backend/isis_content_studio.py    Orquestrador diário — idempotente por dia, nunca publica
+backend/isis_content_routes.py    Rotas /api/admin/isis-conteudo/* (sessão de admin obrigatória; 404 com a flag desligada)
+isis-conteudo-admin.html/.js/.css Painel "Conteúdos da Isis" (calendário de rascunhos, edição, aprovação/rejeição, publicação manual)
+```
+
+Tabelas novas (`database/migrations.py`): `isis_content_jobs`,
+`isis_content_drafts`, `isis_content_assets`, `isis_content_sources`,
+`isis_content_product_history`, `isis_content_approvals`,
+`isis_content_ai_usage`, além da coluna `produtos.isis_oculto` (distinta
+de `ativo`: permite ocultar um produto só das divulgações da Isis sem
+desativá-lo no catálogo). Todas nascem vazias — criar a estrutura não
+ativa nenhum comportamento novo.
+
+### Segurança
+
+Chave de IA nunca exposta ao frontend (toda geração ocorre no backend);
+orçamento diário de IA (`ISIS_CONTENT_AI_DAILY_BUDGET_USD`) checado antes
+de qualquer chamada de rede; logs de consumo nunca incluem o prompt nem a
+resposta gerada; todo texto (de IA ou digitado por um admin) passa por
+`sanitizar_texto` antes de ser persistido (proteção contra XSS
+armazenado); upload de imagem nunca aceita nome de arquivo vindo de fora
+(elimina path traversal por construção); rotas exigem sessão de
+administrador e checam a feature flag antes de qualquer leitura/escrita,
+devolvendo 404 genérico quando desligada (mesmo padrão de
+`MISTICA_REST_ESTORNO_ENABLED`); nunca divulga produto inativo, oculto
+para a Isis, ou sem estoque (salvo regra explícita), e nunca inventa
+preço/desconto.
+
+### Testes (Fase 3)
+
+`tests/test_isis_content_flags.py`, `tests/test_isis_content_scoring.py`,
+`tests/test_isis_content_studio.py`, `tests/test_isis_content_ai_providers.py`,
+`tests/test_isis_content_storage.py` (pytest); `tests/isis2/isis-conteudo-admin.test.js`
+(node:test); `tests/e2e/isis-conteudo-admin.spec.js` (Playwright, backend
+sempre mockado via `page.route`).
+
+### Limitações conhecidas (Fase 3)
+
+| Limitação | Detalhe |
+|---|---|
+| Sinais de `visualizações`/`favoritos`/`carrinhos` do mecanismo de pontuação não têm coleta real ainda | `backend/isis_content_scoring.py` já aceita esses sinais (peso próprio na fórmula) e trata a ausência como 0 — a integração de analytics real é um ponto de extensão futuro, fora do escopo desta fase |
+| Nenhum agendador roda dentro do processo | A geração diária automática depende de algo externo (cron do provedor de hospedagem, GitHub Actions) chamar `POST /api/admin/isis-conteudo/gerar-diario`; decisão deliberada para não introduzir um processo de longa duração nesta fase |
+| `SemFontesExternasTrendProvider` (Google Trends/tendências públicas) é um placeholder que sempre devolve lista vazia | Documentado como ponto de extensão; qualquer integração real exige revisão dos termos de uso da fonte antes de ligar |
