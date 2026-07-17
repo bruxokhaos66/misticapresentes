@@ -170,13 +170,20 @@ def obter_homolog_config(
 
 @router.get("/homolog/estado")
 def estado_homolog(sessao: dict = Depends(exigir_perfil("adm"))):
-    with conectar() as conn:
-        garantir_tabelas_isis2_homolog(conn)
-        ativo = homolog_ativo(conn)
-        testadores = conn.execute(
-            "SELECT COUNT(*) AS total FROM isis2_homolog_testers"
-        ).fetchone()
-    return {"ativo": ativo, "total_testadores": int(testadores["total"] or 0)}
+    """Mesmo fail-safe do restante do módulo: qualquer erro ao consultar o
+    estado responde 'desativada' (nunca 'ativa' por omissão) -- é esse
+    valor que o painel administrativo (isis2-homolog-admin.js) exibe."""
+    try:
+        with conectar() as conn:
+            garantir_tabelas_isis2_homolog(conn)
+            ativo = homolog_ativo(conn)
+            testadores = conn.execute(
+                "SELECT COUNT(*) AS total FROM isis2_homolog_testers"
+            ).fetchone()
+        return {"ativo": ativo, "total_testadores": int(testadores["total"] or 0)}
+    except Exception:
+        logger.warning("isis2 homologação: falha ao consultar estado", extra={"evento": "isis2_homolog_estado_erro"})
+        return {"ativo": False, "total_testadores": 0}
 
 
 @router.post("/homolog/ativar")
@@ -197,6 +204,25 @@ def desativar_homolog(sessao: dict = Depends(exigir_perfil("adm"))):
         _definir_ativo(conn, False)
     logger.info("isis2 homologação: interruptor global desligado", extra={"evento": "isis2_homolog_desativado_por_admin"})
     return {"ok": True, "ativo": False}
+
+
+@router.get("/homolog/buscar-alunos")
+def buscar_alunos(q: str = "", sessao: dict = Depends(exigir_perfil("adm"))):
+    """Busca só para o admin localizar o ID interno de um aluno pelo nome ou
+    e-mail -- a inclusão na allowlist (POST /homolog-testers/{aluno_id})
+    sempre usa esse ID, nunca o e-mail digitado no navegador. Termo curto
+    demais (< 2 caracteres) devolve lista vazia em vez de despejar a base
+    inteira de alunos."""
+    termo = (q or "").strip()
+    if len(termo) < 2:
+        return []
+    padrao = f"%{termo}%"
+    with conectar() as conn:
+        linhas = conn.execute(
+            "SELECT id AS aluno_id, nome, email FROM alunos WHERE nome LIKE ? OR email LIKE ? ORDER BY nome LIMIT 20",
+            (padrao, padrao),
+        ).fetchall()
+    return [dict(linha) for linha in linhas]
 
 
 @router.get("/homolog-testers")
