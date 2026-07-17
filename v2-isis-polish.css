@@ -218,6 +218,9 @@
 }
 
 .isis-feature-grid article { min-height: 138px; }
+.isis-feature-grid { gap: 16px !important; }
+.isis-chat { border: 1px solid rgba(242,201,109,.16); border-radius: 20px; padding: 14px; background: rgba(0,0,0,.14); max-height: 420px; overflow-y: auto; }
+.isis-message { line-height: 1.55; }
 
 .hero-section { position: relative; overflow: hidden; }
 
@@ -255,7 +258,7 @@
 
 .hero-text {
   max-width: 690px !important;
-  font-size: clamp(.98rem, 1.08vw, 1.08rem) !important;
+  font-size: clamp(1.06rem, 1.16vw, 1.18rem) !important;
 }
 
 .isis-portrait-card {
@@ -317,7 +320,7 @@
 .form-panel > * { position: relative; z-index: 1; }
 .category-grid article { cursor: default; }
 .product-card h3 { font-size: 1.12rem; }
-.product-card .btn { min-height: 46px; }
+.product-card .btn { min-height: 48px; }
 .contact-section { padding-bottom: clamp(82px, 8vw, 120px); }
 .contact-card p { margin: 0 0 10px; }
 
