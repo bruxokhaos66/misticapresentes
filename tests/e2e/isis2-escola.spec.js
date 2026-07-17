@@ -9,7 +9,7 @@ const path = require("path");
 
 const SITE_CONFIG_PATH = path.resolve(__dirname, "..", "..", "site-config.js");
 
-function siteConfigWith({ isis2 = false, escola = false } = {}) {
+function siteConfigWith({ isis2 = false, escola = false, refinamento = false } = {}) {
   let content = fs.readFileSync(SITE_CONFIG_PATH, "utf8");
   if (isis2) {
     const before = content;
@@ -18,8 +18,13 @@ function siteConfigWith({ isis2 = false, escola = false } = {}) {
   }
   if (escola) {
     const before = content;
-    content = content.replace("escola: {\n      enabled: false\n    }", "escola: {\n      enabled: true\n    }");
-    if (content === before) throw new Error("Não achei 'escola: { enabled: false }' em site-config.js.");
+    content = content.replace("escola: {\n      enabled: false,", "escola: {\n      enabled: true,");
+    if (content === before) throw new Error("Não achei 'escola: { enabled: false,' em site-config.js.");
+  }
+  if (refinamento) {
+    const before = content;
+    content = content.replace("refinamento: {\n        enabled: false\n      }", "refinamento: {\n        enabled: true\n      }");
+    if (content === before) throw new Error("Não achei 'refinamento: { enabled: false }' em site-config.js.");
   }
   return content;
 }
@@ -66,8 +71,8 @@ async function dismissConsent(page) {
   if (await decline.isVisible().catch(() => false)) await decline.click();
 }
 
-async function abrirEscola(page, { isis2 = true, escola = true, autenticado = false, url = "/escola.html" } = {}) {
-  await servirSiteConfig(page, { isis2, escola });
+async function abrirEscola(page, { isis2 = true, escola = true, refinamento = false, autenticado = false, url = "/escola.html" } = {}) {
+  await servirSiteConfig(page, { isis2, escola, refinamento });
   await mockEscolaApis(page, { autenticado });
   await page.goto(url);
   await dismissConsent(page);
@@ -267,5 +272,108 @@ test.describe("Isis 2.0 — Escola — acessibilidade e responsivo", () => {
     // que importa: o painel abre e fica utilizável em 200%.
     await page.locator("#isis2-toggle").click({ force: true });
     await expect(page.locator("#isis2-panel")).toBeVisible();
+  });
+});
+
+test.describe("Isis 2.0 — Escola — Refinamento (Fase 2.1)", () => {
+  test("flag de refinamento desligada (mesmo com as duas flags da Escola ligadas): comportamento idêntico à Fase 2, zero requisição extra ao endpoint público sem pedido explícito", async ({ page }) => {
+    const publicDetailRequests = [];
+    page.on("request", req => {
+      if (/\/api\/escola\/publico\/cursos\//.test(req.url())) publicDetailRequests.push(req.url());
+    });
+    await abrirEscola(page, { refinamento: false });
+    await page.locator("#isis2-toggle").click();
+    await page.locator("#isis2-input").fill("Qual curso é melhor para começar?");
+    await page.locator("#isis2-form button[type=submit]").click();
+    await page.waitForTimeout(500);
+    expect(publicDetailRequests).toHaveLength(0);
+  });
+
+  test("dependência das três flags: refinamento ligado mas Escola desligada nunca ativa nada", async ({ page }) => {
+    await abrirEscola(page, { escola: false, refinamento: true });
+    await expect(page.locator("#isis2-root")).toHaveCount(0);
+  });
+
+  test("refinamento ligado: negação de tema é respeitada na recomendação", async ({ page }) => {
+    await abrirEscola(page, { refinamento: true, autenticado: false });
+    await page.locator("#isis2-toggle").click();
+    await page.locator("#isis2-input").fill("Não quero xamanismo, me recomende outro curso");
+    await page.locator("#isis2-form button[type=submit]").click();
+    const messages = page.locator("#isis2-messages");
+    await expect(messages).not.toContainText("Recomendo começar por \"Xamanismo");
+  });
+
+  test("refinamento ligado: comparação de cursos nunca declara vencedor absoluto", async ({ page }) => {
+    await abrirEscola(page, { refinamento: true });
+    await page.locator("#isis2-toggle").click();
+    await page.locator("#isis2-input").fill("Compare o curso de xamanismo com o curso de cosmologia");
+    await page.locator("#isis2-form button[type=submit]").click();
+    const messages = page.locator("#isis2-messages");
+    await expect(messages).not.toContainText(/vencedor/i);
+  });
+
+  test("refinamento ligado: detalhe público indisponível mostra a mensagem padrão, nunca inventa dado", async ({ page }) => {
+    await servirSiteConfig(page, { isis2: true, escola: true, refinamento: true });
+    await page.route("**/api/alunos/me", route => route.fulfill({ status: 401, contentType: "application/json", body: "{}" }));
+    await page.route("**/api/escola/publico/cursos/**", route => route.fulfill({ status: 500, contentType: "application/json", body: "{}" }));
+    await page.goto("/escola.html");
+    await dismissConsent(page);
+    await page.locator("#isis2-toggle").click();
+    await page.locator("#isis2-input").fill("Quais são os módulos do curso de xamanismo?");
+    await page.locator("#isis2-form button[type=submit]").click();
+    await expect(page.locator("#isis2-messages")).toContainText("Não consegui consultar os detalhes completos desse curso agora");
+  });
+
+  test("refinamento ligado: a Isis da Escola continua só GET mesmo com as intenções novas (comparação, detalhe, exclusão)", async ({ page }) => {
+    const nonGetRequests = [];
+    page.on("request", req => {
+      if (/\/api\/(escola|alunos|cursos)\b/.test(req.url()) && req.method() !== "GET") {
+        nonGetRequests.push(`${req.method()} ${req.url()}`);
+      }
+    });
+    await abrirEscola(page, { refinamento: true, autenticado: true, url: "/escola-curso.html?curso=xamanismo-introducao" });
+    const perguntas = [
+      "Não quero xamanismo, me recomende outro curso",
+      "Compare o curso de xamanismo com o curso de cosmologia",
+      "Quais são os módulos do curso de xamanismo?",
+      "Quero retomar os estudos",
+    ];
+    await page.locator("#isis2-toggle").click();
+    for (const pergunta of perguntas) {
+      await page.locator("#isis2-input").fill(pergunta);
+      await page.locator("#isis2-form button[type=submit]").click();
+      await page.waitForTimeout(600);
+    }
+    expect(nonGetRequests).toEqual([]);
+  });
+
+  test("refinamento ligado: XSS no título/resumo/módulo devolvido pelo endpoint público de detalhe nunca executa nem vira HTML", async ({ page }) => {
+    await servirSiteConfig(page, { isis2: true, escola: true, refinamento: true });
+    await page.route("**/api/alunos/me", route => route.fulfill({ status: 401, contentType: "application/json", body: "{}" }));
+    await page.route("**/api/escola/publico/cursos/**", route => route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        slug: "xamanismo-introducao",
+        titulo: "<img src=x onerror=alert(1)>Xamanismo",
+        resumo: "<script>alert(2)</script>resumo malicioso",
+        para_quem_e: "\"><svg onload=alert(3)>",
+        modulos: [{ titulo: "<a href=\"javascript:alert(4)\">Módulo</a>", aulas: [{ titulo: "Aula" }] }],
+      }),
+    }));
+    let dialogFired = false;
+    page.on("dialog", async dialog => { dialogFired = true; await dialog.dismiss(); });
+    await page.goto("/escola.html");
+    await dismissConsent(page);
+    await page.locator("#isis2-toggle").click();
+    await page.locator("#isis2-input").fill("Quais são os módulos do curso de xamanismo?");
+    await page.locator("#isis2-form button[type=submit]").click();
+    await page.waitForTimeout(700);
+    expect(dialogFired).toBe(false);
+    await expect(page.locator("#isis2-messages img")).toHaveCount(0);
+    await expect(page.locator("#isis2-messages script")).toHaveCount(0);
+    await expect(page.locator("#isis2-messages svg")).toHaveCount(0);
+    const hrefs = await page.evaluate(() => Array.from(document.querySelectorAll("#isis2-root a[href]")).map(a => a.getAttribute("href")));
+    expect(hrefs.every(href => !href.toLowerCase().startsWith("javascript:"))).toBe(true);
   });
 });

@@ -38,17 +38,24 @@
     return null;
   }
 
-  // Só descreve o motivo de bloqueio com o que a API realmente informa
-  // (módulo anterior não concluído). Não inventa "nota mínima do módulo
-  // anterior" nem "tentativas restantes" quando o payload não traz esses
-  // campos — nesse caso admite a lacuna em vez de arriscar um número
-  // errado (ver isis2/README.md, "Honestidade").
+  // Só descreve o motivo de bloqueio com o que a API realmente informa.
+  // Quando o payload traz um campo de motivo explícito (ex.: "motivo" ou
+  // "motivo_bloqueio"), repassa exatamente esse texto (normalizado como
+  // qualquer outro campo de API — nunca renderizado como HTML). Quando o
+  // backend não informa nada além do próprio bloqueio, usa o texto
+  // genérico documentado no briefing da Fase 2.1 em vez de presumir nota
+  // mínima, tentativas, aula pendente, pagamento ou suspensão — nunca
+  // deduz um motivo que a API não mandou (ver isis2/README.md, "Honestidade").
   function explainBlockedModule(curso) {
     const locked = firstLockedModule(curso);
     if (!locked) return null;
+    const apiMotivo = typeof locked.motivo === "string" && locked.motivo.trim()
+      ? locked.motivo.trim()
+      : (typeof locked.motivo_bloqueio === "string" && locked.motivo_bloqueio.trim() ? locked.motivo_bloqueio.trim() : null);
     return {
       moduloTitulo: locked.titulo,
-      motivo: "o módulo anterior ainda não foi concluído (todas as aulas obrigatórias, e a avaliação quando existir, com a nota mínima)",
+      motivo: apiMotivo || "o módulo anterior ainda não foi concluído (todas as aulas obrigatórias, e a avaliação quando existir, com a nota mínima)",
+      motivoGenerico: !apiMotivo,
     };
   }
 

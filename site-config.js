@@ -30,7 +30,20 @@ window.misticaSiteConfig = {
     // localStorage/sessionStorage, e só atua nas páginas da Escola
     // (escola.html, escola-curso.html). Default false.
     escola: {
-      enabled: false
+      enabled: false,
+      // Feature flag pública da Isis 2.0 — Refinamento da Especialista da
+      // Mística Escola (isis2/README.md, Fase 2.1). Depende também de
+      // isis2.enabled=true E isis2.escola.enabled=true (ver
+      // isis2-loader.js e school-mode.js): com qualquer uma das duas
+      // desligada, esta flag nunca é avaliada. Não é segredo, não é lida
+      // de query string, hash, atributo HTML, localStorage/sessionStorage
+      // nem cookie — só deste arquivo estático, uma única vez, de forma
+      // síncrona. Nunca é ativada automaticamente em produção. Default
+      // false: mantém o comportamento exato da Fase 2 até a habilitação
+      // explícita por ambiente, após auditoria.
+      refinamento: {
+        enabled: false
+      }
     }
   }
 };

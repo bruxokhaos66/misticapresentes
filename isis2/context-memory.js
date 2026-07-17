@@ -43,7 +43,44 @@
       currentLessonId: null,
       educationalIntent: null,
       presentedCourseIds: [],
+      // Fase 2.1 — allowlist fechada, só termos normalizados de um
+      // vocabulário fechado (negation-parser.js) ou slugs já validados
+      // contra o catálogo real, nunca texto integral da conversa, nota,
+      // e-mail, nome, ID de aluno, token ou cookie.
+      includeTopics: [],
+      excludeTopics: [],
+      includeLevels: [],
+      excludeLevels: [],
+      lastRecommendedCourseIds: [],
+      lastComparedCourseIds: [],
+      lastPublicCourseSlug: null,
     };
+  }
+
+  // Fase 2.1 — allowlist fechada de campos aceitos em updateSchool()/
+  // partial de school. Qualquer chave fora desta lista é ignorada
+  // silenciosamente (nunca lança, nunca deixa passar um campo novo sem
+  // revisão explícita deste arquivo) — reforça a regra de "nenhum dado de
+  // avaliação, nota, e-mail, nome, ID de aluno, token ou cookie".
+  const SCHOOL_FIELD_ALLOWLIST = [
+    "courseOfInterest", "studentLevel", "viewedCourseSlug", "currentModuleId", "currentLessonId",
+    "educationalIntent", "includeTopics", "excludeTopics", "includeLevels", "excludeLevels",
+    "lastRecommendedCourseIds", "lastComparedCourseIds", "lastPublicCourseSlug",
+  ];
+  const SCHOOL_LIST_FIELDS = ["includeTopics", "excludeTopics", "includeLevels", "excludeLevels", "lastRecommendedCourseIds", "lastComparedCourseIds"];
+
+  function sanitizeSchoolPartial(partial) {
+    const clean = {};
+    Object.keys(partial || {}).forEach(key => {
+      if (!SCHOOL_FIELD_ALLOWLIST.includes(key)) return;
+      const value = partial[key];
+      if (SCHOOL_LIST_FIELDS.includes(key)) {
+        clean[key] = Array.isArray(value) ? value.filter(v => typeof v === "string" && v.length <= 80).slice(0, SCHOOL_LIST_MAX) : [];
+      } else if (value === null || (typeof value === "string" && value.length <= 200)) {
+        clean[key] = value;
+      }
+    });
+    return clean;
   }
 
   function safeStorage() {
@@ -66,6 +103,13 @@
     try {
       const raw = storage.getItem(STORAGE_KEY);
       memoryState = raw ? { ...emptyState(), ...JSON.parse(raw) } : emptyState();
+      // A allowlist da Escola (sanitizeSchoolPartial) só protegia escritas
+      // via updateSchool(); um objeto "school" antigo/adulterado já salvo
+      // em sessionStorage (ex.: de uma versão anterior sem allowlist)
+      // passava direto por aqui sem filtro. Sanitiza também na leitura,
+      // para que a garantia "allowlist fechada" valha para todo o ciclo de
+      // vida do dado, não só para escritas novas.
+      memoryState.school = { ...emptySchoolState(), ...sanitizeSchoolPartial(memoryState.school), updatedAt: memoryState.school?.updatedAt ?? null };
     } catch {
       memoryState = emptyState();
     }
@@ -148,7 +192,7 @@
   function updateSchool(partial) {
     const state = load();
     if (!state.school || schoolExpired(state.school)) state.school = emptySchoolState();
-    Object.assign(state.school, partial, { updatedAt: new Date().toISOString() });
+    Object.assign(state.school, sanitizeSchoolPartial(partial), { updatedAt: new Date().toISOString() });
     persist();
     return getSchool();
   }

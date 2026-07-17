@@ -48,6 +48,18 @@
     "school-conversation-manager.js",
   ];
 
+  // Módulos do Refinamento da Especialista da Mística Escola (Fase 2.1):
+  // só baixados quando, além das duas flags acima, MISTICA_ISIS2_ESCOLA_-
+  // REFINAMENTO_ENABLED também está ligada. Com ela desligada (default),
+  // zero requisições extras além do que a Fase 2 já baixa — nenhum destes
+  // arquivos é sequer solicitado.
+  const REFINEMENT_MODULES = [
+    "negation-parser.js",
+    "course-payload-normalizer.js",
+    "school-public-detail.js",
+    "course-comparison-engine.js",
+  ];
+
   function currentPageName() {
     try {
       return (window.location.pathname || "").split("/").filter(Boolean).pop()?.toLowerCase() || "";
@@ -61,6 +73,13 @@
     return SCHOOL_PAGES.includes(currentPageName());
   }
 
+  // Fase 2.1: depende das duas flags da Fase 2 já ligadas E da flag
+  // adicional (site-config.js, isis2.escola.refinamento.enabled) — nunca
+  // por query string/hash/localStorage/sessionStorage/cookie.
+  function refinementActive() {
+    return schoolPageActive() && window.misticaSiteConfig?.isis2?.escola?.refinamento?.enabled === true;
+  }
+
   // Fonte única do catálogo real de cursos (window.MISTICA_ESCOLA_CURSOS)
   // é exposta por escola.js (ver comentário lá). escola.html já carrega
   // esse arquivo estaticamente (não duplicar aqui). escola-curso.html não
@@ -71,6 +90,7 @@
   const CATALOG_SOURCE_SCRIPT = { page: "escola-curso.html", src: "escola.js" };
 
   const schoolActive = schoolPageActive();
+  const refinementIsActive = refinementActive();
   const extraRootScripts = schoolActive && currentPageName() === CATALOG_SOURCE_SCRIPT.page
     ? [CATALOG_SOURCE_SCRIPT.src]
     : [];
@@ -78,6 +98,7 @@
   const scriptUrls = [
     ...extraRootScripts.map(name => `${name}?v=${VERSION}`),
     ...CORE_MODULES.map(name => `${BASE}${name}?v=${VERSION}`),
+    ...(refinementIsActive ? REFINEMENT_MODULES.map(name => `${BASE}${name}?v=${VERSION}`) : []),
     ...(schoolActive ? SCHOOL_MODULES.map(name => `${BASE}${name}?v=${VERSION}`) : []),
     `${BASE}conversation-manager.js?v=${VERSION}`,
     `${BASE}widget.js?v=${VERSION}`,

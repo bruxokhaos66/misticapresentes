@@ -42,6 +42,21 @@
     return flagsEnabled() && isSchoolPage();
   }
 
+  // Fase 2.1: flag adicional MISTICA_ISIS2_ESCOLA_REFINAMENTO_ENABLED.
+  // Só é lida (e só pode valer true) quando as duas flags da Fase 2 já
+  // estão ligadas — nunca isoladamente, nunca por query string, hash,
+  // atributo HTML, localStorage, sessionStorage ou cookie. Com ela
+  // desligada (default), o comportamento é idêntico à Fase 2: nenhum
+  // módulo novo é consultado, nenhuma requisição adicional acontece.
+  function refinementFlagEnabled() {
+    const cfg = window.misticaSiteConfig || {};
+    return cfg.isis2?.escola?.refinamento?.enabled === true;
+  }
+
+  function isRefinementActive() {
+    return isActive() && refinementFlagEnabled();
+  }
+
   function currentSlugFromUrl() {
     try {
       const params = new URL(window.location.href).searchParams;
@@ -56,5 +71,7 @@
     isSchoolPage,
     flagsEnabled,
     currentSlugFromUrl,
+    isRefinementActive,
+    refinementFlagEnabled,
   };
 })();

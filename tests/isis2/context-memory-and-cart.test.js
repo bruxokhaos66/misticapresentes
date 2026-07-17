@@ -20,6 +20,10 @@ test("ContextMemory nunca guarda campos fora da lista permitida (sem dados pesso
   const allowedSchoolKeys = new Set([
     "updatedAt", "courseOfInterest", "studentLevel", "viewedCourseSlug",
     "currentModuleId", "currentLessonId", "educationalIntent", "presentedCourseIds",
+    // Fase 2.1 — refinamento: preferências e listas fechadas, sem dado
+    // pessoal, nota, e-mail, nome, ID de aluno, token ou cookie.
+    "includeTopics", "excludeTopics", "includeLevels", "excludeLevels",
+    "lastRecommendedCourseIds", "lastComparedCourseIds", "lastPublicCourseSlug",
   ]);
   Object.keys(state.school).forEach(key => assert.ok(allowedSchoolKeys.has(key), `campo inesperado em school: ${key}`));
 });
