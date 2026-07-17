@@ -38,6 +38,17 @@ test("SchoolKnowledge: nunca inventa curso fora do catálogo real exposto por es
   assert.equal(Isis2.SchoolKnowledge.listCourses().length, 1);
 });
 
+test("SchoolKnowledge: catálogo é congelado em profundidade (array, curso e campos aninhados como tags)", () => {
+  const { Isis2 } = loadIsis2Escola({ cursos: [{ slug: "curso-teste", titulo: "Curso Teste", tipo: "gratuito", preco: 0, tags: ["A"], resumo: "" }] });
+  // listCourses() devolve uma cópia rasa do array (para o chamador poder
+  // filtrar/ordenar livremente sem afetar o catálogo interno), mas cada
+  // curso dentro dela é o mesmo objeto congelado internamente.
+  const catalogo = Isis2.SchoolKnowledge.listCourses();
+  assert.throws(() => { catalogo[0].titulo = "Alterado"; });
+  assert.throws(() => { catalogo[0].tags.push("B"); });
+  assert.equal(catalogo[0].tags.length, 1);
+});
+
 test("SchoolKnowledge: sem window.MISTICA_ESCOLA_CURSOS, admite indisponibilidade em vez de inventar", () => {
   const { Isis2 } = loadIsis2Escola({ cursos: [] });
   delete global.window.MISTICA_ESCOLA_CURSOS;
@@ -67,4 +78,40 @@ test("ContextMemory da Escola limita presentedCourseIds a 10 entradas", () => {
   const { Isis2 } = loadIsis2Escola();
   for (let i = 0; i < 15; i += 1) Isis2.ContextMemory.addPresentedCourse(`curso-${i}`);
   assert.equal(Isis2.ContextMemory.getSchool().presentedCourseIds.length, 10);
+});
+
+// Login/logout na mesma aba (sem recarregar a página) troca a sessão do
+// navegador, mas StudentContext.me() cacheia o resultado em memória —
+// escola.js/escola-curso.js chamam estas duas funções em login/logout
+// para nunca misturar contexto de conversa/identidade entre contas
+// diferentes na mesma aba (ver escola.js#resetIsis2SchoolIdentity).
+test("StudentContext.resetCache() força uma nova consulta a /api/alunos/me (não fica preso ao aluno anterior)", async () => {
+  let chamadas = 0;
+  const fetchImpl = async () => {
+    chamadas += 1;
+    return { ok: true, status: 200, json: async () => ({ nome: `Aluno ${chamadas}` }) };
+  };
+  const { Isis2 } = loadIsis2Escola({ fetchImpl });
+  const primeiro = await Isis2.StudentContext.me();
+  const segundoSemReset = await Isis2.StudentContext.me();
+  assert.equal(chamadas, 1, "segunda chamada deveria usar o cache");
+  assert.deepEqual(segundoSemReset, primeiro);
+
+  Isis2.StudentContext.resetCache();
+  const terceiro = await Isis2.StudentContext.me();
+  assert.equal(chamadas, 2, "depois de resetCache(), deve consultar a API de novo");
+  assert.equal(terceiro.nome, "Aluno 2");
+});
+
+test("ContextMemory.resetSchool() limpa a memória da Escola sem depender do TTL", () => {
+  const { Isis2 } = loadIsis2Escola();
+  Isis2.ContextMemory.updateSchool({ courseOfInterest: "xamanismo-introducao", studentLevel: "iniciante" });
+  Isis2.ContextMemory.addPresentedCourse("xamanismo-introducao");
+  assert.equal(Isis2.ContextMemory.getSchool().courseOfInterest, "xamanismo-introducao");
+
+  Isis2.ContextMemory.resetSchool();
+  const limpo = Isis2.ContextMemory.getSchool();
+  assert.equal(limpo.courseOfInterest, null);
+  assert.equal(limpo.studentLevel, null);
+  assert.deepEqual(limpo.presentedCourseIds, []);
 });

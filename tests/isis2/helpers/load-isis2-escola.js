@@ -54,7 +54,14 @@ function loadIsis2Escola({
     isis2: { enabled: isis2Enabled, escola: { enabled: escolaEnabled } },
   };
   global.window.location = { pathname, href: `https://www.misticaesotericos.com.br${pathname}${query}`, search: query };
-  global.window.MISTICA_ESCOLA_CURSOS = Object.freeze(cursos.map(c => Object.freeze({ ...c })));
+  function deepFreeze(value) {
+    if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
+    Object.values(value).forEach(deepFreeze);
+    return Object.freeze(value);
+  }
+  // Mesma técnica de congelamento profundo de escola.js (não só o array e
+  // cada curso, mas também campos aninhados como "tags").
+  global.window.MISTICA_ESCOLA_CURSOS = deepFreeze(cursos.map(c => ({ ...c })));
   global.document = { getElementById: () => null, querySelector: () => null };
 
   const calls = [];

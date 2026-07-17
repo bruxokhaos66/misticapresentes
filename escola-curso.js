@@ -233,6 +233,11 @@
         body: JSON.stringify({ email: form.querySelector("[data-email]").value.trim(), senha: form.querySelector("[data-senha]").value }),
       });
       if (!r.ok) { status.textContent = r.body.detail || "E-mail ou senha inválidos."; return; }
+      // Nova sessão nesta aba: limpa qualquer cache/memória da Isis 2.0 —
+      // Escola de uma conta anterior (ver comentário equivalente em
+      // escola.js#resetIsis2SchoolIdentity). Dado real sempre vem fresco
+      // da API a cada consulta; isto é só higiene de cache local.
+      try { window.Isis2?.StudentContext?.resetCache?.(); window.Isis2?.ContextMemory?.resetSchool?.(); } catch { /* Isis 2.0 pode não estar carregada */ }
       boot();
     });
     shell.querySelector("[data-voltar-publico]")?.addEventListener("click", () => carregarCursoPublico());
