@@ -48,6 +48,11 @@
   <script defer src="v2-commerce.js?v=20260710-busca-produtos"></script>
   <script defer src="isis-guided.js?v=20260711-isis-guiada"></script>
   <script defer src="v2-product-inspector.js?v=20260716-cards-compactos"></script>
+  <!-- Isis 2.0 (assistente virtual modular) — aditivo, não substitui o
+       chat legado acima. Loader único: só baixa o resto (CSS + módulos)
+       se a feature flag pública (site-config.js) estiver ligada. Ver
+       isis2/README.md para a arquitetura. -->
+  <script defer src="isis2/isis2-loader.js?v=20260717-isis2-fase1"></script>
   <script defer src="/escola-baloon.js"></script>
   <!-- O painel administrativo (HTML, CSS e JS) vive em admin.html, uma
        página separada carregada só quando a rota #admin/?admin=mistica é

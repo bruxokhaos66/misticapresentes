@@ -5,6 +5,7 @@
   "description": "Testes end-to-end (Playwright) do site publico da Mistica Presentes.",
   "scripts": {
     "test:e2e": "playwright test",
+    "test:isis2": "node --test tests/isis2/*.test.js",
     "test:lighthouse": "lhci autorun",
     "build:site": "node scripts/minify-assets.mjs"
   },
