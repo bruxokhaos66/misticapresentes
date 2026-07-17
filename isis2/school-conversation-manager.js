@@ -27,6 +27,10 @@
   const ERROR_PROGRESS = 'Não consegui consultar seu progresso agora. Tente novamente em alguns instantes ou abra "Meus cursos".';
   const ERROR_GENERIC = "Não consegui completar essa consulta agora. Tente novamente em alguns instantes.";
   const ERROR_NOT_LOGGED_IN = "Essa informação só existe depois de entrar na sua conta de aluno — o progresso não pode ser adivinhado. Você pode entrar na página do curso ou em \"Meus cursos\".";
+  // Fase 2.1 — mensagem exata do briefing para falha do endpoint público
+  // de detalhe (nunca inventa detalhe quando a consulta falha).
+  const ERROR_PUBLIC_DETAIL = "Não consegui consultar os detalhes completos desse curso agora. Posso mostrar as informações básicas disponíveis ou você pode tentar novamente mais tarde.";
+  const FIELD_UNAVAILABLE = "Essa informação não está disponível no catálogo atual.";
 
   function nav() { return window.Isis2.LessonNavigation; }
   function knowledge() { return window.Isis2.SchoolKnowledge; }
@@ -34,6 +38,7 @@
   function progressAssistant() { return window.Isis2.ProgressAssistant; }
   function memory() { return window.Isis2.ContextMemory; }
   function analytics() { return window.Isis2.Analytics; }
+  function refinementActive() { return Boolean(window.Isis2.SchoolMode?.isRefinementActive?.()); }
 
   const QUICK_REPLIES = [
     { id: "school_meus_cursos", label: "Ver meus cursos" },
@@ -99,10 +104,12 @@
     });
   }
 
-  function noMatchReply() {
+  function noMatchReply({ hadPreferences = false } = {}) {
     return baseReply({
       kind: "school_no_match",
-      text: "Ainda não encontrei um curso certeiro para isso no catálogo atual. Pode me contar um pouco mais sobre o tema de interesse? Também posso te mostrar todos os cursos disponíveis.",
+      text: hadPreferences
+        ? "Não encontrei no catálogo atual um curso que combine com todas essas preferências."
+        : "Ainda não encontrei um curso certeiro para isso no catálogo atual. Pode me contar um pouco mais sobre o tema de interesse? Também posso te mostrar todos os cursos disponíveis.",
     });
   }
 
@@ -117,16 +124,27 @@
     }
   }
 
-  async function recommendationReply(detection, { introWhenBeginner } = {}) {
+  async function recommendationReply(detection, { introWhenBeginner, preferences = null } = {}) {
     const kn = knowledge();
     if (!kn.hasCatalog()) return catalogUnavailableReply();
     const studentCourses = await currentStudentCourses();
-    const { courses, reasons, note } = window.Isis2.CourseRecommendationEngine.recommend(detection, { studentCourses });
+    const { courses, reasons, note } = window.Isis2.CourseRecommendationEngine.recommend(detection, { studentCourses, preferences });
+    const hadPreferences = Boolean(preferences && (
+      preferences.excludeTopics?.length || preferences.excludeLevels?.length ||
+      preferences.excludeCourseIds?.length || preferences.completedCourseIds?.length
+    ));
     if (note === "catalog_unavailable") return catalogUnavailableReply();
-    if (!courses.length) return noMatchReply();
+    if (!courses.length) return noMatchReply({ hadPreferences });
+
+    if (hadPreferences && refinementActive()) {
+      analytics().trackSchoolEvent("isis_course_exclusion_applied", {
+        excludedCount: (preferences.excludeTopics?.length || 0) + (preferences.excludeLevels?.length || 0) +
+          (preferences.excludeCourseIds?.length || 0) + (preferences.completedCourseIds?.length || 0),
+      });
+    }
 
     registerPresented(courses);
-    if (courses[0]) memory().updateSchool({ courseOfInterest: courses[0].slug });
+    if (courses[0]) memory().updateSchool({ courseOfInterest: courses[0].slug, lastRecommendedCourseIds: courses.map(c => c.slug) });
     analytics().trackSchoolEvent("isis_course_recommended", { count: courses.length });
 
     const intro = introWhenBeginner && detection.wantsBeginner
@@ -333,6 +351,217 @@
     });
   }
 
+  // ---- Fase 2.1 — Refinamento -------------------------------------------
+  // Tudo nesta seção só é chamado quando refinementActive() é verdadeiro
+  // (window.Isis2.SchoolMode.isRefinementActive()). Com a flag desligada,
+  // handleUserMessage nunca entra aqui — o comportamento é idêntico à
+  // Fase 2 (ver handleRefinedIntent, primeira linha).
+
+  function dedupeMerge(a, b) {
+    return Array.from(new Set([...(a || []), ...(b || [])])).slice(0, 10);
+  }
+
+  // Interpreta negações/exclusões da mensagem atual (negation-parser.js) e
+  // acumula com o que já estava salvo na memória da sessão (TTL de 45min,
+  // ver context-memory.js), para que "não quero cristais" dito uma vez
+  // continue valendo nas próximas recomendações da mesma sessão. Exclusão
+  // sempre vence conflito com inclusão do mesmo termo.
+  function buildPreferences(text) {
+    const parser = window.Isis2.NegationParser;
+    if (!parser) return null;
+    const parsed = parser.parse(text);
+    const kn = knowledge();
+    const completedCourseIds = parser.resolveCompletedCourseIds(text, kn ? kn.listCourses() : []);
+    const school = memory().getSchool();
+
+    const excludeTopics = dedupeMerge(school.excludeTopics, parsed.excludeTopics);
+    const excludeLevels = dedupeMerge(school.excludeLevels, parsed.excludeLevels);
+    const includeTopics = dedupeMerge(school.includeTopics, parsed.includeTopics).filter(t => !excludeTopics.includes(t));
+    const includeLevels = dedupeMerge(school.includeLevels, parsed.includeLevels).filter(l => !excludeLevels.includes(l));
+
+    memory().updateSchool({ includeTopics, excludeTopics, includeLevels, excludeLevels });
+
+    return { includeTopics, excludeTopics, includeLevels, excludeLevels, excludeCourseIds: [], completedCourseIds };
+  }
+
+  function resolveComparisonCandidates(detection) {
+    const kn = knowledge();
+    const catalog = kn.listCourses();
+    const titleMatches = catalog.filter(c => detection.normalized.includes(kn.normalize(c.titulo)));
+    let candidates = titleMatches;
+    if (candidates.length < 2 && detection.themeTerms.length) {
+      const themeCandidates = detection.themeTerms
+        .map(term => kn.searchByTerms([term], { limit: 1 })[0])
+        .filter(Boolean);
+      candidates = [...candidates, ...themeCandidates];
+    }
+    const bySlug = new Map();
+    candidates.forEach(c => bySlug.set(c.slug, c));
+    return Array.from(bySlug.values()).slice(0, window.Isis2.CourseComparisonEngine.MAX_COURSES);
+  }
+
+  function comparisonRowText(row) {
+    const tema = row.tema || FIELD_UNAVAILABLE;
+    const nivel = row.nivel || FIELD_UNAVAILABLE;
+    const resumo = row.resumo ? ` — ${row.resumo}` : "";
+    return `"${row.titulo}": tema ${tema}, nível ${nivel}${resumo}`;
+  }
+
+  async function comparisonReply(detection) {
+    const candidates = resolveComparisonCandidates(detection);
+    if (candidates.length < 2) {
+      return baseReply({
+        kind: "school_need_comparison_context",
+        text: "Me diga os nomes de até três cursos que você quer comparar (por exemplo, pelo tema de cada um).",
+        actions: [{ label: "Ver catálogo de cursos", url: nav().catalogUrl() }],
+      });
+    }
+    const { rows, guidance } = window.Isis2.CourseComparisonEngine.compare(candidates.map(curso => ({ curso })));
+    memory().updateSchool({ lastComparedCourseIds: candidates.map(c => c.slug) });
+    analytics().trackSchoolEvent("isis_course_comparison", { count: candidates.length });
+    return baseReply({
+      kind: "school_comparison",
+      text: `Comparando ${candidates.length} cursos:\n${rows.map(comparisonRowText).join("\n")}\n\n${guidance.join(" ")}`,
+      courses: candidates,
+      actions: courseActions(candidates),
+    });
+  }
+
+  function resolveDetailSlug(detection) {
+    const fromFocus = resolveSlugInFocus();
+    if (fromFocus) return fromFocus;
+    if (detection.themeTerms.length) {
+      const match = knowledge().searchByTerms(detection.themeTerms, { limit: 1 })[0];
+      if (match) return match.slug;
+    }
+    return null;
+  }
+
+  async function courseDetailReply(detection) {
+    const slug = resolveDetailSlug(detection);
+    if (!slug) return askWhichCourseReply();
+    if (!window.Isis2.SchoolPublicDetail) return catalogUnavailableReply();
+
+    const result = await window.Isis2.SchoolPublicDetail.fetchDetail(slug);
+    if (!result.ok) {
+      analytics().trackSchoolEvent("isis_school_api_unavailable", { reason: result.reason });
+      return baseReply({
+        kind: "school_detail_unavailable",
+        text: ERROR_PUBLIC_DETAIL,
+        actions: nav().courseUrl(slug) ? [{ label: "Ver informações básicas", url: nav().courseUrl(slug) }] : [],
+      });
+    }
+
+    memory().updateSchool({ lastPublicCourseSlug: slug });
+    analytics().trackSchoolEvent("isis_course_detail_consulted", { cached: Boolean(result.fromCache) });
+
+    const curso = result.curso;
+    const modulosText = curso.modulos.length
+      ? curso.modulos.map(m => `${m.titulo} (${m.totalAulas} aula${m.totalAulas === 1 ? "" : "s"})`).join("; ")
+      : "Estrutura de módulos não informada no momento.";
+    const partes = [`"${curso.titulo}"`];
+    if (curso.resumo) partes.push(curso.resumo);
+    if (curso.paraQuemE) partes.push(`Para quem é: ${curso.paraQuemE}`);
+    partes.push(`Módulos: ${modulosText}`);
+
+    return baseReply({
+      kind: "school_course_detail",
+      text: partes.join("\n"),
+      actions: [{ label: `Ver "${curso.titulo}"`, url: nav().courseUrl(slug) }],
+    });
+  }
+
+  function accessHelpReply() {
+    const slug = resolveSlugInFocus();
+    const curso = slug ? knowledge().bySlug(slug) : null;
+    return baseReply({
+      kind: "school_access_help",
+      text: curso
+        ? `Para acessar "${curso.titulo}", entre na sua conta e abra o curso em "Meus cursos". Se ele aparecer bloqueado, o motivo aparece direto na tela do curso.`
+        : "Para acessar um curso, entre na sua conta e abra \"Meus cursos\". Se quiser, me diga qual curso para eu te ajudar a encontrar o link certo.",
+      actions: [{ label: "Abrir Meus cursos", url: nav().myCoursesUrl() }],
+    });
+  }
+
+  function levelInfoReply(detection) {
+    const slug = resolveDetailSlug(detection);
+    const curso = slug ? knowledge().bySlug(slug) : null;
+    if (!curso) {
+      return baseReply({ kind: "school_level_info", text: "Para eu indicar o nível de um curso específico, me diga qual curso você quer saber." });
+    }
+    const nivel = (curso.tags || []).find(tag => ["iniciante", "avancado", "avançado"].includes(knowledge().normalize(tag)));
+    return baseReply({
+      kind: "school_level_info",
+      text: nivel ? `"${curso.titulo}" está marcado no catálogo como ${nivel}.` : `${FIELD_UNAVAILABLE} para o nível de "${curso.titulo}".`,
+      actions: [{ label: `Ver "${curso.titulo}"`, url: nav().courseUrl(curso.slug) }],
+    });
+  }
+
+  function reviewContentReply() {
+    return baseReply({
+      kind: "school_review_content",
+      text: "Posso ajudar a revisar: me diga o tema ou módulo que você quer relembrar, que eu explico os conceitos principais de novo — sem repetir a avaliação, só o conteúdo da aula.",
+    });
+  }
+
+  async function resumeStudiesReply() {
+    const authed = await student().isAuthenticated();
+    if (!authed) {
+      return baseReply({
+        kind: "school_resume_not_authenticated",
+        text: "Para eu retomar exatamente de onde você parou, preciso que você esteja logado — entre na sua conta ou abra \"Meus cursos\". Enquanto isso, posso te mostrar o catálogo ou recomendar por onde começar.",
+        actions: [{ label: "Abrir Meus cursos", url: nav().myCoursesUrl() }],
+      });
+    }
+    return nextLessonReply();
+  }
+
+  function unavailabilityAckReply() {
+    return baseReply({
+      kind: "school_unavailability_ack",
+      text: "Se a plataforma estiver fora do ar ou não carregando para você, tente novamente em alguns minutos. Se persistir, entre em contato com o suporte da Mística Escola.",
+    });
+  }
+
+  async function courseCompletedInfoReply(detection, preferences) {
+    const slug = resolveSlugInFocus();
+    const curso = slug ? knowledge().bySlug(slug) : null;
+    const rec = await recommendationReply(detection, { preferences });
+    const prefix = curso ? `Parabéns por concluir "${curso.titulo}"! ` : "Parabéns por concluir o curso! ";
+    return { ...rec, text: `${prefix}${rec.text}` };
+  }
+
+  // Dispatcher das intenções novas da Fase 2.1. Retorna null (nunca lança)
+  // quando a intenção não é nova — quem chama cai de volta no dispatch
+  // original da Fase 2, preservado sem alteração logo abaixo. Só é
+  // chamado quando refinementActive() já foi confirmado por
+  // handleUserMessage (ver ali).
+  async function dispatchRefinedIntent(detection, preferences) {
+    switch (detection.primaryIntent) {
+      case "comparison":
+        return comparisonReply(detection);
+      case "course_detail":
+      case "course_structure":
+      case "lesson_count":
+        return courseDetailReply(detection);
+      case "access":
+        return accessHelpReply();
+      case "difficulty":
+      case "level":
+        return levelInfoReply(detection);
+      case "review_content":
+        return reviewContentReply();
+      case "resume_studies":
+        return resumeStudiesReply();
+      case "unavailability":
+        return unavailabilityAckReply();
+      case "course_completed":
+        return courseCompletedInfoReply(detection, preferences);
+      default:
+        return null;
+    }
+  }
+
   function detectionToEventBucket(detection) {
     if (detection.isCatalogQuery) return "catalog";
     if (detection.isBestStartQuery) return "best_start";
@@ -356,12 +585,32 @@
     if (detection.isThanks) return thanksReply();
 
     const assessment = window.Isis2.AssessmentSafety ? window.Isis2.AssessmentSafety.classify(text) : null;
-    if (assessment === "direct_answer_request") return assessmentHelpReply();
+    if (assessment === "direct_answer_request") {
+      // Fase 2.1: evento dedicado de contorno de avaliação, além do
+      // evento "isis_assessment_help_blocked" já existente da Fase 2
+      // (mantido sem alteração) — só disparado com a flag de refinamento
+      // ligada, nunca carrega texto da pergunta/resposta.
+      if (refinementActive()) analytics().trackSchoolEvent("isis_assessment_bypass_blocked", {});
+      return assessmentHelpReply();
+    }
 
     const classification = window.Isis2.SafetyGuardrails ? window.Isis2.SafetyGuardrails.classify(text) : null;
     if (classification) {
       const safety = safetyReply(classification);
       if (safety) return safety;
+    }
+
+    // Fase 2.1 — intenções novas (comparação, detalhe público, acesso,
+    // nível, revisão, retomada, indisponibilidade, curso concluído) e
+    // negações/exclusões (negation-parser.js). Só roda com a flag de
+    // refinamento ligada; com ela desligada, `preferences` fica null e o
+    // dispatch abaixo (Fase 2) é idêntico ao anterior.
+    const refinement = refinementActive();
+    const preferences = refinement ? buildPreferences(text) : null;
+    if (refinement) {
+      analytics().trackSchoolEvent("isis_school_refinement_intent", { intent: detection.primaryIntent });
+      const refinedReply = await dispatchRefinedIntent(detection, preferences);
+      if (refinedReply) return refinedReply;
     }
 
     if (detection.isSuspendedQuery) {
@@ -375,8 +624,8 @@
     if (detection.isAttemptsQuery) return attemptsReply();
     if (/modulo|módulo/.test(detection.normalized) && /como funciona|o que e|o que é/.test(detection.normalized)) return howModulesWorkReply();
     if (detection.isCatalogQuery) return catalogReply();
-    if (detection.isBestStartQuery) return recommendationReply(detection, { introWhenBeginner: true });
-    if (detection.themeTerms.length) return recommendationReply(detection);
+    if (detection.isBestStartQuery) return recommendationReply(detection, { introWhenBeginner: true, preferences });
+    if (detection.themeTerms.length) return recommendationReply(detection, { preferences });
 
     return baseReply({
       kind: "school_fallback",
