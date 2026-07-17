@@ -83,15 +83,15 @@ button, input, textarea { font: inherit; }
 .portrait-caption { margin-top: 14px; border: 1px solid rgba(242,201,109,.24); border-radius: 20px; padding: 18px; background: rgba(3,3,5,.78); }
 .portrait-caption strong { display: block; font-family: Cinzel, serif; color: var(--gold-2); font-size: 1.1rem; }
 .portrait-caption span { display: block; margin-top: 6px; color: var(--muted); line-height: 1.5; }
-.section-title { margin-bottom: 28px; }
+.section-title { margin-bottom: 34px; }
 .centered { text-align: center; }
 .centered .eyebrow { margin-inline: auto; }
 .section-title h2, .form-panel h2, .contact-section h2 { margin: 14px 0 10px; color: #fff8e8; font-family: Cinzel, serif; font-size: clamp(2rem, 4vw, 3.45rem); line-height: 1.05; }
 .section-title p:not(.eyebrow), .contact-section p, .privacy-note { color: var(--muted); font-size: 1.03rem; line-height: 1.65; }
-.category-grid, .confidence-grid, .product-grid { display: grid; gap: 16px; }
+.category-grid, .confidence-grid, .product-grid { display: grid; gap: 20px; }
 .category-grid { grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); }
 .category-grid > a { display: block; text-decoration: none; color: inherit; }
-.category-grid article, .confidence-grid article { padding: 20px; }
+.category-grid article, .confidence-grid article { padding: 22px 20px; }
 .category-grid article span { font-size: 2rem; }
 .category-grid article strong, .confidence-grid article strong { display: block; margin: 10px 0 7px; color: var(--gold-2); font-family: Cinzel, serif; }
 .category-grid article p, .confidence-grid article span { color: var(--muted); font-size: .96rem; line-height: 1.5; }
@@ -111,7 +111,7 @@ textarea { min-height: 120px; resize: vertical; }
 :focus-visible { outline: 2px solid #f2c96d; outline-offset: 2px; }
 input:focus-visible, textarea:focus-visible { outline: 2px solid #f2c96d; outline-offset: 1px; }
 label { display: grid; gap: 7px; color: var(--muted); font-weight: 750; }
-.checkout-grid, .isis-layout, .split { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; align-items: stretch; }
+.checkout-grid, .isis-layout, .split { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: stretch; }
 .form-panel, .contact-card { padding: clamp(22px, 3vw, 34px); }
 .cart-list, .history-list, .stock-list, .client-list, .isis-chat { display: grid; gap: 10px; }
 .cart-item, .history-item, .stock-item, .client-item, .isis-message { border: 1px solid rgba(242,201,109,.18); border-radius: 18px; padding: 14px; background: rgba(0,0,0,.18); }

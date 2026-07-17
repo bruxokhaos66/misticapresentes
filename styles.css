@@ -37,8 +37,8 @@ button, input, textarea, select { font: inherit; }
 img { display: block; max-width: 100%; height: auto; }
 [hidden], .internal-section { display: none !important; }
 .container { width: min(1180px, calc(100% - 32px)); margin: 0 auto; }
-.section { position: relative; padding: clamp(48px, 6vw, 86px) 0; }
-.section-title { display: grid; gap: 10px; margin-bottom: 26px; }
+.section { position: relative; padding: clamp(52px, 6.4vw, 94px) 0; }
+.section-title { display: grid; gap: 12px; margin-bottom: 32px; }
 .centered { text-align: center; max-width: 760px; }
 .section-title.centered { margin-left: auto; margin-right: auto; }
 h1, h2, h3, p { margin-top: 0; }
@@ -98,7 +98,7 @@ p { color: var(--muted); }
 .floating-card span { color: var(--muted); }
 
 .category-section { padding-top: 26px; }
-.category-grid, .checkout-grid, .split, .dashboard-grid, .product-grid, .footer-grid, .isis-layout, .confidence-grid { display: grid; gap: 18px; }
+.category-grid, .checkout-grid, .split, .dashboard-grid, .product-grid, .footer-grid, .isis-layout, .confidence-grid { display: grid; gap: 22px; }
 .category-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .category-grid article, .form-panel, .product-card, .metric-card, .feature-card, .total-box, .warning-box, .saved-box, .contact-card, .client-item, .history-item, .stock-item, .cart-item { border: 1px solid var(--border); background: var(--panel); border-radius: var(--radius); padding: 20px; box-shadow: 0 18px 55px rgba(0,0,0,.20); }
 .category-grid article { min-height: 190px; display: grid; align-content: start; gap: 7px; transition: transform .18s ease, background .18s ease; }
