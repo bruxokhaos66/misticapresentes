@@ -64,14 +64,14 @@ button, input, textarea { font: inherit; }
 .hero-grid { display: grid; grid-template-columns: minmax(0, 1.04fr) minmax(360px, .72fr); gap: clamp(42px, 6vw, 86px); align-items: center; }
 .hero-copy h1 { max-width: 830px; margin: 24px 0 22px; font-family: Cinzel, serif; font-size: clamp(2.85rem, 5.1vw, 5.25rem); line-height: .98; letter-spacing: -.04em; text-transform: uppercase; color: #fff8e8; text-shadow: 0 26px 80px rgba(0,0,0,.48); }
 .hero-text { max-width: 760px; color: #efe4cc; font-size: clamp(1.08rem, 1.3vw, 1.26rem); font-weight: 750; line-height: 1.68; }
-.hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 32px 0; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: 14px; margin: 34px 0; }
 .trust-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .trust-row span, .confidence-grid article, .category-grid article, .product-card, .form-panel, .contact-card { border: 1px solid var(--line); border-radius: var(--radius); background: linear-gradient(180deg, rgba(255,248,230,.09), rgba(255,248,230,.045)), rgba(6,6,9,.58); backdrop-filter: blur(14px); box-shadow: var(--shadow); }
 .trust-row span { padding: 16px; color: var(--muted); font-size: .96rem; line-height: 1.5; }
 .trust-row strong { display: block; color: var(--gold-2); }
 .hero-visual { position: relative; }
-.isis-portrait-card, .isis-panel-image { border: 1px solid rgba(242,201,109,.28); border-radius: 32px; overflow: hidden; background: rgba(6,6,9,.68); box-shadow: var(--shadow); }
-.isis-portrait-card { padding: 18px; }
+.isis-portrait-card, .isis-panel-image { border: 1px solid rgba(242,201,109,.32); border-radius: 32px; overflow: hidden; background: rgba(6,6,9,.68); box-shadow: var(--shadow), 0 0 60px rgba(242,201,109,.06); }
+.isis-portrait-card { padding: 20px; }
 .isis-photo, .isis-panel-image { background:
   linear-gradient(180deg, rgba(3,3,5,.02) 0%, rgba(3,3,5,.10) 42%, rgba(3,3,5,.88) 100%),
   radial-gradient(circle at 68% 12%, rgba(242,201,109,.18), transparent 24rem),
@@ -80,7 +80,7 @@ button, input, textarea { font: inherit; }
 .isis-photo { min-height: clamp(410px, 46vw, 560px); border-radius: 24px; position: relative; }
 .isis-photo::before, .isis-panel-image::before { content: "☾"; position: absolute; inset: 0; display: grid; place-items: center; color: rgba(242,201,109,.16); font-family: Cinzel, serif; font-size: clamp(8rem, 16vw, 14rem); }
 .isis-photo::after, .isis-panel-image::after { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 50% 40%, rgba(242,201,109,.14), transparent 34%), linear-gradient(145deg, transparent, rgba(31,15,40,.44)); }
-.portrait-caption { margin-top: 14px; border: 1px solid rgba(242,201,109,.24); border-radius: 20px; padding: 18px; background: rgba(3,3,5,.78); }
+.portrait-caption { margin-top: 16px; border: 1px solid rgba(242,201,109,.26); border-radius: 20px; padding: 19px 20px; background: rgba(3,3,5,.78); }
 .portrait-caption strong { display: block; font-family: Cinzel, serif; color: var(--gold-2); font-size: 1.1rem; }
 .portrait-caption span { display: block; margin-top: 6px; color: var(--muted); line-height: 1.5; }
 .section-title { margin-bottom: 34px; }
