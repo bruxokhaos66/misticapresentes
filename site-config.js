@@ -22,7 +22,16 @@ window.misticaSiteConfig = {
   // ambiente. Para homologar, edite este valor para true no deploy de
   // homologação; para produção, só depois de validado em homolog.
   isis2: {
-    enabled: false
+    enabled: false,
+    // Feature flag pública da Isis 2.0 — Especialista da Mística Escola
+    // (isis2/README.md, Fase 2). Depende também de isis2.enabled=true
+    // (ver isis2-loader.js): com isis2.enabled=false esta flag nunca é
+    // avaliada. Não é segredo, não é lida de query string nem de
+    // localStorage/sessionStorage, e só atua nas páginas da Escola
+    // (escola.html, escola-curso.html). Default false.
+    escola: {
+      enabled: false
+    }
   }
 };
 

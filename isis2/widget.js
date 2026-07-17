@@ -120,11 +120,60 @@
     return `<p class="isis2-cart-hint">Seu carrinho está em ${escapeHtml(assistant.formattedSubtotal())}. <button type="button" class="isis2-link" id="isis2-checkout-suggest">Quer finalizar a compra?</button></p>`;
   }
 
+  // URL de navegação segura sugerida pela Escola (isis2/lesson-navigation.js):
+  // só aceita caminho relativo às páginas autorizadas, nunca "javascript:"
+  // nem URL absoluta/arbitrária. Renderizada como <a href> normal — nunca
+  // via innerHTML de HTML não escapado.
+  const SAFE_SCHOOL_URL = /^escola(-curso)?\.html(\?[a-zA-Z0-9=&%_-]*)?$/;
+  function isSafeSchoolUrl(url) {
+    return typeof url === "string" && SAFE_SCHOOL_URL.test(url);
+  }
+
+  function renderCourseCard(course, reason) {
+    const kn = window.Isis2.SchoolKnowledge;
+    const priceLabel = course.tipo === "gratuito" ? "Gratuito" : kn.formatPrice(course.preco);
+    const url = window.Isis2.LessonNavigation?.courseUrl(course.slug);
+    return `
+      <li class="isis2-card">
+        <div class="isis2-card-icon" aria-hidden="true">${escapeHtml(course.icone || "📘")}</div>
+        <div class="isis2-card-body">
+          <strong>${escapeHtml(course.titulo)}</strong>
+          <span class="isis2-card-price">${escapeHtml(priceLabel)}</span>
+          ${reason ? `<p class="isis2-card-reason">Escolhi este curso porque ${escapeHtml(reason)}.</p>` : ""}
+          <div class="isis2-card-actions">
+            ${isSafeSchoolUrl(url) ? `<a class="isis2-btn isis2-btn-ghost" href="${escapeHtml(url)}" data-isis2-course-open="${escapeHtml(course.slug)}">Ver curso</a>` : ""}
+          </div>
+        </div>
+      </li>
+    `;
+  }
+
+  function renderCourses(courses, reasons) {
+    if (!courses || !courses.length) return "";
+    return `<ul class="isis2-card-list">${courses.map(course => renderCourseCard(course, reasons?.[course.slug])).join("")}</ul>`;
+  }
+
+  function slugFromSchoolUrl(url) {
+    const match = /[?&]curso=([^&]+)/.exec(url || "");
+    return match ? decodeURIComponent(match[1]) : "";
+  }
+
+  function renderActions(actions) {
+    if (!actions || !actions.length) return "";
+    const items = actions
+      .filter(action => isSafeSchoolUrl(action.url))
+      .map(action => `<a class="isis2-btn isis2-btn-small isis2-btn-ghost" href="${escapeHtml(action.url)}" data-isis2-course-open="${escapeHtml(slugFromSchoolUrl(action.url))}">${escapeHtml(action.label)}</a>`)
+      .join("");
+    return items ? `<div class="isis2-card-actions">${items}</div>` : "";
+  }
+
   function renderReply(reply) {
     const productsHtml = reply.products?.length
       ? `<ul class="isis2-card-list">${reply.products.map(product => renderProductCard(product, reply.reasons?.[product.id])).join("")}</ul>`
       : "";
-    const html = `<p>${escapeHtml(reply.text)}</p>${productsHtml}${renderComplements(reply.complements)}${renderCartHint()}`;
+    const coursesHtml = renderCourses(reply.courses, reply.reasons);
+    const actionsHtml = renderActions(reply.actions);
+    const html = `<p>${escapeHtml(reply.text).replace(/\n/g, "<br>")}</p>${productsHtml}${coursesHtml}${actionsHtml}${renderComplements(reply.complements)}${renderCartHint()}`;
     appendMessage("bot", html);
     renderQuickReplies(reply.quickReplies);
   }
@@ -134,12 +183,17 @@
     if (show) scrollToBottom();
   }
 
+  // A Escola (Fase 2) responde de forma assíncrona (consulta APIs reais
+  // de progresso/matrícula); a Isis comercial (Fase 1) responde de forma
+  // síncrona. Promise.resolve() aceita os dois sem exigir que os módulos
+  // comerciais existentes virem async.
   function respondTo(replyFactory) {
     showTyping(true);
     window.setTimeout(() => {
-      showTyping(false);
-      const reply = replyFactory();
-      if (reply) renderReply(reply);
+      Promise.resolve(replyFactory()).then(reply => {
+        showTyping(false);
+        if (reply) renderReply(reply);
+      });
     }, 450);
   }
 
@@ -175,10 +229,18 @@
       window.Isis2.Analytics.track("recommendation_clicked", { item_id: viewLink.dataset.isis2View, action: "view_product" });
       return;
     }
+    const courseOpen = event.target.closest("[data-isis2-course-open]");
+    if (courseOpen) {
+      const slug = courseOpen.dataset.isis2CourseOpen || null;
+      window.Isis2.Analytics?.trackSchoolEvent?.("isis_course_opened", {}, slug ? { dedupeKey: slug } : undefined);
+      return; // navegação normal do <a href>, sem preventDefault
+    }
     const intentChip = event.target.closest("[data-isis2-intent]");
     if (intentChip) {
       const intentId = intentChip.dataset.isis2Intent;
-      const intent = window.Isis2.IntentEngine.INTENTS.find(item => item.id === intentId);
+      const schoolIntent = window.Isis2.SchoolConversationManager?.QUICK_REPLIES?.find(item => item.id === intentId);
+      const commercialIntent = window.Isis2.IntentEngine.INTENTS.find(item => item.id === intentId);
+      const intent = schoolIntent || commercialIntent;
       if (intent) appendMessage("user", escapeHtml(intent.label));
       respondTo(() => window.Isis2.ConversationManager.handleIntentShortcut(intentId));
       return;
@@ -236,11 +298,23 @@
     if (event.key === "Escape" && !els.panel.hidden) closePanel();
   }
 
+  function hasUsableCatalog() {
+    // Catálogo comercial (Fase 1: index/kit/produto) OU catálogo da
+    // Escola quando a Fase 2 está ativa nesta página — nunca monta um
+    // widget sem nenhuma fonte real de dados disponível.
+    if (window.Isis2.ProductKnowledge && window.Isis2.ProductKnowledge.hasCatalog()) return true;
+    if (window.Isis2.SchoolMode && window.Isis2.SchoolMode.isActive()) {
+      return Boolean(window.Isis2.SchoolKnowledge && window.Isis2.SchoolKnowledge.hasCatalog());
+    }
+    return false;
+  }
+
   function mount() {
     if (mounted) return true;
-    // Não monta sem o catálogo real disponível: preferimos deixar a Isis
-    // 1 (fallback) sozinha a mostrar um widget vazio/quebrado.
-    if (!window.Isis2.ProductKnowledge || !window.Isis2.ProductKnowledge.hasCatalog()) return false;
+    // Não monta sem catálogo real disponível: preferimos deixar a Isis 1
+    // (fallback, quando existir na página) sozinha a mostrar um widget
+    // vazio/quebrado.
+    if (!hasUsableCatalog()) return false;
     mounted = true;
     els = buildDom();
     els.toggle.addEventListener("click", togglePanel);

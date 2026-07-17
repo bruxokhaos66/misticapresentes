@@ -53,6 +53,21 @@
     }
   ];
 
+  // Exposição somente-leitura do catálogo real para a Isis 2.0 — Escola
+  // (isis2/school-knowledge.js, Fase 2). Congelamento profundo (array,
+  // cada curso, e cada array/objeto aninhado como "tags") para que nenhum
+  // script consumidor possa alterar o catálogo em memória, nem por essa
+  // via nem escrevendo num campo aninhado; a única fonte que grava aqui
+  // continua sendo este arquivo. Sem isso, o School Knowledge teria que
+  // reimplementar/duplicar esta lista (proibido pela auditoria: "nunca
+  // criar dados fictícios em produção").
+  function deepFreeze(value) {
+    if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
+    Object.values(value).forEach(deepFreeze);
+    return Object.freeze(value);
+  }
+  window.MISTICA_ESCOLA_CURSOS = deepFreeze(cursos.map(curso => ({ ...curso })));
+
   const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
   // Estado do aluno logado (nulo enquanto não carregado ou deslogado).
@@ -99,6 +114,7 @@
     if (!ok) throw new Error(body.detail || "Não foi possível criar sua senha. O link pode ter expirado.");
     alunoAtual = { nome: body.nome, email: body.email, cursos: [] };
     alunoCarregado = false;
+    resetIsis2SchoolIdentity();
     await carregarAlunoAtual();
     return alunoAtual;
   }
@@ -119,6 +135,7 @@
     if (!ok) throw new Error(body.detail || "E-mail ou senha inválidos.");
     alunoAtual = { nome: body.nome, email: body.email, cursos: [] };
     alunoCarregado = false;
+    resetIsis2SchoolIdentity();
     await carregarAlunoAtual();
     return alunoAtual;
   }
@@ -127,6 +144,25 @@
     await apiJson("/api/alunos/logout", { method: "POST" });
     alunoAtual = null;
     alunoCarregado = true;
+    resetIsis2SchoolIdentity();
+  }
+
+  // Login/logout troca a sessão do navegador (cookie), mas a Isis 2.0 —
+  // Escola (isis2/student-context.js) guarda em memória, por página, se o
+  // aluno está autenticado (StudentContext.me()) e sinais de conversa
+  // (ContextMemory school) — sem isso, trocar de conta na mesma aba sem
+  // recarregar a página deixaria esse cache local desatualizado. Todo
+  // dado real (cursos, progresso) continua sempre vindo fresco da API a
+  // cada consulta, então isso nunca foi uma falha de autorização — mas
+  // limpa mesmo assim, por clareza e para não misturar contexto de
+  // conversa entre contas diferentes na mesma aba.
+  function resetIsis2SchoolIdentity() {
+    try {
+      window.Isis2?.StudentContext?.resetCache?.();
+      window.Isis2?.ContextMemory?.resetSchool?.();
+    } catch {
+      /* Isis 2.0 pode não estar carregada (flag desligada) — nunca quebra login/logout */
+    }
   }
 
   function normalizeUrl(url) {
