@@ -1,0 +1,166 @@
+/* Isis Chat (homologação) — widget discreto, canto inferior ESQUERDO para
+   nunca cobrir o WhatsApp flutuante (styles.css#.floating-whatsapp, bottom
+   direito), o carrinho ou outros botões importantes do lado direito. Usa
+   as mesmas variáveis de marca de styles.css (--gold, --violet, --panel). */
+#isis-chat-root {
+  position: fixed;
+  left: 18px;
+  bottom: 18px;
+  /* Abaixo do banner de consentimento (z-index 9999). */
+  z-index: 8000;
+  font-family: inherit;
+}
+
+.isis-chat-fab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border, rgba(240, 197, 106, 0.22));
+  background: linear-gradient(135deg, var(--violet, #362044), var(--olive, #26351c));
+  color: var(--text, #fff8ea);
+  padding: 12px 18px;
+  border-radius: 999px;
+  box-shadow: var(--shadow, 0 26px 84px rgba(0, 0, 0, 0.44));
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  min-height: 46px;
+}
+.isis-chat-fab:hover { transform: translateY(-2px); }
+.isis-chat-fab:focus-visible { outline: 2px solid var(--gold, #f0c56a); outline-offset: 2px; }
+.isis-chat-open .isis-chat-fab { display: none; }
+
+.isis-chat-panel {
+  position: fixed;
+  left: 18px;
+  bottom: 18px;
+  width: min(360px, calc(100vw - 32px));
+  max-height: min(560px, calc(100vh - 96px));
+  display: flex;
+  flex-direction: column;
+  background: var(--panel, #1a1224);
+  color: var(--text, #fff8ea);
+  border: 1px solid var(--border, rgba(240, 197, 106, 0.22));
+  border-radius: 18px;
+  box-shadow: var(--shadow, 0 26px 84px rgba(0, 0, 0, 0.44));
+  overflow: hidden;
+}
+.isis-chat-panel[hidden] { display: none; }
+
+.isis-chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border, rgba(240, 197, 106, 0.16));
+}
+.isis-chat-title { font-weight: 800; }
+.isis-chat-badge {
+  font-size: 0.72em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(240, 197, 106, 0.18);
+  color: var(--gold, #f0c56a);
+  border: 1px solid rgba(240, 197, 106, 0.35);
+}
+.isis-chat-close {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 1.1em;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+.isis-chat-close:focus-visible { outline: 2px solid var(--gold, #f0c56a); }
+
+.isis-chat-privacy {
+  font-size: 0.76em;
+  opacity: 0.8;
+  padding: 8px 14px 0;
+}
+
+.isis-chat-log {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.isis-chat-msg { max-width: 92%; padding: 8px 12px; border-radius: 12px; line-height: 1.4; font-size: 0.92em; white-space: pre-wrap; word-break: break-word; }
+.isis-chat-msg-isis { align-self: flex-start; background: rgba(255,255,255,0.06); }
+.isis-chat-msg-user { align-self: flex-end; background: rgba(240, 197, 106, 0.18); }
+
+.isis-chat-cards { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.isis-chat-card {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid var(--border, rgba(240, 197, 106, 0.16));
+  background: rgba(255,255,255,0.03);
+}
+.isis-chat-card img { width: 44px; height: 44px; object-fit: cover; border-radius: 8px; flex-shrink: 0; background: rgba(255,255,255,0.08); }
+.isis-chat-card-info { flex: 1; min-width: 0; }
+.isis-chat-card-name { font-weight: 700; font-size: 0.88em; }
+.isis-chat-card-price { font-size: 0.82em; opacity: 0.85; }
+.isis-chat-card-reason { font-size: 0.76em; opacity: 0.7; margin-top: 2px; }
+.isis-chat-btn {
+  border: 1px solid var(--gold, #f0c56a);
+  color: var(--gold, #f0c56a);
+  background: transparent;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.78em;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.isis-chat-btn:focus-visible { outline: 2px solid var(--gold, #f0c56a); outline-offset: 2px; }
+
+.isis-chat-quick { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px 10px; }
+.isis-chat-quick button {
+  border: 1px solid var(--border, rgba(240, 197, 106, 0.2));
+  background: rgba(255,255,255,0.04);
+  color: inherit;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.78em;
+  cursor: pointer;
+}
+.isis-chat-quick button:focus-visible { outline: 2px solid var(--gold, #f0c56a); }
+
+.isis-chat-form { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border, rgba(240, 197, 106, 0.16)); }
+.isis-chat-input {
+  flex: 1;
+  border-radius: 999px;
+  border: 1px solid var(--border, rgba(240, 197, 106, 0.25));
+  background: rgba(255,255,255,0.04);
+  color: inherit;
+  padding: 8px 14px;
+  font-size: 0.9em;
+}
+.isis-chat-send {
+  border: none;
+  background: var(--gold, #f0c56a);
+  color: #1a1224;
+  font-weight: 800;
+  border-radius: 999px;
+  padding: 8px 16px;
+  cursor: pointer;
+}
+.isis-chat-send:disabled { opacity: 0.5; cursor: not-allowed; }
+.isis-chat-send:focus-visible { outline: 2px solid var(--gold, #f0c56a); outline-offset: 2px; }
+
+.isis-chat-error { font-size: 0.8em; color: #ffb3b3; padding: 0 14px 8px; }
+
+@media (max-width: 480px) {
+  #isis-chat-root { left: 12px; bottom: 12px; }
+  .isis-chat-panel { left: 12px; right: 12px; bottom: 12px; width: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .isis-chat-fab { transition: none; }
+  .isis-chat-fab:hover { transform: none; }
+}

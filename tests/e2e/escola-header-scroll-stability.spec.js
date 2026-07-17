@@ -49,6 +49,13 @@ async function abrirCurso(page) {
   await page.route("**/api/isis2/homolog-config", rota =>
     rota.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ enabled: false, escola: false, refinamento: false, homologacao: false }) })
   );
+  // isis2/chat-gate.js (Chat Inteligente da Isis 2.0, também sempre
+  // carregado) consulta este outro endpoint em paralelo -- mesmo motivo
+  // do mock acima: sem ele, a chamada real é bloqueada por CORS e vira
+  // um erro de console alheio ao que esta suíte audita.
+  await page.route("**/api/isis2/chat/config", rota =>
+    rota.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ enabled: false, homolog: false, authorized: false }) })
+  );
   await page.goto("/escola-curso.html?curso=xamanismo-introducao");
   await expect(page.locator("[data-header-sentinel]")).toHaveCount(1);
   await expect(page.locator(".aula-hero")).toBeVisible();

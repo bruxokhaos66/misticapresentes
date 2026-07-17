@@ -78,6 +78,12 @@ async function abrirCurso(page) {
   await page.route("**/api/isis2/homolog-config", route =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ enabled: false, escola: false, refinamento: false, homologacao: false }) })
   );
+  // isis2/chat-gate.js (Chat Inteligente da Isis 2.0, também sempre
+  // carregado) consulta este outro endpoint em paralelo -- mesmo motivo
+  // do mock acima.
+  await page.route("**/api/isis2/chat/config", route =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ enabled: false, homolog: false, authorized: false }) })
+  );
   await page.goto("/escola-curso.html?curso=xamanismo-introducao");
   return erros;
 }

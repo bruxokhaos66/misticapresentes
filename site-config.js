@@ -419,6 +419,7 @@ window.misticaSiteConfig = {
     loadScript("misticaCoursesScript", "v2-courses.js?v=20260711-convite");
     loadScript("misticaCampaignAdminScript", "campaign-admin.js?v=20260711-campanhas");
     loadScript("misticaIsis2HomologAdminScript", "isis2-homolog-admin.js?v=20260717-isis2-homolog-admin");
+    loadScript("misticaIsisChatAdminScript", "isis2-chat-admin.js?v=20260717-isis-chat-admin");
   };
 
   const iniciar = () => {

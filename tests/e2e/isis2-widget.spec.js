@@ -90,17 +90,25 @@ test.describe("Isis 2.0 - feature flag", () => {
     });
     await irParaHomeComCatalogo(page, { isis2: false });
     await page.waitForTimeout(500);
-    // Com a flag estática desligada, o único arquivo estático baixado é o
-    // portão (isis2-homolog-gate.js); ele também consulta o backend uma
-    // única vez (GET /api/isis2/homolog-config, mockado acima como
-    // desautorizado) -- e todo o resto (~60KB de módulos) nunca é
-    // requisitado.
+    // Com a flag estática desligada, os únicos arquivos estáticos baixados
+    // são os dois portões independentes: o da Isis 2.0 comercial/Escola
+    // (isis2-homolog-gate.js) e o do Chat Inteligente (chat-gate.js, módulo
+    // à parte, ver isis2/README do chat) -- cada um consulta o próprio
+    // endpoint de autorização uma única vez, e todo o resto (módulos e
+    // widget de cada um) nunca é requisitado sem autorização confirmada
+    // pelo servidor.
     const inesperados = isis2Requests.filter(
-      url => !url.includes("isis2-homolog-gate.js") && !url.includes("/api/isis2/homolog-config")
+      url =>
+        !url.includes("isis2-homolog-gate.js") &&
+        !url.includes("/api/isis2/homolog-config") &&
+        !url.includes("chat-gate.js") &&
+        !url.includes("/api/isis2/chat/config")
     );
     expect(inesperados, `requisições inesperadas: ${JSON.stringify(inesperados)}`).toEqual([]);
     const chamadasConfig = isis2Requests.filter(url => url.includes("/api/isis2/homolog-config"));
     expect(chamadasConfig).toHaveLength(1);
+    const chamadasChatConfig = isis2Requests.filter(url => url.includes("/api/isis2/chat/config"));
+    expect(chamadasChatConfig).toHaveLength(1);
   });
 
   test("flag não pode ser ligada por query string", async ({ page }) => {
