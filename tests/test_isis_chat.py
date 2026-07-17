@@ -6,6 +6,8 @@ segurança (CSRF/Origin, sanitização, prompt injection) e auditoria.
 """
 import importlib
 import os
+import socket
+import threading
 import uuid
 
 from fastapi.testclient import TestClient
@@ -195,6 +197,72 @@ def test_flags_estudio_fase3_permanecem_false(monkeypatch):
         "image_generation_enabled": False,
         "auto_publish_enabled": False,
     }
+
+
+def test_flags_do_chat_ausentes_resultam_em_false(monkeypatch):
+    for chave in (
+        "MISTICA_ISIS_CHAT_ENABLED",
+        "MISTICA_ISIS_CHAT_HOMOLOG_ENABLED",
+        "MISTICA_ISIS_CHAT_AI_ENABLED",
+        "MISTICA_ISIS_CHAT_PRODUCT_RECOMMENDATIONS_ENABLED",
+    ):
+        monkeypatch.delenv(chave, raising=False)
+    from backend import isis_chat_flags as f
+
+    assert f.chat_habilitado() is False
+    assert f.chat_homolog_habilitado() is False
+    assert f.chat_ai_habilitado() is False
+    assert f.chat_recomendacoes_habilitadas() is False
+
+
+def test_flags_do_chat_valor_invalido_resulta_em_false(monkeypatch):
+    from backend import isis_chat_flags as f
+
+    for valor_invalido in ("maybe", "1.0", "ativado", "  ", "null", "None"):
+        monkeypatch.setenv("MISTICA_ISIS_CHAT_ENABLED", valor_invalido)
+        assert f.chat_habilitado() is False, f"valor {valor_invalido!r} deveria resultar em False"
+
+
+def test_flags_do_chat_sao_independentes_entre_si(monkeypatch):
+    """Ligar uma flag não pode, sozinha, ligar nenhuma outra -- cada
+    combinação parcial deve refletir exatamente o que foi configurado."""
+    from backend import isis_chat_flags as f
+
+    monkeypatch.setenv("MISTICA_ISIS_CHAT_ENABLED", "true")
+    monkeypatch.delenv("MISTICA_ISIS_CHAT_HOMOLOG_ENABLED", raising=False)
+    monkeypatch.delenv("MISTICA_ISIS_CHAT_AI_ENABLED", raising=False)
+    monkeypatch.delenv("MISTICA_ISIS_CHAT_PRODUCT_RECOMMENDATIONS_ENABLED", raising=False)
+    assert f.chat_habilitado() is True
+    assert f.chat_homolog_habilitado() is False
+    assert f.chat_ai_habilitado() is False
+    assert f.chat_recomendacoes_habilitadas() is False
+
+
+def test_limites_numericos_invalidos_caem_no_padrao_seguro(monkeypatch):
+    from backend import isis_chat_flags as f
+
+    monkeypatch.setenv("MISTICA_ISIS_CHAT_MAX_MESSAGES_PER_SESSION", "nao-e-numero")
+    assert f.max_mensagens_por_sessao() == 20
+
+    monkeypatch.setenv("MISTICA_ISIS_CHAT_MAX_SESSIONS_PER_HOUR", "-3")
+    assert f.max_sessoes_por_hora() >= 1
+
+    monkeypatch.setenv("MISTICA_ISIS_CHAT_DAILY_AI_CALL_LIMIT", "-1")
+    assert f.limite_diario_chamadas_ia() == 0
+
+    monkeypatch.setenv("MISTICA_ISIS_CHAT_DAILY_COST_LIMIT_CENTS", "-1")
+    assert f.limite_diario_custo_centavos() == 0
+
+
+def test_chat_homolog_true_sozinho_nao_torna_chat_publico(monkeypatch):
+    """MISTICA_ISIS_CHAT_HOMOLOG_ENABLED=true sem MISTICA_ISIS_CHAT_ENABLED
+    também true não é suficiente -- as duas flags são exigidas juntas."""
+    client.cookies.clear()
+    monkeypatch.setenv("MISTICA_ISIS_CHAT_ENABLED", "false")
+    monkeypatch.setenv("MISTICA_ISIS_CHAT_HOMOLOG_ENABLED", "true")
+    criar_admin_com_sessao()
+    resposta = client.post("/api/isis2/chat/sessoes", headers=_headers())
+    assert resposta.status_code == 404
 
 
 # ---------------------------------------------------------------------------
@@ -573,3 +641,190 @@ def test_admin_limpar_sessoes_expiradas_gera_auditoria(monkeypatch):
             "SELECT * FROM audit_log WHERE entidade='isis_chat_sessions' ORDER BY id DESC LIMIT 1"
         ).fetchone()
     assert auditoria is not None
+
+
+# ---------------------------------------------------------------------------
+# Auditoria: concorrência, revogação, custo zero e precisão monetária do kit
+# ---------------------------------------------------------------------------
+
+def test_limite_de_mensagens_e_atomico_sob_concorrencia(monkeypatch):
+    """Duas rajadas de mensagens concorrentes para a MESMA sessão nunca
+    podem ultrapassar o limite configurado -- a checagem antiga (ler o
+    contador em memória, comparar, e só depois gravar) tinha uma janela
+    de corrida clássica (TOCTOU); a correção usa
+    `UPDATE ... WHERE contador_mensagens < ?` numa única instrução SQL,
+    que o SQLite executa atomicamente mesmo com conexões concorrentes."""
+    ligar_flags_chat(monkeypatch)
+    monkeypatch.setenv("MISTICA_ISIS_CHAT_MAX_MESSAGES_PER_SESSION", "5")
+    criar_admin_com_sessao()
+    resposta = client.post("/api/isis2/chat/sessoes", headers=_headers())
+    session_id = resposta.json()["session_id"]
+
+    resultados = []
+    lock = threading.Lock()
+
+    def enviar():
+        r = client.post(
+            f"/api/isis2/chat/sessoes/{session_id}/mensagens",
+            json={"texto": "oi"},
+            headers=_headers(),
+        )
+        with lock:
+            resultados.append(r.status_code)
+
+    threads = [threading.Thread(target=enviar) for _ in range(15)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    total_sucesso = resultados.count(200)
+    assert total_sucesso == 5, f"esperado exatamente 5 sucessos, obtido {total_sucesso} ({resultados})"
+    assert all(codigo in (200, 429) for codigo in resultados)
+
+    from backend.database import conectar
+    with conectar() as conn:
+        linha = conn.execute(
+            "SELECT contador_mensagens FROM isis_chat_sessions WHERE session_id=?", (session_id,)
+        ).fetchone()
+    assert linha["contador_mensagens"] == 5
+
+
+def test_limite_de_sessoes_por_hora_e_atomico_sob_concorrencia(monkeypatch):
+    """O mesmo tipo de corrida existia na criação de sessões (contagem por
+    hora): rajada concorrente de criação de sessão para a mesma conta
+    nunca pode ultrapassar o limite configurado."""
+    ligar_flags_chat(monkeypatch)
+    monkeypatch.setenv("MISTICA_ISIS_CHAT_MAX_SESSIONS_PER_HOUR", "3")
+    criar_admin_com_sessao()
+
+    resultados = []
+    lock = threading.Lock()
+
+    def criar():
+        r = client.post("/api/isis2/chat/sessoes", headers=_headers())
+        with lock:
+            resultados.append(r.status_code)
+
+    threads = [threading.Thread(target=criar) for _ in range(10)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    total_sucesso = resultados.count(200)
+    assert total_sucesso == 3, f"esperado exatamente 3 sucessos, obtido {total_sucesso} ({resultados})"
+    assert all(codigo in (200, 429) for codigo in resultados)
+
+
+def test_revogacao_de_allowlist_durante_sessao_ativa_bloqueia_proxima_mensagem(monkeypatch):
+    """A autorização é revalidada a cada mensagem (não só na criação da
+    sessão): se o admin remove um aluno da allowlist no meio de uma
+    conversa já em andamento, a próxima mensagem desse aluno deve ser
+    recusada -- a sessão continua existindo no banco, mas a dependência
+    de autorização volta 401 antes de qualquer processamento."""
+    from backend.database import conectar
+
+    client.cookies.clear()
+    ligar_flags_chat(monkeypatch)
+    aluno_id, token = criar_aluno_com_sessao(autorizado=True)
+    resposta = client.post(
+        "/api/isis2/chat/sessoes", headers=_headers(), cookies={"mistica_aluno_sessao": token}
+    )
+    assert resposta.status_code == 200, resposta.text
+    session_id = resposta.json()["session_id"]
+
+    r1 = client.post(
+        f"/api/isis2/chat/sessoes/{session_id}/mensagens",
+        json={"texto": "oi"},
+        headers=_headers(),
+        cookies={"mistica_aluno_sessao": token},
+    )
+    assert r1.status_code == 200, r1.text
+
+    with conectar() as conn:
+        conn.execute("DELETE FROM isis2_homolog_testers WHERE aluno_id=?", (aluno_id,))
+
+    r2 = client.post(
+        f"/api/isis2/chat/sessoes/{session_id}/mensagens",
+        json={"texto": "ainda funciona?"},
+        headers=_headers(),
+        cookies={"mistica_aluno_sessao": token},
+    )
+    assert r2.status_code == 401, r2.text
+
+
+def test_modo_deterministico_nunca_tenta_conexao_de_rede(monkeypatch):
+    """Prova de custo zero / zero chamada externa: substitui
+    `socket.socket` por uma versão que levanta exceção em qualquer
+    tentativa de conexão de rede nova. Enviar várias mensagens reais
+    (incluindo intenções de recomendação, kit e curso) com
+    MISTICA_ISIS_CHAT_AI_ENABLED=false não deve disparar nenhuma
+    tentativa de conexão -- o único "socket" tocado é o já aberto pelo
+    TestClient/ASGI em memória, que não passa por `socket.socket`."""
+    session_id, headers = abrir_sessao_admin(monkeypatch)
+
+    def socket_bloqueado(*args, **kwargs):
+        raise AssertionError("tentativa de abrir socket de rede em modo determinístico (custo deveria ser zero)")
+
+    monkeypatch.setattr(socket, "socket", socket_bloqueado)
+    monkeypatch.setattr(socket, "create_connection", socket_bloqueado)
+
+    for texto in ("quero relaxar", "monte um kit de até 80 reais", "tem curso de xamanismo", "oi"):
+        resposta = client.post(
+            f"/api/isis2/chat/sessoes/{session_id}/mensagens", json={"texto": texto}, headers=headers
+        )
+        assert resposta.status_code == 200, resposta.text
+
+
+def test_kit_orcamento_exato_ao_centavo_nao_e_excluido_por_erro_de_float(monkeypatch):
+    """19.90 + 25.10 = 45.00 exatamente, mas em ponto flutuante bruto pode
+    chegar a 44.99999999999999 -- o kit deve caber no orçamento de
+    R$45,00 (aritmética em centavos, não float bruto)."""
+    from backend.isis_chat_ranking import montar_kit
+
+    produtos = [
+        {"id": 1, "nome": "A", "categoria": "X", "preco": 19.90, "disponivel": True},
+        {"id": 2, "nome": "B", "categoria": "Y", "preco": 25.10, "disponivel": True},
+    ]
+    kit = montar_kit(produtos, orcamento_max=45.0)
+    assert kit is not None
+    assert len(kit["itens"]) == 2
+    assert kit["valor_total"] == 45.0
+
+
+def test_kit_orcamento_zero_ou_negativo_nao_gera_kit():
+    from backend.isis_chat_ranking import montar_kit
+
+    produtos = [{"id": 1, "nome": "A", "categoria": "X", "preco": 10.0, "disponivel": True}]
+    assert montar_kit(produtos, orcamento_max=0) is None
+    assert montar_kit(produtos, orcamento_max=-5) is None
+
+
+def test_kit_orcamento_abaixo_do_produto_mais_barato_nao_gera_kit():
+    from backend.isis_chat_ranking import montar_kit
+
+    produtos = [{"id": 1, "nome": "A", "categoria": "X", "preco": 50.0, "disponivel": True}]
+    assert montar_kit(produtos, orcamento_max=10.0) is None
+
+
+def test_resumo_de_mensagem_nao_guarda_texto_livre_do_cliente(monkeypatch):
+    """O resumo salvo em isis_chat_messages_summary nunca deve conter o
+    texto livre digitado pelo cliente (só intenção/aroma/finalidade/faixa
+    de preço, vocabulário fechado ou numérico) -- guardar até 100
+    caracteres do texto normalizado equivaleria, na prática, a armazenar a
+    mensagem quase inteira."""
+    from backend.database import conectar
+
+    session_id, headers = abrir_sessao_admin(monkeypatch)
+    mensagem_livre_do_cliente = "gostaria de um presente exclusivo para minha tia muito especial"
+    client.post(
+        f"/api/isis2/chat/sessoes/{session_id}/mensagens", json={"texto": mensagem_livre_do_cliente}, headers=headers
+    )
+    with conectar() as conn:
+        linha = conn.execute(
+            "SELECT resumo FROM isis_chat_messages_summary WHERE session_id=? ORDER BY id DESC LIMIT 1",
+            (session_id,),
+        ).fetchone()
+    assert linha is not None
+    assert mensagem_livre_do_cliente not in linha["resumo"]
