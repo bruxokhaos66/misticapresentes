@@ -198,7 +198,10 @@
     }
   }
 
+  let elementFocusedBeforeOpen = null;
+
   function openPanel() {
+    elementFocusedBeforeOpen = document.activeElement;
     els.panel.hidden = false;
     els.toggle.setAttribute("aria-expanded", "true");
     els.root.classList.add("isis2-open");
@@ -214,6 +217,14 @@
     els.toggle.setAttribute("aria-expanded", "false");
     els.root.classList.remove("isis2-open");
     persistOpenState(false);
+    // Devolve o foco a quem o tinha antes de abrir (ou ao botão
+    // flutuante, se aquele elemento já não existir mais) — sem isso, o
+    // teclado perderia a posição ao fechar o painel.
+    const restoreTo = elementFocusedBeforeOpen && document.contains(elementFocusedBeforeOpen)
+      ? elementFocusedBeforeOpen
+      : els.toggle;
+    restoreTo?.focus?.();
+    elementFocusedBeforeOpen = null;
   }
 
   function togglePanel() {

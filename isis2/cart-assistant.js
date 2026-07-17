@@ -23,8 +23,22 @@
 
   const MAX_QTY = 999;
 
+  // `products` é `const` no topo de app.js: isso cria uma ligação no
+  // escopo léxico do script, NÃO uma propriedade em `window` (diferente
+  // de `var`). Por isso window.products é sempre undefined num
+  // navegador real, mesmo com o catálogo carregado — é preciso checar o
+  // identificador solto `products`, com try/catch para páginas onde
+  // app.js não está presente.
+  function catalog() {
+    try {
+      return Array.isArray(window.products) ? window.products : (typeof products !== "undefined" ? products : []);
+    } catch {
+      return [];
+    }
+  }
+
   function available() {
-    return typeof window.addToCart === "function" && typeof window.products !== "undefined";
+    return typeof window.addToCart === "function" && catalog().length > 0;
   }
 
   function currentCart() {
@@ -39,8 +53,7 @@
   }
 
   function findProduct(productId) {
-    const list = Array.isArray(window.products) ? window.products : [];
-    return list.find(item => String(item.id) === String(productId)) || null;
+    return catalog().find(item => String(item.id) === String(productId)) || null;
   }
 
   function qtyInputFor(productId) {

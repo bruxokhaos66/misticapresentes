@@ -87,8 +87,16 @@
       candidates = knowledge.listAll().filter(product => product.category === detection.primaryIntent.priorityCategory);
     }
 
-    const strictBudget = candidates.filter(product => withinBudget(product, detection));
-    if (detection.budget != null || detection.budgetMin != null) candidates = strictBudget;
+    // Se há orçamento, filtra por ele — mas se a busca textual/categoria
+    // encontrou candidatos que a caíram todos fora do orçamento (ex.:
+    // "presente até R$50" quando o único produto com "presente" no texto
+    // custa R$250), amplia para o catálogo inteiro em vez de desistir:
+    // pode haver opção mais barata que só não bateu a busca textual.
+    if (detection.budget != null || detection.budgetMin != null) {
+      let withinB = candidates.filter(product => withinBudget(product, detection));
+      if (!withinB.length) withinB = knowledge.listAll().filter(product => withinBudget(product, detection));
+      candidates = withinB;
+    }
 
     candidates = applyExclusions(candidates, detection);
     candidates = candidates.filter(product => !excludeIds.includes(product.id));

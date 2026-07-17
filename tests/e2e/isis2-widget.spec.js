@@ -71,6 +71,18 @@ test.describe("Isis 2.0 - feature flag", () => {
     await expect(page.locator("#isisForm")).toBeVisible();
   });
 
+  test("com a flag desligada, nenhum outro arquivo da Isis 2.0 é baixado (só o loader)", async ({ page }) => {
+    const isis2Requests = [];
+    page.on("request", req => {
+      const url = req.url();
+      if (url.includes("/isis2/")) isis2Requests.push(url);
+    });
+    await irParaHomeComCatalogo(page, { isis2: false });
+    await page.waitForTimeout(500);
+    const naoLoader = isis2Requests.filter(url => !url.includes("isis2-loader.js"));
+    expect(naoLoader, `requisições inesperadas: ${JSON.stringify(naoLoader)}`).toEqual([]);
+  });
+
   test("flag não pode ser ligada por query string", async ({ page }) => {
     await prepararCatalogo(page);
     await page.goto("/index.html?MISTICA_ISIS2_ENABLED=true&isis2=1");

@@ -35,7 +35,6 @@
   <link rel="stylesheet" href="mistica-encomenda.css?v=20260712-achados-misticos" />
   <link rel="stylesheet" href="consent-banner.css" />
   <link rel="stylesheet" href="/escola-baloon.css" />
-  <link rel="stylesheet" href="isis2/widget.css?v=20260717-isis2-fase1" />
   <script defer src="assets/vendor/qrcode.min.js"></script>
   <script defer src="site-config.js?v=20260716-catalogo-sync-estavel"></script>
   <script defer src="mistica-encomenda.js?v=20260712-achados-misticos"></script>
@@ -50,18 +49,10 @@
   <script defer src="isis-guided.js?v=20260711-isis-guiada"></script>
   <script defer src="v2-product-inspector.js?v=20260716-cards-compactos"></script>
   <!-- Isis 2.0 (assistente virtual modular) — aditivo, não substitui o
-       chat legado acima. Ver isis2/README.md para a arquitetura. -->
-  <script defer src="isis2/product-knowledge.js?v=20260717-isis2-fase1"></script>
-  <script defer src="isis2/safety-guardrails.js?v=20260717-isis2-fase1"></script>
-  <script defer src="isis2/intent-engine.js?v=20260717-isis2-fase1"></script>
-  <script defer src="isis2/recommendation-engine.js?v=20260717-isis2-fase1"></script>
-  <script defer src="isis2/context-memory.js?v=20260717-isis2-fase1"></script>
-  <script defer src="isis2/analytics.js?v=20260717-isis2-fase1"></script>
-  <script defer src="isis2/cart-assistant.js?v=20260717-isis2-fase1"></script>
-  <script defer src="isis2/ai-providers.js?v=20260717-isis2-fase1"></script>
-  <script defer src="isis2/conversation-manager.js?v=20260717-isis2-fase1"></script>
-  <script defer src="isis2/widget.js?v=20260717-isis2-fase1"></script>
-  <script defer src="isis2/isis2-bootstrap.js?v=20260717-isis2-fase1"></script>
+       chat legado acima. Loader único: só baixa o resto (CSS + módulos)
+       se a feature flag pública (site-config.js) estiver ligada. Ver
+       isis2/README.md para a arquitetura. -->
+  <script defer src="isis2/isis2-loader.js?v=20260717-isis2-fase1"></script>
   <script defer src="/escola-baloon.js"></script>
   <!-- O painel administrativo (HTML, CSS e JS) vive em admin.html, uma
        página separada carregada só quando a rota #admin/?admin=mistica é
