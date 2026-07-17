@@ -361,6 +361,9 @@
           <p class="escola-card-note">As partes introdutórias não exigem cadastro nem login.</p>
         </article>`;
     }
+    // Somente o curso com LMS (partes introdutórias públicas) tem observação
+    // de rodapé com texto; nos demais o espaço é reservado, mas vazio, para
+    // que os botões fiquem na mesma posição vertical em todos os cards.
     const primaryAction = curso.tipo === "gratuito"
       ? `<button class="btn btn-full" type="button" data-action="ver">Acessar curso grátis</button>`
       : `<button class="btn btn-full" type="button" data-action="comprar">Comprar acesso</button>`;
@@ -377,6 +380,7 @@
           ${primaryAction}
           <button class="btn btn-ghost escola-card-toggle" type="button" data-action="toggle">Ver conteúdo do curso</button>
         </div>
+        <p class="escola-card-note" aria-hidden="true">&nbsp;</p>
         <div class="escola-detail" data-detail hidden>
           <div class="escola-materials" data-materials></div>
           ${curso.tipo === "pago" ? purchasePanelHtml(curso) : ""}
