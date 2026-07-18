@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Pedidos Pix aguardando confirmação — Mística Presentes</title>
+<link rel="stylesheet" href="styles.css" />
+<link rel="stylesheet" href="admin-pedidos-pix.css" />
+</head>
+<body class="admin-pix-body">
+<header class="site-header">
+  <nav class="container nav">
+    <a class="brand" href="index.html" aria-label="Mística Presentes">
+      <span class="brand-mark" aria-hidden="true">☾</span>
+      <span class="brand-copy"><strong>Mística Presentes</strong><small>Pedidos Pix</small></span>
+    </a>
+    <a class="btn btn-small btn-ghost" href="admin.html">Painel geral</a>
+  </nav>
+</header>
+
+<main class="container admin-pix-main">
+  <section id="loginPanelPix" class="form-panel admin-pix-login">
+    <p class="eyebrow">Acesso restrito</p>
+    <h1>Entrar no painel de pedidos Pix</h1>
+    <form id="loginFormPix">
+      <label>Usuário
+        <input id="loginUserPix" type="text" autocomplete="username" required />
+      </label>
+      <label>Senha
+        <input id="loginSenhaPix" type="password" autocomplete="current-password" required />
+      </label>
+      <button class="btn btn-full" type="submit">Entrar</button>
+      <p id="loginStatusPix" class="admin-pix-note" hidden></p>
+    </form>
+  </section>
+
+  <section id="painelPix" hidden>
+    <div class="admin-pix-topbar">
+      <div>
+        <p class="eyebrow">Pedidos Pix aguardando confirmação</p>
+        <h1>Novos pedidos e comprovantes</h1>
+      </div>
+      <div class="admin-pix-topbar-actions">
+        <span id="contadorPendentes" class="admin-pix-counter">0 aguardando</span>
+        <span id="contadorNovos" class="admin-pix-counter admin-pix-counter-novo" hidden>0 novos</span>
+        <label class="admin-pix-sound-toggle">
+          <input type="checkbox" id="somToggle" checked />
+          Som ao chegar pedido
+        </label>
+        <button class="btn btn-small btn-ghost" type="button" id="btnSairPix">Sair</button>
+      </div>
+    </div>
+
+    <p class="admin-pix-note">
+      O site nunca confirma sozinho que um comprovante enviado pelo WhatsApp é verdadeiro ou que o cliente
+      realmente anexou o arquivo. Confirme sempre o valor recebido no aplicativo bancário antes de marcar um
+      pedido como pago.
+    </p>
+
+    <div id="listaPedidosPix" class="admin-pix-lista">
+      <p class="admin-pix-vazio">Carregando pedidos...</p>
+    </div>
+  </section>
+</main>
+
+<script src="site-config.js"></script>
+<script src="admin-pedidos-pix.js" defer></script>
+</body>
+</html>

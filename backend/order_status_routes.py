@@ -46,9 +46,21 @@ TIPOS_ITEM_VALIDOS = {TIPO_ITEM_FISICO, TIPO_ITEM_SOB_ENCOMENDA}
 
 STATUS_PEDIDO_AGUARDANDO_ENCOMENDA = "Aguardando encomenda"
 
+# "Comprovante enviado" e "Pagamento em análise" (ver
+# backend/pedido_notificacao_routes.py) são estados intermediários entre a
+# geração do Pix e a confirmação financeira: registram que o cliente indicou
+# ter pago e que o comprovante está sob conferência administrativa, mas
+# nunca, por si só, liberam estoque nem confirmam pagamento — isso continua
+# exclusivo de POST /api/pagamentos (backend/payment_routes.py), sem
+# alteração na lógica de conciliação já existente.
+STATUS_PEDIDO_COMPROVANTE_ENVIADO = "Comprovante enviado"
+STATUS_PEDIDO_PAGAMENTO_EM_ANALISE = "Pagamento em análise"
+
 STATUS_PEDIDO = {
     "Aguardando pagamento",
     "Pagamento divergente",
+    STATUS_PEDIDO_COMPROVANTE_ENVIADO,
+    STATUS_PEDIDO_PAGAMENTO_EM_ANALISE,
     "Pagamento confirmado",
     STATUS_PEDIDO_AGUARDANDO_ENCOMENDA,
     "Separando pedido",
@@ -166,8 +178,8 @@ def expirar_pedidos_pendentes(conn, agora: str | None = None):
     total_expirados = 0
     for venda in expirados:
         claim = conn.execute(
-            "UPDATE pedidos SET status='Cancelado' WHERE id=? AND status IN ('Aguardando pagamento', 'Pagamento divergente')",
-            (venda["id"],),
+            "UPDATE pedidos SET status='Cancelado', expirado_em=? WHERE id=? AND status IN ('Aguardando pagamento', 'Pagamento divergente')",
+            (agora, venda["id"]),
         )
         if claim.rowcount == 0:
             continue
@@ -544,7 +556,9 @@ def listar_pedidos(status: str = "", limite: int = Query(100, ge=1, le=500), ses
                 SELECT id, cliente, telefone, data_venda, subtotal, desconto, taxa, total_final,
                        forma_pagamento, vendedor, status, data_iso, dia_operacional,
                        origem, observacao_pedido, estoque_baixado, estoque_baixado_em,
-                       estoque_reservado, expira_em, pix_txid, pix_copia_cola, confirmado_automaticamente
+                       estoque_reservado, expira_em, pix_txid, pix_copia_cola, confirmado_automaticamente,
+                       visualizado_admin_em, visualizado_admin_por, comprovante_enviado_em,
+                       expirado_em, payment_provider, provider_payment_id
                 FROM pedidos
                 WHERE COALESCE(status,'')=?
                 ORDER BY id DESC
@@ -558,7 +572,9 @@ def listar_pedidos(status: str = "", limite: int = Query(100, ge=1, le=500), ses
                 SELECT id, cliente, telefone, data_venda, subtotal, desconto, taxa, total_final,
                        forma_pagamento, vendedor, status, data_iso, dia_operacional,
                        origem, observacao_pedido, estoque_baixado, estoque_baixado_em,
-                       estoque_reservado, expira_em, pix_txid, pix_copia_cola, confirmado_automaticamente
+                       estoque_reservado, expira_em, pix_txid, pix_copia_cola, confirmado_automaticamente,
+                       visualizado_admin_em, visualizado_admin_por, comprovante_enviado_em,
+                       expirado_em, payment_provider, provider_payment_id
                 FROM pedidos
                 ORDER BY id DESC
                 LIMIT ?
@@ -594,7 +610,9 @@ def obter_pedido(venda_id: int, sessao: dict = Depends(exigir_sessao_ou_chave_ap
             SELECT id, cliente, telefone, data_venda, subtotal, desconto, taxa, total_final,
                    forma_pagamento, vendedor, status, data_iso, dia_operacional,
                    origem, observacao_pedido, estoque_baixado, estoque_baixado_em,
-                   estoque_reservado, expira_em, pix_txid, pix_copia_cola, confirmado_automaticamente
+                   estoque_reservado, expira_em, pix_txid, pix_copia_cola, confirmado_automaticamente,
+                       visualizado_admin_em, visualizado_admin_por, comprovante_enviado_em,
+                       expirado_em, payment_provider, provider_payment_id
             FROM pedidos
             WHERE id=?
             """,

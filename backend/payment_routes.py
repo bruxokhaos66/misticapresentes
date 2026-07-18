@@ -19,7 +19,9 @@ from backend.idempotency import (
 from backend.money import centavos
 from backend.order_status_routes import (
     STATUS_PEDIDO_AGUARDANDO_ENCOMENDA,
+    STATUS_PEDIDO_COMPROVANTE_ENVIADO,
     STATUS_PEDIDO_CONCLUIDOS,
+    STATUS_PEDIDO_PAGAMENTO_EM_ANALISE,
     baixar_estoque_do_pedido,
     expirar_pedidos_pendentes,
     pedido_tem_item_sob_encomenda,
@@ -54,7 +56,12 @@ CONCILIACAO_TARDIO = "pagamento_tardio"
 # tinham comportamento definido e testado antes deste PR e permanecem
 # intactos — 'Aguardando encomenda' (pedido só/parcialmente sob encomenda já
 # confirmado) segue exatamente a mesma regra de 'Pagamento confirmado'.
-STATUS_PEDIDO_ELEGIVEIS_CONFIRMACAO = {"Aguardando pagamento", "Pagamento divergente"}
+STATUS_PEDIDO_ELEGIVEIS_CONFIRMACAO = {
+    "Aguardando pagamento",
+    "Pagamento divergente",
+    STATUS_PEDIDO_COMPROVANTE_ENVIADO,
+    STATUS_PEDIDO_PAGAMENTO_EM_ANALISE,
+}
 STATUS_PEDIDO_JA_CONFIRMADO = {"Pagamento confirmado", STATUS_PEDIDO_AGUARDANDO_ENCOMENDA}
 
 limitar_registrar_pagamento = limitar_requisicoes("registrar_pagamento", limite=20, janela_segundos=60)

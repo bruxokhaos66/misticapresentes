@@ -681,3 +681,51 @@ def _criar_tabelas_isis_content_studio():
     # `ativo`, que já existe): produto pode estar ativo no catálogo mas
     # oculto de divulgações automáticas por decisão comercial.
     _exec_tolerante("ALTER TABLE produtos ADD COLUMN isis_oculto INTEGER DEFAULT 0")
+
+    # Notificação administrativa de novos pedidos Pix + fluxo de comprovante
+    # (ver backend/pedido_notificacao_routes.py). Nunca reutiliza
+    # pedidos.status para "visualizado pelo admin" nem para "cliente clicou
+    # no botão do WhatsApp": são sinais operacionais/de auditoria, não
+    # financeiros — a confirmação de pagamento continua exclusivamente via
+    # POST /api/pagamentos (backend/payment_routes.py), sem alteração.
+    for col, typ in [
+        ("visualizado_admin_em", "TEXT"),
+        ("visualizado_admin_por", "TEXT"),
+        ("comprovante_enviado_em", "TEXT"),
+        # Marca a expiração automática (backend/order_status_routes.py::
+        # expirar_pedidos_pendentes) sem criar um status novo: o pedido
+        # continua indo para 'Cancelado' (comportamento já existente e
+        # testado, preservado sem alteração), só que agora distinguível de
+        # um cancelamento manual por este carimbo aditivo.
+        ("expirado_em", "TEXT"),
+        # Preparação para confirmação automática futura por provedor externo
+        # (ex.: Mercado Pago — não integrado nesta mudança). 'manual_pix' é o
+        # único provedor em uso hoje: confirmação sempre feita por um
+        # administrador via POST /api/pagamentos.
+        ("payment_provider", "TEXT NOT NULL DEFAULT 'manual_pix'"),
+        ("provider_payment_id", "TEXT"),
+    ]:
+        _exec_tolerante(f"ALTER TABLE pedidos ADD COLUMN {col} {typ}")
+    _exec_tolerante("CREATE INDEX IF NOT EXISTS idx_pedidos_visualizado_admin ON pedidos(visualizado_admin_em)")
+
+    # Idempotência de eventos de webhook de provedor de pagamento externo
+    # (estrutura preparatória — nenhum provedor integrado nesta mudança; ver
+    # backend/payment_webhook_routes.py). evento_id é o identificador do
+    # evento no provedor (nunca o pix_txid/chave Pix); o par
+    # (provedor, evento_id) é único para que um reenvio do mesmo webhook
+    # (comum em integrações assíncronas) nunca seja processado duas vezes.
+    query_db(
+        """
+        CREATE TABLE IF NOT EXISTS webhook_eventos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            provedor TEXT NOT NULL,
+            evento_id TEXT NOT NULL,
+            tipo TEXT,
+            payload_hash TEXT,
+            recebido_em TEXT NOT NULL,
+            processado_em TEXT,
+            UNIQUE(provedor, evento_id)
+        )
+        """,
+        commit=True,
+    )
