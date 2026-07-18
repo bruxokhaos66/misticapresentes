@@ -1,14 +1,18 @@
 from __future__ import annotations
 
-"""Interface de provedor de pagamento externo (preparação para uma
-integração futura, ex.: Mercado Pago — NÃO integrada nesta mudança).
+"""Interface de provedor de pagamento externo.
 
 Nenhuma lógica de geração de QR Code, payload EMV, CRC16, TXID ou chave Pix
 vive aqui nem é alterada por este módulo: a confirmação automática via
-provedor é um caminho adicional que, quando implementado, chamará as MESMAS
-funções de conciliação já existentes em backend/payment_routes.py
-(_classificar_conciliacao/_aplicar_resultado_confirmacao), nunca uma cópia
-paralela delas.
+provedor é um caminho adicional que sempre chama as MESMAS funções de
+conciliação já existentes em backend/payment_routes.py (registrar_pagamento,
+que por sua vez usa _classificar_conciliacao/_aplicar_resultado_confirmacao),
+nunca uma cópia paralela delas.
+
+O Mercado Pago (backend/mercadopago_provider.py::MercadoPagoProvider) é
+registrado em PAYMENT_PROVIDERS por backend/payment_webhook_routes.py (não
+aqui, para evitar import circular: MercadoPagoProvider depende de
+EventoPagamentoProvider, definido neste módulo).
 """
 
 from dataclasses import dataclass
@@ -49,7 +53,8 @@ class PaymentProvider(Protocol):
         ...
 
 
-# Registro de provedores habilitados. Vazio nesta mudança — nenhum provedor
-# real está integrado; o endpoint de webhook responde 501 para qualquer
-# provedor não registrado aqui.
+# Registro de provedores habilitados, preenchido em tempo de import por
+# backend/payment_webhook_routes.py. O endpoint de webhook responde 501 para
+# qualquer provedor não registrado aqui (ou registrado mas desabilitado por
+# feature flag -- ver backend/mercadopago_flags.py::mercado_pago_habilitado).
 PAYMENT_PROVIDERS: dict[str, PaymentProvider] = {}
