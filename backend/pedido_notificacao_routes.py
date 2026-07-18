@@ -83,7 +83,7 @@ def listar_pedidos_pix_pendentes(limite: int = Query(100, ge=1, le=500), sessao:
         rows = conn.execute(
             f"""
             SELECT id, cliente, telefone, data_venda, total_final, forma_pagamento, status,
-                   data_iso, expira_em, pix_txid, visualizado_admin_em, visualizado_admin_por,
+                   data_iso, expira_em, visualizado_admin_em, visualizado_admin_por,
                    comprovante_enviado_em
             FROM pedidos
             WHERE COALESCE(status,'') IN ({placeholders})
@@ -92,6 +92,10 @@ def listar_pedidos_pix_pendentes(limite: int = Query(100, ge=1, le=500), sessao:
             """,
             (*STATUS_PIX_PENDENTES, limite),
         ).fetchall()
+        # venda_para_pedido só junta itens/histórico; a listagem em si NUNCA
+        # seleciona pix_txid/chave Pix/tokens — o painel (resumo ou completo)
+        # não precisa desses dados para exibir ou operar os pedidos, e assim
+        # eles nunca trafegam para o navegador do administrador.
         pedidos = [venda_para_pedido(conn, row) for row in rows]
     total_nao_visualizados = sum(1 for pedido in pedidos if not pedido.get("visualizado_admin_em"))
     return {
