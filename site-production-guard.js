@@ -57,7 +57,16 @@
     pendingOrderId = order?.id ?? null;
   }
 
+  // O estado visual do botão (idle/busy/gerado) é controlado por
+  // window.misticaSetGerarPixVisualState (app.js, carregado antes deste
+  // script) para evitar duas fontes de verdade sobre o mesmo botão. Se por
+  // algum motivo essa função não estiver disponível, cai para o
+  // comportamento mínimo anterior (só desabilita durante o envio).
   function setCheckoutButtonBusy(busy) {
+    if (typeof window.misticaSetGerarPixVisualState === "function") {
+      window.misticaSetGerarPixVisualState(busy ? "busy" : "idle");
+      return;
+    }
     const button = qs("[data-generate-pix]");
     if (!button) return;
     button.disabled = Boolean(busy);
@@ -70,6 +79,14 @@
 
     if (checkoutRunning) {
       status("Seu pedido já está sendo criado. Aguarde a resposta do servidor.");
+      return;
+    }
+
+    // Já existe um Pix gerado (ou uma geração em curso) para este carrinho:
+    // só faz sentido gerar de novo depois que app.js destravar esse estado
+    // (reserva expirada/cancelada ou carrinho alterado).
+    if (typeof window.misticaGerarPixBloqueado === "function" && window.misticaGerarPixBloqueado()) {
+      status("Este pedido já tem um Pix gerado. Aguarde o pagamento ou a expiração da reserva para gerar outro.");
       return;
     }
 
@@ -118,19 +135,25 @@
     if (typeof pararAcompanhamentoPedido === "function") pararAcompanhamentoPedido();
     if (typeof clearQrCanvas === "function") clearQrCanvas();
     if (typeof pixPayloadInput !== "undefined" && pixPayloadInput) pixPayloadInput.value = "";
+    // Reabilita "Copiar Pix" e limpa feedback de cópia de uma geração
+    // anterior (ex.: reserva expirada havia desabilitado o botão) — mesma
+    // função usada pelo fluxo não-produção (app.js), sem duplicar lógica.
+    if (typeof window.misticaResetCopyPixButtonState === "function") window.misticaResetCopyPixButtonState();
     status("Enviando pedido e gerando o Pix com segurança...");
 
+    let sucesso = false;
     try {
       const pedido = await window.misticaCriarPedido(items);
       if (!pedido?.id || !pedido?.pixPayload) throw new Error("O servidor não retornou um Pix válido.");
 
       if (typeof pixPayloadInput !== "undefined" && pixPayloadInput) pixPayloadInput.value = pedido.pixPayload;
       if (pedido.pixInfo) {
-        if (typeof pixKeyInput !== "undefined" && pixKeyInput) pixKeyInput.value = pedido.pixInfo.chave_mascarada || "";
+        if (typeof pixKeyInput !== "undefined" && pixKeyInput) pixKeyInput.dataset.valorMascarado = pedido.pixInfo.chave_mascarada || "";
         if (typeof merchantNameInput !== "undefined" && merchantNameInput) merchantNameInput.value = pedido.pixInfo.recebedor || "";
         if (typeof storeNameInput !== "undefined" && storeNameInput) storeNameInput.value = pedido.pixInfo.nome_loja || "";
         if (typeof merchantCityInput !== "undefined" && merchantCityInput) merchantCityInput.value = pedido.pixInfo.cidade || "";
       }
+      if (typeof window.misticaSetPixKeyRevealed === "function") window.misticaSetPixKeyRevealed(false);
       if (window.QRCode && typeof pixCanvas !== "undefined" && pixCanvas) {
         try {
           await window.QRCode.toCanvas(pixCanvas, pedido.pixPayload, {
@@ -142,13 +165,23 @@
       }
 
       persistPendingOrder(pedido);
+      sucesso = true;
+      if (typeof window.misticaSetGerarPixVisualState === "function") window.misticaSetGerarPixVisualState("gerado");
+      if (typeof window.misticaSetPedidoStatusLabel === "function") window.misticaSetPedidoStatusLabel("Aguardando pagamento");
+      if (typeof window.misticaSetCheckoutStep === "function") window.misticaSetCheckoutStep("pagamento");
+      // Revela o botão "Já realizei o pagamento" reaproveitando a mesma
+      // função/estrutura do fluxo não-produção (app.js) — sem duplicar a
+      // lógica de notificação/WhatsApp aqui. Precisa rodar ANTES de
+      // iniciarAcompanhamentoPedido: se a reserva já chegar expirada, é a
+      // desabilitação do relógio que deve prevalecer sobre este reveal.
+      if (typeof mostrarBotaoComprovanteWhatsapp === "function") mostrarBotaoComprovanteWhatsapp(pedido, total);
       if (typeof iniciarAcompanhamentoPedido === "function") iniciarAcompanhamentoPedido(pedido);
       status(`Pedido #${pedido.id} criado — aguardando pagamento. Seu carrinho foi preservado até a confirmação.`, true);
     } catch (error) {
       status(error?.message || "Não foi possível gerar o Pix agora. Seu carrinho foi preservado.");
     } finally {
       checkoutRunning = false;
-      setCheckoutButtonBusy(false);
+      if (!sucesso) setCheckoutButtonBusy(false);
     }
   }
 
