@@ -45,6 +45,7 @@ from backend.panel_sessions import exigir_sessao_ou_chave_api, validar_sessao
 from backend.payment_routes import router as payment_router
 from backend.pedido_notificacao_routes import router as pedido_notificacao_router
 from backend.payment_webhook_routes import router as payment_webhook_router
+from backend.mercadopago_routes import router as mercadopago_router
 from backend.api_security import APP_ENV, ORIGENS_PERMITIDAS, estorno_rest_habilitado, validar_site_api_key as validar_chave_api
 from backend.product_routes import router as product_router, validar_site_api_key
 from backend.review_routes import router as review_router
@@ -284,6 +285,7 @@ app.include_router(order_status_router)
 app.include_router(payment_router)
 app.include_router(pedido_notificacao_router)
 app.include_router(payment_webhook_router)
+app.include_router(mercadopago_router)
 app.include_router(upload_router)
 app.include_router(system_status_router)
 app.include_router(backup_router)
