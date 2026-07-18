@@ -145,6 +145,40 @@ def test_listar_pendentes_exige_autenticacao():
     assert resposta.status_code == 401
 
 
+def test_pedido_aparece_no_painel_administrativo_imediatamente_apos_criado_sem_clicar_em_ja_paguei():
+    """O painel administrativo (resumo em admin.html e painel completo em
+    admin-pedidos-pix.html, ambos consumindo este mesmo endpoint) precisa
+    saber de um pedido novo assim que ele é criado pelo checkout -- nunca
+    apenas quando o cliente clica em "Já paguei"/abre o WhatsApp."""
+    pedido = criar_pedido_pix()
+
+    listagem = client.get("/api/pedidos/pix/pendentes", headers=HEADERS)
+    assert listagem.status_code == 200
+    corpo = listagem.json()
+    encontrado = next((p for p in corpo["pedidos"] if p["id"] == pedido["id"]), None)
+    assert encontrado is not None, "pedido recém-criado deveria aparecer no painel sem nenhuma ação do cliente"
+    assert encontrado["status"] == "Aguardando pagamento"
+    assert not encontrado["comprovante_enviado_em"]
+    assert not encontrado["visualizado_admin_em"]
+
+
+def test_listagem_pix_pendentes_nao_retorna_dados_sensiveis():
+    """A listagem usada pelo resumo do painel principal e pelo painel
+    completo nunca deve trafegar TXID, chaves ou tokens administrativos."""
+    pedido = criar_pedido_pix()
+
+    listagem = client.get("/api/pedidos/pix/pendentes", headers=HEADERS)
+    assert listagem.status_code == 200
+    corpo_bruto = listagem.text
+    assert "pix_txid" not in corpo_bruto
+    assert pedido["pix_txid"] not in corpo_bruto
+    assert TEST_API_KEY not in corpo_bruto
+
+    encontrado = next(p for p in listagem.json()["pedidos"] if p["id"] == pedido["id"])
+    assert "pix_txid" not in encontrado
+    assert "chave_pix" not in encontrado
+
+
 # ---------------------------------------------------------------------------
 # 3/4. Clique no WhatsApp não marca como pago; dados do pedido batem
 # ---------------------------------------------------------------------------
