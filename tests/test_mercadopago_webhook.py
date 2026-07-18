@@ -59,7 +59,7 @@ def criar_pedido_publico(preco: float, quantidade: int = 1) -> dict:
     return resposta.json()
 
 
-def resultado_mp(pedido, *, status="approved", payment_id=None, valor=None):
+def resultado_mp(pedido, *, status="approved", payment_id=None, valor=None, currency_id="BRL"):
     from backend.mercadopago_client import ResultadoPagamentoMP
 
     if payment_id is None:
@@ -73,7 +73,7 @@ def resultado_mp(pedido, *, status="approved", payment_id=None, valor=None):
         payment_method_id="visa",
         payment_type_id="credit_card",
         external_reference=str(pedido["id"]),
-        currency_id="BRL",
+        currency_id=currency_id,
         collector_id="1",
     )
 
@@ -84,14 +84,19 @@ def assinar(data_id: str, request_id: str, ts: str, secret: str = WEBHOOK_SECRET
     return f"ts={ts},v1={v1}"
 
 
-def enviar_webhook(payment_id: str, *, request_id=None, ts=None, secret=WEBHOOK_SECRET, resultado=None):
+def enviar_webhook(payment_id: str, *, request_id=None, ts=None, secret=WEBHOOK_SECRET, resultado=None, usar_query_string=True):
     body = json.dumps({"type": "payment", "data": {"id": payment_id}}).encode()
     ts = ts or str(int(time.time()))
     request_id = request_id or f"req-{uuid.uuid4().hex[:8]}"
     sig = assinar(payment_id, request_id, ts, secret)
     headers = {"x-signature": sig, "x-request-id": request_id, "Content-Type": "application/json", "X-Forwarded-For": ip_unico()}
+    # O Mercado Pago sempre chama a URL de notificação com data.id e type na
+    # query string (não só no corpo) -- replica isso para exercitar o mesmo
+    # caminho usado em produção (backend/mercadopago_provider.py lê
+    # primeiro da query string, com fallback pro corpo).
+    url = f"/api/webhooks/pagamentos/mercadopago?data.id={payment_id}&type=payment" if usar_query_string else "/api/webhooks/pagamentos/mercadopago"
     with patch("backend.mercadopago_provider.consultar_pagamento", return_value=resultado):
-        return client.post("/api/webhooks/pagamentos/mercadopago", content=body, headers=headers)
+        return client.post(url, content=body, headers=headers)
 
 
 def test_webhook_aprovado_confirma_pedido():
@@ -291,6 +296,16 @@ def test_webhook_evento_de_tipo_irrelevante_e_ignorado():
     assert resposta.json().get("ignorado") is True
 
 
+def test_webhook_moeda_diferente_de_brl_e_ignorado():
+    pedido = criar_pedido_publico(50.0)
+    resultado = resultado_mp(pedido, status="approved", currency_id="USD")
+    resposta = enviar_webhook(resultado.id, resultado=resultado)
+    assert resposta.status_code == 200
+    assert resposta.json().get("ignorado") is True
+    detalhe = client.get(f"/api/pedidos/{pedido['id']}", headers=HEADERS).json()
+    assert detalhe["status"] != "Pagamento confirmado"
+
+
 def test_resposta_do_webhook_nunca_contem_segredo_ou_token():
     pedido = criar_pedido_publico(15.0)
     resultado = resultado_mp(pedido, status="approved")
@@ -298,3 +313,63 @@ def test_resposta_do_webhook_nunca_contem_segredo_ou_token():
     corpo = resposta.text
     assert WEBHOOK_SECRET not in corpo
     assert os.environ["MERCADO_PAGO_ACCESS_TOKEN"] not in corpo
+
+
+def test_assinatura_usa_data_id_da_query_string_como_documentado():
+    """Algoritmo oficial do Mercado Pago: o manifesto HMAC usa o data.id da
+    query string da URL de notificação, não do corpo. Uma assinatura
+    calculada com o data.id do CORPO (divergente do da query) deve ser
+    rejeitada -- prova que o código está de fato lendo da query string."""
+    pedido = criar_pedido_publico(22.0)
+    resultado = resultado_mp(pedido, status="approved")
+    ts = str(int(time.time()))
+    request_id = f"req-{uuid.uuid4().hex[:8]}"
+    # Assina com um data.id diferente do que vai na query string.
+    sig_para_id_errado = assinar("id-diferente-do-corpo", request_id, ts)
+    body = json.dumps({"type": "payment", "data": {"id": resultado.id}}).encode()
+    with patch("backend.mercadopago_provider.consultar_pagamento", return_value=resultado):
+        resposta = client.post(
+            f"/api/webhooks/pagamentos/mercadopago?data.id={resultado.id}&type=payment",
+            content=body,
+            headers={"x-signature": sig_para_id_errado, "x-request-id": request_id, "Content-Type": "application/json", "X-Forwarded-For": ip_unico()},
+        )
+    assert resposta.status_code == 401
+
+
+def test_assinatura_valida_apenas_com_query_string_correta():
+    pedido = criar_pedido_publico(22.0)
+    resultado = resultado_mp(pedido, status="approved")
+    resposta = enviar_webhook(resultado.id, resultado=resultado, usar_query_string=True)
+    assert resposta.status_code == 200
+
+
+def test_assinatura_fallback_para_corpo_sem_query_string():
+    """Notificações de teste manual ("Simular") do painel do Mercado Pago
+    não usam a URL completa cadastrada (sem query string) -- o fallback para
+    o data.id do corpo continua aceitando essas notificações legítimas."""
+    pedido = criar_pedido_publico(18.0)
+    resultado = resultado_mp(pedido, status="approved")
+    resposta = enviar_webhook(resultado.id, resultado=resultado, usar_query_string=False)
+    assert resposta.status_code == 200
+
+
+def test_assinatura_normaliza_data_id_alfanumerico_para_minusculas():
+    """Documentação oficial: se o data.id for alfanumérico, deve ser
+    convertido para minúsculas antes de montar o manifesto assinado."""
+    pedido = criar_pedido_publico(18.0)
+    data_id_maiusculo = "ABC123XYZ"
+    resultado = resultado_mp(pedido, status="approved", payment_id=data_id_maiusculo)
+    ts = str(int(time.time()))
+    request_id = f"req-{uuid.uuid4().hex[:8]}"
+    # Assina com o id já em minúsculas (como o Mercado Pago faz antes de
+    # calcular a assinatura) -- a validação deve normalizar o id recebido
+    # (maiúsculo) da mesma forma e aceitar.
+    sig = assinar(data_id_maiusculo.lower(), request_id, ts)
+    body = json.dumps({"type": "payment", "data": {"id": data_id_maiusculo}}).encode()
+    with patch("backend.mercadopago_provider.consultar_pagamento", return_value=resultado):
+        resposta = client.post(
+            f"/api/webhooks/pagamentos/mercadopago?data.id={data_id_maiusculo}&type=payment",
+            content=body,
+            headers={"x-signature": sig, "x-request-id": request_id, "Content-Type": "application/json", "X-Forwarded-For": ip_unico()},
+        )
+    assert resposta.status_code == 200

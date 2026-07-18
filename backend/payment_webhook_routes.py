@@ -114,7 +114,7 @@ async def receber_webhook_pagamento(provedor: str, request: Request):
         logger.info("webhook_pagamento_provedor_nao_configurado", extra={"provedor": provedor_normalizado})
         raise HTTPException(status_code=501, detail="Provedor de pagamento não configurado.")
 
-    if not implementacao.validar_assinatura(payload_bruto, dict(request.headers)):
+    if not implementacao.validar_assinatura(payload_bruto, dict(request.headers), dict(request.query_params)):
         logger.warning("webhook_pagamento_assinatura_invalida", extra={"provedor": provedor_normalizado})
         raise HTTPException(status_code=401, detail="Assinatura do webhook inválida.")
 

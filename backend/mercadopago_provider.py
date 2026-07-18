@@ -32,7 +32,23 @@ _TIPOS_RELEVANTES = {"payment"}
 class MercadoPagoProvider:
     nome = "mercadopago"
 
-    def validar_assinatura(self, payload_bruto: bytes, headers: dict) -> bool:
+    def validar_assinatura(self, payload_bruto: bytes, headers: dict, query_params: Optional[dict] = None) -> bool:
+        """Segue exatamente o algoritmo documentado pelo Mercado Pago
+        ("Como verificar a origem de uma notificação"):
+
+            manifest = f"id:{dataID};request-id:{xRequestId};ts:{ts};"
+            v1_esperado = HMAC-SHA256(manifest, chave_secreta)
+
+        `dataID` vem do parâmetro de query `data.id` da própria URL da
+        notificação (nunca do corpo) -- é o valor usado pelo Mercado Pago
+        para calcular a assinatura enviada. Se vier alfanumérico, a
+        documentação exige convertê-lo para minúsculas antes de montar o
+        manifesto. Faz fallback para o `data.id` do corpo apenas quando a
+        notificação não trouxer query string (ex.: teste manual "Simular"
+        no painel do Mercado Pago, que não usa a URL completa cadastrada) --
+        esse fallback não abre brecha de segurança: sem o segredo correto,
+        nenhum atacante consegue produzir um v1 válido para qualquer dataID
+        escolhido por ele."""
         if not mercado_pago_webhook_configurado():
             # Sem segredo configurado (integração desligada ou webhook ainda
             # não cadastrado no painel do Mercado Pago), nunca aceitamos uma
@@ -56,13 +72,20 @@ class MercadoPagoProvider:
         if not ts or not v1:
             return False
 
-        try:
-            corpo = json.loads(payload_bruto or b"{}")
-        except ValueError:
-            return False
-        data_id = str((corpo.get("data") or {}).get("id") or "").strip()
+        query_params = query_params or {}
+        data_id = str(query_params.get("data.id") or query_params.get("data_id") or "").strip()
+        if not data_id:
+            try:
+                corpo = json.loads(payload_bruto or b"{}")
+            except ValueError:
+                return False
+            data_id = str((corpo.get("data") or {}).get("id") or "").strip()
         if not data_id:
             return False
+        # "Se o valor for alfanumérico, deve ser convertido para minúsculas"
+        # (documentação oficial) -- aplicado sempre, sem custo em ids
+        # puramente numéricos.
+        data_id = data_id.lower()
 
         manifesto = f"id:{data_id};request-id:{request_id};ts:{ts};"
         esperado = hmac.new(
@@ -94,6 +117,18 @@ class MercadoPagoProvider:
             logger.warning(
                 "mercadopago_webhook_sem_referencia_externa",
                 extra={"evento": "mp_webhook_external_reference_invalida"},
+            )
+            return None
+
+        # A loja só opera em reais -- um pagamento devolvido em outra moeda
+        # (conta mal configurada, resposta inesperada do provedor) nunca é
+        # conciliado silenciosamente: fica registrado como divergência
+        # administrativa, mas o evento não avança sozinho, para o valor em
+        # outra moeda nunca ser comparado como se fosse BRL.
+        if resultado.currency_id and resultado.currency_id.upper() != "BRL":
+            logger.warning(
+                "mercadopago_webhook_moeda_inesperada",
+                extra={"evento": "mp_webhook_moeda_invalida", "moeda": resultado.currency_id},
             )
             return None
 

@@ -40,10 +40,16 @@ class PaymentProvider(Protocol):
 
     nome: str
 
-    def validar_assinatura(self, payload_bruto: bytes, headers: dict) -> bool:
+    def validar_assinatura(self, payload_bruto: bytes, headers: dict, query_params: Optional[dict] = None) -> bool:
         """Valida a assinatura/segredo do webhook antes de qualquer
         processamento. Deve usar comparação de tempo constante
-        (hmac.compare_digest / secrets.compare_digest)."""
+        (hmac.compare_digest / secrets.compare_digest).
+
+        `query_params` (parâmetros da URL da notificação, ex.: `?data.id=...`)
+        é opcional na assinatura desta interface para não quebrar um provider
+        futuro mais simples, mas o Mercado Pago exige especificamente o
+        `data.id` da query string (não do corpo) para montar o manifesto
+        assinado -- ver MercadoPagoProvider.validar_assinatura."""
         ...
 
     def extrair_evento(self, payload: dict) -> Optional[EventoPagamentoProvider]:
