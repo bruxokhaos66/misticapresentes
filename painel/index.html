@@ -2,33 +2,12 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; script-src 'self' https://sdk.mercadopago.com https://www.googletagmanager.com https://connect.facebook.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://api.misticaesotericos.com.br https://api.mercadopago.com https://sdk.mercadopago.com https://www.google-analytics.com https://analytics.google.com https://www.googletagmanager.com https://www.facebook.com https://connect.facebook.net; frame-src https://www.youtube.com https://www.mercadopago.com; worker-src 'self' blob:; manifest-src 'self'; media-src 'self' blob: https://api.misticaesotericos.com.br; upgrade-insecure-requests" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; script-src 'self' https://sdk.mercadopago.com https://www.googletagmanager.com https://connect.facebook.net; style-src 'self' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://api.misticaesotericos.com.br https://*.mercadopago.com https://*.mercadopago.com.br https://www.google-analytics.com https://analytics.google.com https://www.googletagmanager.com https://www.facebook.com https://connect.facebook.net; frame-src https://www.youtube.com https://*.mercadopago.com https://*.mercadopago.com.br; worker-src 'self' blob:; manifest-src 'self'; media-src 'self' blob: https://api.misticaesotericos.com.br; upgrade-insecure-requests" />
   <meta name="referrer" content="strict-origin-when-cross-origin" />
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <title>Mistica Painel</title>
-  <style>
-    body {
-      margin: 0;
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-      color: #fff8ea;
-      font-family: Arial, Helvetica, sans-serif;
-      background: linear-gradient(180deg, #100b17, #0d0a12);
-    }
-    .box {
-      width: min(440px, calc(100% - 28px));
-      padding: 22px;
-      border-radius: 18px;
-      border: 1px solid rgba(223, 189, 114, .25);
-      background: #17121f;
-      box-shadow: 0 14px 34px rgba(0, 0, 0, .28);
-      text-align: center;
-    }
-    h1 { margin: 0 0 8px; color: #dfbd72; font-size: 24px; }
-    p { margin: 0; color: #cfc2d6; line-height: 1.45; }
-  </style>
+  <link rel="stylesheet" href="redirect.css">
   <script defer src="redirect.js"></script>
 </head>
 <body>

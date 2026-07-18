@@ -65,7 +65,7 @@
     // Imagem com fallback visual: se a URL externa falhar, escondemos o <img> e
     // revelamos o ícone padrão da marca (sem depender de hosts de terceiros).
     const media = imagem
-      ? `<div class="achados-card-media"><img src="${esc(imagem)}" alt="${nome}" loading="lazy" data-fallback-hide><span class="achados-card-fallback" style="display:none" aria-hidden="true">✦</span></div>`
+      ? `<div class="achados-card-media"><img src="${esc(imagem)}" alt="${nome}" loading="lazy" data-fallback-hide><span class="achados-card-fallback is-imagem-pendente" aria-hidden="true">✦</span></div>`
       : `<div class="achados-card-media"><span class="achados-card-fallback" aria-hidden="true">✦</span></div>`;
     return `
       <a class="achados-card" href="${href}">

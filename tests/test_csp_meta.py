@@ -22,7 +22,7 @@ PAGINAS_PUBLICAS = [
     "aromaterapia/index.html", "banhos-de-ervas/index.html", "cristais/index.html",
     "escola-admin.html", "escola-curso.html", "escola-incensos.html",
     "escola-medicinas-floresta.html", "escola.html", "incensos/index.html", "index.html",
-    "isis-conteudo-admin.html", "kit.html", "painel/index.html",
+    "isis-conteudo-admin.html", "kit.html", "painel/index.html", "painel-operacional.html",
     "politica-de-privacidade.html", "politica-de-trocas.html", "produto.html",
     "termos-de-uso.html", "teste-commerce.html", "velas/index.html",
 ]
@@ -80,8 +80,7 @@ def test_csp_base_uri_self(pagina):
 
 @pytest.mark.parametrize("pagina", PAGINAS_PUBLICAS)
 def test_csp_script_src_sem_unsafe_inline(pagina):
-    """script-src não pode conter 'unsafe-inline' -- só style-src tem essa
-    exceção documentada (CSS inline não executa JavaScript)."""
+    """script-src nunca pode conter 'unsafe-inline'."""
     csp = _csp_de(pagina)
     m = re.search(r"script-src ([^;]+);", csp)
     assert m, f"{pagina}: script-src ausente"
@@ -89,21 +88,49 @@ def test_csp_script_src_sem_unsafe_inline(pagina):
 
 
 @pytest.mark.parametrize("pagina", PAGINAS_PUBLICAS)
-def test_csp_autoriza_apenas_origens_conhecidas_do_mercado_pago(pagina):
-    """script-src/connect-src/frame-src só podem referenciar os hosts
-    exatos do Mercado Pago realmente usados pelo SDK (nunca um domínio
-    genérico ou curinga *.mercadopago.com)."""
+def test_csp_style_src_sem_unsafe_inline(pagina):
+    """style-src também não depende de 'unsafe-inline': todo style="" inline
+    (fixo ou dinâmico) foi removido em favor de classes CSS dedicadas ou de
+    element.style.* via CSSOM (não restrito por CSP) -- ver docs/admin/CSP.md."""
     csp = _csp_de(pagina)
-    for host in re.findall(r"https://([a-zA-Z0-9.-]*mercadopago[a-zA-Z0-9.-]*)", csp):
-        assert host in {"sdk.mercadopago.com", "api.mercadopago.com", "www.mercadopago.com"}, (
-            f"{pagina}: host inesperado do Mercado Pago na CSP: {host}"
-        )
+    m = re.search(r"style-src ([^;]+);", csp)
+    assert m, f"{pagina}: style-src ausente"
+    assert "'unsafe-inline'" not in m.group(1)
+
+
+@pytest.mark.parametrize("pagina", PAGINAS_PUBLICAS)
+def test_csp_autoriza_apenas_origens_conhecidas_do_mercado_pago(pagina):
+    """script-src/connect-src/frame-src só podem referenciar domínios do
+    próprio Mercado Pago -- nunca um host de terceiros.
+
+    script-src fica com o host exato do loader oficial (sdk.mercadopago.com):
+    é o único ponto que executa JavaScript, então o mais estrito possível.
+    connect-src/frame-src usam curinga de subdomínio (`*.mercadopago.com` e
+    `*.mercadopago.com.br`, TLD do Mercado Pago Brasil) -- necessário porque
+    o Secure Fields (iframes de número/validade/CVV do CardForm) e as
+    chamadas de tokenização/parcelas do SDK não têm um único subdomínio
+    documentado nem estável entre países/ambientes (ver docs/admin/CSP.md,
+    seção sobre o bug do CardForm sem foco/parcelas). Ainda é um domínio
+    restrito ao próprio provedor de pagamento, não um curinga global."""
+    csp = _csp_de(pagina)
+    script_src = re.search(r"script-src ([^;]+);", csp).group(1)
+    for host in re.findall(r"https://([a-zA-Z0-9.-]*mercadopago[a-zA-Z0-9.-]*)", script_src):
+        assert host == "sdk.mercadopago.com", f"{pagina}: script-src com host inesperado do Mercado Pago: {host}"
+    for diretiva in ("connect-src", "frame-src"):
+        m = re.search(rf"{diretiva} ([^;]+);", csp)
+        if not m:
+            continue
+        for host in re.findall(r"https://([a-zA-Z0-9.*-]*mercadopago[a-zA-Z0-9.*-]*)", m.group(1)):
+            assert host in {"*.mercadopago.com", "*.mercadopago.com.br"}, (
+                f"{pagina}: {diretiva} com host inesperado do Mercado Pago: {host}"
+            )
 
 
 def test_index_permite_sdk_mercadopago_para_tokenizacao():
     csp = _csp_de("index.html")
     assert "https://sdk.mercadopago.com" in csp  # script-src: carrega o SDK
-    assert "https://api.mercadopago.com" in csp  # connect-src: tokenização/parcelas/emissor
+    connect_src = re.search(r"connect-src ([^;]+);", csp).group(1)
+    assert "https://*.mercadopago.com" in connect_src  # tokenização/parcelas/emissor
 
 
 def test_frontend_nunca_referencia_endpoint_privado_de_criacao_de_pagamento_mercadopago():

@@ -1,0 +1,20 @@
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  color: #fff8ea;
+  font-family: Arial, Helvetica, sans-serif;
+  background: linear-gradient(180deg, #100b17, #0d0a12);
+}
+.box {
+  width: min(440px, calc(100% - 28px));
+  padding: 22px;
+  border-radius: 18px;
+  border: 1px solid rgba(223, 189, 114, .25);
+  background: #17121f;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .28);
+  text-align: center;
+}
+h1 { margin: 0 0 8px; color: #dfbd72; font-size: 24px; }
+p { margin: 0; color: #cfc2d6; line-height: 1.45; }
