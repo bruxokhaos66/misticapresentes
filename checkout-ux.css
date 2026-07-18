@@ -1,0 +1,222 @@
+/* Melhorias de UX do checkout e do pagamento Pix.
+   Arquivo isolado para não conflitar com v2.css / v2-commerce.css: só
+   estilo (nenhuma regra de negócio), reduz risco de regressão visual em
+   outras seções do site. */
+
+/* ---------- Indicador de etapas ---------- */
+.checkout-steps {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0 0 22px;
+  padding: 0;
+  list-style: none;
+}
+.checkout-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid rgba(242, 201, 109, .2);
+  border-radius: 999px;
+  color: var(--muted, #d7c8ad);
+  font-size: .78rem;
+  font-weight: 800;
+  letter-spacing: .01em;
+  background: rgba(0, 0, 0, .14);
+  white-space: nowrap;
+}
+.checkout-step-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  font-size: .68rem;
+}
+.checkout-step[aria-current="step"] {
+  color: #1b1204;
+  background: linear-gradient(135deg, #fff0b6, #e3b64f 62%, #fff0bd);
+  border-color: rgba(242, 201, 109, .68);
+}
+.checkout-step[data-done="true"]:not([aria-current="step"]) {
+  color: #dff1a4;
+  border-color: rgba(189, 209, 122, .38);
+}
+.checkout-step[data-done="true"]:not([aria-current="step"]) .checkout-step-index::before { content: "✓"; }
+.checkout-step-sep {
+  color: rgba(242, 201, 109, .3);
+  font-size: .8rem;
+}
+@media (max-width: 680px) {
+  .checkout-steps { justify-content: flex-start; gap: 4px; overflow-x: auto; padding-bottom: 2px; }
+  .checkout-step { padding: 7px 10px; font-size: .72rem; }
+}
+
+/* ---------- Total do pedido ---------- */
+.total-box-label { display: block; color: var(--muted, #d7c8ad); font-size: .84rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+.total-box strong.total-value { font-size: 1.95rem; line-height: 1.1; }
+
+/* ---------- Itens do carrinho ---------- */
+.cart-item-detail { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cart-item-name { color: var(--cream, #fff6dd); font-weight: 850; overflow-wrap: anywhere; }
+.cart-item-line { display: flex; flex-wrap: wrap; gap: 4px 10px; color: var(--muted, #d7c8ad); font-size: .88rem; }
+.cart-item-subtotal { color: var(--gold-2, #ffe7a3); font-weight: 800; }
+
+/* ---------- Botão Gerar Pix / estados ---------- */
+[data-generate-pix][data-state="gerado"] {
+  background: rgba(189, 209, 122, .12);
+  color: #dff1a4;
+  border-color: rgba(189, 209, 122, .35);
+  cursor: default;
+  box-shadow: none;
+}
+[data-generate-pix][data-state="gerado"]:hover { transform: none; }
+[data-generate-pix][aria-busy="true"] { position: relative; color: transparent; }
+[data-generate-pix][aria-busy="true"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 2px solid rgba(27, 18, 4, .35);
+  border-top-color: #1b1204;
+  animation: checkout-spin .7s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-generate-pix][aria-busy="true"]::after { animation: none; border-top-color: rgba(27, 18, 4, .35); }
+}
+@keyframes checkout-spin { to { transform: rotate(360deg); } }
+
+/* ---------- Botão "Já paguei" ---------- */
+.btn-whatsapp-comprovante[data-state="enviado"] {
+  background: rgba(189, 209, 122, .16);
+  color: #dff1a4;
+  border-color: rgba(189, 209, 122, .4);
+  cursor: default;
+}
+.pix-comprovante-feedback {
+  margin: 10px 0 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(189, 209, 122, .4);
+  background: rgba(189, 209, 122, .1);
+  color: #dff1a4;
+  font-weight: 750;
+  font-size: .92rem;
+  line-height: 1.5;
+}
+
+/* ---------- Feedback de cópia do Pix ---------- */
+.pix-copy-feedback {
+  margin: 10px 0 0;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(242, 201, 109, .32);
+  background: rgba(242, 201, 109, .1);
+  color: #ffe7a3;
+  font-size: .88rem;
+  font-weight: 750;
+  line-height: 1.5;
+}
+.pix-copy-feedback::before { content: "✓ "; }
+.pix-copy-feedback[data-tone="warn"] {
+  border-color: rgba(255, 176, 176, .4);
+  background: rgba(255, 100, 100, .08);
+  color: #ffcaca;
+}
+.pix-copy-feedback[data-tone="warn"]::before { content: "! "; }
+
+/* ---------- Reserva de estoque ---------- */
+.pix-reserva-status {
+  display: inline-flex;
+  align-self: center;
+  align-items: center;
+  gap: 8px;
+  margin: -2px 0 0;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(242, 201, 109, .28);
+  background: rgba(242, 201, 109, .08);
+  color: var(--muted, #d7c8ad);
+  font-size: .84rem;
+  font-weight: 800;
+  text-align: center;
+}
+.pix-reserva-status[data-urgent="true"] {
+  border-color: rgba(255, 176, 176, .5);
+  background: rgba(255, 100, 100, .1);
+  color: #ffcaca;
+}
+.pix-reserva-status[data-expired="true"] {
+  border-color: rgba(255, 130, 130, .6);
+  background: rgba(255, 90, 90, .16);
+  color: #ffdada;
+  font-weight: 850;
+}
+
+/* ---------- Status do pedido ---------- */
+.pix-pedido-status {
+  align-self: center;
+  margin: -4px 0 0;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(242, 201, 109, .22);
+  background: rgba(0, 0, 0, .18);
+  color: var(--muted, #d7c8ad);
+  font-size: .84rem;
+  font-weight: 800;
+  text-align: center;
+}
+.pix-pedido-status[data-tone="confirmado"] { border-color: rgba(189, 209, 122, .5); background: rgba(189, 209, 122, .14); color: #dff1a4; }
+.pix-pedido-status[data-tone="informado"] { border-color: rgba(242, 201, 109, .4); background: rgba(242, 201, 109, .12); color: #ffe7a3; }
+.pix-pedido-status[data-tone="expirado"], .pix-pedido-status[data-tone="cancelado"] { border-color: rgba(255, 130, 130, .5); background: rgba(255, 90, 90, .12); color: #ffdada; }
+
+/* ---------- Aviso de segurança ---------- */
+.pix-security-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(189, 209, 122, .26);
+  background: rgba(189, 209, 122, .06);
+  color: var(--muted, #d7c8ad);
+  font-size: .84rem;
+  line-height: 1.5;
+}
+.pix-security-note-icon { flex: none; line-height: 1; font-size: 1rem; }
+
+/* ---------- Dados do recebedor ---------- */
+.pix-key-row { display: flex; align-items: flex-end; gap: 8px; }
+.pix-key-row label { flex: 1 1 auto; min-width: 0; }
+.pix-key-toggle {
+  flex: none;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid rgba(242, 201, 109, .3);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .04);
+  color: var(--gold-2, #ffe7a3);
+  font-weight: 800;
+  font-size: .82rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pix-key-toggle:hover { background: rgba(255, 255, 255, .08); }
+
+/* ---------- QR code responsivo ---------- */
+#pixQr { max-width: 100%; height: auto; }
+
+@media (max-width: 390px) {
+  .total-box strong.total-value { font-size: 1.6rem; }
+  .pix-key-row { flex-wrap: wrap; }
+  .pix-key-toggle { width: 100%; }
+}
