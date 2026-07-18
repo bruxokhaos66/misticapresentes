@@ -46,6 +46,10 @@ SENHA_TESTE = "senha-forte-123"
 
 PAINEL_HTML = (ROOT / "api" / "painel.html").read_text(encoding="utf-8")
 PAINEL_OPERACIONAL_HTML = (ROOT / "painel-operacional.html").read_text(encoding="utf-8")
+# A lógica do painel operacional foi extraída para um arquivo externo (CSP do
+# site sem 'unsafe-inline' em script-src); os testes abaixo que inspecionam
+# esse comportamento passaram a olhar para o JS, não mais para o HTML.
+PAINEL_OPERACIONAL_JS = (ROOT / "painel-operacional.js").read_text(encoding="utf-8")
 
 
 def test_api_painel_nao_grava_token_em_localstorage():
@@ -72,11 +76,12 @@ def test_api_painel_usa_cookie_sem_header_de_token_construido_do_storage():
 
 def test_painel_operacional_nao_grava_sessao_completa_em_sessionstorage():
     assert 'sessionStorage.setItem("misticaPainelSessao"' not in PAINEL_OPERACIONAL_HTML
+    assert 'sessionStorage.setItem("misticaPainelSessao"' not in PAINEL_OPERACIONAL_JS
 
 
 def test_painel_operacional_continua_usando_endpoint_de_sessao_autoritativo():
-    assert '/api/auth/me' in PAINEL_OPERACIONAL_HTML
-    assert 'credentials: "include"' in PAINEL_OPERACIONAL_HTML
+    assert '/api/auth/me' in PAINEL_OPERACIONAL_JS
+    assert 'credentials: "include"' in PAINEL_OPERACIONAL_JS
 
 
 # ---------------------------------------------------------------------------
@@ -505,7 +510,7 @@ def test_websocket_nao_expoe_token_na_url_do_frontend():
 
 
 def test_broadcastchannel_so_transmite_evento_de_logout_sem_payload_sensivel():
-    for arquivo in (PAINEL_HTML, PAINEL_OPERACIONAL_HTML):
+    for arquivo in (PAINEL_HTML, PAINEL_OPERACIONAL_HTML, PAINEL_OPERACIONAL_JS):
         for chave_proibida in ("token", "senha", "perfil", "usuario", "cookie", security.APP_SESSION_COOKIE):
             for match_inicio in _ocorrencias(arquivo, "postMessage("):
                 trecho = arquivo[match_inicio: match_inicio + 80]

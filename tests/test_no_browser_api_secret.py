@@ -8,6 +8,7 @@ PUBLIC_FRONTEND_FILES = [
     ROOT / "index.html",
     ROOT / "painel-auth.js",
     ROOT / "painel-operacional.html",
+    ROOT / "painel-operacional.js",
     ROOT / "site-production-guard.js",
 ]
 

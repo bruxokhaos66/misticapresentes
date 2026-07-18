@@ -109,7 +109,9 @@ test("abrir o card não altera pixels fora da margem de 50px", async ({ page }) 
   await card.waitFor({ state: "attached" });
   const box = await card.boundingBox();
 
-  await page.addStyleTag({ content: "* { animation-play-state: paused !important; transition: none !important; caret-color: transparent !important; }" });
+  // addStyleTag({ url }), não { content }: a CSP do site (sem 'unsafe-inline'
+  // em style-src) bloquearia um <style> inline injetado pelo Playwright.
+  await page.addStyleTag({ url: "/tests/e2e/fixtures/pause-animations.css" });
   await page.waitForTimeout(1_000);
 
   const clips = [
