@@ -192,6 +192,14 @@ def _status_atual(conn, venda_id: int) -> str:
     return str(venda["status"] or "") if venda else "desconhecido"
 
 
+def tentar_transicao_status_pagamento(conn, venda_id: int, status_esperado: str, status_novo: str) -> bool:
+    """Wrapper público de _tentar_transicao_status, para reuso por outros
+    provedores de pagamento (ex.: backend/mercadopago_routes.py, quando um
+    pagamento fica pendente/em análise) sem duplicar a transição atômica de
+    pedidos.status já implementada e testada aqui."""
+    return _tentar_transicao_status(conn, venda_id, status_esperado, status_novo)
+
+
 def _aplicar_resultado_confirmacao(conn, venda_id: int, status_pedido_atual: str, conciliacao: str, motivo: Optional[str], usuario: str, agora: str, valor_recebido: float, valor_esperado: float) -> bool:
     """Aplica ao pedido o resultado da conciliação (já classificado por
     _classificar_conciliacao, que filtrou pedidos em status terminal
