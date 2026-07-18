@@ -58,7 +58,7 @@ def test_csp_nao_usa_curingas_globais(pagina):
     # curinga de src amplo em script/connect/frame -- só em img-src, onde o
     # próprio enunciado do exercício já aceita "https:" (baixo risco: uma
     # imagem não executa JS).
-    for diretiva in ("default-src", "script-src", "connect-src", "frame-src", "object-src"):
+    for diretiva in ("default-src", "script-src", "connect-src", "frame-src", "object-src", "style-src-attr"):
         m = re.search(rf"{diretiva} ([^;]+);", csp)
         if not m:
             continue
@@ -96,6 +96,52 @@ def test_csp_style_src_sem_unsafe_inline(pagina):
     m = re.search(r"style-src ([^;]+);", csp)
     assert m, f"{pagina}: style-src ausente"
     assert "'unsafe-inline'" not in m.group(1)
+
+
+@pytest.mark.parametrize("pagina", PAGINAS_PUBLICAS)
+def test_csp_style_src_attr_restrito_a_unsafe_inline(pagina):
+    """style-src-attr (CSP3) autoriza SÓ o atributo style="" inline -- exigido
+    pelo próprio SDK MercadoPago.js v2 para posicionar os iframes de Secure
+    Fields do CardForm (ver docs/admin/CSP.md, seção "Auditoria de runtime
+    (violações reais pós-#365)"). Não pode ter nenhuma origem além de
+    'unsafe-inline': isso manteria style-src-elem (<style>/<link>, herdado de
+    style-src) tão restrito quanto antes, e é a diretiva mais estreita do
+    CSP3 para esse caso -- não afeta script-src nem <style> injetado."""
+    csp = _csp_de(pagina)
+    m = re.search(r"style-src-attr ([^;]+);", csp)
+    assert m, f"{pagina}: style-src-attr ausente (necessário para o CardForm)"
+    valores = m.group(1).split()
+    assert valores == ["'unsafe-inline'"], (
+        f"{pagina}: style-src-attr deveria conter só 'unsafe-inline', achou {valores}"
+    )
+
+
+@pytest.mark.parametrize("pagina", PAGINAS_PUBLICAS)
+def test_csp_unsafe_inline_so_existe_em_style_src_attr(pagina):
+    """'unsafe-inline' é a exceção mais perigosa da CSP -- confirma que ela
+    está confinada à única diretiva que realmente precisa (style-src-attr,
+    só atributo style="") e ausente de toda diretiva que executa código
+    (script-src, script-src-elem, script-src-attr) ou que aceita <style>
+    (style-src, style-src-elem)."""
+    csp = _csp_de(pagina)
+    for diretiva in ("script-src", "script-src-elem", "script-src-attr", "style-src", "style-src-elem", "default-src"):
+        m = re.search(rf"{diretiva} ([^;]+);", csp)
+        if not m:
+            continue
+        assert "'unsafe-inline'" not in m.group(1), f"{pagina}: {diretiva} não pode ter 'unsafe-inline'"
+
+
+@pytest.mark.parametrize("pagina", PAGINAS_PUBLICAS)
+def test_csp_connect_src_autoriza_apenas_host_exato_do_mercadolibre_tracks(pagina):
+    """O SDK MercadoPago.js v2 envia telemetria própria (device fingerprint/
+    analytics do CardForm) para https://api.mercadolibre.com/tracks -- host
+    exato do próprio grupo Mercado Livre/Mercado Pago, sem curinga (ver
+    docs/admin/CSP.md)."""
+    csp = _csp_de(pagina)
+    connect_src = re.search(r"connect-src ([^;]+);", csp).group(1)
+    assert "https://api.mercadolibre.com" in connect_src.split()
+    assert "https://*.mercadolibre.com" not in connect_src
+    assert "*.mercadolibre.com" not in connect_src
 
 
 @pytest.mark.parametrize("pagina", PAGINAS_PUBLICAS)
