@@ -527,6 +527,7 @@ def init_db():
                 print(f"[migrations] falha ao inserir categoria padrão '{c}': {exc}")
 
     _criar_tabelas_isis_content_studio()
+    _criar_tabelas_mercadopago()
 
     _BANCOS_MIGRADOS.add(db_path_atual)
 
@@ -729,3 +730,66 @@ def _criar_tabelas_isis_content_studio():
         """,
         commit=True,
     )
+
+
+def _criar_tabelas_mercadopago():
+    """Integração Mercado Pago (cartão de crédito) preservando o Pix manual
+    já existente. Nenhuma tabela aqui é lida por nenhum caminho de código do
+    Pix manual; `pedidos`/`pagamentos`/`webhook_eventos`/`idempotency_keys`
+    continuam sendo a mesma fonte de verdade para os dois provedores (ver
+    backend/payment_routes.py::registrar_pagamento, reaproveitado tanto pelo
+    webhook Pix quanto pelo fluxo de cartão do Mercado Pago — nunca uma
+    cópia paralela da conciliação/baixa de estoque).
+
+    Índices em pedidos(pix_txid) e pedidos(provider_payment_id): essas
+    colunas já existiam (pix_txid desde o PR do Pix manual, provider_payment_id
+    como preparação para provedor externo) mas nunca tiveram índice dedicado
+    — o lookup do webhook por provider_payment_id ficaria com scan completo
+    da tabela à medida que o volume de pedidos cresce.
+    """
+    _exec_tolerante("CREATE INDEX IF NOT EXISTS idx_pedidos_pix_txid ON pedidos(pix_txid)")
+    _exec_tolerante("CREATE INDEX IF NOT EXISTS idx_pedidos_provider_payment_id ON pedidos(provider_payment_id)")
+
+    # Tentativa de pagamento: um pedido pode ter várias (cartão recusado,
+    # cliente tenta outro cartão), mas nunca mais de uma aprovada — essa
+    # garantia não vem de uma constraint nesta tabela (ela só registra a
+    # tentativa em si, inclusive as recusadas), e sim da transição atômica de
+    # pedidos.status em backend/payment_routes.py::_tentar_transicao_status,
+    # reaproveitada pelo fluxo de cartão. idempotency_key é única por
+    # provedor: reenviar a mesma tentativa (retry de rede, clique duplo)
+    # nunca cria uma segunda linha nem gera uma segunda cobrança no provedor.
+    # provider_payment_id é único por provedor quando presente (preenchido
+    # só depois que o provedor responde) para impedir duas tentativas locais
+    # apontando para o mesmo pagamento externo por corrida/reprocessamento.
+    query_db(
+        """
+        CREATE TABLE IF NOT EXISTS tentativas_pagamento (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            pedido_id INTEGER NOT NULL,
+            pagamento_id INTEGER,
+            provedor TEXT NOT NULL,
+            metodo TEXT NOT NULL,
+            provider_payment_id TEXT,
+            idempotency_key TEXT NOT NULL,
+            status_interno TEXT NOT NULL DEFAULT 'processando',
+            status_externo TEXT,
+            valor REAL NOT NULL,
+            parcelas INTEGER DEFAULT 1,
+            bandeira TEXT,
+            motivo_recusa TEXT,
+            payload_sanitizado TEXT,
+            evento_notificacao_id TEXT,
+            criado_em TEXT NOT NULL,
+            atualizado_em TEXT,
+            UNIQUE(provedor, idempotency_key)
+        )
+        """,
+        commit=True,
+    )
+    for sql_idx in [
+        "CREATE INDEX IF NOT EXISTS idx_tentativas_pagamento_pedido ON tentativas_pagamento(pedido_id)",
+        "CREATE INDEX IF NOT EXISTS idx_tentativas_pagamento_status ON tentativas_pagamento(status_interno)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_tentativas_pagamento_provider_payment "
+        "ON tentativas_pagamento(provedor, provider_payment_id) WHERE provider_payment_id IS NOT NULL",
+    ]:
+        _exec_tolerante(sql_idx)
