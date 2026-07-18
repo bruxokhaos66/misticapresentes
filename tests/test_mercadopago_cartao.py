@@ -58,7 +58,7 @@ def criar_pedido_publico(preco: float, quantidade: int = 1) -> dict:
     return resposta.json()
 
 
-def resultado_mp(pedido, *, status="approved", status_detail="accredited", payment_id=None, valor=None, installments=1, payment_method_id="visa"):
+def resultado_mp(pedido, *, status="approved", status_detail="accredited", payment_id=None, valor=None, installments=1, payment_method_id="visa", currency_id="BRL"):
     from backend.mercadopago_client import ResultadoPagamentoMP
 
     # Cada pagamento no Mercado Pago tem um id único de verdade; nos testes,
@@ -75,7 +75,7 @@ def resultado_mp(pedido, *, status="approved", status_detail="accredited", payme
         payment_method_id=payment_method_id,
         payment_type_id="credit_card",
         external_reference=str(pedido["id"]),
-        currency_id="BRL",
+        currency_id=currency_id,
         collector_id="1" if payment_id else None,
     )
 
@@ -307,6 +307,119 @@ def test_tentativas_listadas_no_painel_admin():
     assert tentativas[0]["provedor"] == "mercadopago"
 
 
+def _quantidade_produto(codigo_p: str) -> int:
+    # codigo_p é normalizado para maiúsculas na criação (backend/product_routes.py).
+    resposta = client.get("/api/produtos", params={"busca": codigo_p})
+    itens = [p for p in resposta.json() if p["codigo_p"].upper() == codigo_p.upper()]
+    assert len(itens) == 1, f"produto {codigo_p} não encontrado de forma única: {itens}"
+    return int(itens[0]["quantidade"])
+
+
+def test_estoque_reservado_na_criacao_nao_e_baixado_de_novo_na_aprovacao_do_cartao():
+    """A reserva de estoque físico já acontece na criação do pedido (ver
+    backend/site_stock_routes.py) -- a aprovação do cartão reaproveita
+    baixar_estoque_do_pedido, que é idempotente via pedidos.estoque_baixado.
+    Prova que o estoque final reflete só UMA baixa (a da criação), nunca
+    duas."""
+    codigo = codigo_unico("MPESTQ")
+    resposta = client.post(
+        "/api/produtos",
+        json={"nome": "Produto Estoque MP", "codigo_p": codigo, "preco": 40.0, "quantidade": 10, "categoria": "Testes"},
+        headers=HEADERS,
+    )
+    produto = resposta.json()
+    quantidade_inicial = _quantidade_produto(codigo)
+    assert quantidade_inicial == 10
+
+    resposta = client.post(
+        "/api/checkout/pedidos",
+        json={"cliente": "Cliente Estoque", "telefone": "5599999999999", "itens": [{"produto_id": produto["id"], "quantidade": 3}]},
+        headers={"X-Forwarded-For": ip_unico()},
+    )
+    pedido = resposta.json()
+    # A reserva já acontece aqui, na criação (itens físicos) -- confirma
+    # antes de qualquer pagamento.
+    assert _quantidade_produto(codigo) == 7
+
+    aprovado = resultado_mp(pedido, status="approved")
+    resposta = pagar_cartao(pedido, aprovado)
+    assert resposta.status_code == 200
+    assert resposta.json()["status"] == "aprovado"
+
+    assert _quantidade_produto(codigo) == 7, "aprovação do cartão não pode baixar o estoque uma segunda vez"
+    detalhe = client.get(f"/api/pedidos/{pedido['id']}", headers=HEADERS).json()
+    assert detalhe["estoque_baixado"] == 1
+
+
+def test_expiracao_libera_estoque_reservado_de_pedido_pago_com_cartao():
+    """Um pedido criado para pagar com cartão, mas nunca confirmado, expira
+    exatamente como um pedido Pix (mesmo campo pedidos.expira_em, mesma
+    rotina expirar_pedidos_pendentes) -- o estoque reservado é devolvido, não
+    fica preso indefinidamente."""
+    codigo = codigo_unico("MPEXP")
+    resposta = client.post(
+        "/api/produtos",
+        json={"nome": "Produto Expiração MP", "codigo_p": codigo, "preco": 20.0, "quantidade": 5, "categoria": "Testes"},
+        headers=HEADERS,
+    )
+    produto = resposta.json()
+    resposta = client.post(
+        "/api/checkout/pedidos",
+        json={"cliente": "Cliente Expiração", "telefone": "5599999999999", "itens": [{"produto_id": produto["id"], "quantidade": 2}]},
+        headers={"X-Forwarded-For": ip_unico()},
+    )
+    pedido = resposta.json()
+    assert _quantidade_produto(codigo) == 3  # 5 - 2 reservados
+
+    from backend.database import conectar as conectar_backend
+
+    with conectar_backend() as conn:
+        conn.execute("UPDATE pedidos SET expira_em=? WHERE id=?", ("2000-01-01T00:00:00", pedido["id"]))
+        conn.commit()
+
+    # Qualquer chamada que rode expirar_pedidos_pendentes (ex.: consultar o
+    # pedido) processa a expiração e repõe o estoque.
+    detalhe = client.get(f"/api/pedidos/{pedido['id']}", headers=HEADERS).json()
+    assert detalhe["status"] == "Cancelado"
+    assert _quantidade_produto(codigo) == 5, "estoque reservado por um pedido de cartão nunca confirmado deve ser devolvido na expiração"
+
+    # E depois de expirado/cancelado, uma tentativa de cartão tardia é
+    # rejeitada (não reabre nem cobra um pedido morto).
+    aprovado = resultado_mp(pedido, status="approved")
+    resposta = pagar_cartao(pedido, aprovado)
+    assert resposta.status_code == 409
+
+
+def test_mesma_unidade_de_estoque_nao_e_vendida_duas_vezes_entre_pix_e_cartao():
+    """Estoque limitado (1 unidade): o segundo pedido -- não importa se o
+    cliente pretende pagar com Pix ou cartão -- nunca consegue reservar a
+    mesma unidade já reservada pelo primeiro. A reserva acontece na criação
+    do pedido, antes de qualquer decisão de forma de pagamento, então os
+    dois provedores nunca disputam a mesma unidade fisicamente."""
+    codigo = codigo_unico("MPUNI")
+    resposta = client.post(
+        "/api/produtos",
+        json={"nome": "Produto Unidade Única MP", "codigo_p": codigo, "preco": 15.0, "quantidade": 1, "categoria": "Testes"},
+        headers=HEADERS,
+    )
+    produto = resposta.json()
+
+    resposta1 = client.post(
+        "/api/checkout/pedidos",
+        json={"cliente": "Cliente Pix", "telefone": "5599999999999", "itens": [{"produto_id": produto["id"], "quantidade": 1}]},
+        headers={"X-Forwarded-For": ip_unico()},
+    )
+    assert resposta1.status_code == 200
+    assert _quantidade_produto(codigo) == 0
+
+    resposta2 = client.post(
+        "/api/checkout/pedidos",
+        json={"cliente": "Cliente Cartão", "telefone": "5599999999999", "itens": [{"produto_id": produto["id"], "quantidade": 1}]},
+        headers={"X-Forwarded-For": ip_unico()},
+    )
+    assert resposta2.status_code in (404, 409), "segundo pedido não pode reservar a mesma última unidade já reservada pelo primeiro"
+
+
 def test_pix_continua_funcionando_sem_regressao():
     """Confirma que criar um pedido e confirmar o pagamento via Pix continua
     funcionando normalmente, sem qualquer interferência da integração com o
@@ -323,3 +436,16 @@ def test_pix_continua_funcionando_sem_regressao():
     detalhe = client.get(f"/api/pedidos/{pedido['id']}", headers=HEADERS).json()
     assert detalhe["status"] == "Pagamento confirmado"
     assert detalhe["payment_provider"] == "manual_pix"
+
+
+def test_moeda_diferente_de_brl_nunca_confirma_pedido():
+    """Defesa em profundidade: mesmo que o Mercado Pago responda "approved"
+    numa moeda que não seja BRL (conta mal configurada, resposta
+    inesperada), o pedido nunca é confirmado a partir dela."""
+    pedido = criar_pedido_publico(60.0)
+    resultado_moeda_errada = resultado_mp(pedido, status="approved", currency_id="USD")
+    resposta = pagar_cartao(pedido, resultado_moeda_errada)
+    assert resposta.status_code == 200
+    assert resposta.json()["status"] != "aprovado"
+    detalhe = client.get(f"/api/pedidos/{pedido['id']}", headers=HEADERS).json()
+    assert detalhe["status"] != "Pagamento confirmado"

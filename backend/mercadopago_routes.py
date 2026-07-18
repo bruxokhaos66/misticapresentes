@@ -211,7 +211,18 @@ def pagar_com_cartao(payload: CartaoPagamentoIn, idempotency_key: str | None = H
     # depois deste ponto fica visível para o admin via GET
     # /tentativas/{pedido_id} e é resolvida com o botão de reconsulta
     # (POST /tentativas/{id}/consultar), nunca com uma nova cobrança.
-    status_interno_pagamento = STATUS_PROVEDOR_PARA_INTERNO.get(resultado.status, "Recusado")
+    status_provedor_efetivo = resultado.status
+    if resultado.currency_id and resultado.currency_id.upper() != "BRL":
+        # Defesa em profundidade: a loja só opera em reais. Mesmo que o
+        # Mercado Pago tenha respondido "approved" numa moeda inesperada
+        # (conta mal configurada), nunca conciliamos como se fosse BRL --
+        # fica registrado como divergência, nunca confirma o pedido sozinho.
+        logger.warning(
+            "mercadopago_cartao_moeda_inesperada",
+            extra={"evento": "mp_cartao_moeda_invalida", "moeda": resultado.currency_id, "pedido_id": payload.pedido_id},
+        )
+        status_provedor_efetivo = "rejected"
+    status_interno_pagamento = STATUS_PROVEDOR_PARA_INTERNO.get(status_provedor_efetivo, "Recusado")
     status_interno_tentativa = {
         "Confirmado": "aprovado",
         "Aguardando": "pendente",
@@ -298,7 +309,7 @@ def pagar_com_cartao(payload: CartaoPagamentoIn, idempotency_key: str | None = H
         "tentativa_id": tentativa_id,
         "status": status_interno_tentativa,
         "aprovado": status_interno_tentativa == "aprovado",
-        "mensagem": _mensagem_amigavel(resultado.status, resultado.status_detail),
+        "mensagem": _mensagem_amigavel(status_provedor_efetivo, resultado.status_detail),
         "parcelas": payload.installments,
         "valor": total_final,
     }
