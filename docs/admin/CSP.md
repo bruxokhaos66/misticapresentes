@@ -41,11 +41,12 @@ object-src 'none';
 form-action 'self';
 script-src 'self' https://sdk.mercadopago.com https://www.googletagmanager.com https://connect.facebook.net;
 style-src 'self' https://fonts.googleapis.com;
+style-src-attr 'unsafe-inline';
 img-src 'self' data: blob: https:;
 font-src 'self' data: https://fonts.gstatic.com;
 connect-src 'self' https://api.misticaesotericos.com.br https://*.mercadopago.com https://*.mercadopago.com.br
             https://www.google-analytics.com https://analytics.google.com https://www.googletagmanager.com
-            https://www.facebook.com https://connect.facebook.net;
+            https://www.facebook.com https://connect.facebook.net https://api.mercadolibre.com;
 frame-src https://www.youtube.com https://*.mercadopago.com https://*.mercadopago.com.br;
 worker-src 'self' blob:;
 manifest-src 'self';
@@ -66,6 +67,7 @@ upgrade-insecure-requests
 | `www.facebook.com` | connect-src | Endpoint de tracking do Facebook Pixel. |
 | `www.youtube.com` | frame-src | Vídeos de aula incorporados via `<iframe>` na Escola Mística (`escola-curso.js`). |
 | `fonts.googleapis.com`, `fonts.gstatic.com` | style-src, font-src | Fonte Google (`Cinzel`/`Inter`) usada em todo o site. |
+| `api.mercadolibre.com` (host exato, sem curinga) | connect-src | Telemetria própria do SDK `MercadoPago.js v2` (`/tracks`) -- device fingerprint/analytics do CardForm, endpoint documentado do mesmo grupo Mercado Livre/Mercado Pago. Ver seção "Auditoria de runtime" abaixo. |
 
 **Nenhuma dessas origens tem acesso a criar/consultar pagamentos com o
 Access Token** — o Access Token nunca sai do backend (ver
@@ -120,6 +122,59 @@ as bloqueia — e contra uma origem de terceiro não relacionada, confirmando
 que o bloqueio de CSP continua funcionando para hosts fora do Mercado
 Pago. **Recomendado**: validar visualmente em sandbox real (rede sem essa
 restrição) antes de ativar `MERCADO_PAGO_ENABLED=true` em produção.
+
+### Auditoria de runtime (violações reais pós-#365)
+
+Depois do merge da PR #365 (que adicionou `iframe: true` à config do
+`cardForm()`, corrigindo a montagem dos Secure Fields), o Console do
+navegador passou a reportar 3 violações novas de CSP, todas originadas
+dentro do bundle do SDK `MercadoPago.js v2` (`v2:1` -- código de terceiro,
+fora do nosso controle) durante a montagem do CardForm real:
+
+| # | Violação reportada | Diretiva responsável | Origem/ação bloqueada | Correção aplicada | Risco residual |
+|---|---|---|---|---|---|
+| 1 | `Applying inline style violates: style-src 'self' https://fonts.googleapis.com` | `style-src` (atributo `style=""`) | O SDK aplica `style=""` inline no `<div>` wrapper que envolve cada iframe de Secure Field (número/validade/CVV), para posicionar/dimensionar o campo dentro do nosso layout. | Adicionada a diretiva CSP3 `style-src-attr 'unsafe-inline'`, **separada** de `style-src`. Ela só cobre o atributo `style=""` -- não afeta `<style>`/`<link>` (que continuam em `style-src`/`style-src-elem`, sem `unsafe-inline`), nem `script-src`. | Um XSS que já tivesse conseguido injetar um atributo `style=""` arbitrário (ex.: via `innerHTML` não sanitizado) poderia usar CSS para acobertar/mascarar elementos (clickjacking visual) -- não pode executar JS. Mitigado porque o site não usa `innerHTML` com dado não confiável nas páginas públicas (ver seção "Handlers inline removidos" acima) e `style-src-elem`/`script-src` continuam tão restritos quanto antes. Navegadores sem suporte a CSP3 `style-src-attr` (raros hoje) ignoram a diretiva e caem de volta em `style-src` sem `unsafe-inline` -- o campo fica visualmente quebrado, não inseguro. |
+| 2 | `Executing inline script violates: script-src 'self' https://sdk.mercadopago.com https://www.googletagmanager.com https://connect.facebook.net` | `script-src` | O SDK tenta executar um `<script>` inline (bootstrap do módulo de telemetria/device fingerprint do CardForm, correlacionado com a violação de `connect-src` abaixo e com o erro `Could not send event`). | **Nenhuma.** `script-src` foi mantido exatamente como estava, sem `'unsafe-inline'`, hash ou nonce. | **Deliberadamente não corrigido nesta mudança.** É a diretiva de maior risco (execução de código) e nenhuma das opções seguras é viável aqui: hash é inviável sem confirmar que o conteúdo do script é estável entre carregamentos/sessões (não há acesso de rede a `sdk.mercadopago.com` neste ambiente para capturar e validar isso -- ver limitação abaixo), e nonce por header dinâmico é inviável porque o site público é HTML estático via GitHub Pages sem servidor sob nosso controle (mesma limitação já documentada no topo deste arquivo). O SDK oficial não documenta esse script inline como requisito para tokenizar o cartão -- é telemetria própria do Mercado Pago, então o CardForm deve continuar funcional (Secure Fields, tokenização, parcelas) mesmo com esse script bloqueado; o efeito observável é só o console.error `Could not send event`, sem impacto no pagamento. **Ação pendente**: capturar em sandbox real (ver procedimento no fim deste arquivo) se o hash do script é estável; se for, trocar esta linha por `script-src-elem` com o(s) hash(es) exatos -- nunca por `'unsafe-inline'` global. |
+| 3 | `Connecting to: https://api.mercadolibre.com/tracks violates connect-src` (+ console `/checkout/api_integration Could not send event`, `/checkout/api_integration/card_form Could not send event`) | `connect-src` | Mesmo módulo de telemetria do SDK, enviando eventos de uso do CardForm para o endpoint de tracking do grupo Mercado Livre/Mercado Pago. | Adicionado **só o host exato** `https://api.mercadolibre.com` a `connect-src` (sem curinga `*.mercadolibre.com`, sem `https:`). | Baixo: é um endpoint de coleta de eventos (POST de telemetria), não expõe nem recebe credenciais nossas -- o Access Token nunca sai do backend (ver acima) e esse host não tem relação com criação/consulta de pagamentos. Mesmo padrão de risco já aceito para `www.google-analytics.com`/`connect.facebook.net`. |
+
+**Confirmação da política efetivamente aplicada**: como não há build/SSR (HTML
+estático), a única fonte de verdade é a própria `<meta http-equiv=
+"Content-Security-Policy">` de cada página -- não existe CSP duplicada por
+header nesta hospedagem (GitHub Pages) nem em nenhum outro arquivo de
+config do site público (`render.yaml`, `netlify.toml` e `_headers`
+inexistem no repositório). Em produção, confirmar no DevTools com:
+
+```js
+document.querySelector('meta[http-equiv="Content-Security-Policy"]')?.content
+```
+
+e conferir a aba Network (Response Headers) que **nenhum** header HTTP
+`Content-Security-Policy` é enviado para o site público (o GitHub Pages não
+adiciona um por conta própria) -- só a `<meta>` está em vigor ali. A API
+(`api.misticaesotericos.com.br`) é o único domínio deste projeto que entrega
+CSP por header real, e não serve nenhuma página do checkout.
+
+**Limitação de verificação (mesma já registrada na correção anterior)**:
+este ambiente de desenvolvimento não tem acesso de rede a
+`sdk.mercadopago.com` nem a `api.mercadolibre.com`, então as 3 violações
+acima não puderam ser reproduzidas com o SDK real neste sandbox -- foram
+registradas a partir do relato do Console (violações #1-#3 do ticket) e
+validadas por: (1) um teste Playwright dedicado
+(`tests/e2e/csp-mercadopago-runtime-violations.spec.js`) que simula, com um
+Chromium real e a CSP de produção (`index.html`), o mesmo padrão de
+atributo `style=""` inline + `fetch` para `api.mercadolibre.com/tracks` que
+o módulo de telemetria do CardForm usa, confirmando que a policy corrigida
+não os bloqueia mais, **e** que um `<style>` injetado, um `<script>` inline
+e um host de terceiro não relacionado continuam bloqueados (prova de que a
+correção não abriu a diretiva além do necessário); (2) `pytest
+tests/test_csp_meta.py`, que confirma estaticamente, nas 23 páginas
+públicas, que `'unsafe-inline'` existe só em `style-src-attr` e que
+`connect-src` só ganhou o host exato `api.mercadolibre.com`, sem curinga.
+**Recomendado antes de `MERCADO_PAGO_ENABLED=true`**: validar visualmente em
+sandbox real (rede sem essa restrição) que as 3 violações originais
+desapareceram do Console e que o CardForm aceita clique/digitação nos 3
+campos, reconhece o BIN e carrega parcelas -- ver "Procedimento de
+homologação real" no fim deste arquivo.
 
 ### Por que `img-src` inclui `https:` (qualquer origem HTTPS)
 
@@ -194,6 +249,23 @@ conectado à mesma função que já existia.
   com um Chromium real, captura eventos `securitypolicyviolation` e erros
   de console, adiciona um produto ao carrinho (exercitando a nova
   delegação de cliques) e confirma viewport mobile.
+- `tests/e2e/csp-mercadopago-cardform.spec.js` (Playwright): confirma que
+  `frame-src`/`connect-src` autorizam subdomínios `.com`/`.com.br` do
+  Mercado Pago sem violação, e que um host de terceiro não relacionado
+  continua bloqueado.
+- `tests/e2e/mercadopago-cardform-mount.spec.js` (Playwright, com fixture
+  dedicada e SDK mockado): confirma a mecânica de montagem dos 3 iframes de
+  Secure Fields sem violação de CSP.
+- `tests/e2e/csp-mercadopago-runtime-violations.spec.js` (Playwright, novo
+  nesta correção): reproduz as 3 violações reais reportadas após a PR #365
+  (atributo `style=""` inline no wrapper do Secure Field, `fetch` para
+  `api.mercadolibre.com/tracks`) contra a CSP real de `index.html`,
+  confirmando que a policy corrigida não as bloqueia mais -- e, ao mesmo
+  tempo, que `<style>` injetado, `<script>` inline e hosts de terceiros
+  fora da lista continuam bloqueados (garante que a correção não abriu mais
+  do que o necessário). Escuta `document.addEventListener(
+  "securitypolicyviolation", ...)` e falha se sobrar qualquer violação
+  relacionada ao Mercado Pago.
 - `tests/test_seguranca_reforcada.py`: atualizado para os novos valores de
   `Permissions-Policy` (`payment=(self)`) e `Cross-Origin-Opener-Policy`
   (`same-origin-allow-popups`) da API.
@@ -235,3 +307,50 @@ domínios customizados com HTTPS forçado (fora do nosso controle direto).
 5. Repetir até o checkout completar sem nenhuma violação.
 6. Rodar `pytest tests/test_csp_meta.py` e `npx playwright test tests/e2e/csp.spec.js`
    antes de publicar a mudança.
+
+## Procedimento de homologação real do CardForm (obrigatório antes de `MERCADO_PAGO_ENABLED=true`)
+
+Nenhum ambiente de desenvolvimento usado para preparar esta política tem
+acesso de rede a `sdk.mercadopago.com` nem a `api.mercadolibre.com` — a
+validação abaixo só pode ser feita num sandbox com acesso real à internet.
+
+1. Ativar `MERCADO_PAGO_ENABLED=true` e configurar a Public Key de
+   **sandbox/teste** (nunca a de produção neste passo) no backend.
+2. Abrir o checkout num navegador real (recarregar algumas vezes, em janela
+   anônima e em pelo menos dois navegadores diferentes — hashes/scripts de
+   terceiros podem variar por sessão/versão do SDK).
+3. Console aberto: confirmar que as 3 violações originais deste ticket
+   (`style-src` inline, `script-src` inline, `connect-src` para
+   `api.mercadolibre.com/tracks`) não aparecem mais **exceto** a de
+   `script-src` (deixada bloqueada de propósito — ver tabela acima). Se a
+   violação de `script-src` persistir, confirmar no Console se ela vem
+   rotulada como telemetria (`Could not send event`) — se sim, é esperada e
+   não bloqueia o pagamento; qualquer outra violação de `script-src` deve
+   ser investigada antes de prosseguir.
+4. Rodar no Console:
+   ```js
+   document.querySelector('meta[http-equiv="Content-Security-Policy"]')?.content
+   ```
+   e conferir a aba Network (Response Headers) que nenhum header HTTP
+   `Content-Security-Policy` divergente está sendo enviado — só a `<meta>`
+   deve estar em vigor no site público.
+5. Confirmar exatamente 1 iframe por campo seguro:
+   ```js
+   document.querySelectorAll("#mpCardNumber iframe").length     // 1
+   document.querySelectorAll("#mpExpirationDate iframe").length // 1
+   document.querySelectorAll("#mpSecurityCode iframe").length   // 1
+   ```
+6. Testar manualmente: clique e digitação em número/validade/CVV, BIN
+   reconhecido (o SDK deve preencher a bandeira/emissor), parcelas
+   carregando no seletor, e alternar Pix ↔ cartão várias vezes sem
+   duplicar iframes.
+7. Só depois de 3-6 passarem sem nenhuma violação inesperada e com um
+   cartão de teste de verdade tokenizando com sucesso, considerar o
+   CardForm homologado. `MERCADO_PAGO_ENABLED` permanece `false` em
+   produção até essa homologação ser concluída.
+8. Se `script-src` precisar ser relaxado (passo 3 acima falhar de forma
+   não relacionada a telemetria), capturar o hash exato reportado pelo
+   navegador (`sha256-...`) em pelo menos 3 recarregamentos/sessões
+   diferentes; só adicionar o hash a `script-src-elem` se for **idêntico**
+   em todas as tentativas. Nunca adicionar `'unsafe-inline'` a `script-src`
+   como atalho.
