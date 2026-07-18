@@ -205,6 +205,20 @@ async def cabecalhos_seguranca(request, call_next):
     # ambiente e prévias públicas que o site carrega legitimamente de outra
     # origem; same-site bloquearia esse carregamento.
     response.headers.setdefault("Cross-Origin-Resource-Policy", "cross-origin")
+    # A API nunca serve HTML de app (só JSON e arquivos estáticos como
+    # imagens/áudio/PDF), então default-src 'none' é seguro em qualquer
+    # resposta desta origem e não interfere no CSP que o site (hospedado à
+    # parte, ver CNAME) já aplique via <meta> às próprias páginas.
+    response.headers.setdefault("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
+    # Sem recursos de câmera/microfone/geolocalização etc. usados pela API.
+    response.headers.setdefault(
+        "Permissions-Policy",
+        "geolocation=(), microphone=(), camera=(), payment=(), usb=(), interest-cohort=()",
+    )
+    # COOP isola a janela desta origem de outras abas; seguro aqui porque a
+    # API não abre nem depende de popups/postMessage entre origens.
+    response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+    response.headers.setdefault("Origin-Agent-Cluster", "?1")
     if request.url.scheme == "https":
         response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
     return response
@@ -321,17 +335,21 @@ def garantir_admin_api():
             extra={"evento": "startup_aviso"},
         )
         return
+    # Login configurável por variável de ambiente para permitir renomear o
+    # usuário administrativo padrão (menos previsível que "admin" fixo).
+    # Default "admin" preserva instalações existentes sem exigir migração.
+    login_admin = os.environ.get("MISTICA_ADMIN_LOGIN", "").strip().lower() or "admin"
     salt = "mistica_api_admin"
     senha_hash = hash_password_pbkdf2(senha_admin, salt.encode("utf-8"))
-    existente = obter("SELECT id FROM usuarios WHERE login='admin'")
+    existente = obter("SELECT id FROM usuarios WHERE login=?", (login_admin,))
     if existente:
         executar(
             """
             UPDATE usuarios
             SET nome=?, senha_hash=?, senha_salt=?, perfil=?, ativo=1
-            WHERE login='admin'
+            WHERE login=?
             """,
-            ("Administrador", senha_hash, salt, "adm"),
+            ("Administrador", senha_hash, salt, "adm", login_admin),
         )
     else:
         executar(
@@ -339,7 +357,7 @@ def garantir_admin_api():
             INSERT INTO usuarios (nome, login, senha_hash, senha_salt, perfil, ativo)
             VALUES (?,?,?,?,?,1)
             """,
-            ("Administrador", "admin", senha_hash, salt, "adm"),
+            ("Administrador", login_admin, senha_hash, salt, "adm"),
         )
 
 
@@ -806,7 +824,10 @@ def painel_dashboard(response: Response, meta_mes: float = Query(1500.0, ge=0), 
 
 
 @app.get("/api/estoque/baixo")
-def estoque_baixo(limite: int = Query(100, ge=1, le=500)):
+def estoque_baixo(limite: int = Query(100, ge=1, le=500), sessao: dict = Depends(exigir_sessao_ou_chave_api())):
+    """Dado administrativo (quantidade em estoque e estoque mínimo por produto):
+    exige sessão de painel ou chave da API, igual às demais rotas de
+    /api/painel/*. Antes ficava pública, sem nenhuma credencial."""
     return listar(
         """
         SELECT id, codigo_p, nome, quantidade, estoque_minimo, categoria

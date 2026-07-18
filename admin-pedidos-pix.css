@@ -17,6 +17,15 @@
 .pedido-pix-titulo strong { font-size: 16px; }
 .pedido-pix-badge-novo { background: var(--gold, #f0c56a); color: #171007; font-weight: 800; font-size: 11px; padding: 3px 9px; border-radius: 999px; text-transform: uppercase; letter-spacing: .04em; }
 .pedido-pix-status { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,.08); }
+
+/* Indicadores visuais por status (só cor/aparência — nenhuma regra de negócio muda aqui). */
+.pedido-pix-status.status-aguardando-pagamento { background: rgba(240,197,106,.18); color: #f0c56a; }
+.pedido-pix-status.status-comprovante-enviado { background: rgba(96,165,250,.2); color: #93c5fd; }
+.pedido-pix-status.status-pagamento-em-an-lise { background: rgba(167,139,250,.2); color: #c4b5fd; }
+.pedido-pix-status.status-pagamento-confirmado,
+.pedido-pix-status.status-aguardando-encomenda { background: rgba(74,222,128,.2); color: #86efac; }
+.pedido-pix-status.status-pagamento-divergente { background: rgba(251,146,60,.2); color: #fdba74; }
+.pedido-pix-status.status-cancelado { background: rgba(248,113,113,.2); color: #fca5a5; }
 .pedido-pix-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 6px 18px; font-size: 13px; color: var(--muted); }
 .pedido-pix-info strong { color: var(--muted-strong); }
 .pedido-pix-itens { font-size: 13px; color: var(--muted); }

@@ -171,6 +171,19 @@ def test_resumo_acessos_site_exige_sessao_ou_chave_api():
     assert resposta_com_chave.status_code == 200
 
 
+def test_estoque_baixo_exige_sessao_ou_chave_api():
+    # Dado interno (quantidade em estoque e estoque mínimo por produto) --
+    # antes servido sem nenhuma credencial em GET /api/estoque/baixo.
+    client.cookies.clear()
+    resposta_sem_credencial = client.get("/api/estoque/baixo")
+    assert resposta_sem_credencial.status_code == 401
+
+    resposta_com_chave = client.get(
+        "/api/estoque/baixo", headers={"X-Mistica-Api-Key": TEST_API_KEY}
+    )
+    assert resposta_com_chave.status_code == 200
+
+
 def test_mutacao_com_sessao_de_cookie_e_origem_desconhecida_e_bloqueada(monkeypatch):
     monkeypatch.delenv("MISTICA_DEFAULT_PANEL_PASSWORD", raising=False)
     login = f"usuario-csrf-{uuid.uuid4().hex[:8]}"
@@ -277,6 +290,37 @@ def test_material_de_curso_pago_exige_aluno_com_acesso_liberado():
         assert resposta_api_key.status_code == 200
     finally:
         (CURSOS_DIR / nome).unlink(missing_ok=True)
+
+
+def test_headers_de_seguranca_incluem_csp_e_permissions_policy():
+    resposta = client.get("/api/health")
+    assert resposta.headers.get("content-security-policy") == "default-src 'none'; frame-ancestors 'none'"
+    assert "geolocation=()" in resposta.headers.get("permissions-policy", "")
+    assert resposta.headers.get("cross-origin-opener-policy") == "same-origin"
+    assert resposta.headers.get("origin-agent-cluster") == "?1"
+
+
+def test_login_admin_padrao_criado_via_env_var_admin_login(monkeypatch):
+    # MISTICA_ADMIN_LOGIN permite renomear o usuário administrativo
+    # provisionado automaticamente; sem a variável, o comportamento
+    # (login "admin") continua igual ao de antes desta mudança.
+    from backend.database import conectar
+
+    login_customizado = f"admin-teste-{uuid.uuid4().hex[:8]}"
+    monkeypatch.setenv("MISTICA_ADMIN_LOGIN", login_customizado)
+    monkeypatch.setenv("MISTICA_ADMIN_PASSWORD", "Senha-Forte-123!")
+    try:
+        main.garantir_admin_api()
+        with conectar() as conn:
+            usuario = conn.execute(
+                "SELECT login, perfil, ativo FROM usuarios WHERE login=?", (login_customizado,)
+            ).fetchone()
+        assert usuario is not None
+        assert usuario["perfil"] == "adm"
+        assert usuario["ativo"] == 1
+    finally:
+        with conectar() as conn:
+            conn.execute("DELETE FROM usuarios WHERE login=?", (login_customizado,))
 
 
 def test_imagem_de_produto_continua_publica_no_mount_estatico():

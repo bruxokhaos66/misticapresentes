@@ -5,7 +5,7 @@ import secrets
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from backend.audit import registrar_auditoria
@@ -19,7 +19,7 @@ from backend.order_status_routes import (
 )
 from backend.panel_sessions import exigir_sessao_ou_chave_api
 from backend.payment_routes import PagamentoIn, registrar_pagamento as registrar_pagamento_api_key
-from backend.rate_limit import limitar_requisicoes
+from backend.rate_limit import _client_ip, limitar_requisicoes
 
 router = APIRouter(prefix="/api", tags=["pedidos-notificacao"])
 
@@ -129,7 +129,7 @@ class ComprovanteClienteIn(BaseModel):
 
 
 @router.post("/pedidos/{venda_id}/comprovante", dependencies=[Depends(limitar_comprovante_cliente)])
-def cliente_iniciou_envio_comprovante(venda_id: int, payload: ComprovanteClienteIn = Body(default=ComprovanteClienteIn())):
+def cliente_iniciou_envio_comprovante(venda_id: int, request: Request, payload: ComprovanteClienteIn = Body(default=ComprovanteClienteIn())):
     """Registra que o cliente clicou em "Já paguei — enviar comprovante pelo
     WhatsApp" para ESTE pedido. O site nunca consegue confirmar que o cliente
     de fato anexou o comprovante na conversa do WhatsApp — isso só é validado
@@ -141,7 +141,14 @@ def cliente_iniciou_envio_comprovante(venda_id: int, payload: ComprovanteCliente
     público limitado (mesmo padrão já usado por GET /api/pedidos/{id}/status
     e /recibo) — sem ele, o id sozinho não dá acesso a pedidos alheios. A
     resposta de acesso negado é sempre a mesma, com pedido existente ou não,
-    para não servir de oráculo de enumeração."""
+    para não servir de oráculo de enumeração.
+
+    Auditoria: IP e User-Agent do clique ficam registrados em audit_log
+    (nunca em pedido_status_log, que é exibido ao operador no painel) só
+    para investigar disputas/fraude — não afetam a confirmação financeira,
+    que continua exclusivamente manual via POST /api/pagamentos."""
+    ip_cliente = _client_ip(request)
+    user_agent_cliente = str(request.headers.get("user-agent", ""))[:255]
     with conectar() as conn:
         expirar_pedidos_pendentes(conn)
         venda = conn.execute("SELECT id, status, pix_txid, comprovante_enviado_em FROM pedidos WHERE id=?", (venda_id,)).fetchone()
@@ -186,7 +193,8 @@ def cliente_iniciou_envio_comprovante(venda_id: int, payload: ComprovanteCliente
         )
         registrar_auditoria(
             conn, "pedido", venda_id, "cliente_iniciou_envio_comprovante", "Cliente",
-            antes={"status": status_atual}, depois={"status": status_novo},
+            antes={"status": status_atual},
+            depois={"status": status_novo, "ip": ip_cliente, "user_agent": user_agent_cliente},
         )
         conn.commit()
     return {
