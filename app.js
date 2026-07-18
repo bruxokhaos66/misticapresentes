@@ -58,6 +58,10 @@ const merchantNameInput = $("#merchantName");
 const storeNameInput = $("#storeName");
 const merchantCityInput = $("#merchantCity");
 const publishWarning = $("#publishWarning");
+const pixCopyFeedback = $("#pixCopyFeedback");
+const pixComprovanteFeedback = $("#pixComprovanteFeedback");
+const pixKeyToggleBtn = $("[data-toggle-pix-key]");
+const generatePixBtn = $("[data-generate-pix]");
 const adminLoginPanel = $("#adminLoginPanel");
 const adminContent = $("#adminContent");
 const adminLoginForm = $("#adminLoginForm");
@@ -121,7 +125,7 @@ function escapeCsv(value) { return `"${text(value).replace(/"/g, '""')}"`; }
 function safeId(value) { return text(value).replace(/[^a-zA-Z0-9_-]/g, ""); }
 function buildWhatsappUrl(message) { return `https://wa.me/${storeConfig.whatsappNumber}?text=${encodeURIComponent(message)}`; }
 
-function setupConfig() { const pendente = "Disponível após confirmar o pedido"; if (pixKeyInput) pixKeyInput.value = pendente; if (merchantNameInput) merchantNameInput.value = pendente; if (storeNameInput) storeNameInput.value = pendente; if (merchantCityInput) merchantCityInput.value = pendente; $$('[data-whatsapp-link]').forEach(link => { link.href = buildWhatsappUrl("Olá, vim pelo site da Mística Presentes e gostaria de atendimento."); }); const warnings = []; if (storeConfig.whatsappNumber === PLACEHOLDER_WHATSAPP) warnings.push("WhatsApp ainda está com número de exemplo."); if (warnings.length && publishWarning) { publishWarning.hidden = false; publishWarning.innerHTML = `<strong>Atenção:</strong> ${warnings.join(" ")}`; } }
+function setupConfig() { const pendente = "Disponível após confirmar o pedido"; if (pixKeyInput) { pixKeyInput.value = pendente; delete pixKeyInput.dataset.valorMascarado; } if (pixKeyToggleBtn) pixKeyToggleBtn.disabled = true; if (merchantNameInput) merchantNameInput.value = pendente; if (storeNameInput) storeNameInput.value = pendente; if (merchantCityInput) merchantCityInput.value = pendente; $$('[data-whatsapp-link]').forEach(link => { link.href = buildWhatsappUrl("Olá, vim pelo site da Mística Presentes e gostaria de atendimento."); }); const warnings = []; if (storeConfig.whatsappNumber === PLACEHOLDER_WHATSAPP) warnings.push("WhatsApp ainda está com número de exemplo."); if (warnings.length && publishWarning) { publishWarning.hidden = false; publishWarning.innerHTML = `<strong>Atenção:</strong> ${warnings.join(" ")}`; } }
 function setupFloatingWhatsapp() { if (document.querySelector(".floating-whatsapp")) return; const link = document.createElement("a"); link.className = "floating-whatsapp"; link.href = buildWhatsappUrl("Olá, vim pelo site da Mística Presentes e gostaria de atendimento."); link.target = "_blank"; link.rel = "noopener"; link.setAttribute("aria-label", "Chamar Mística Presentes no WhatsApp"); link.textContent = "☘ WhatsApp"; document.body.appendChild(link); }
 
 // Carrinho flutuante com contador de itens, presente em todas as páginas. Dá
@@ -187,9 +191,9 @@ window.toggleProductDescription = toggleProductDescription;
 window.openProductDrawers = openProductDrawers;
 function renderProducts() { if (!productGrid) return; productGrid.innerHTML = products.map(productCardHtml).join(""); }
 function validateQuantity(rawQty, productId) { const qty = Number.parseInt(rawQty, 10); const available = getStock(productId); const inCart = cart.find(item => item.id === productId)?.qty || 0; if (!Number.isInteger(qty) || qty < 1) return { ok: false, message: "Informe uma quantidade inteira maior que zero." }; if (qty + inCart > available) return { ok: false, message: `Estoque insuficiente. Disponível: ${Math.max(available - inCart, 0)}.` }; return { ok: true, qty }; }
-function addToCart(productId) { const product = products.find(item => item.id === productId); if (!product) return; const qtyInput = document.getElementById(`qty-${safeId(productId)}`); const validation = validateQuantity(qtyInput.value, productId); if (!validation.ok) return setStatus(validation.message); const existing = cart.find(item => item.id === productId); const sob = Boolean(window.misticaEncomenda && window.misticaEncomenda.isSobEncomenda(product)); if (existing) { existing.qty += validation.qty; existing.sob = sob; } else cart.push({ id: product.id, name: product.name, price: product.price, qty: validation.qty, sob }); window.misticaResetIdempotencyKey?.(); saveState(); renderCart(); renderProducts(); setStatus(`${product.name} adicionado ao carrinho.`); window.misticaTrack?.("add_to_cart", { currency: "BRL", value: product.price * validation.qty, items: [{ item_id: product.id, item_name: product.name, price: product.price, quantity: validation.qty }] }); }
-function removeFromCart(productId) { cart = cart.filter(item => item.id !== productId); window.misticaResetIdempotencyKey?.(); saveState(); renderCart(); renderProducts(); }
-function clearCart() { cart = []; window.misticaCupomAtivo = null; window.misticaResetIdempotencyKey?.(); const cupomInput = document.getElementById("cartCoupon"); if (cupomInput) cupomInput.value = ""; const cupomStatus = document.getElementById("couponStatus"); if (cupomStatus) cupomStatus.hidden = true; pixPayloadInput.value = ""; setStatus("Carrinho limpo. Adicione produtos para gerar um novo Pix."); clearQrCanvas(); pararAcompanhamentoPedido(); const el = reservaStatusEl(); if (el) el.textContent = ""; saveState(); renderCart(); renderProducts(); }
+function addToCart(productId) { const product = products.find(item => item.id === productId); if (!product) return; const qtyInput = document.getElementById(`qty-${safeId(productId)}`); const validation = validateQuantity(qtyInput.value, productId); if (!validation.ok) return setStatus(validation.message); const existing = cart.find(item => item.id === productId); const sob = Boolean(window.misticaEncomenda && window.misticaEncomenda.isSobEncomenda(product)); if (existing) { existing.qty += validation.qty; existing.sob = sob; } else cart.push({ id: product.id, name: product.name, price: product.price, qty: validation.qty, sob }); window.misticaResetIdempotencyKey?.(); resetGerarPixStateOnCartChange(); saveState(); renderCart(); renderProducts(); setStatus(`${product.name} adicionado ao carrinho.`); window.misticaTrack?.("add_to_cart", { currency: "BRL", value: product.price * validation.qty, items: [{ item_id: product.id, item_name: product.name, price: product.price, quantity: validation.qty }] }); }
+function removeFromCart(productId) { cart = cart.filter(item => item.id !== productId); window.misticaResetIdempotencyKey?.(); resetGerarPixStateOnCartChange(); saveState(); renderCart(); renderProducts(); }
+function clearCart() { cart = []; window.misticaCupomAtivo = null; window.misticaResetIdempotencyKey?.(); resetGerarPixStateOnCartChange(); const cupomInput = document.getElementById("cartCoupon"); if (cupomInput) cupomInput.value = ""; const cupomStatus = document.getElementById("couponStatus"); if (cupomStatus) cupomStatus.hidden = true; pixPayloadInput.value = ""; setStatus("Carrinho limpo. Adicione produtos para gerar um novo Pix."); clearQrCanvas(); pararAcompanhamentoPedido(); const el = reservaStatusEl(); if (el) { el.textContent = ""; el.hidden = true; } const statusEl = document.getElementById("pixPedidoStatus"); if (statusEl) statusEl.hidden = true; setCheckoutStep("carrinho"); saveState(); renderCart(); renderProducts(); }
 // Identifica itens sob encomenda no carrinho. Prioriza o marcador salvo no
 // próprio item (definido no addToCart), com fallback para a regra central caso
 // o produto ainda esteja no catálogo carregado.
@@ -211,11 +215,19 @@ function updatePixPanelVisibility() {
   const panel = document.querySelector(".pix-panel");
   if (panel) panel.hidden = !cart.length;
   const generateBtn = document.querySelector("[data-generate-pix]");
-  if (generateBtn) generateBtn.disabled = !cart.length;
+  // Só a ausência de itens no carrinho decide o estado "idle" aqui; os
+  // estados "busy" (requisição em curso) e "gerado" (Pix já emitido para
+  // este pedido) são controlados por setGerarPixVisualState() e não podem
+  // ser reabertos só porque o carrinho foi re-renderizado.
+  if (generateBtn && gerarPixEstadoAtual === "idle") generateBtn.disabled = !cart.length;
   const whatsappBtn = document.querySelector("[data-send-sale-whatsapp]");
   if (whatsappBtn) whatsappBtn.disabled = !cart.length;
 }
-function renderCart() { updateCartCount(); renderCrossSell(); updateCheckoutEncomendaBox(); updatePixPanelVisibility(); if (!cartList || !cartTotal) return; if (!cartReady) { cartList.innerHTML = `<div class="cart-item"><span>Carregando catálogo oficial para exibir seu carrinho...</span></div>`; cartTotal.textContent = currency.format(0); return; } if (!cart.length) cartList.innerHTML = `<div class="cart-empty"><p>Seu carrinho está vazio. Explore nossos produtos e encontre algo especial para sua intenção.</p><a class="btn btn-small" href="#produtos">Ver produtos</a></div>`; else cartList.innerHTML = cart.map(item => `<div class="cart-item"><div><strong>${escapeHtml(item.name)}</strong><span>${item.qty}x ${currency.format(item.price)} = ${currency.format(item.price * item.qty)}</span>${cartItemIsEncomenda(item) ? `<span class="cart-encomenda-tag">${escapeHtml((window.misticaEncomenda && window.misticaEncomenda.BADGE) || "Sob encomenda")}</span>` : ""}</div><button class="cart-remove" type="button" onclick="removeFromCart('${item.id}')">Remover</button></div>`).join(""); cartTotal.textContent = currency.format(getTotal()); }
+function cartItemLineHtml(item) {
+  const subtotal = item.price * item.qty;
+  return `<div class="cart-item"><div class="cart-item-detail"><span class="cart-item-name">${escapeHtml(item.name)}</span><span class="cart-item-line"><span>${item.qty} × ${currency.format(item.price)}</span><span class="cart-item-subtotal">Subtotal: ${currency.format(subtotal)}</span></span>${cartItemIsEncomenda(item) ? `<span class="cart-encomenda-tag">${escapeHtml((window.misticaEncomenda && window.misticaEncomenda.BADGE) || "Sob encomenda")}</span>` : ""}</div><button class="cart-remove" type="button" aria-label="Remover ${escapeHtml(item.name)} do carrinho" onclick="removeFromCart('${item.id}')">Remover</button></div>`;
+}
+function renderCart() { updateCartCount(); renderCrossSell(); updateCheckoutEncomendaBox(); updatePixPanelVisibility(); if (!cartList || !cartTotal) return; if (!cartReady) { cartList.innerHTML = `<div class="cart-item"><span>Carregando catálogo oficial para exibir seu carrinho...</span></div>`; cartTotal.textContent = currency.format(0); return; } if (!cart.length) cartList.innerHTML = `<div class="cart-empty"><p>Seu carrinho está vazio. Explore nossos produtos e encontre algo especial para sua intenção.</p><a class="btn btn-small" href="#produtos">Ver produtos</a></div>`; else cartList.innerHTML = cart.map(cartItemLineHtml).join(""); cartTotal.textContent = currency.format(getTotal()); }
 
 // Cross-sell no carrinho: sugere até 4 produtos disponíveis que ainda não
 // estão no carrinho, priorizando categorias diferentes das já escolhidas
@@ -259,15 +271,121 @@ let pedidoStatusPollInterval = null;
 // de outro cliente): nunca persistido em localStorage/sessionStorage.
 let pedidoAtualParaComprovante = null;
 
+// ---------------------------------------------------------------------
+// Estado visual do botão "Gerar Pix": puramente de UI (não mexe em regra
+// de negócio/backend). "gerado" trava o botão para não recriar o mesmo
+// pedido por engano; volta a ficar livre quando o carrinho muda (o Pix
+// gerado passa a valer para um pedido diferente), a reserva expira ou o
+// pedido é cancelado — os únicos casos em que gerar de novo faz sentido.
+let gerarPixEstadoAtual = "idle"; // "idle" | "busy" | "gerado"
+function setGerarPixVisualState(state) {
+  gerarPixEstadoAtual = state;
+  const botao = generatePixBtn || document.querySelector("[data-generate-pix]");
+  if (!botao) return;
+  botao.dataset.state = state;
+  if (state === "busy") {
+    botao.disabled = true;
+    botao.setAttribute("aria-busy", "true");
+    botao.textContent = "Gerando Pix...";
+  } else if (state === "gerado") {
+    botao.disabled = true;
+    botao.setAttribute("aria-busy", "false");
+    botao.textContent = "Pix gerado";
+  } else {
+    botao.disabled = !cart.length;
+    botao.setAttribute("aria-busy", "false");
+    botao.textContent = "Gerar Pix";
+  }
+}
+window.misticaSetGerarPixVisualState = setGerarPixVisualState;
+window.misticaGerarPixBloqueado = () => gerarPixEstadoAtual !== "idle";
+// Cart mudou depois do Pix gerado: o Pix exibido não representa mais esse
+// carrinho, então destrava o botão para permitir gerar um novo.
+function resetGerarPixStateOnCartChange() {
+  if (gerarPixEstadoAtual === "gerado") setGerarPixVisualState("idle");
+}
+
+// Reabilita "Copiar Pix" e limpa o feedback de cópia da geração anterior
+// (ex.: reserva expirada, que via desabilitarAcoesPixInvalido() havia
+// desabilitado o botão). Chamada no início de toda nova tentativa de gerar
+// Pix, nas duas rotas de checkout (app.js e site-production-guard.js), para
+// que o botão nunca fique preso desabilitado sobre um payload novo e válido.
+function resetCopyPixButtonState() {
+  const copyBtn = document.querySelector("[data-copy-pix]");
+  if (copyBtn) copyBtn.disabled = false;
+  if (pixCopyFeedback) { pixCopyFeedback.hidden = true; pixCopyFeedback.textContent = ""; }
+}
+window.misticaResetCopyPixButtonState = resetCopyPixButtonState;
+
+const STEP_LABELS = { carrinho: 1, pagamento: 2, comprovante: 3, confirmacao: 4 };
+function setCheckoutStep(stepName) {
+  const steps = document.querySelectorAll("#checkoutSteps .checkout-step");
+  const alvo = STEP_LABELS[stepName] || 1;
+  steps.forEach(step => {
+    const ordem = STEP_LABELS[step.dataset.step] || 1;
+    step.removeAttribute("aria-current");
+    step.removeAttribute("data-done");
+    if (ordem === alvo) step.setAttribute("aria-current", "step");
+    else if (ordem < alvo) step.setAttribute("data-done", "true");
+  });
+}
+window.misticaSetCheckoutStep = setCheckoutStep;
+
+const PEDIDO_STATUS_LABELS = {
+  "Aguardando pagamento": { texto: "Aguardando pagamento", tom: "aguardando" },
+  "Pagamento divergente": { texto: "Aguardando pagamento", tom: "aguardando" },
+  "Comprovante enviado": { texto: "Pagamento informado — aguardando conferência da loja", tom: "informado" },
+  "Pagamento em análise": { texto: "Pagamento informado — aguardando conferência da loja", tom: "informado" },
+  "Pagamento confirmado": { texto: "Pagamento confirmado — seu pedido está sendo preparado", tom: "confirmado" },
+  "Aguardando encomenda": { texto: "Pagamento confirmado — seu pedido está sendo preparado", tom: "confirmado" },
+  "Cancelado": { texto: "Pix expirado — gere um novo pagamento", tom: "expirado" },
+};
+function pedidoStatusEl() {
+  let el = document.getElementById("pixPedidoStatus");
+  if (!el && pixStatus) {
+    el = document.createElement("p");
+    el.id = "pixPedidoStatus";
+    el.className = "pix-pedido-status";
+    el.setAttribute("role", "status");
+    el.setAttribute("aria-live", "polite");
+    pixStatus.insertAdjacentElement("afterend", el);
+  }
+  return el;
+}
+function setPedidoStatusLabel(statusBackend) {
+  const el = pedidoStatusEl();
+  if (!el) return;
+  const info = PEDIDO_STATUS_LABELS[statusBackend] || { texto: statusBackend || "", tom: "aguardando" };
+  el.textContent = info.texto;
+  el.dataset.tone = info.tom;
+  if (info.tom === "confirmado") setCheckoutStep("confirmacao");
+  else if (info.tom === "informado") setCheckoutStep("comprovante");
+}
+window.misticaSetPedidoStatusLabel = setPedidoStatusLabel;
+
 function reservaStatusEl() {
   let el = document.getElementById("pixReservaStatus");
   if (!el && pixStatus) {
     el = document.createElement("p");
     el.id = "pixReservaStatus";
     el.className = "pix-reserva-status";
+    el.setAttribute("role", "status");
+    el.setAttribute("aria-live", "polite");
     pixStatus.insertAdjacentElement("afterend", el);
   }
   return el;
+}
+
+// Desabilita ações que não fazem mais sentido quando a reserva expira ou o
+// pedido é cancelado (copiar Pix, avisar pagamento): o Pix mostrado na tela
+// não deve mais ser pago nesse estado. O prazo em si vem sempre do backend
+// (pedido.expiraEm) — este relógio só exibe a contagem, nunca a define.
+function desabilitarAcoesPixInvalido() {
+  const copyBtn = document.querySelector("[data-copy-pix]");
+  if (copyBtn) copyBtn.disabled = true;
+  const comprovanteBtn = document.querySelector("[data-send-pix-comprovante]");
+  if (comprovanteBtn) comprovanteBtn.disabled = true;
+  setGerarPixVisualState("idle");
 }
 
 function pararAcompanhamentoPedido() {
@@ -281,20 +399,31 @@ function iniciarAcompanhamentoPedido(pedido) {
   pararAcompanhamentoPedido();
   const el = reservaStatusEl();
   if (!el) return;
+  el.hidden = false;
+  el.removeAttribute("data-urgent");
+  el.removeAttribute("data-expired");
 
   if (pedido.expiraEm) {
     const expiraEm = new Date(pedido.expiraEm).getTime();
+    const CINCO_MINUTOS_MS = 5 * 60000;
     const atualizarContagem = () => {
       const restanteMs = expiraEm - Date.now();
       if (restanteMs <= 0) {
-        el.textContent = "Reserva de estoque expirada. Gere um novo Pix para reservar os produtos novamente.";
+        el.textContent = "Reserva expirada — o Pix acima não deve mais ser pago. Gere um novo Pix para reservar os produtos novamente.";
+        el.dataset.expired = "true";
+        el.removeAttribute("data-urgent");
         clearInterval(reservaTimerInterval);
         reservaTimerInterval = null;
+        desabilitarAcoesPixInvalido();
         return;
       }
       const minutos = String(Math.floor(restanteMs / 60000)).padStart(2, "0");
       const segundos = String(Math.floor((restanteMs % 60000) / 1000)).padStart(2, "0");
-      el.textContent = `Estoque reservado por mais ${minutos}:${segundos}. Pague dentro desse prazo para garantir os produtos.`;
+      const urgente = restanteMs < CINCO_MINUTOS_MS;
+      el.dataset.urgent = urgente ? "true" : "false";
+      el.textContent = urgente
+        ? `Atenção: reserva expira em ${minutos}:${segundos}. Pague agora para garantir os produtos.`
+        : `Reserva expira em ${minutos}:${segundos}`;
     };
     atualizarContagem();
     reservaTimerInterval = setInterval(atualizarContagem, 1000);
@@ -305,11 +434,17 @@ function iniciarAcompanhamentoPedido(pedido) {
       try {
         const { status } = await window.misticaConsultarStatusPedido(pedido.id, pedido.pixTxid);
         if (status && status !== "Aguardando pagamento") {
-          pararAcompanhamentoPedido();
+          setPedidoStatusLabel(status);
           const cancelado = /cancel/i.test(status);
-          el.textContent = cancelado
-            ? "Este pedido foi cancelado e o estoque reservado foi liberado."
-            : `Pagamento confirmado! Status do pedido: ${status}.`;
+          if (cancelado) {
+            pararAcompanhamentoPedido();
+            el.textContent = "Este pedido foi cancelado e o estoque reservado foi liberado.";
+            el.dataset.expired = "true";
+            el.removeAttribute("data-urgent");
+            desabilitarAcoesPixInvalido();
+          } else if (/confirmad|encomenda/i.test(status)) {
+            pararAcompanhamentoPedido();
+          }
         }
       } catch {
         // Falha de rede ao consultar status não deve interromper o checkout;
@@ -320,6 +455,10 @@ function iniciarAcompanhamentoPedido(pedido) {
 }
 
 async function generatePix() {
+  // Trava contra clique duplo/geração concorrente: enquanto uma requisição
+  // está em andamento ou já existe um Pix gerado válido para este carrinho,
+  // um novo clique não deve disparar outro pedido.
+  if (gerarPixEstadoAtual === "busy" || gerarPixEstadoAtual === "gerado") return;
   const total = getTotal();
   if (!cart.length || total <= 0) return setStatus("Adicione pelo menos um produto ao carrinho antes de gerar o Pix.");
   if (!hasEnoughStockForCart()) return setStatus("Existe produto no carrinho acima do estoque disponível. Ajuste antes de gerar o Pix.");
@@ -338,20 +477,24 @@ async function generatePix() {
   pararAcompanhamentoPedido();
   clearQrCanvas();
   pixPayloadInput.value = "";
+  resetCopyPixButtonState();
+  setGerarPixVisualState("busy");
   setStatus("Enviando pedido e gerando o Pix com o servidor...");
   let pedido;
   try {
     pedido = await window.misticaCriarPedido(cart);
   } catch (error) {
+    setGerarPixVisualState("idle");
     return setStatus(error.message || "Não foi possível gerar o Pix agora. Tente novamente ou fale pelo WhatsApp.");
   }
   pixPayloadInput.value = pedido.pixPayload;
   if (pedido.pixInfo) {
-    if (pixKeyInput) pixKeyInput.value = pedido.pixInfo.chave_mascarada || "";
+    if (pixKeyInput) pixKeyInput.dataset.valorMascarado = pedido.pixInfo.chave_mascarada || "";
     if (merchantNameInput) merchantNameInput.value = pedido.pixInfo.recebedor || "";
     if (storeNameInput) storeNameInput.value = pedido.pixInfo.nome_loja || "";
     if (merchantCityInput) merchantCityInput.value = pedido.pixInfo.cidade || "";
   }
+  setPixKeyRevealed(false);
   try {
     if (!window.QRCode) throw new Error("Biblioteca de QR Code não carregou.");
     await window.QRCode.toCanvas(pixCanvas, pedido.pixPayload, { width: 220, margin: 2, errorCorrectionLevel: "M" });
@@ -359,28 +502,43 @@ async function generatePix() {
   } catch {
     setStatus("Pix copia e cola gerado. Não foi possível desenhar o QR Code agora.");
   }
-  iniciarAcompanhamentoPedido(pedido);
+  setGerarPixVisualState("gerado");
+  setPedidoStatusLabel("Aguardando pagamento");
+  setCheckoutStep("pagamento");
   mostrarBotaoComprovanteWhatsapp(pedido, total);
+  iniciarAcompanhamentoPedido(pedido);
   saveSale(pedido);
   window.misticaMobileSync?.syncNow?.();
 }
 
 function mostrarBotaoComprovanteWhatsapp(pedido, total) {
   pedidoAtualParaComprovante = { id: pedido.id, pixTxid: pedido.pixTxid || null, total, dataIso: pedido.dataIso };
+  comprovanteEnviadoAtual = false;
   const botao = document.querySelector("[data-send-pix-comprovante]");
   const nota = document.getElementById("comprovanteWhatsappNote");
-  if (botao) botao.hidden = false;
+  if (botao) { botao.hidden = false; botao.disabled = false; botao.dataset.state = ""; botao.textContent = "Já realizei o pagamento"; }
   if (nota) nota.hidden = false;
+  if (pixComprovanteFeedback) { pixComprovanteFeedback.hidden = true; pixComprovanteFeedback.textContent = ""; }
 }
 
-// "Já paguei — enviar comprovante pelo WhatsApp": nunca marca o pedido como
-// pago. Apenas registra no servidor (idempotente) que o cliente indicou ter
-// pago e abre o WhatsApp da loja com uma mensagem pré-preenchida — sem a
-// chave Pix completa, só os dados já públicos do próprio pedido do cliente.
-// A confirmação real do pagamento é sempre feita por um administrador.
+// "Já realizei o pagamento": nunca marca o pedido como pago. Apenas
+// registra no servidor (idempotente) que o cliente indicou ter pago e abre
+// o WhatsApp da loja com uma mensagem pré-preenchida — sem a chave Pix
+// completa, só os dados já públicos do próprio pedido do cliente. A
+// confirmação real do pagamento é sempre feita por um administrador.
+let comprovanteEnviadoAtual = false;
+let comprovanteEnviandoAgora = false;
 async function enviarComprovantePixWhatsapp() {
   const pedido = pedidoAtualParaComprovante;
   if (!pedido || !pedido.id) return setStatus("Gere o Pix antes de enviar o comprovante.");
+  // Evita clique duplo/envio duplicado: uma vez informado, o botão fica
+  // travado até um novo Pix ser gerado (mostrarBotaoComprovanteWhatsapp
+  // reseta esse estado).
+  if (comprovanteEnviandoAgora || comprovanteEnviadoAtual) return;
+  comprovanteEnviandoAgora = true;
+
+  const botao = document.querySelector("[data-send-pix-comprovante]");
+  if (botao) botao.disabled = true;
 
   const dataHora = new Date(pedido.dataIso || Date.now()).toLocaleString("pt-BR");
   const mensagem = `Olá, ${storeConfig.name}! Realizei o pagamento Pix do pedido #${pedido.id}.\n\nValor: ${currency.format(pedido.total)}\nData: ${dataHora}\n\nVou anexar o comprovante nesta conversa.`;
@@ -397,13 +555,40 @@ async function enviarComprovantePixWhatsapp() {
     // mesmo sem esse registro (ex.: pedido segue "Aguardando pagamento").
   }
 
+  comprovanteEnviadoAtual = true;
+  comprovanteEnviandoAgora = false;
+  if (botao) { botao.dataset.state = "enviado"; botao.textContent = "Pagamento informado ✓"; }
+  if (pixComprovanteFeedback) {
+    pixComprovanteFeedback.hidden = false;
+    pixComprovanteFeedback.textContent = "Pagamento informado. Seu pedido será conferido pela loja.";
+  }
+  setPedidoStatusLabel("Comprovante enviado");
+  setCheckoutStep("comprovante");
+
   window.open(buildWhatsappUrl(mensagem), "_blank", "noopener");
 }
 // O pix_txid não entra no objeto salvo em `sales`/localStorage: ele já cumpriu
 // seu papel (acompanhar o pedido nesta sessão, via `pedido.pixTxid` em
 // memória) e não deve ficar persistido permanentemente no navegador.
 function saveSale(pedido) { const saleItems = cart.map(item => ({ ...item })); const total = getTotal(); reduceStockFromCart(); sales.unshift({ date: pedido.dataIso || new Date().toISOString(), id: pedido.id, pedidoBackendId: pedido.id, total, items: saleItems, pixPayload: pedido.pixPayload, status: "Aguardando pagamento", estoqueReposto: false }); sales = sales.slice(0, 50); cart = []; saveState(); renderAll(); }
-async function copyPix() { const payload = pixPayloadInput.value; if (!payload) return setStatus("Gere o Pix antes de copiar."); try { await navigator.clipboard.writeText(payload); setStatus("Pix copia e cola copiado."); } catch { pixPayloadInput.select(); document.execCommand("copy"); setStatus("Pix copia e cola selecionado para copiar."); } }
+function showPixCopyFeedback(message, tone = "ok") {
+  if (!pixCopyFeedback) return setStatus(message);
+  pixCopyFeedback.hidden = false;
+  pixCopyFeedback.textContent = message;
+  pixCopyFeedback.dataset.tone = tone;
+}
+async function copyPix() {
+  const payload = pixPayloadInput.value;
+  if (!payload) return setStatus("Gere o Pix antes de copiar.");
+  try {
+    await navigator.clipboard.writeText(payload);
+    showPixCopyFeedback("Código Pix copiado com sucesso! Cole no aplicativo do seu banco para concluir o pagamento.");
+  } catch {
+    pixPayloadInput.select();
+    document.execCommand("copy");
+    showPixCopyFeedback("Código Pix selecionado. Copie com Ctrl+C (ou Cmd+C) e cole no aplicativo do seu banco.", "warn");
+  }
+}
 function buildSaleSummary() { if (!cart.length) return ""; const items = cart.map(item => `• ${item.qty}x ${item.name} - ${currency.format(item.price * item.qty)}`).join("\n"); return `Olá, quero finalizar um pedido na ${storeConfig.name}:\n\n${items}\n\nTotal: ${currency.format(getTotal())}`; }
 function sendSaleWhatsapp() { if (!cart.length) return setStatus("Adicione produtos ao carrinho para enviar o resumo pelo WhatsApp."); window.misticaTrack?.("contact_whatsapp", { method: "carrinho", currency: "BRL", value: getTotal() }); window.open(buildWhatsappUrl(buildSaleSummary()), "_blank", "noopener"); }
 function buyProductWhatsapp(productId) { const product = products.find(item => item.id === productId); if (!product) return; const message = `Olá, tenho interesse neste produto da ${storeConfig.name}:\n\n${product.name}\nValor: ${currency.format(product.price)}\nCategoria: ${product.category}\n\nGostaria de saber disponibilidade e opções parecidas.`; window.misticaTrack?.("contact_whatsapp", { method: "produto", item_id: product.id, item_name: product.name }); window.open(buildWhatsappUrl(message), "_blank", "noopener"); }
@@ -471,6 +656,23 @@ function handleIsisSubmit(event) { if (isisForm?.dataset?.isisCommerce === "1") 
 if (clientForm) clientForm.addEventListener("submit", event => { event.preventDefault(); const client = { name: $("#clientName").value.trim(), cpf: $("#clientCpf").value.trim(), address: $("#clientAddress").value.trim(), whatsapp: $("#clientWhatsapp").value.trim(), createdAt: new Date().toISOString() }; if (!isValidCpf(client.cpf)) { clientSaved.hidden = false; clientSaved.textContent = "CPF inválido. Confira os números digitados."; return; } if (!isValidWhatsapp(client.whatsapp)) { clientSaved.hidden = false; clientSaved.textContent = "WhatsApp inválido. Use DDD + número."; return; } clients.unshift(client); clients = clients.slice(0, 20); saveState(); renderClients(); clientSaved.hidden = false; clientSaved.textContent = `Cliente salvo: ${client.name} • ${client.whatsapp}`; clientForm.reset(); });
 function renderAll() { renderProducts(); renderCart(); renderClients(); renderHistory(); renderStock(); renderSuppliers(); renderAdminDashboard(); }
 
+// A chave Pix chega do backend já mascarada (nunca a chave completa: ver
+// backend/pix.py, info_publica_pix). Este toggle só alterna a EXIBIÇÃO
+// dessa versão já mascarada — não existe chave completa no navegador para
+// revelar, então o payload do Pix e o backend não são tocados.
+let pixKeyRevelada = false;
+function setPixKeyRevealed(revelar) {
+  pixKeyRevelada = Boolean(revelar);
+  if (!pixKeyInput || !pixKeyToggleBtn) return;
+  const mascarada = pixKeyInput.dataset.valorMascarado || "";
+  pixKeyToggleBtn.disabled = !mascarada;
+  pixKeyInput.value = pixKeyRevelada ? mascarada : "•••• (oculta)";
+  pixKeyToggleBtn.textContent = pixKeyRevelada ? "Ocultar chave" : "Mostrar chave";
+  pixKeyToggleBtn.setAttribute("aria-pressed", String(pixKeyRevelada));
+}
+function togglePixKeyReveal() { setPixKeyRevealed(!pixKeyRevelada); }
+window.misticaSetPixKeyRevealed = setPixKeyRevealed;
+
 $("#clientCpf")?.addEventListener("input", event => { event.target.value = maskCpf(event.target.value); });
 $("#clientWhatsapp")?.addEventListener("input", event => { event.target.value = maskWhatsapp(event.target.value); });
 $("[data-apply-coupon]")?.addEventListener("click", applyCoupon);
@@ -478,6 +680,7 @@ $("[data-clear-cart]")?.addEventListener("click", clearCart);
 $("[data-generate-pix]")?.addEventListener("click", generatePix);
 $("[data-copy-pix]")?.addEventListener("click", copyPix);
 $("[data-send-pix-comprovante]")?.addEventListener("click", enviarComprovantePixWhatsapp);
+$("[data-toggle-pix-key]")?.addEventListener("click", togglePixKeyReveal);
 $("[data-send-sale-whatsapp]")?.addEventListener("click", sendSaleWhatsapp);
 $("[data-export-clients]")?.addEventListener("click", exportClients);
 $("[data-export-sales]")?.addEventListener("click", exportSales);
@@ -519,3 +722,5 @@ setupFloatingWhatsapp();
 setupFloatingCart();
 renderAll();
 clearQrCanvas();
+setCheckoutStep("carrinho");
+setGerarPixVisualState("idle");

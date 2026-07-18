@@ -70,11 +70,22 @@ test.describe("checkout público: Idempotency-Key e acompanhamento por txid", ()
     expect(chavesRecebidas[1]).toBe(chavesRecebidas[0]);
     await expect(page.locator("#pixStatus")).toContainText("aguardando pagamento", { ignoreCase: true });
 
-    // Gerar o Pix de novo para o MESMO carrinho após o sucesso (ex.: reload
-    // da página ou clique repetido) deve reaproveitar a mesma chave — nunca
-    // criar um segundo pedido/reserva de estoque para o mesmo conteúdo (ver
-    // Fase B: achado de duplicidade em refresh/múltiplas abas).
-    await gerarPix.click();
+    // Depois do sucesso, "Gerar Pix" trava (melhoria de UX: nunca recriar o
+    // mesmo pedido por engano) — um novo clique no mesmo carrinho não gera
+    // uma terceira requisição.
+    await expect(gerarPix).toBeDisabled();
+    await gerarPix.click({ force: true });
+    await page.waitForTimeout(300);
+    expect(chavesRecebidas.length).toBe(2);
+
+    // Gerar o Pix de novo para o MESMO carrinho via reload (ex.: cliente deu
+    // F5) ainda deve reaproveitar a mesma chave — nunca criar um segundo
+    // pedido/reserva de estoque para o mesmo conteúdo (ver Fase B: achado de
+    // duplicidade em refresh/múltiplas abas, coberto em
+    // checkout-duplicidade-multitab.spec.js).
+    await page.reload();
+    await expect.poll(() => page.evaluate(() => window.misticaCatalogState)).toBe("ready");
+    await page.locator("[data-generate-pix]").click();
     await expect.poll(() => chavesRecebidas.length).toBe(3);
     expect(chavesRecebidas[2]).toBe(chavesRecebidas[1]);
   });
