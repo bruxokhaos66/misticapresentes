@@ -27,6 +27,12 @@ function makeElement(overrides = {}) {
     removeAttribute(k) { delete this.attrs[k]; },
     addEventListener() {},
     classList: { toggle() {} },
+    // Este ambiente Node não tem layout real -- simula um painel já visível
+    // e com tamanho (usado por aguardarPainelCartaoVisivel em
+    // v2-mercadopago-checkout.js). Validações de layout/geometria real
+    // ficam em tests/e2e/mercadopago-cardform-mount.spec.js e
+    // tests/e2e/mercadopago-cardform-viewport.spec.js.
+    getBoundingClientRect: () => ({ width: 300, height: 44, top: 100, left: 20 }),
     ...overrides,
   };
 }
@@ -66,6 +72,8 @@ function loadCheckout({ enabled = true, publicKey = "TEST-PUBLIC-KEY" } = {}) {
     querySelectorAll: () => [],
     addEventListener: () => {},
   };
+  global.getComputedStyle = () => ({ display: "block", visibility: "visible" });
+  global.requestAnimationFrame = (callback) => setTimeout(callback, 0);
 
   require("../v2-mercadopago-checkout.js");
   return { checkout: global.window.misticaMercadoPagoCheckout, capturedConfigs };

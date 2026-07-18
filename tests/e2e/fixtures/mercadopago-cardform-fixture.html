@@ -17,15 +17,35 @@
   Parâmetro de URL `?modo=falha` faz o mock simular onFormMounted(null) SEM
   nunca inserir os 3 iframes -- usado para testar a nova defesa que impede o
   formulário de ficar "utilizável" quando os Secure Fields não carregam.
+
+  Réplica do bug de posicionamento (iframe com coordenadas negativas): o SDK
+  real do Mercado Pago calcula o tamanho/posição de cada Secure Field UMA
+  VEZ, no instante em que cardForm() é chamado, e nunca reobserva o layout
+  depois. Este mock replica esse comportamento -- captura
+  getBoundingClientRect() de cada campo no exato momento da chamada e usa
+  esse valor "congelado" (largura/altura em px fixo, não 100%) para o
+  iframe inserido depois. Se o código de produção chamar cardForm() com o
+  painel ainda oculto (rect zerado), os testes abaixo devem falhar mesmo
+  depois do painel ficar visível -- é isso que valida a correção em
+  v2-mercadopago-checkout.js (aguardarPainelCartaoVisivel).
+
+  Parâmetro de URL `?scrollAntes=1` adiciona um espaçador alto acima do
+  formulário e faz a página abrir já rolada para longe do topo antes do
+  usuário trocar para "cartão" -- usado para testar que o congelamento de
+  coordenadas não é reintroduzido em páginas compridas/roladas.
 -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Fixture CardForm Mercado Pago</title>
 <link rel="stylesheet" href="../../../v2-mercadopago-checkout.css" />
-<style>body { font-family: sans-serif; max-width: 480px; margin: 24px auto; }</style>
+<style>body { font-family: sans-serif; max-width: 480px; margin: 24px auto; }
+.scroll-spacer { height: 1400px; }
+</style>
 </head>
 <body>
+<div class="scroll-spacer" id="scrollSpacer" hidden></div>
 <div class="payment-method-toggle" role="tablist" aria-label="Forma de pagamento">
   <button type="button" class="btn btn-ghost payment-method-btn is-active" data-payment-method="pix" role="tab" aria-selected="true">Pix</button>
   <button type="button" class="btn btn-ghost payment-method-btn" data-payment-method="cartao" role="tab" aria-selected="false" hidden data-mp-toggle>Cartão de crédito</button>
@@ -56,22 +76,44 @@
   window.misticaGetCart = () => [{ id: "produto-teste", qty: 1 }];
   window.misticaCriarPedido = async () => ({ id: 999, pixTxid: "txid-teste", totalFinal: 150.5 });
 
-  var modoFalha = new URLSearchParams(location.search).get("modo") === "falha";
+  var params = new URLSearchParams(location.search);
+  var modoFalha = params.get("modo") === "falha";
+  if (params.get("scrollAntes") === "1") {
+    document.getElementById("scrollSpacer").hidden = false;
+  }
   window.__mpMountCount = 0;
   window.__mpConfigsCapturados = [];
+
+  var CAMPOS_SEGUROS = ["mpCardNumber", "mpExpirationDate", "mpSecurityCode"];
 
   function MockMercadoPago() {}
   MockMercadoPago.prototype.cardForm = function (config) {
     window.__mpConfigsCapturados.push(config);
     window.__mpMountCount += 1;
+
+    // Congela a geometria de cada campo AGORA, no instante da chamada --
+    // exatamente como o SDK real faz. Se o container ainda estiver oculto
+    // (display:none via `hidden`), o rect vem zerado e o iframe nasce 0x0,
+    // reproduzindo o bug relatado mesmo que o painel fique visível depois.
+    var geometriaCongelada = {};
+    CAMPOS_SEGUROS.forEach(function (id) {
+      var el = document.getElementById(id);
+      geometriaCongelada[id] = el ? el.getBoundingClientRect() : null;
+    });
+
     if (config.autoMount) {
       setTimeout(function () {
         if (!modoFalha) {
-          ["mpCardNumber", "mpExpirationDate", "mpSecurityCode"].forEach(function (id) {
+          CAMPOS_SEGUROS.forEach(function (id) {
             var el = document.getElementById(id);
-            if (el && el.querySelectorAll("iframe").length === 0) {
+            var rect = geometriaCongelada[id];
+            if (el && el.querySelectorAll("iframe").length === 0 && rect) {
               var iframe = document.createElement("iframe");
               iframe.src = "about:blank";
+              iframe.style.display = "block";
+              iframe.style.border = "0";
+              iframe.style.width = rect.width + "px";
+              iframe.style.height = rect.height + "px";
               el.appendChild(iframe);
             }
           });
@@ -88,7 +130,7 @@
     }
     return {
       unmount: function () {
-        ["mpCardNumber", "mpExpirationDate", "mpSecurityCode"].forEach(function (id) {
+        CAMPOS_SEGUROS.forEach(function (id) {
           var el = document.getElementById(id);
           if (el) el.querySelectorAll("iframe").forEach(function (f) { f.remove(); });
         });

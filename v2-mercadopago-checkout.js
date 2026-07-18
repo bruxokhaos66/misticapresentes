@@ -90,6 +90,34 @@
     sessionStorage.removeItem(ATTEMPT_KEY_STORAGE_PREFIX + pedidoId);
   }
 
+  // O SDK do Mercado Pago calcula a posição/tamanho dos iframes dos Secure
+  // Fields (#mpCardNumber/#mpExpirationDate/#mpSecurityCode) UMA VEZ, no
+  // instante em que cardForm() é chamado -- ele não reobserva o layout
+  // depois. Se essa chamada acontecer com o painel ainda oculto (hidden,
+  // display:none, ou com getBoundingClientRect() zerado porque o layout/
+  // scroll ainda não terminou de assentar), os iframes ficam "presos" numa
+  // coordenada antiga e nunca recebem clique/digitação -- mesmo que
+  // visualmente o container pareça normal depois. Por isso nunca chamamos
+  // mpInstance.cardForm(...) sem antes confirmar que o painel já está
+  // visível e com layout final (dois requestAnimationFrame garantem que o
+  // navegador já aplicou estilo e completou pelo menos um ciclo de layout
+  // desde que o painel foi revelado).
+  function painelCartaoPronto(painel) {
+    if (!painel || painel.hidden) return false;
+    const estilo = getComputedStyle(painel);
+    if (estilo.display === "none" || estilo.visibility === "hidden") return false;
+    const rect = painel.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }
+
+  function aguardarPainelCartaoVisivel(painel) {
+    return new Promise((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => resolve(painelCartaoPronto(painel)));
+      });
+    });
+  }
+
   function alternarFormaPagamento(forma) {
     const pixPanel = document.getElementById("pixPaymentPanel");
     const cardPanel = document.getElementById("cardPaymentPanel");
@@ -132,6 +160,28 @@
     }
 
     if (cardFormMontadoParaPedido === pedido.id && cardForm) return; // já montado para este pedido/total
+
+    const cardPanel = document.getElementById("cardPaymentPanel");
+    const painelVisivel = await aguardarPainelCartaoVisivel(cardPanel);
+    if (!painelVisivel) {
+      // O painel foi ocultado (ex.: usuário voltou para Pix) antes do layout
+      // se estabilizar -- não monta o SDK às cegas; a próxima vez que
+      // "Cartão de crédito" for selecionado, alternarFormaPagamento chama
+      // montarFormularioCartao() de novo e este mesmo check roda outra vez.
+      return;
+    }
+
+    if (cardForm && typeof cardForm.unmount === "function") {
+      // Nunca deixa uma instância antiga do CardForm (montada para um
+      // pedido/total anterior) presa junto com uma nova -- evita iframes
+      // duplicados dentro de #mpCardNumber/#mpExpirationDate/#mpSecurityCode.
+      try {
+        cardForm.unmount();
+      } catch {
+        /* instância antiga já pode ter sido descartada pelo próprio SDK */
+      }
+    }
+
     cardFormMontadoParaPedido = pedido.id;
 
     cardForm = mpInstance.cardForm({
