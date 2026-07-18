@@ -242,7 +242,7 @@
           <strong data-progress-label>${feitos}/${total} aulas concluídas</strong>
           <span data-progress-pct>${pct}%</span>
         </div>
-        <div class="escola-progress-bar"><span data-progress-fill style="width:${pct}%"></span></div>
+        <div class="escola-progress-bar"><span data-progress-fill></span></div>
         <div class="escola-progress-actions">
           <button class="btn btn-ghost" type="button" data-continuar ${completo || !total ? "disabled" : ""}>Continuar estudando</button>
           <button class="btn" type="button" data-certificado ${completo ? "" : "disabled"}>${completo ? "Emitir certificado 🎓" : "Certificado ao concluir"}</button>
@@ -252,6 +252,9 @@
     `;
 
     const fill = container.querySelector("[data-progress-fill]");
+    // Via CSSOM (não style="" no HTML), para não depender de 'unsafe-inline'
+    // em style-src -- ver o mesmo padrão em escola-curso.js.
+    if (fill) fill.style.width = `${pct}%`;
     const label = container.querySelector("[data-progress-label]");
     const pctEl = container.querySelector("[data-progress-pct]");
     const btnContinuar = container.querySelector("[data-continuar]");

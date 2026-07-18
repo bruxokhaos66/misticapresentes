@@ -100,6 +100,11 @@
 }
 .achados-card-media img { width: 100%; height: 100%; object-fit: cover; }
 .achados-card-fallback { font-size: 2.4rem; color: rgba(242, 201, 109, .7); }
+/* Só escondido por padrão quando existe uma <img> tentando carregar ao lado
+   (mostrado via CSSOM se ela falhar, ver document.addEventListener("error")
+   em achados-misticos.js); quando não há imagem alguma, o ícone já nasce
+   visível (sem essa classe). */
+.achados-card-fallback.is-imagem-pendente { display: none; }
 
 .achados-card-body { display: flex; flex-direction: column; gap: 4px; flex: 1; }
 .achados-card-body h3 { margin: 2px 0; font-family: Cinzel, serif; color: var(--cream, #f4ecd8); font-size: 1.06rem; }

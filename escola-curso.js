@@ -10,6 +10,21 @@
 
   const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
+  // Aplica imagem de fundo/largura de barra via CSSOM (element.style.*), não
+  // via atributo style="" no HTML -- a CSP do site não tem 'unsafe-inline' em
+  // style-src, e um style="" dentro do innerHTML seria bloqueado pelo
+  // navegador. Propriedades de estilo setadas via JavaScript não passam pelo
+  // parser de HTML e por isso não são restritas por essa diretiva. Chamada
+  // depois de qualquer innerHTML que use [data-bg-url]/[data-progress-width].
+  function aplicarEstilosDinamicos(raiz) {
+    raiz.querySelectorAll("[data-bg-url]").forEach(el => {
+      el.style.backgroundImage = `url('${el.dataset.bgUrl}')`;
+    });
+    raiz.querySelectorAll("[data-progress-width]").forEach(el => {
+      el.style.width = `${el.dataset.progressWidth}%`;
+    });
+  }
+
   // Sanitiza o HTML de conteúdo de aula (autorado no admin) antes de exibir.
   // Usa um <template> inerte (scripts não executam, imagens não carregam na
   // análise) e remove tags perigosas, handlers on* e URLs javascript:. Preserva
@@ -258,15 +273,16 @@
     shell.innerHTML = `<h1 class="plataforma-titulo">Meus cursos</h1>
       <div class="plataforma-grid">${cursos.map(c => `
         <article class="plataforma-curso-card">
-          ${c.imagem ? `<div class="plataforma-curso-capa" style="background-image:url('${esc(normalizeUrl(c.imagem))}')"></div>` : `<div class="plataforma-curso-capa is-emblem" aria-hidden="true">☾</div>`}
+          ${c.imagem ? `<div class="plataforma-curso-capa" data-bg-url="${esc(normalizeUrl(c.imagem))}"></div>` : `<div class="plataforma-curso-capa is-emblem" aria-hidden="true">☾</div>`}
           <div class="plataforma-curso-body">
             <h2>${esc(c.titulo)}</h2>
             <p>${esc(c.descricao || "")}</p>
-            <div class="plataforma-progress"><span style="width:${c.percentual}%"></span></div>
+            <div class="plataforma-progress"><span data-progress-width="${c.percentual}"></span></div>
             <small>${c.aulas_concluidas}/${c.total_aulas} aulas • ${c.percentual}% concluído</small>
             <a class="btn btn-full" href="escola-curso.html?curso=${encodeURIComponent(c.slug)}">${c.percentual > 0 ? "Continuar estudando" : "Começar curso"}</a>
           </div>
         </article>`).join("")}</div>`;
+    aplicarEstilosDinamicos(shell);
   }
 
   // ---- Player do curso --------------------------------------------------
@@ -374,7 +390,7 @@
       <button type="button" class="plataforma-drawer-fechar" data-drawer-fechar aria-label="Fechar lista de módulos">✕</button>
       <div class="plataforma-sidebar-head">
         <strong title="${esc(curso.titulo)}">${esc(curso.titulo)}</strong>
-        <div class="plataforma-progress"><span style="width:${curso.progresso.percentual}%"></span></div>
+        <div class="plataforma-progress"><span data-progress-width="${curso.progresso.percentual}"></span></div>
         <small>${curso.progresso.aulas_concluidas}/${curso.progresso.total_aulas} aulas • ${curso.progresso.percentual}%</small>
       </div>
       <nav class="plataforma-modulos">
@@ -387,7 +403,7 @@
             ? `<p class="plataforma-modulo-bloqueado">Continue sua jornada assinando o plano completo.</p>
                <button type="button" class="btn btn-small" data-login-cta>Entrar / assinar para continuar</button>`
             : `<p class="plataforma-modulo-bloqueado">Conclua o módulo anterior para liberar.</p>`;
-          const capa = m.imagem && aberto ? `<div class="plataforma-modulo-capa" style="background-image:url('${esc(normalizeUrl(m.imagem))}')" aria-hidden="true"></div>` : "";
+          const capa = m.imagem && aberto ? `<div class="plataforma-modulo-capa" data-bg-url="${esc(normalizeUrl(m.imagem))}" aria-hidden="true"></div>` : "";
           const corpo = m.liberado ? `<ul class="plataforma-aulas">
               ${m.aulas.map(a => `<li>
                 <button type="button" class="plataforma-aula-link ${aulaAtiva && aulaAtiva.aulaId === a.id ? "is-active" : ""} ${a.status === "concluida" ? "is-done" : ""}" data-aula="${a.id}" data-modulo="${m.id}" ${aulaAtiva && aulaAtiva.aulaId === a.id ? 'aria-current="true"' : ""}>
@@ -574,6 +590,7 @@
         ${renderSidebar()}
         <section class="plataforma-conteudo" data-conteudo>${renderConteudoAula()}</section>
       </div>`;
+    aplicarEstilosDinamicos(shell);
     bindPlayer();
     garantirCamadasPremium();
     animarProgresso();
@@ -587,6 +604,7 @@
     if (box) { box.innerHTML = renderConteudoAula(); bindConteudo(); }
     const side = shell.querySelector("[data-sidebar]");
     if (side) side.outerHTML = renderSidebar();
+    aplicarEstilosDinamicos(shell);
     bindSidebar();
     animarEntradaConteudo();
     atualizarTituloDocumento();

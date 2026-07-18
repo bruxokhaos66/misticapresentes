@@ -12,7 +12,7 @@ sob nosso controle nessa hospedagem. Por isso a CSP é entregue via
 <meta http-equiv="Content-Security-Policy" content="...">
 ```
 
-em cada página HTML pública (23 páginas — ver lista em
+em cada página HTML pública (24 páginas — ver lista em
 `tests/test_csp_meta.py::PAGINAS_PUBLICAS`), inserida logo após
 `<meta charset>`.
 
@@ -40,7 +40,7 @@ base-uri 'self';
 object-src 'none';
 form-action 'self';
 script-src 'self' https://sdk.mercadopago.com https://www.googletagmanager.com https://connect.facebook.net;
-style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+style-src 'self' https://fonts.googleapis.com;
 img-src 'self' data: blob: https:;
 font-src 'self' data: https://fonts.gstatic.com;
 connect-src 'self' https://api.misticaesotericos.com.br https://api.mercadopago.com https://sdk.mercadopago.com
@@ -76,16 +76,43 @@ públicas de tokenização que o SDK do Mercado Pago expõe para uso no
 cliente (não há endpoint de criação de cobrança acessível sem o Access
 Token, e o frontend nunca o possui).
 
-## `style-src 'unsafe-inline'` — exceção documentada
+### Por que `img-src` inclui `https:` (qualquer origem HTTPS)
 
-O site tem `style=""` inline em alguns pontos (ex.: fallback de imagem
-mostrando/escondendo elementos, `404.html`) e depende de CSS-in-JS simples
-em poucos lugares. Removê-los todos exigiria uma refatoração maior, fora do
-escopo desta mudança. Optamos por manter `'unsafe-inline'` **somente em
-`style-src`**, nunca em `script-src`: CSS inline não executa JavaScript —
-o pior cenário de um CSS-injection é desfiguração visual, não execução de
-código arbitrário. `script-src` permanece estrito (sem `unsafe-inline`,
-sem `unsafe-eval`) em todas as páginas.
+O cadastro de produto (`backend/product_routes.py::_validar_url_https`)
+aceita **qualquer URL HTTPS** como imagem principal/galeria — não só do
+nosso domínio ou de um CDN fixo. Isso é intencional (o operador da loja
+pode apontar para a imagem de um fornecedor, uma CDN própria configurada
+depois via `PRODUCT_IMAGES_PUBLIC_BASE_URL`, etc.), então não existe uma
+lista fechada de domínios de imagem para enumerar em `img-src`. Como o
+navegador só *carrega* a imagem (não executa nada a partir dela),
+autorizar todo `https:` em `img-src` é o mesmo tipo de troca que outros
+sites com conteúdo gerado por operador/usuário fazem — o risco real
+(vazamento de referrer/cookie para um host de imagem) já é mitigado por
+`Referrer-Policy: strict-origin-when-cross-origin` em toda página.
+
+## Sem `unsafe-inline` em nenhuma diretiva
+
+Nenhuma página pública tem `onclick=`/`onerror=`/`style=""` inline, nem
+`<script>`/`<style>` sem `src`/`href` (auditoria completa desta mudança).
+Onde existiam:
+
+- **`style=""` fixo** (ex.: badge posicionado in-line em `produto-page.js`,
+  fallback de imagem escondido por padrão em `achados-misticos.js`) →
+  virou uma classe CSS dedicada.
+- **`style=""` com valor dinâmico** (imagem de capa/barra de progresso em
+  `escola-curso.js`/`escola.js`, calculadas a partir da API) → o valor
+  passou a viajar num atributo `data-*` (URL/percentual) e é aplicado via
+  `elemento.style.propriedade = valor` (CSSOM) logo depois do `innerHTML`.
+  CSP restringe o atributo `style=""` vindo de HTML/`setAttribute`, **não**
+  a manipulação de `element.style` via JavaScript — por isso essa técnica
+  não precisa de `'unsafe-inline'`.
+- **`<style>`/`<script>` inline** (`painel-operacional.html`, ~250 linhas
+  de painel administrativo mobile; `painel/index.html`, redirecionamento)
+  → viraram arquivos externos (`painel-operacional.css`/`.js`,
+  `painel/redirect.css`).
+
+Por isso `style-src`, assim como `script-src`, **não** precisa de
+`'unsafe-inline'` nem de hash/nonce em massa.
 
 ## Handlers inline removidos (`onclick=`/`onerror=`)
 
@@ -141,7 +168,7 @@ No site público (GitHub Pages), **nenhum destes cabeçalhos HTTP pode ser
 configurado** — só `Content-Security-Policy` e `Referrer-Policy` têm
 equivalente via `<meta>` (este último adicionado como
 `<meta name="referrer" content="strict-origin-when-cross-origin">` em
-todas as 23 páginas). `X-Content-Type-Options`, `Permissions-Policy`,
+todas as 24 páginas). `X-Content-Type-Options`, `Permissions-Policy`,
 `Cross-Origin-Opener-Policy`/`Cross-Origin-Embedder-Policy` e
 `Strict-Transport-Security` **não têm equivalente em meta tag** — não é
 possível implementá-los no site público nesta hospedagem. HSTS, na
@@ -157,7 +184,7 @@ domínios customizados com HTTPS forçado (fora do nosso controle direto).
    `Refused to ... because it violates the following Content Security
    Policy directive: ...`, com a origem exata bloqueada.
 4. Adicionar **só o host exato** reportado à diretiva correspondente em
-   todas as 23 páginas (o mesmo texto de política é replicado em todas —
+   todas as 24 páginas (o mesmo texto de política é replicado em todas —
    não há um arquivo único incluído, pois GitHub Pages não suporta
    includes/templates no HTML estático).
 5. Repetir até o checkout completar sem nenhuma violação.
