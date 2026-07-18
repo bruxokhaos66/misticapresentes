@@ -22,7 +22,7 @@ PAGINAS_PUBLICAS = [
     "aromaterapia/index.html", "banhos-de-ervas/index.html", "cristais/index.html",
     "escola-admin.html", "escola-curso.html", "escola-incensos.html",
     "escola-medicinas-floresta.html", "escola.html", "incensos/index.html", "index.html",
-    "isis-conteudo-admin.html", "kit.html", "painel/index.html",
+    "isis-conteudo-admin.html", "kit.html", "painel/index.html", "painel-operacional.html",
     "politica-de-privacidade.html", "politica-de-trocas.html", "produto.html",
     "termos-de-uso.html", "teste-commerce.html", "velas/index.html",
 ]
@@ -80,11 +80,21 @@ def test_csp_base_uri_self(pagina):
 
 @pytest.mark.parametrize("pagina", PAGINAS_PUBLICAS)
 def test_csp_script_src_sem_unsafe_inline(pagina):
-    """script-src não pode conter 'unsafe-inline' -- só style-src tem essa
-    exceção documentada (CSS inline não executa JavaScript)."""
+    """script-src nunca pode conter 'unsafe-inline'."""
     csp = _csp_de(pagina)
     m = re.search(r"script-src ([^;]+);", csp)
     assert m, f"{pagina}: script-src ausente"
+    assert "'unsafe-inline'" not in m.group(1)
+
+
+@pytest.mark.parametrize("pagina", PAGINAS_PUBLICAS)
+def test_csp_style_src_sem_unsafe_inline(pagina):
+    """style-src também não depende de 'unsafe-inline': todo style="" inline
+    (fixo ou dinâmico) foi removido em favor de classes CSS dedicadas ou de
+    element.style.* via CSSOM (não restrito por CSP) -- ver docs/admin/CSP.md."""
+    csp = _csp_de(pagina)
+    m = re.search(r"style-src ([^;]+);", csp)
+    assert m, f"{pagina}: style-src ausente"
     assert "'unsafe-inline'" not in m.group(1)
 
 

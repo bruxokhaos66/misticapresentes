@@ -1,0 +1,9 @@
+/* Usado só pelos testes Playwright (page.addStyleTag com url, nunca
+   content) para congelar animações/transições antes de tirar screenshots de
+   comparação de pixel. Nunca é publicado no site (tests/ fica de fora do
+   build de produção, ver scripts/minify-assets.mjs). */
+* {
+  animation-play-state: paused !important;
+  transition: none !important;
+  caret-color: transparent !important;
+}
