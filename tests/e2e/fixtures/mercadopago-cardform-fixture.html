@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<!--
+  Fixture isolada para testar a MONTAGEM do CardForm do Mercado Pago
+  (v2-mercadopago-checkout.js) sem depender de rede real para
+  sdk.mercadopago.com -- este ambiente de CI/sandbox não tem acesso a esse
+  host (ver tests/e2e/csp-mercadopago-cardform.spec.js). Em vez disso,
+  define window.MercadoPago ANTES do script real carregar: como
+  carregarSdk() só injeta o <script src=SDK_URL> quando
+  `!window.MercadoPago`, o mock abaixo faz o script real pular a rede
+  inteiramente e seguir o mesmo caminho de código de produção
+  (mpInstance.cardForm(config), autoMount, callbacks).
+
+  Isso valida a MECÂNICA de montagem (contrato do cardForm, checagem dos 3
+  iframes, remontagem duplicada) com um Chromium real -- mas NÃO substitui a
+  validação final com o SDK/cartão real em sandbox (ver instruções na PR).
+
+  Parâmetro de URL `?modo=falha` faz o mock simular onFormMounted(null) SEM
+  nunca inserir os 3 iframes -- usado para testar a nova defesa que impede o
+  formulário de ficar "utilizável" quando os Secure Fields não carregam.
+-->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<title>Fixture CardForm Mercado Pago</title>
+<link rel="stylesheet" href="../../../v2-mercadopago-checkout.css" />
+<style>body { font-family: sans-serif; max-width: 480px; margin: 24px auto; }</style>
+</head>
+<body>
+<div class="payment-method-toggle" role="tablist" aria-label="Forma de pagamento">
+  <button type="button" class="btn btn-ghost payment-method-btn is-active" data-payment-method="pix" role="tab" aria-selected="true">Pix</button>
+  <button type="button" class="btn btn-ghost payment-method-btn" data-payment-method="cartao" role="tab" aria-selected="false" hidden data-mp-toggle>Cartão de crédito</button>
+</div>
+<div class="form-panel pix-panel" id="pixPaymentPanel"></div>
+<div class="form-panel card-panel" id="cardPaymentPanel" hidden>
+  <form id="mpCardForm" class="form" novalidate>
+    <label>Número do cartão<div id="mpCardNumber" class="mp-secure-field"></div></label>
+    <div class="mp-card-row">
+      <label>Validade<div id="mpExpirationDate" class="mp-secure-field"></div></label>
+      <label>CVV<div id="mpSecurityCode" class="mp-secure-field"></div></label>
+    </div>
+    <label>Nome impresso no cartão<input id="mpCardholderName" type="text" required /></label>
+    <div class="mp-card-row">
+      <label>CPF do titular<input id="mpDocNumber" type="text" required /></label>
+      <label>Parcelas<select id="mpInstallments" required></select></label>
+    </div>
+    <label>E-mail para confirmação<input id="mpCardEmail" type="email" required /></label>
+    <select id="mpIssuer" hidden></select>
+    <select id="mpIdentificationType" hidden><option value="CPF" selected>CPF</option></select>
+    <p id="mpInstallmentsNote"></p>
+    <p id="mpCardStatus" aria-live="polite"></p>
+    <button class="btn btn-full" type="submit" id="mpCardSubmit">Pagar com cartão</button>
+  </form>
+</div>
+<script>
+  window.misticaSiteConfig = { apiBaseUrl: "https://api.example.invalid" };
+  window.misticaGetCart = () => [{ id: "produto-teste", qty: 1 }];
+  window.misticaCriarPedido = async () => ({ id: 999, pixTxid: "txid-teste", totalFinal: 150.5 });
+
+  var modoFalha = new URLSearchParams(location.search).get("modo") === "falha";
+  window.__mpMountCount = 0;
+  window.__mpConfigsCapturados = [];
+
+  function MockMercadoPago() {}
+  MockMercadoPago.prototype.cardForm = function (config) {
+    window.__mpConfigsCapturados.push(config);
+    window.__mpMountCount += 1;
+    if (config.autoMount) {
+      setTimeout(function () {
+        if (!modoFalha) {
+          ["mpCardNumber", "mpExpirationDate", "mpSecurityCode"].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el && el.querySelectorAll("iframe").length === 0) {
+              var iframe = document.createElement("iframe");
+              iframe.src = "about:blank";
+              el.appendChild(iframe);
+            }
+          });
+          var installments = document.getElementById("mpInstallments");
+          if (installments && !installments.options.length) {
+            var opt = document.createElement("option");
+            opt.value = "1";
+            opt.textContent = "1x sem juros";
+            installments.appendChild(opt);
+          }
+        }
+        if (config.callbacks && config.callbacks.onFormMounted) config.callbacks.onFormMounted(null);
+      }, 20);
+    }
+    return {
+      unmount: function () {
+        ["mpCardNumber", "mpExpirationDate", "mpSecurityCode"].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (el) el.querySelectorAll("iframe").forEach(function (f) { f.remove(); });
+        });
+      },
+      getCardFormData: function () {
+        return {
+          token: "mock-token",
+          paymentMethodId: "visa",
+          installments: 1,
+          issuerId: "1",
+          cardholderEmail: "teste@example.invalid",
+          identificationType: "CPF",
+          identificationNumber: "12345678900",
+        };
+      },
+    };
+  };
+  window.MercadoPago = MockMercadoPago;
+</script>
+<script src="../../../v2-mercadopago-checkout.js"></script>
+</body>
+</html>

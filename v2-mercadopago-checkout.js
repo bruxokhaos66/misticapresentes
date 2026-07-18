@@ -136,6 +136,12 @@
 
     cardForm = mpInstance.cardForm({
       amount: String(pedido.totalFinal || 0),
+      // Sem isso, o SDK monta cardNumber/securityCode/expirationDate no modo
+      // padrão (iframe: false), que exige <input> nesses três campos -- os
+      // <div id="mpCardNumber/mpExpirationDate/mpSecurityCode"> do HTML nunca
+      // recebem os Secure Fields (iframes) do Mercado Pago, e por isso
+      // ficavam visíveis mas não aceitavam clique/digitação.
+      iframe: true,
       autoMount: true,
       form: {
         id: "mpCardForm",
@@ -151,7 +157,22 @@
       },
       callbacks: {
         onFormMounted: (error) => {
-          if (error) setCardStatus("Não foi possível preparar o formulário de cartão agora.", "erro");
+          if (error) {
+            console.error("[MercadoPago] onFormMounted retornou erro:", sanitizarErroParaLog(error));
+            desabilitarFormularioCartao();
+            return;
+          }
+          // autoMount monta os Secure Fields de forma assíncrona -- dá um
+          // instante para os iframes aparecerem no DOM antes de confirmar
+          // que o formulário está realmente utilizável (o bug relatado era
+          // exatamente onFormMounted sem erro, mas nenhum iframe montado
+          // dentro de #mpCardNumber/#mpExpirationDate/#mpSecurityCode).
+          window.setTimeout(() => {
+            if (!tresIframesSeguraMontados()) {
+              console.error("[MercadoPago] onFormMounted sem erro, mas os 3 iframes de Secure Fields não foram encontrados no DOM.");
+              desabilitarFormularioCartao();
+            }
+          }, 300);
         },
         onInstallmentsReceived: () => {
           const nota = document.getElementById("mpInstallmentsNote");
@@ -166,6 +187,27 @@
         },
       },
     });
+  }
+
+  // Nunca loga o erro do SDK inteiro (pode incluir contexto interno da
+  // requisição) -- só uma mensagem curta e sanitizada, sem Public Key,
+  // Access Token, token do cartão, número do cartão, CVV, CPF ou e-mail.
+  function sanitizarErroParaLog(error) {
+    if (!error) return "erro desconhecido";
+    const mensagem = typeof error === "string" ? error : (error.message || error.type || "erro desconhecido");
+    return String(mensagem).slice(0, 300);
+  }
+
+  function tresIframesSeguraMontados() {
+    return ["mpCardNumber", "mpExpirationDate", "mpSecurityCode"].every(
+      id => document.querySelectorAll(`#${id} iframe`).length === 1,
+    );
+  }
+
+  function desabilitarFormularioCartao() {
+    const botao = document.getElementById("mpCardSubmit");
+    if (botao) botao.disabled = true;
+    setCardStatus("Não foi possível carregar os campos seguros do cartão. Use o Pix ou tente novamente.", "erro");
   }
 
   function definirCarregando(carregando) {
