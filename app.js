@@ -301,6 +301,18 @@ function resetGerarPixStateOnCartChange() {
   if (gerarPixEstadoAtual === "gerado") setGerarPixVisualState("idle");
 }
 
+// Reabilita "Copiar Pix" e limpa o feedback de cópia da geração anterior
+// (ex.: reserva expirada, que via desabilitarAcoesPixInvalido() havia
+// desabilitado o botão). Chamada no início de toda nova tentativa de gerar
+// Pix, nas duas rotas de checkout (app.js e site-production-guard.js), para
+// que o botão nunca fique preso desabilitado sobre um payload novo e válido.
+function resetCopyPixButtonState() {
+  const copyBtn = document.querySelector("[data-copy-pix]");
+  if (copyBtn) copyBtn.disabled = false;
+  if (pixCopyFeedback) { pixCopyFeedback.hidden = true; pixCopyFeedback.textContent = ""; }
+}
+window.misticaResetCopyPixButtonState = resetCopyPixButtonState;
+
 const STEP_LABELS = { carrinho: 1, pagamento: 2, comprovante: 3, confirmacao: 4 };
 function setCheckoutStep(stepName) {
   const steps = document.querySelectorAll("#checkoutSteps .checkout-step");
@@ -461,9 +473,7 @@ async function generatePix() {
   pararAcompanhamentoPedido();
   clearQrCanvas();
   pixPayloadInput.value = "";
-  const copyBtn = document.querySelector("[data-copy-pix]");
-  if (copyBtn) copyBtn.disabled = false;
-  if (pixCopyFeedback) pixCopyFeedback.hidden = true;
+  resetCopyPixButtonState();
   setGerarPixVisualState("busy");
   setStatus("Enviando pedido e gerando o Pix com o servidor...");
   let pedido;

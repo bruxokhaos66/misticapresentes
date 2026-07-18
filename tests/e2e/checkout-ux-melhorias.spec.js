@@ -124,6 +124,60 @@ test.describe("checkout: melhorias de UX do Pix", () => {
     await expect(page.locator("[data-generate-pix]")).toBeEnabled();
   });
 
+  test("gerar Pix, copiar, expirar, gerar novo Pix e copiar de novo: botão Copiar Pix nunca fica preso desabilitado", async ({ page, context }) => {
+    await prepararCatalogo(page);
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+
+    let contador = 0;
+    await page.route("**/api/checkout/pedidos", async route => {
+      contador += 1;
+      // Primeiro Pix já nasce expirado (simula reserva vencida); o segundo
+      // tem prazo normal — exatamente o cenário "gerar → copiar → expirar →
+      // gerar novo → copiar de novo".
+      const opts = contador === 1 ? { id: "PED-COPY-1", expiraEmMs: -1000 } : { id: "PED-COPY-2", expiraEmMs: 15 * 60_000 };
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(respostaPedido(opts)) });
+    });
+
+    await page.goto("/index.html");
+    await expect.poll(() => page.evaluate(() => window.misticaCatalogState)).toBe("ready");
+    await page.locator("[data-product-grid] button", { hasText: "Adicionar" }).click();
+
+    const gerarPix = page.locator("[data-generate-pix]");
+    const copiarPix = page.locator("[data-copy-pix]");
+    const feedback = page.locator("#pixCopyFeedback");
+    const reserva = page.locator("#pixReservaStatus");
+
+    // 1) Gerar Pix (nasce expirado nesta rota mockada, simulando reserva já
+    // vencida na hora da geração) — o relógio de reserva expira
+    // imediatamente e desabilita "Copiar Pix", como já coberto no teste
+    // acima; aqui o foco é o que acontece DEPOIS, ao gerar de novo.
+    await gerarPix.dispatchEvent("click");
+    await expect(reserva).toContainText(/Reserva expirada/i);
+    await expect(reserva).toHaveAttribute("data-expired", "true");
+    await expect(copiarPix).toBeDisabled();
+
+    // 2) Com a reserva expirada, "Gerar Pix" deve estar destravado para
+    // permitir um novo pedido.
+    await expect(gerarPix).toBeEnabled();
+
+    // 3) Gerar novo Pix (dessa vez com prazo válido).
+    await gerarPix.dispatchEvent("click");
+    await expect.poll(() => contador).toBe(2);
+    await expect(reserva).not.toHaveAttribute("data-expired", "true");
+    await expect(reserva).toContainText(/Reserva expira em/i);
+
+    // O botão "Copiar Pix" deve estar reabilitado e sem nenhum feedback
+    // visual (nem estado desabilitado, nem mensagem) da geração anterior.
+    await expect(copiarPix).toBeEnabled();
+    await expect(feedback).toBeHidden();
+
+    // 4) Copiar de novo: deve funcionar normalmente, com o feedback da
+    // cópia atual (não uma mensagem antiga presa na tela).
+    await copiarPix.click();
+    await expect(feedback).toBeVisible();
+    await expect(feedback).toContainText("Código Pix copiado com sucesso! Cole no aplicativo do seu banco para concluir o pagamento.");
+  });
+
   test("chave Pix aparece mascarada por padrão e alterna com o botão Mostrar/Ocultar", async ({ page }) => {
     await prepararCatalogo(page);
     await gerarPixComSucesso(page);

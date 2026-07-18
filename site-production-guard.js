@@ -135,6 +135,10 @@
     if (typeof pararAcompanhamentoPedido === "function") pararAcompanhamentoPedido();
     if (typeof clearQrCanvas === "function") clearQrCanvas();
     if (typeof pixPayloadInput !== "undefined" && pixPayloadInput) pixPayloadInput.value = "";
+    // Reabilita "Copiar Pix" e limpa feedback de cópia de uma geração
+    // anterior (ex.: reserva expirada havia desabilitado o botão) — mesma
+    // função usada pelo fluxo não-produção (app.js), sem duplicar lógica.
+    if (typeof window.misticaResetCopyPixButtonState === "function") window.misticaResetCopyPixButtonState();
     status("Enviando pedido e gerando o Pix com segurança...");
 
     let sucesso = false;
