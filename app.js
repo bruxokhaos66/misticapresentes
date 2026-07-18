@@ -168,9 +168,9 @@ function productCardHtml(product) {
   const id = safeId(product.id);
   const name = escapeHtml(product.name);
   const imgSrc = escapeHtml(product.imageUrl || PRODUCT_FALLBACK_IMAGE);
-  const media = `<div class="product-media-frame"><img class="product-photo" src="${imgSrc}" alt="${name}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='${PRODUCT_FALLBACK_IMAGE}';this.classList.add('is-fallback');">${isBestSeller(product) ? `<span class="product-badge-best">${escapeHtml(productBadgeText(product))}</span>` : ""}</div>`;
+  const media = `<div class="product-media-frame"><img class="product-photo" src="${imgSrc}" alt="${name}" loading="lazy" decoding="async" data-fallback-src="${PRODUCT_FALLBACK_IMAGE}">${isBestSeller(product) ? `<span class="product-badge-best">${escapeHtml(productBadgeText(product))}</span>` : ""}</div>`;
   const descId = `desc-${id}`;
-  return `<article class="product-card" data-category="${escapeHtml(product.category || "")}" data-best-seller="${isBestSeller(product)}">${media}<div class="product-card-body"><p class="eyebrow">${escapeHtml(product.category)}</p><h3>${name}</h3>${socialProofHtml(product)}<strong class="product-price">${currency.format(product.price)}</strong><span class="stock-badge ${available <= storeConfig.minStock ? "stock-low" : ""}">Estoque: ${available}</span><div class="qty-row"><input id="qty-${id}" type="number" min="1" max="${available}" step="1" value="1" aria-label="Quantidade de ${name}" ${disabled} /><button class="btn" type="button" onclick="addToCart('${product.id}')" ${disabled}>Adicionar</button></div><button class="btn btn-ghost btn-full" type="button" onclick="buyProductWhatsapp('${product.id}')">Comprar pelo WhatsApp</button><button class="product-desc-toggle" type="button" aria-expanded="${openProductDrawers.has(product.id)}" aria-controls="${descId}" onclick="toggleProductDescription('${product.id}')"><span>Ver descrição</span><svg class="product-desc-chevron" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 7l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="product-desc-drawer${openProductDrawers.has(product.id) ? " is-open" : ""}" id="${descId}"${openProductDrawers.has(product.id) ? "" : ' aria-hidden="true"'}><div class="product-desc-drawer-inner"><p>${escapeHtml(product.description)}</p></div></div></div></article>`;
+  return `<article class="product-card" data-category="${escapeHtml(product.category || "")}" data-best-seller="${isBestSeller(product)}">${media}<div class="product-card-body"><p class="eyebrow">${escapeHtml(product.category)}</p><h3>${name}</h3>${socialProofHtml(product)}<strong class="product-price">${currency.format(product.price)}</strong><span class="stock-badge ${available <= storeConfig.minStock ? "stock-low" : ""}">Estoque: ${available}</span><div class="qty-row"><input id="qty-${id}" type="number" min="1" max="${available}" step="1" value="1" aria-label="Quantidade de ${name}" ${disabled} /><button class="btn" type="button" data-add-to-cart="${escapeHtml(product.id)}" ${disabled}>Adicionar</button></div><button class="btn btn-ghost btn-full" type="button" data-buy-whatsapp="${escapeHtml(product.id)}">Comprar pelo WhatsApp</button><button class="product-desc-toggle" type="button" aria-expanded="${openProductDrawers.has(product.id)}" aria-controls="${descId}" data-toggle-desc="${escapeHtml(product.id)}"><span>Ver descrição</span><svg class="product-desc-chevron" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 7l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="product-desc-drawer${openProductDrawers.has(product.id) ? " is-open" : ""}" id="${descId}"${openProductDrawers.has(product.id) ? "" : ' aria-hidden="true"'}><div class="product-desc-drawer-inner"><p>${escapeHtml(product.description)}</p></div></div></div></article>`;
 }
 const openProductDrawers = new Set();
 function toggleProductDescription(productId) {
@@ -189,6 +189,50 @@ function toggleProductDescription(productId) {
 }
 window.toggleProductDescription = toggleProductDescription;
 window.openProductDrawers = openProductDrawers;
+
+// Delegação central de cliques/erros de imagem via atributos data-* em vez
+// de onclick=/onerror= inline no HTML gerado: exigido pela Content-Security-
+// -Policy do site (script-src sem 'unsafe-inline' -- ver v2-mercadopago-checkout.css
+// e docs/admin/CSP.md). Um único listener no document cobre todo HTML
+// injetado via innerHTML em qualquer página que carregue este arquivo
+// (index.html, produto.html, kit.html), incluindo o gerado por
+// v2-product-inspector.js (mesmas funções globais, mesma convenção de atributos).
+document.addEventListener("click", event => {
+  const alvo = event.target.closest(
+    "[data-add-to-cart],[data-buy-whatsapp],[data-toggle-desc],[data-remove-from-cart],[data-inspect-product],[data-close-inspector]"
+  );
+  if (!alvo) return;
+  if (alvo.dataset.addToCart !== undefined) {
+    event.preventDefault();
+    addToCart(alvo.dataset.addToCart);
+    if (alvo.dataset.closeInspectorAfter !== undefined && typeof window.closeProductInspector === "function") window.closeProductInspector();
+  }
+  else if (alvo.dataset.buyWhatsapp !== undefined) { event.preventDefault(); buyProductWhatsapp(alvo.dataset.buyWhatsapp); }
+  else if (alvo.dataset.toggleDesc !== undefined) { event.preventDefault(); toggleProductDescription(alvo.dataset.toggleDesc); }
+  else if (alvo.dataset.removeFromCart !== undefined) { event.preventDefault(); removeFromCart(alvo.dataset.removeFromCart); }
+  else if (alvo.dataset.inspectProduct !== undefined && typeof window.inspectProduct === "function") { event.preventDefault(); window.inspectProduct(alvo.dataset.inspectProduct); }
+  else if (alvo.dataset.closeInspector !== undefined && typeof window.closeProductInspector === "function") { event.preventDefault(); window.closeProductInspector(); }
+});
+// "error" em <img> não borbulha (bubbles: false) -- precisa de capture:true
+// para um listener único no document interceptar. data-fallback-src troca o
+// src (ex.: foto quebrada -> imagem padrão); data-fallback-hide oculta a
+// imagem e mostra o próximo irmão (ex.: ícone alternativo).
+document.addEventListener("error", event => {
+  const img = event.target;
+  if (!(img instanceof HTMLImageElement) || img.dataset.fallbackApplied) return;
+  if (img.dataset.fallbackSrc) {
+    img.dataset.fallbackApplied = "1";
+    img.onerror = null;
+    img.src = img.dataset.fallbackSrc;
+    img.classList.add("is-fallback");
+  } else if (img.dataset.fallbackHide !== undefined) {
+    img.dataset.fallbackApplied = "1";
+    img.style.display = "none";
+    const irmao = img.nextElementSibling;
+    if (irmao) irmao.style.display = "grid";
+  }
+}, true);
+
 function renderProducts() { if (!productGrid) return; productGrid.innerHTML = products.map(productCardHtml).join(""); }
 function validateQuantity(rawQty, productId) { const qty = Number.parseInt(rawQty, 10); const available = getStock(productId); const inCart = cart.find(item => item.id === productId)?.qty || 0; if (!Number.isInteger(qty) || qty < 1) return { ok: false, message: "Informe uma quantidade inteira maior que zero." }; if (qty + inCart > available) return { ok: false, message: `Estoque insuficiente. Disponível: ${Math.max(available - inCart, 0)}.` }; return { ok: true, qty }; }
 function addToCart(productId) { const product = products.find(item => item.id === productId); if (!product) return; const qtyInput = document.getElementById(`qty-${safeId(productId)}`); const validation = validateQuantity(qtyInput.value, productId); if (!validation.ok) return setStatus(validation.message); const existing = cart.find(item => item.id === productId); const sob = Boolean(window.misticaEncomenda && window.misticaEncomenda.isSobEncomenda(product)); if (existing) { existing.qty += validation.qty; existing.sob = sob; } else cart.push({ id: product.id, name: product.name, price: product.price, qty: validation.qty, sob }); window.misticaResetIdempotencyKey?.(); resetGerarPixStateOnCartChange(); saveState(); renderCart(); renderProducts(); setStatus(`${product.name} adicionado ao carrinho.`); window.misticaTrack?.("add_to_cart", { currency: "BRL", value: product.price * validation.qty, items: [{ item_id: product.id, item_name: product.name, price: product.price, quantity: validation.qty }] }); }
@@ -225,7 +269,7 @@ function updatePixPanelVisibility() {
 }
 function cartItemLineHtml(item) {
   const subtotal = item.price * item.qty;
-  return `<div class="cart-item"><div class="cart-item-detail"><span class="cart-item-name">${escapeHtml(item.name)}</span><span class="cart-item-line"><span>${item.qty} × ${currency.format(item.price)}</span><span class="cart-item-subtotal">Subtotal: ${currency.format(subtotal)}</span></span>${cartItemIsEncomenda(item) ? `<span class="cart-encomenda-tag">${escapeHtml((window.misticaEncomenda && window.misticaEncomenda.BADGE) || "Sob encomenda")}</span>` : ""}</div><button class="cart-remove" type="button" aria-label="Remover ${escapeHtml(item.name)} do carrinho" onclick="removeFromCart('${item.id}')">Remover</button></div>`;
+  return `<div class="cart-item"><div class="cart-item-detail"><span class="cart-item-name">${escapeHtml(item.name)}</span><span class="cart-item-line"><span>${item.qty} × ${currency.format(item.price)}</span><span class="cart-item-subtotal">Subtotal: ${currency.format(subtotal)}</span></span>${cartItemIsEncomenda(item) ? `<span class="cart-encomenda-tag">${escapeHtml((window.misticaEncomenda && window.misticaEncomenda.BADGE) || "Sob encomenda")}</span>` : ""}</div><button class="cart-remove" type="button" aria-label="Remover ${escapeHtml(item.name)} do carrinho" data-remove-from-cart="${escapeHtml(item.id)}">Remover</button></div>`;
 }
 function renderCart() { updateCartCount(); renderCrossSell(); updateCheckoutEncomendaBox(); updatePixPanelVisibility(); if (!cartList || !cartTotal) return; if (!cartReady) { cartList.innerHTML = `<div class="cart-item"><span>Carregando catálogo oficial para exibir seu carrinho...</span></div>`; cartTotal.textContent = currency.format(0); return; } if (!cart.length) cartList.innerHTML = `<div class="cart-empty"><p>Seu carrinho está vazio. Explore nossos produtos e encontre algo especial para sua intenção.</p><a class="btn btn-small" href="#produtos">Ver produtos</a></div>`; else cartList.innerHTML = cart.map(cartItemLineHtml).join(""); cartTotal.textContent = currency.format(getTotal()); }
 
@@ -249,7 +293,7 @@ function renderCrossSell() {
     box.className = "cross-sell";
     checkout.appendChild(box);
   }
-  box.innerHTML = `<p class="eyebrow">Combine seu ritual</p><h3>Quem levou esses, também gostou de</h3><div class="cross-sell-grid">${sugestoes.map(product => `<div class="cross-sell-card"><span aria-hidden="true">${escapeHtml(product.icon || "✨")}</span><strong>${escapeHtml(product.name)}</strong><small>${currency.format(product.price)}</small><button class="btn btn-ghost btn-full" type="button" onclick="addToCart('${product.id}')">Adicionar</button></div>`).join("")}</div>`;
+  box.innerHTML = `<p class="eyebrow">Combine seu ritual</p><h3>Quem levou esses, também gostou de</h3><div class="cross-sell-grid">${sugestoes.map(product => `<div class="cross-sell-card"><span aria-hidden="true">${escapeHtml(product.icon || "✨")}</span><strong>${escapeHtml(product.name)}</strong><small>${currency.format(product.price)}</small><button class="btn btn-ghost btn-full" type="button" data-add-to-cart="${escapeHtml(product.id)}">Adicionar</button></div>`).join("")}</div>`;
 }
 function getTotal() { return cart.reduce((sum, item) => sum + item.price * item.qty, 0); }
 function renderClients() { if (!clientList) return; if (!clients.length) { clientList.innerHTML = `<div class="client-item"><span>Nenhum cliente cadastrado ainda.</span></div>`; return; } clientList.replaceChildren(); clients.slice(0, 5).forEach(client => { const item = document.createElement("div"); item.className = "client-item"; const name = document.createElement("strong"); name.textContent = client.name; const cpf = document.createElement("span"); cpf.textContent = `CPF: ${client.cpf}`; const whatsapp = document.createElement("span"); whatsapp.textContent = `WhatsApp: ${client.whatsapp}`; const address = document.createElement("span"); address.textContent = client.address; item.append(name, cpf, document.createElement("br"), whatsapp, document.createElement("br"), address); clientList.appendChild(item); }); }

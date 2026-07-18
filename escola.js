@@ -10,6 +10,17 @@
     whatsappNumber: (window.misticaSiteConfig && window.misticaSiteConfig.whatsappNumber) || "554999172137"
   };
 
+  // Fallback de imagem via atributo data- em vez de onerror= inline (exigido
+  // pela CSP do site, script-src sem 'unsafe-inline'). Cobre também
+  // escola-incensos-catalog.js e escola-medicinas-floresta-catalog.js,
+  // carregados nesta mesma página. "error" em <img> não borbulha: precisa
+  // capture:true para um listener único no document capturar.
+  document.addEventListener("error", event => {
+    const img = event.target;
+    if (!(img instanceof HTMLImageElement) || img.dataset.fallbackRemove === undefined) return;
+    img.remove();
+  }, true);
+
   const cursos = [
     {
       slug: "xamanismo-introducao",
@@ -371,7 +382,7 @@
   function coverHtml(curso) {
     if (!curso.capa) return "";
     const alt = `Capa do curso ${escapeHtml(curso.titulo)}`;
-    return `<img class="escola-card-cover" src="${escapeHtml(curso.capa)}" alt="${alt}" width="1200" height="630" loading="lazy" onerror="this.remove()">`;
+    return `<img class="escola-card-cover" src="${escapeHtml(curso.capa)}" alt="${alt}" width="1200" height="630" loading="lazy" data-fallback-remove>`;
   }
 
   function cardHtml(curso) {

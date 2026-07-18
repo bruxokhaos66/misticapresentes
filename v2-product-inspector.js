@@ -8,11 +8,11 @@
   const isSobEncomenda = (product) => Boolean(encomenda()?.isSobEncomenda?.(product));
   // Imagem local, sempre disponível, usada sempre que o produto não tem
   // foto cadastrada OU a foto cadastrada falha ao carregar (404, CORS,
-  // link quebrado etc. — ver onerror abaixo). Nunca deixamos o <img> sem
-  // src válido: sem isso, o navegador mostra o alt em texto gigante
-  // ocupando o card inteiro quando a imagem falha.
+  // link quebrado etc. — ver data-fallback-src, tratado pelo listener
+  // delegado de "error" em app.js, exigido pela CSP sem 'unsafe-inline').
+  // Nunca deixamos o <img> sem src válido: sem isso, o navegador mostra o
+  // alt em texto gigante ocupando o card inteiro quando a imagem falha.
   const FALLBACK_IMAGE = (typeof window !== 'undefined' && window.PRODUCT_FALLBACK_IMAGE) || '/assets/images/produto-sem-imagem.webp';
-  const onErrorFallback = "this.onerror=null;this.src='" + FALLBACK_IMAGE + "';this.classList.add('is-fallback');";
 
   function productMedia(product, large = false) {
     // product.images é o nome real gravado por mobile-sync.js normalizarProduto();
@@ -20,14 +20,14 @@
     const image = product.imageUrl || product.images?.[0] || '';
     const src = image ? esc(image) : FALLBACK_IMAGE;
     const cls = large ? 'product-inspector-photo' : 'product-photo';
-    return `<img class="${cls}" src="${src}" alt="${esc(product.name || 'Produto Mística Presentes')}" loading="lazy" decoding="async" onerror="${onErrorFallback}">`;
+    return `<img class="${cls}" src="${src}" alt="${esc(product.name || 'Produto Mística Presentes')}" loading="lazy" decoding="async" data-fallback-src="${esc(FALLBACK_IMAGE)}">`;
   }
 
   function galleryHtml(product) {
     const images = [product.imageUrl, ...(product.images || [])].filter(Boolean);
     const unique = [...new Set(images)];
     if (!unique.length) return '';
-    return `<div class="product-inspector-gallery">${unique.map((url) => `<button type="button" data-inspector-gallery="${esc(url)}"><img src="${esc(url)}" alt="Imagem de ${esc(product.name)}" loading="lazy" decoding="async" onerror="${onErrorFallback}"></button>`).join('')}</div>`;
+    return `<div class="product-inspector-gallery">${unique.map((url) => `<button type="button" data-inspector-gallery="${esc(url)}"><img src="${esc(url)}" alt="Imagem de ${esc(product.name)}" loading="lazy" decoding="async" data-fallback-src="${esc(FALLBACK_IMAGE)}"></button>`).join('')}</div>`;
   }
 
   function ensureModal() {
@@ -44,7 +44,7 @@
       const galleryButton = event.target.closest('[data-inspector-gallery]');
       if (galleryButton) {
         const img = modal.querySelector('[data-inspector-main-media]');
-        if (img) img.innerHTML = `<img class="product-inspector-photo" src="${esc(galleryButton.dataset.inspectorGallery)}" alt="Imagem ampliada" loading="lazy" decoding="async" onerror="${onErrorFallback}">`;
+        if (img) img.innerHTML = `<img class="product-inspector-photo" src="${esc(galleryButton.dataset.inspectorGallery)}" alt="Imagem ampliada" loading="lazy" decoding="async" data-fallback-src="${esc(FALLBACK_IMAGE)}">`;
       }
     });
     document.addEventListener('keydown', (event) => {
@@ -94,8 +94,8 @@
           <p>${esc(product.description || 'Produto selecionado pela Mística Presentes.')}</p>
           <strong class="product-inspector-price">${currency.format(Number(product.price || 0))}</strong>
           <div class="product-inspector-actions">
-            <button class="btn" type="button" onclick="addToCart('${esc(product.id)}'); closeProductInspector();" ${available <= 0 ? 'disabled' : ''}>Adicionar ao carrinho</button>
-            <button class="btn btn-ghost" type="button" onclick="buyProductWhatsapp('${esc(product.id)}')">WhatsApp</button>
+            <button class="btn" type="button" data-add-to-cart="${esc(product.id)}" data-close-inspector-after ${available <= 0 ? 'disabled' : ''}>Adicionar ao carrinho</button>
+            <button class="btn btn-ghost" type="button" data-buy-whatsapp="${esc(product.id)}">WhatsApp</button>
           </div>
           ${encomendaInfo}
           ${external}
@@ -123,7 +123,7 @@
       const id = safeId(product.id);
       const descId = `desc-${id}`;
       const isOpen = openDrawers.has(product.id);
-      const media = `<div class="product-media-wrap"><div class="product-media-frame">${productMedia(product)}</div><button class="product-zoom-button" type="button" onclick="inspectProduct('${esc(product.id)}')" aria-label="Inspecionar ${esc(product.name)}">🔍</button></div>`;
+      const media = `<div class="product-media-wrap"><div class="product-media-frame">${productMedia(product)}</div><button class="product-zoom-button" type="button" data-inspect-product="${esc(product.id)}" aria-label="Inspecionar ${esc(product.name)}">🔍</button></div>`;
       const bestSeller = typeof isBestSeller === 'function' && isBestSeller(product) ? `<span class="product-badge-best">${esc(typeof productBadgeText === 'function' ? productBadgeText(product) : product.selo)}</span>` : '';
       const rating = typeof socialProofHtml === 'function' ? socialProofHtml(product) : '';
       const sob = isSobEncomenda(product);
@@ -134,8 +134,8 @@
         ? `<span class="stock-badge">${esc(t.ESTOQUE_NOTE)}</span>`
         : `<span class="stock-badge ${available <= storeConfig.minStock ? 'stock-low' : ''}">Estoque: ${available}</span>`;
       const descriptionText = product.description || 'Produto selecionado pela Mística Presentes.';
-      const drawer = `<button class="product-desc-toggle" type="button" aria-expanded="${isOpen}" aria-controls="${descId}" onclick="toggleProductDescription('${esc(product.id)}')"><span>Ver descrição</span><svg class="product-desc-chevron" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 7l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="product-desc-drawer${isOpen ? ' is-open' : ''}" id="${descId}"${isOpen ? '' : ' aria-hidden="true"'}><div class="product-desc-drawer-inner"><p>${esc(descriptionText)}</p>${encomendaNote}</div></div>`;
-      return `<article class="product-card" data-category="${esc(product.category || '')}" data-best-seller="${typeof isBestSeller === 'function' ? isBestSeller(product) : false}">${bestSeller}${encomendaBadge}${media}<div class="product-card-body"><p class="eyebrow">${esc(product.category)}</p><h3>${esc(product.name)}</h3>${rating}<strong class="product-price">${currency.format(product.price)}</strong>${stockBadge}<div class="qty-row"><input id="qty-${id}" type="number" min="1" max="${available}" step="1" value="1" aria-label="Quantidade de ${esc(product.name)}" ${disabled} /><button class="btn" type="button" onclick="addToCart('${esc(product.id)}')" ${disabled}>Adicionar</button></div><button class="btn btn-ghost btn-full" type="button" onclick="buyProductWhatsapp('${esc(product.id)}')">Comprar pelo WhatsApp</button>${drawer}</div></article>`;
+      const drawer = `<button class="product-desc-toggle" type="button" aria-expanded="${isOpen}" aria-controls="${descId}" data-toggle-desc="${esc(product.id)}"><span>Ver descrição</span><svg class="product-desc-chevron" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 7l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="product-desc-drawer${isOpen ? ' is-open' : ''}" id="${descId}"${isOpen ? '' : ' aria-hidden="true"'}><div class="product-desc-drawer-inner"><p>${esc(descriptionText)}</p>${encomendaNote}</div></div>`;
+      return `<article class="product-card" data-category="${esc(product.category || '')}" data-best-seller="${typeof isBestSeller === 'function' ? isBestSeller(product) : false}">${bestSeller}${encomendaBadge}${media}<div class="product-card-body"><p class="eyebrow">${esc(product.category)}</p><h3>${esc(product.name)}</h3>${rating}<strong class="product-price">${currency.format(product.price)}</strong>${stockBadge}<div class="qty-row"><input id="qty-${id}" type="number" min="1" max="${available}" step="1" value="1" aria-label="Quantidade de ${esc(product.name)}" ${disabled} /><button class="btn" type="button" data-add-to-cart="${esc(product.id)}" ${disabled}>Adicionar</button></div><button class="btn btn-ghost btn-full" type="button" data-buy-whatsapp="${esc(product.id)}">Comprar pelo WhatsApp</button>${drawer}</div></article>`;
     }).join('');
   }
 

@@ -14,7 +14,7 @@
     card.dataset.course = "medicinas-floresta-introducao";
     const capa = window.MEDICINAS_FLORESTA_ASSETS?.curso || "";
     const cover = capa
-      ? `<img class="escola-card-cover" src="${capa}" alt="Capa do curso Medicinas da Floresta: primeiros caminhos" width="1200" height="630" loading="lazy" onerror="this.remove()">`
+      ? `<img class="escola-card-cover" src="${capa}" alt="Capa do curso Medicinas da Floresta: primeiros caminhos" width="1200" height="630" loading="lazy" data-fallback-remove>`
       : "";
     card.innerHTML = `
       ${cover}

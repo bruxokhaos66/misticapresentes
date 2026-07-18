@@ -14,7 +14,7 @@
     card.dataset.course = "incensos-introducao";
     const capa = window.INCENSOS_ASSETS?.curso || "assets/escola/incensos/incensos-curso-capa.webp";
     card.innerHTML = `
-      <img class="escola-card-cover" src="${capa}" alt="Capa do curso Incensos: História, Cultura e Tradições" width="1200" height="630" loading="lazy" onerror="this.remove()">
+      <img class="escola-card-cover" src="${capa}" alt="Capa do curso Incensos: História, Cultura e Tradições" width="1200" height="630" loading="lazy" data-fallback-remove>
       <span class="escola-badge gratuito">Gratuito</span>
       <div class="escola-card-icon" aria-hidden="true">🔥</div>
       <div class="escola-card-tags"><span>Incensos</span><span>Iniciante</span></div>
