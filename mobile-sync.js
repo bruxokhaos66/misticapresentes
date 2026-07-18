@@ -380,8 +380,24 @@
     };
   }
 
+  // Registra no servidor que o cliente clicou em "Já paguei — enviar
+  // comprovante pelo WhatsApp" para este pedido. O pix_txid do próprio
+  // pedido funciona como identificador público limitado (o mesmo já usado
+  // por consultarStatusPedido acima): sem ele, o backend nega o acesso. Esta
+  // chamada NUNCA marca o pedido como pago — apenas registra a intenção do
+  // cliente para o painel administrativo, que confirma o pagamento
+  // manualmente depois de conferir o valor no aplicativo bancário.
+  async function registrarComprovanteEnviado(pedidoId, pixTxid) {
+    const resposta = await api(`/api/pedidos/${encodeURIComponent(pedidoId)}/comprovante`, {
+      method: "POST",
+      body: JSON.stringify({ txid: pixTxid || null }),
+    });
+    return { status: resposta.status, jaRegistrado: Boolean(resposta.ja_registrado) };
+  }
+
   window.misticaCriarPedido = criarPedidoNoServidor;
   window.misticaConsultarStatusPedido = consultarStatusPedido;
+  window.misticaRegistrarComprovanteEnviado = registrarComprovanteEnviado;
   window.misticaResetIdempotencyKey = reiniciarIdempotencyKey;
   window.misticaMobileSync = {
     apiBase: API_BASE,

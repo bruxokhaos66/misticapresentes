@@ -250,6 +250,10 @@ function reduceStockFromCart() { cart.forEach(item => { stock[item.id] = Math.ma
 
 let reservaTimerInterval = null;
 let pedidoStatusPollInterval = null;
+// Guarda só o necessário para montar a mensagem do WhatsApp e chamar o
+// endpoint de comprovante (id + txid do pedido atual, nunca dado sensível
+// de outro cliente): nunca persistido em localStorage/sessionStorage.
+let pedidoAtualParaComprovante = null;
 
 function reservaStatusEl() {
   let el = document.getElementById("pixReservaStatus");
@@ -352,8 +356,44 @@ async function generatePix() {
     setStatus("Pix copia e cola gerado. Não foi possível desenhar o QR Code agora.");
   }
   iniciarAcompanhamentoPedido(pedido);
+  mostrarBotaoComprovanteWhatsapp(pedido, total);
   saveSale(pedido);
   window.misticaMobileSync?.syncNow?.();
+}
+
+function mostrarBotaoComprovanteWhatsapp(pedido, total) {
+  pedidoAtualParaComprovante = { id: pedido.id, pixTxid: pedido.pixTxid || null, total, dataIso: pedido.dataIso };
+  const botao = document.querySelector("[data-send-pix-comprovante]");
+  const nota = document.getElementById("comprovanteWhatsappNote");
+  if (botao) botao.hidden = false;
+  if (nota) nota.hidden = false;
+}
+
+// "Já paguei — enviar comprovante pelo WhatsApp": nunca marca o pedido como
+// pago. Apenas registra no servidor (idempotente) que o cliente indicou ter
+// pago e abre o WhatsApp da loja com uma mensagem pré-preenchida — sem a
+// chave Pix completa, só os dados já públicos do próprio pedido do cliente.
+// A confirmação real do pagamento é sempre feita por um administrador.
+async function enviarComprovantePixWhatsapp() {
+  const pedido = pedidoAtualParaComprovante;
+  if (!pedido || !pedido.id) return setStatus("Gere o Pix antes de enviar o comprovante.");
+
+  const dataHora = new Date(pedido.dataIso || Date.now()).toLocaleString("pt-BR");
+  const mensagem = `Olá, ${storeConfig.name}! Realizei o pagamento Pix do pedido #${pedido.id}.\n\nValor: ${currency.format(pedido.total)}\nData: ${dataHora}\n\nVou anexar o comprovante nesta conversa.`;
+
+  window.misticaTrack?.("contact_whatsapp", { method: "comprovante_pix", pedido_id: pedido.id, value: pedido.total });
+
+  try {
+    if (typeof window.misticaRegistrarComprovanteEnviado === "function") {
+      await window.misticaRegistrarComprovanteEnviado(pedido.id, pedido.pixTxid);
+    }
+  } catch {
+    // Falha ao registrar no servidor não deve impedir o cliente de enviar o
+    // comprovante pelo WhatsApp; o administrador ainda vê o pedido no painel
+    // mesmo sem esse registro (ex.: pedido segue "Aguardando pagamento").
+  }
+
+  window.open(buildWhatsappUrl(mensagem), "_blank", "noopener");
 }
 // O pix_txid não entra no objeto salvo em `sales`/localStorage: ele já cumpriu
 // seu papel (acompanhar o pedido nesta sessão, via `pedido.pixTxid` em
@@ -433,6 +473,7 @@ $("[data-apply-coupon]")?.addEventListener("click", applyCoupon);
 $("[data-clear-cart]")?.addEventListener("click", clearCart);
 $("[data-generate-pix]")?.addEventListener("click", generatePix);
 $("[data-copy-pix]")?.addEventListener("click", copyPix);
+$("[data-send-pix-comprovante]")?.addEventListener("click", enviarComprovantePixWhatsapp);
 $("[data-send-sale-whatsapp]")?.addEventListener("click", sendSaleWhatsapp);
 $("[data-export-clients]")?.addEventListener("click", exportClients);
 $("[data-export-sales]")?.addEventListener("click", exportSales);
