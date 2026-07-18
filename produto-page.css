@@ -225,3 +225,10 @@
     text-align: center;
   }
 }
+
+/* Nesta página o selo de "sob encomenda" corre no fluxo normal do texto
+   (a página de produto não é um card com posicionamento absoluto). */
+.product-badge-encomenda--inline {
+  position: static;
+  align-self: flex-start;
+}

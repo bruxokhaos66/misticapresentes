@@ -153,7 +153,7 @@
           <p>${esc(product.description || "Produto especial selecionado pela Mística Presentes.")}</p>
           <strong class="product-price">${money(product.price)}</strong>
           <span class="stock-badge ${!sob && stock <= storeConfig.minStock ? "stock-low" : ""}">${sob ? esc(t.ESTOQUE_NOTE) : (stock > 0 ? `Estoque: ${stock}` : "Sob encomenda")}</span>
-          ${sob ? `<span class="product-badge-encomenda" style="position:static;align-self:flex-start">${esc(t.BADGE)}</span>` : ""}
+          ${sob ? `<span class="product-badge-encomenda product-badge-encomenda--inline">${esc(t.BADGE)}</span>` : ""}
           <div class="product-page-buy">
             <input id="qty-${cartId}" class="product-page-qty" type="number" min="1" max="${Math.max(stock, 1)}" step="1" value="1" aria-label="Quantidade de ${esc(product.name)}" ${stock <= 0 ? "disabled" : ""}>
             <button class="btn" type="button" id="addProductToCart" ${stock <= 0 ? "disabled" : ""}>${stock > 0 ? "Adicionar ao carrinho" : "Sob encomenda"}</button>
