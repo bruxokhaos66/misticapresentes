@@ -445,6 +445,7 @@ def registrar_venda_site(
                 "expira_em": expira_em,
                 "pix_txid": pix["txid"] if pix else None,
                 "pix_copia_cola": pix["copia_cola"] if pix else None,
+                "pix": pix["info"] if pix else None,
             }
             registrar_auditoria(conn, "pedido", venda_id, "criar", venda.vendedor, depois={"total_final": total_final, "itens": len(itens_calculados), "status": venda.status})
             concluir_chave_idempotente(conn, "criar_pedido", idempotency_key, resposta)

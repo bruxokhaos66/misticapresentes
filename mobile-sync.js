@@ -362,6 +362,7 @@
       id: resposta.id,
       pixTxid: resposta.pix_txid || null,
       pixPayload: resposta.pix_copia_cola,
+      pixInfo: resposta.pix || null,
       dataIso,
       expiraEm: resposta.expira_em || null,
       totalFinal: Number(resposta.total_final || 0),

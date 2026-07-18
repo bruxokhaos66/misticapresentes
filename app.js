@@ -55,6 +55,7 @@ const pixStatus = $("#pixStatus");
 const pixCanvas = $("#pixQr");
 const pixKeyInput = $("#pixKey");
 const merchantNameInput = $("#merchantName");
+const storeNameInput = $("#storeName");
 const merchantCityInput = $("#merchantCity");
 const publishWarning = $("#publishWarning");
 const adminLoginPanel = $("#adminLoginPanel");
@@ -116,7 +117,7 @@ function escapeCsv(value) { return `"${text(value).replace(/"/g, '""')}"`; }
 function safeId(value) { return text(value).replace(/[^a-zA-Z0-9_-]/g, ""); }
 function buildWhatsappUrl(message) { return `https://wa.me/${storeConfig.whatsappNumber}?text=${encodeURIComponent(message)}`; }
 
-function setupConfig() { if (pixKeyInput) pixKeyInput.value = "Gerada pelo servidor ao confirmar o pedido"; if (merchantNameInput) merchantNameInput.value = "Confira o nome no Pix copia e cola abaixo"; if (merchantCityInput) merchantCityInput.value = "Pinhalzinho-SC"; $$('[data-whatsapp-link]').forEach(link => { link.href = buildWhatsappUrl("Olá, vim pelo site da Mística Presentes e gostaria de atendimento."); }); const warnings = []; if (storeConfig.whatsappNumber === PLACEHOLDER_WHATSAPP) warnings.push("WhatsApp ainda está com número de exemplo."); if (warnings.length && publishWarning) { publishWarning.hidden = false; publishWarning.innerHTML = `<strong>Atenção:</strong> ${warnings.join(" ")}`; } }
+function setupConfig() { const pendente = "Disponível após confirmar o pedido"; if (pixKeyInput) pixKeyInput.value = pendente; if (merchantNameInput) merchantNameInput.value = pendente; if (storeNameInput) storeNameInput.value = pendente; if (merchantCityInput) merchantCityInput.value = pendente; $$('[data-whatsapp-link]').forEach(link => { link.href = buildWhatsappUrl("Olá, vim pelo site da Mística Presentes e gostaria de atendimento."); }); const warnings = []; if (storeConfig.whatsappNumber === PLACEHOLDER_WHATSAPP) warnings.push("WhatsApp ainda está com número de exemplo."); if (warnings.length && publishWarning) { publishWarning.hidden = false; publishWarning.innerHTML = `<strong>Atenção:</strong> ${warnings.join(" ")}`; } }
 function setupFloatingWhatsapp() { if (document.querySelector(".floating-whatsapp")) return; const link = document.createElement("a"); link.className = "floating-whatsapp"; link.href = buildWhatsappUrl("Olá, vim pelo site da Mística Presentes e gostaria de atendimento."); link.target = "_blank"; link.rel = "noopener"; link.setAttribute("aria-label", "Chamar Mística Presentes no WhatsApp"); link.textContent = "☘ WhatsApp"; document.body.appendChild(link); }
 
 // Carrinho flutuante com contador de itens, presente em todas as páginas. Dá
@@ -337,6 +338,12 @@ async function generatePix() {
     return setStatus(error.message || "Não foi possível gerar o Pix agora. Tente novamente ou fale pelo WhatsApp.");
   }
   pixPayloadInput.value = pedido.pixPayload;
+  if (pedido.pixInfo) {
+    if (pixKeyInput) pixKeyInput.value = pedido.pixInfo.chave_mascarada || "";
+    if (merchantNameInput) merchantNameInput.value = pedido.pixInfo.recebedor || "";
+    if (storeNameInput) storeNameInput.value = pedido.pixInfo.nome_loja || "";
+    if (merchantCityInput) merchantCityInput.value = pedido.pixInfo.cidade || "";
+  }
   try {
     if (!window.QRCode) throw new Error("Biblioteca de QR Code não carregou.");
     await window.QRCode.toCanvas(pixCanvas, pedido.pixPayload, { width: 220, margin: 2, errorCorrectionLevel: "M" });
