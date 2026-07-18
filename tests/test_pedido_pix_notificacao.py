@@ -432,14 +432,18 @@ def test_cancelamento_repetido_pelo_painel_e_idempotente():
 def test_webhook_provedor_nao_configurado_retorna_501_e_nao_confirma_pedido():
     pedido = criar_pedido_pix()
 
+    # "mercadopago" passou a ser um provedor real (backend/mercadopago_provider.py),
+    # registrado condicionalmente à feature flag MERCADO_PAGO_ENABLED -- não é
+    # mais um bom exemplo de "provedor nunca configurado". Um nome que nunca
+    # existirá em PAYMENT_PROVIDERS continua provando a mesma regra: qualquer
+    # provedor desconhecido responde 501, sem bypass possível só trocando o
+    # nome na URL.
     resposta = client.post(
-        f"/api/webhooks/pagamentos/mercadopago",
+        "/api/webhooks/pagamentos/provedor-generico-inexistente",
         json={"venda_id": pedido["id"], "status": "approved"},
     )
     assert resposta.status_code == 501
 
-    # Nome de provedor arbitrário/desconhecido também nunca passa: não há
-    # bypass possível só trocando o nome na URL.
     resposta_arbitraria = client.post(
         f"/api/webhooks/pagamentos/{uuid.uuid4().hex}",
         json={"venda_id": pedido["id"], "status": "approved"},

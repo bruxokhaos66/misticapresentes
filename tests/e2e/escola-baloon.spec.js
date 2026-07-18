@@ -216,7 +216,10 @@ test("20 ciclos não deixam observers, listeners ou camadas órfãs", async ({ p
 
   for (let cycle = 0; cycle < 20; cycle += 1) {
     await page.evaluate((key) => localStorage.removeItem(key), STORAGE_KEY);
-    await page.addScriptTag({ path: path.join(__dirname, "..", "..", "escola-baloon.js") });
+    // url (não path): path injeta o conteúdo como <script> inline, bloqueado
+    // pela CSP estrita (script-src sem 'unsafe-inline'); url injeta
+    // <script src="/escola-baloon.js">, igual ao carregamento real em produção.
+    await page.addScriptTag({ url: "/escola-baloon.js" });
     const card = page.locator(COMPONENT);
     await card.waitFor({ state: "attached" });
     await card.evaluate((element) => element.classList.add("is-visible"));

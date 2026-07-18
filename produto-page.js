@@ -119,7 +119,7 @@
     const root = document.getElementById("produtoPageRoot");
     const esc = window.escapeHtml || (value => String(value ?? ""));
     const fallbackImg = window.PRODUCT_FALLBACK_IMAGE || "/assets/images/produto-sem-imagem.webp";
-    const onerror = `this.onerror=null;this.src='${fallbackImg}';this.classList.add('is-fallback');`;
+
     const images = productImages(product);
     const stock = available(product);
     const related = relatedProducts(product);
@@ -134,10 +134,10 @@
     const sob = Boolean(t && t.isSobEncomenda(product));
 
     const mainSrc = esc(images[0] || fallbackImg);
-    const mainPhoto = `<img class="product-page-photo" id="productMainPhoto" src="${mainSrc}" alt="${esc(product.name)}" loading="eager" decoding="async" onerror="${onerror}">`;
+    const mainPhoto = `<img class="product-page-photo" id="productMainPhoto" src="${mainSrc}" alt="${esc(product.name)}" loading="eager" decoding="async" data-fallback-src="${esc(fallbackImg)}">`;
 
     const thumbs = images.length > 1
-      ? `<div class="product-page-thumbs">${images.map((src, i) => `<button type="button" class="product-page-thumb${i === 0 ? " is-active" : ""}" data-src="${esc(src)}"><img src="${esc(src)}" alt="${esc(product.name)} - foto ${i + 1}" loading="lazy" decoding="async" onerror="${onerror}"></button>`).join("")}</div>`
+      ? `<div class="product-page-thumbs">${images.map((src, i) => `<button type="button" class="product-page-thumb${i === 0 ? " is-active" : ""}" data-src="${esc(src)}"><img src="${esc(src)}" alt="${esc(product.name)} - foto ${i + 1}" loading="lazy" decoding="async" data-fallback-src="${esc(fallbackImg)}"></button>`).join("")}</div>`
       : "";
 
     root.innerHTML = `

@@ -19,6 +19,18 @@
   const stateEl = document.querySelector("[data-achados-state]");
   if (!grid || !stateEl) return;
 
+  // Fallback de imagem via atributo data- em vez de onerror= inline (exigido
+  // pela CSP do site, script-src sem 'unsafe-inline'). "error" em <img> não
+  // borbulha: precisa capture:true para um listener único capturar.
+  document.addEventListener("error", event => {
+    const img = event.target;
+    if (!(img instanceof HTMLImageElement) || img.dataset.fallbackApplied || img.dataset.fallbackHide === undefined) return;
+    img.dataset.fallbackApplied = "1";
+    img.style.display = "none";
+    const irmao = img.nextElementSibling;
+    if (irmao) irmao.style.display = "grid";
+  }, true);
+
   const esc = (value) => String(value == null ? "" : value).replace(/[&<>"']/g, (ch) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   }[ch]));
@@ -53,7 +65,7 @@
     // Imagem com fallback visual: se a URL externa falhar, escondemos o <img> e
     // revelamos o ícone padrão da marca (sem depender de hosts de terceiros).
     const media = imagem
-      ? `<div class="achados-card-media"><img src="${esc(imagem)}" alt="${nome}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='grid';"><span class="achados-card-fallback" style="display:none" aria-hidden="true">✦</span></div>`
+      ? `<div class="achados-card-media"><img src="${esc(imagem)}" alt="${nome}" loading="lazy" data-fallback-hide><span class="achados-card-fallback" style="display:none" aria-hidden="true">✦</span></div>`
       : `<div class="achados-card-media"><span class="achados-card-fallback" aria-hidden="true">✦</span></div>`;
     return `
       <a class="achados-card" href="${href}">
