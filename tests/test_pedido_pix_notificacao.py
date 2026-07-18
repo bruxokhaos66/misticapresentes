@@ -275,3 +275,176 @@ def test_auditoria_comprovante_nao_expoe_telefone_nem_txid_completo():
         bruto = json.dumps([linha["dados_antes"], linha["dados_depois"]])
         assert "49999912345" not in bruto
         assert pedido["pix_txid"] not in bruto
+
+
+# ---------------------------------------------------------------------------
+# 10. Pedido cancelado/expirado não reentra no fluxo financeiro por estas rotas
+# ---------------------------------------------------------------------------
+
+
+def test_pedido_cancelado_nao_aceita_comprovante_nem_acoes_administrativas():
+    pedido = criar_pedido_pix()
+    cancelado = client.delete(f"/api/pedidos/{pedido['id']}", headers=HEADERS)
+    assert cancelado.status_code == 200
+    assert cancelado.json()["status"] == "Cancelado"
+
+    # Cliente tentando enviar comprovante de um pedido já cancelado: nunca
+    # reabre nem muda o status, apenas devolve o estado atual.
+    resposta = client.post(f"/api/pedidos/{pedido['id']}/comprovante", json={"txid": pedido["pix_txid"]})
+    assert resposta.status_code == 200
+    assert resposta.json()["status"] == "Cancelado"
+    assert resposta.json()["ja_registrado"] is True
+
+    # Admin tentando marcar comprovante recebido/rejeitar num pedido
+    # cancelado: transição inválida, rejeitada com 409.
+    recebido = client.post(f"/api/pedidos/{pedido['id']}/comprovante/recebido", headers=HEADERS, json={})
+    assert recebido.status_code == 409
+    rejeitado = client.post(f"/api/pedidos/{pedido['id']}/comprovante/rejeitar", headers=HEADERS, json={})
+    assert rejeitado.status_code == 409
+
+    consulta = client.get(f"/api/pedidos/{pedido['id']}", headers=HEADERS).json()
+    assert consulta["status"] == "Cancelado"
+
+
+def test_pedido_expirado_nao_reentra_no_fluxo_por_clique_do_cliente():
+    pedido = criar_pedido_pix()
+    # Força o prazo de expiração para o passado diretamente no banco (mesma
+    # técnica usada pelos testes já existentes de expiração automática) —
+    # nunca chama a lógica de geração de Pix de novo.
+    with main.conectar() as conn:
+        conn.execute("UPDATE pedidos SET expira_em=? WHERE id=?", ("2000-01-01T00:00:00", pedido["id"]))
+        conn.commit()
+
+    resposta = client.post(f"/api/pedidos/{pedido['id']}/comprovante", json={"txid": pedido["pix_txid"]})
+    assert resposta.status_code == 200
+    # expirar_pedidos_pendentes roda no início do endpoint: o pedido já virou
+    # "Cancelado" antes da checagem de transição, então o clique do cliente
+    # nunca reabre um pedido expirado.
+    assert resposta.json()["status"] == "Cancelado"
+
+    consulta = client.get(f"/api/pedidos/{pedido['id']}", headers=HEADERS).json()
+    assert consulta["status"] == "Cancelado"
+    assert consulta["expirado_em"]
+
+
+# ---------------------------------------------------------------------------
+# 11. CSRF/Origin nas rotas do painel autenticadas por cookie
+# ---------------------------------------------------------------------------
+
+
+def test_confirmar_pagamento_painel_rejeita_origem_nao_permitida():
+    pedido = criar_pedido_pix()
+    _, sessao_admin = criar_admin_com_sessao()
+
+    resposta = sessao_admin.post(
+        f"/api/pedidos/{pedido['id']}/confirmar-pagamento-painel",
+        json={"valor": pedido["total_final"]},
+        headers={"Origin": "http://evil.example.com"},
+    )
+    assert resposta.status_code == 403
+
+    consulta = client.get(f"/api/pedidos/{pedido['id']}", headers=HEADERS).json()
+    assert consulta["status"] == "Aguardando pagamento"
+
+
+def test_cancelar_painel_rejeita_origem_nao_permitida():
+    pedido = criar_pedido_pix()
+    _, sessao_admin = criar_admin_com_sessao()
+
+    resposta = sessao_admin.post(
+        f"/api/pedidos/{pedido['id']}/cancelar-painel",
+        headers={"Origin": "http://evil.example.com"},
+    )
+    assert resposta.status_code == 403
+
+    consulta = client.get(f"/api/pedidos/{pedido['id']}", headers=HEADERS).json()
+    assert consulta["status"] == "Aguardando pagamento"
+
+
+# ---------------------------------------------------------------------------
+# 12. Confirmação e cancelamento repetidos pelo painel são idempotentes
+# ---------------------------------------------------------------------------
+
+
+def test_confirmacao_repetida_pelo_painel_nao_duplica_estoque():
+    pedido = criar_pedido_pix()
+    _, sessao_admin = criar_admin_com_sessao()
+    origem = {"Origin": "http://localhost:3000"}
+
+    primeira = sessao_admin.post(
+        f"/api/pedidos/{pedido['id']}/confirmar-pagamento-painel",
+        json={"valor": pedido["total_final"]},
+        headers=origem,
+    )
+    assert primeira.status_code == 200, primeira.text
+
+    with main.conectar() as conn:
+        produto_id = conn.execute(
+            "SELECT codigo_p FROM pedidos_itens WHERE pedido_id=? LIMIT 1", (pedido["id"],)
+        ).fetchone()["codigo_p"]
+        estoque_apos_primeira = conn.execute(
+            "SELECT quantidade FROM produtos WHERE codigo_p=?", (produto_id,)
+        ).fetchone()["quantidade"]
+
+    segunda = sessao_admin.post(
+        f"/api/pedidos/{pedido['id']}/confirmar-pagamento-painel",
+        json={"valor": pedido["total_final"]},
+        headers=origem,
+    )
+    assert segunda.status_code == 200, segunda.text
+
+    with main.conectar() as conn:
+        estoque_apos_segunda = conn.execute(
+            "SELECT quantidade FROM produtos WHERE codigo_p=?", (produto_id,)
+        ).fetchone()["quantidade"]
+        pedido_final = conn.execute("SELECT status FROM pedidos WHERE id=?", (pedido["id"],)).fetchone()
+
+    # Confirmar duas vezes o mesmo valor nunca baixa estoque duas vezes e o
+    # pedido continua exatamente "Pagamento confirmado" (nunca avança para
+    # outro status nem regride).
+    assert estoque_apos_segunda == estoque_apos_primeira
+    assert pedido_final["status"] == "Pagamento confirmado"
+
+
+def test_cancelamento_repetido_pelo_painel_e_idempotente():
+    pedido = criar_pedido_pix()
+    _, sessao_admin = criar_admin_com_sessao()
+    origem = {"Origin": "http://localhost:3000"}
+
+    primeiro = sessao_admin.post(f"/api/pedidos/{pedido['id']}/cancelar-painel", headers=origem)
+    assert primeiro.status_code == 200, primeiro.text
+    assert primeiro.json()["status"] == "Cancelado"
+
+    segundo = sessao_admin.post(f"/api/pedidos/{pedido['id']}/cancelar-painel", headers=origem)
+    assert segundo.status_code == 200, segundo.text
+    assert segundo.json()["status"] == "Cancelado"
+    assert segundo.json()["ja_cancelado"] is True
+
+    consulta = client.get(f"/api/pedidos/{pedido['id']}", headers=HEADERS).json()
+    assert consulta["status"] == "Cancelado"
+
+
+# ---------------------------------------------------------------------------
+# 13. Webhook de provedor futuro: nenhum provedor configurado
+# ---------------------------------------------------------------------------
+
+
+def test_webhook_provedor_nao_configurado_retorna_501_e_nao_confirma_pedido():
+    pedido = criar_pedido_pix()
+
+    resposta = client.post(
+        f"/api/webhooks/pagamentos/mercadopago",
+        json={"venda_id": pedido["id"], "status": "approved"},
+    )
+    assert resposta.status_code == 501
+
+    # Nome de provedor arbitrário/desconhecido também nunca passa: não há
+    # bypass possível só trocando o nome na URL.
+    resposta_arbitraria = client.post(
+        f"/api/webhooks/pagamentos/{uuid.uuid4().hex}",
+        json={"venda_id": pedido["id"], "status": "approved"},
+    )
+    assert resposta_arbitraria.status_code == 501
+
+    consulta = client.get(f"/api/pedidos/{pedido['id']}", headers=HEADERS).json()
+    assert consulta["status"] == "Aguardando pagamento"
