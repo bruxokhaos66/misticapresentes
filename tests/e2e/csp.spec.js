@@ -39,11 +39,21 @@ async function prepararRede(page) {
   }));
 }
 
+// Erros de console genéricos de rede (ex.: uma fonte do Google Fonts que a
+// rede do runner de CI bloqueia) não são um sinal de violação de CSP -- o
+// sinal real e confiável é o evento securitypolicyviolation, capturado à
+// parte. Filtramos aqui só "Failed to load resource" (sem stack, sem
+// exceção JS) para não mascarar erros de verdade (exceções não tratadas
+// continuam chegando via pageerror, sempre incluídas).
+function _ehFalhaGenericaDeRede(texto) {
+  return /Failed to load resource/.test(texto) && !/Content Security Policy/i.test(texto);
+}
+
 function coletarDiagnosticos(page) {
   const consoleErros = [];
   const violacoesCsp = [];
   page.on("console", msg => {
-    if (msg.type() === "error") consoleErros.push(msg.text());
+    if (msg.type() === "error" && !_ehFalhaGenericaDeRede(msg.text())) consoleErros.push(msg.text());
   });
   page.on("pageerror", err => consoleErros.push(String(err)));
   return { consoleErros, violacoesCsp };
