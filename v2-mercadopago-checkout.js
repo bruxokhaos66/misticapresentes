@@ -236,15 +236,28 @@
     definirCarregando(false);
 
     if (resposta.status === "aprovado") {
-      setCardStatus(resposta.mensagem || "Pagamento aprovado!", "sucesso");
+      const parcelasTexto = resposta.parcelas > 1 ? `em ${resposta.parcelas}x` : "à vista";
+      setCardStatus(
+        `Pagamento aprovado! Pedido #${pedidoId} confirmado (${currency(resposta.valor)} ${parcelasTexto}). ` +
+        "O comprovante será enviado e você pode acompanhar o andamento do pedido a qualquer momento.",
+        "sucesso",
+      );
       window.misticaTrack?.("purchase", { transaction_id: String(pedidoId), currency: "BRL", value: resposta.valor, payment_method: "mercadopago_cartao" });
+      // Só limpa o carrinho DEPOIS da confirmação do servidor -- nunca antes
+      // (evita perder o carrinho se a cobrança falhar) e nunca com base
+      // apenas numa resposta local/otimista do navegador.
+      window.clearCart?.();
       if (typeof window.misticaPagamentoCartaoAprovado === "function") {
         window.misticaPagamentoCartaoAprovado(pedidoId, resposta);
       }
       cardFormMontadoParaPedido = null;
       pedidoAtual = null;
     } else if (resposta.status === "pendente") {
-      setCardStatus(resposta.mensagem || "Pagamento em análise. Você será avisado assim que for confirmado.", "info");
+      setCardStatus(
+        (resposta.mensagem || "Pagamento em análise.") +
+        ` Pedido #${pedidoId} — a análise está em andamento, não é necessário pagar novamente agora. Você será avisado assim que for confirmado.`,
+        "info",
+      );
       if (typeof window.misticaPagamentoCartaoPendente === "function") {
         window.misticaPagamentoCartaoPendente(pedidoId, resposta);
       }
