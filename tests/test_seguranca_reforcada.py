@@ -296,7 +296,12 @@ def test_headers_de_seguranca_incluem_csp_e_permissions_policy():
     resposta = client.get("/api/health")
     assert resposta.headers.get("content-security-policy") == "default-src 'none'; frame-ancestors 'none'"
     assert "geolocation=()" in resposta.headers.get("permissions-policy", "")
-    assert resposta.headers.get("cross-origin-opener-policy") == "same-origin"
+    # payment=(self): a Payment Request API pertence à origem do site
+    # (checkout), não a esta API -- ver comentário em backend/main.py.
+    assert "payment=(self)" in resposta.headers.get("permissions-policy", "")
+    # same-origin-allow-popups (não same-origin): permite popups legítimos
+    # (ex.: OAuth de terceiros) sem abrir mão do isolamento COOP.
+    assert resposta.headers.get("cross-origin-opener-policy") == "same-origin-allow-popups"
     assert resposta.headers.get("origin-agent-cluster") == "?1"
 
 

@@ -211,14 +211,22 @@ async def cabecalhos_seguranca(request, call_next):
     # resposta desta origem e não interfere no CSP que o site (hospedado à
     # parte, ver CNAME) já aplique via <meta> às próprias páginas.
     response.headers.setdefault("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
-    # Sem recursos de câmera/microfone/geolocalização etc. usados pela API.
+    # Sem recursos de câmera/microfone/geolocalização usados pela API.
+    # payment=(self): a API em si nunca invoca a Payment Request API (só
+    # devolve JSON), mas o valor "(self)" em vez de "()" documenta que essa
+    # capacidade pertence à origem do site (misticaesotericos.com.br), não a
+    # esta API -- e evita bloquear por engano uma resposta HTML servida
+    # daqui no futuro (ex.: /docs) que embarque algo do Mercado Pago.
     response.headers.setdefault(
         "Permissions-Policy",
-        "geolocation=(), microphone=(), camera=(), payment=(), usb=(), interest-cohort=()",
+        "geolocation=(), microphone=(), camera=(), payment=(self), usb=(), interest-cohort=()",
     )
-    # COOP isola a janela desta origem de outras abas; seguro aqui porque a
-    # API não abre nem depende de popups/postMessage entre origens.
-    response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+    # COOP: same-origin-allow-popups em vez de same-origin -- o checkout do
+    # site (outra origem) abre a API só via fetch/XHR, nunca via
+    # window.open/popup; mesmo assim, "allow-popups" é a opção mais segura
+    # que ainda não quebra nenhum fluxo de popup legítimo que passe a
+    # existir (ex.: OAuth de terceiros), sem abrir mão do isolamento COOP.
+    response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin-allow-popups")
     response.headers.setdefault("Origin-Agent-Cluster", "?1")
     if request.url.scheme == "https":
         response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
