@@ -214,6 +214,7 @@ def registrar_checkout_publico(
                 "expira_em": expira_em,
                 "pix_txid": pix["txid"] if pix else None,
                 "pix_copia_cola": pix["copia_cola"] if pix else None,
+                "pix": pix["info"] if pix else None,
             }
             registrar_auditoria(
                 conn,

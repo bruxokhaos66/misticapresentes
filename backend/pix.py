@@ -48,6 +48,46 @@ def config_pix() -> dict:
         "chave": os.environ.get("MISTICA_PIX_KEY", "").strip(),
         "nome": os.environ.get("MISTICA_PIX_NOME", "").strip() or "MISTICA PRESENTES",
         "cidade": os.environ.get("MISTICA_PIX_CIDADE", "").strip() or "PINHALZINHO",
+        # Só para exibição na tela de confirmação do pedido — nunca entram no
+        # payload EMV (que usa "nome"/"cidade" acima, sanitizados e truncados
+        # pelos limites do BR Code). Mantidos separados para não confundir o
+        # nome comercial da loja com o titular real da conta recebedora.
+        "nome_loja": os.environ.get("MISTICA_LOJA_NOME", "").strip() or "Mística Presentes",
+        "cidade_loja": os.environ.get("MISTICA_LOJA_CIDADE", "").strip() or "Pinhalzinho-SC",
+    }
+
+
+_UUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+
+
+def mascarar_chave_pix(chave: str) -> str:
+    """Mascara a chave Pix para exibição pública: nunca devolve o valor
+    completo. Chaves aleatórias (UUID) preservam o formato com hífens,
+    mostrando só o último grupo; as demais mostram só os últimos 4
+    caracteres."""
+    chave = str(chave or "").strip()
+    if not chave:
+        return ""
+    if _UUID_RE.match(chave):
+        grupos = chave.split("-")
+        return "-".join(["•" * len(grupo) for grupo in grupos[:-1]] + [grupos[-1]])
+    if len(chave) <= 4:
+        return "•" * 8 + chave
+    return "•" * 8 + chave[-4:]
+
+
+def info_publica_pix(cfg: dict, copia_cola: str) -> dict:
+    """Monta o bloco público de informações do Pix devolvido pela API —
+    nunca inclui a chave completa, só a versão mascarada."""
+    return {
+        "qr_code": copia_cola,
+        "copia_e_cola": copia_cola,
+        "chave_mascarada": mascarar_chave_pix(cfg["chave"]),
+        "recebedor": cfg["nome"],
+        "nome_loja": cfg["nome_loja"],
+        "cidade": cfg["cidade_loja"],
     }
 
 
@@ -82,4 +122,4 @@ def gerar_pix_do_pedido(pedido_id: int, valor: float) -> dict | None:
         payload = montar_payload_pix(chave=cfg["chave"], nome=cfg["nome"], cidade=cfg["cidade"], valor=valor, txid=txid)
     except ValueError:
         return None
-    return {"txid": txid, "copia_cola": payload}
+    return {"txid": txid, "copia_cola": payload, "info": info_publica_pix(cfg, payload)}

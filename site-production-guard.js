@@ -125,6 +125,12 @@
       if (!pedido?.id || !pedido?.pixPayload) throw new Error("O servidor não retornou um Pix válido.");
 
       if (typeof pixPayloadInput !== "undefined" && pixPayloadInput) pixPayloadInput.value = pedido.pixPayload;
+      if (pedido.pixInfo) {
+        if (typeof pixKeyInput !== "undefined" && pixKeyInput) pixKeyInput.value = pedido.pixInfo.chave_mascarada || "";
+        if (typeof merchantNameInput !== "undefined" && merchantNameInput) merchantNameInput.value = pedido.pixInfo.recebedor || "";
+        if (typeof storeNameInput !== "undefined" && storeNameInput) storeNameInput.value = pedido.pixInfo.nome_loja || "";
+        if (typeof merchantCityInput !== "undefined" && merchantCityInput) merchantCityInput.value = pedido.pixInfo.cidade || "";
+      }
       if (window.QRCode && typeof pixCanvas !== "undefined" && pixCanvas) {
         try {
           await window.QRCode.toCanvas(pixCanvas, pedido.pixPayload, {
