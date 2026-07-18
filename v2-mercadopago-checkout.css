@@ -1,0 +1,77 @@
+/* Cartão de crédito (Mercado Pago) no checkout -- ver v2-mercadopago-checkout.js.
+   Reaproveita as classes .form-panel/.warning-box/.pix-comprovante-note já
+   existentes (v2.css/styles.css); este arquivo cobre só o que é específico
+   do formulário de cartão (toggle de forma de pagamento e campos seguros do
+   Mercado Pago). */
+
+.payment-method-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.payment-method-btn {
+  flex: 1 1 auto;
+  min-width: 120px;
+}
+
+.payment-method-btn.is-active {
+  background: var(--accent, #7a4fd1);
+  color: #fff;
+  border-color: transparent;
+}
+
+.card-panel .mp-card-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.card-panel .mp-card-row > label {
+  flex: 1 1 160px;
+}
+
+/* Os campos seguros do Mercado Pago (número, validade, CVV) são iframes
+   montados pelo SDK dentro destes contêineres -- o iframe herda a altura do
+   pai, então fixamos uma altura compatível com os demais inputs do site. */
+.mp-secure-field {
+  height: 44px;
+  border: 1px solid var(--border, #d8d0ea);
+  border-radius: 10px;
+  padding: 2px 10px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+}
+
+.mp-secure-field iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+#mpCardSubmit:disabled,
+.payment-method-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+#mpCardStatus[data-tone="erro"] {
+  color: #b3261e;
+}
+
+#mpCardStatus[data-tone="sucesso"] {
+  color: #1b7f3a;
+}
+
+#mpCardStatus[data-tone="info"] {
+  color: inherit;
+}
+
+@media (prefers-color-scheme: dark) {
+  .mp-secure-field {
+    background: #16101f;
+    border-color: #3a2c57;
+  }
+}

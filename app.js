@@ -96,6 +96,10 @@ function reconcileCartWithCatalog() {
   renderProducts();
 }
 window.misticaReconcileCart = reconcileCartWithCatalog;
+// Leitura do carrinho atual para outros módulos (ex.: v2-mercadopago-checkout.js)
+// sem duplicar o estado do carrinho em outro arquivo. Nunca usado para
+// escrita: quem precisa alterar o carrinho usa addToCart/removeFromCart/clearCart.
+window.misticaGetCart = () => cart.slice();
 window.addEventListener("storage", event => {
   if (window.misticaSecureStorage && event.key === window.misticaSecureStorage.CART_KEY) {
     cart = window.misticaSecureStorage.getCart().map(entry => ({ id: entry.id, qty: entry.qty }));
