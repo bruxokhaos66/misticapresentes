@@ -120,11 +120,14 @@
             <span><strong>Telefone:</strong> ${escapeHtml(pedido.telefone || "Não informado")}</span>
             <span><strong>Valor:</strong> ${currency.format(Number(pedido.total_final || 0))}</span>
             <span><strong>Pagamento:</strong> ${escapeHtml(pedido.forma_pagamento || "Pix")}</span>
+            ${pedido.payment_provider && pedido.payment_provider !== "manual_pix" ? `<span><strong>Provedor:</strong> ${escapeHtml(pedido.payment_provider)}${pedido.provider_payment_id ? ` (#${escapeHtml(pedido.provider_payment_id)})` : ""}</span>` : ""}
           </div>
           <p class="pedido-pix-itens"><strong>Itens:</strong> ${escapeHtml(formatarItens(pedido))}</p>
           ${status === "Comprovante enviado" || status === "Pagamento em análise" ? `<p class="pedido-pix-aviso-comprovante">O cliente indicou ter enviado o comprovante pelo WhatsApp. O site não confirma automaticamente se o anexo foi de fato enviado — confira a conversa antes de aprovar.</p>` : ""}
+          <div class="pedido-pix-tentativas" data-tentativas-pedido="${pedido.id}" hidden></div>
           <div class="pedido-pix-acoes">
             <button type="button" class="btn btn-small btn-ghost" data-acao="visualizar">Marcar como visto</button>
+            <button type="button" class="btn btn-small btn-ghost" data-acao="ver-tentativas">Ver tentativas de pagamento</button>
             ${waUrl ? `<a class="btn btn-small btn-ghost" href="${waUrl}" target="_blank" rel="noopener">Abrir WhatsApp</a>` : ""}
             ${podeMarcarRecebido ? `<button type="button" class="btn btn-small btn-ghost" data-acao="comprovante-recebido">Marcar comprovante recebido</button>` : ""}
             ${podeConfirmar ? `<button type="button" class="btn btn-small" data-acao="confirmar-pagamento">Confirmar pagamento</button>` : ""}
@@ -161,6 +164,40 @@
     }
 
     renderPedidos(pedidos);
+  }
+
+  function formatarTentativa(tentativa) {
+    const dataFormatada = escapeHtml(tentativa.atualizado_em || tentativa.criado_em || "");
+    const provedor = escapeHtml(tentativa.provedor || "");
+    const statusBadge = escapeHtml(tentativa.status_interno || "");
+    const parcelas = tentativa.parcelas ? `${tentativa.parcelas}x` : "";
+    const providerId = tentativa.provider_payment_id ? `#${escapeHtml(tentativa.provider_payment_id)}` : "";
+    const motivo = tentativa.motivo_recusa ? ` — ${escapeHtml(tentativa.motivo_recusa)}` : "";
+    const podeReconsultar = tentativa.provedor === "mercadopago" && tentativa.provider_payment_id;
+    return `<div class="pedido-pix-tentativa-item" data-tentativa-id="${tentativa.id}">
+      <span class="pedido-pix-status status-${statusClasse(statusBadge)}">${statusBadge}</span>
+      <span>${provedor} ${parcelas} ${providerId}</span>
+      <span>${dataFormatada}</span>
+      <span>${motivo}</span>
+      ${podeReconsultar ? `<button type="button" class="btn btn-small btn-ghost" data-acao="reconsultar-tentativa" data-tentativa-id="${tentativa.id}">Consultar novamente no provedor</button>` : ""}
+    </div>`;
+  }
+
+  async function alternarTentativas(pedidoId, container) {
+    if (!container.hidden) {
+      container.hidden = true;
+      return;
+    }
+    container.hidden = false;
+    container.innerHTML = "<p>Carregando tentativas...</p>";
+    try {
+      const tentativas = await apiFetch(`/api/payments/mercadopago/tentativas/${pedidoId}`);
+      container.innerHTML = Array.isArray(tentativas) && tentativas.length
+        ? tentativas.map(formatarTentativa).join("")
+        : "<p>Nenhuma tentativa de pagamento por provedor externo registrada para este pedido.</p>";
+    } catch (error) {
+      container.innerHTML = `<p>Não foi possível carregar as tentativas: ${escapeHtml(error.message)}</p>`;
+    }
   }
 
   async function executarAcao(acao, pedidoId, valorTotal) {
@@ -200,6 +237,27 @@
     if (!card) return;
     const pedidoId = card.dataset.pedidoId;
     const total = card.dataset.total;
+
+    if (botao.dataset.acao === "ver-tentativas") {
+      const container = card.querySelector(`[data-tentativas-pedido="${pedidoId}"]`);
+      if (container) await alternarTentativas(pedidoId, container);
+      return;
+    }
+    if (botao.dataset.acao === "reconsultar-tentativa") {
+      botao.disabled = true;
+      try {
+        await apiFetch(`/api/payments/mercadopago/tentativas/${botao.dataset.tentativaId}/consultar`, { method: "POST" });
+        const container = card.querySelector(`[data-tentativas-pedido="${pedidoId}"]`);
+        if (container) { container.hidden = true; await alternarTentativas(pedidoId, container); }
+        await carregarPedidos();
+      } catch (error) {
+        window.alert(error.message || "Não foi possível reconsultar o provedor.");
+      } finally {
+        botao.disabled = false;
+      }
+      return;
+    }
+
     botao.disabled = true;
     try {
       await executarAcao(botao.dataset.acao, pedidoId, total);
