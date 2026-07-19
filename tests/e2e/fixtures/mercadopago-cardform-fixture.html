@@ -83,10 +83,13 @@
   }
   window.__mpMountCount = 0;
   window.__mpConfigsCapturados = [];
+  window.__mpConstructorOptionsCapturadas = [];
 
   var CAMPOS_SEGUROS = ["mpCardNumber", "mpExpirationDate", "mpSecurityCode"];
 
-  function MockMercadoPago() {}
+  function MockMercadoPago(publicKey, options) {
+    window.__mpConstructorOptionsCapturadas.push(options);
+  }
   MockMercadoPago.prototype.cardForm = function (config) {
     window.__mpConfigsCapturados.push(config);
     window.__mpMountCount += 1;

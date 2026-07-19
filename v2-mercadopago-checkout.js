@@ -149,7 +149,19 @@
     const cfg = await obterConfigPublica();
     if (!cfg.enabled || !cfg.public_key) return;
     await carregarSdk();
-    if (!mpInstance) mpInstance = new window.MercadoPago(cfg.public_key, { locale: "pt-BR" });
+    // trackingDisabled: true -- opção oficial do SDK (mercadopago/sdk-js,
+    // README "API": "Enable/disable tracking of generic usage metrics",
+    // default false). Candidata mais próxima, documentada pelo próprio
+    // fabricante, do script inline de telemetria bloqueado pela CSP
+    // (script-src) reportado após a PR #365 -- ver docs/admin/CSP.md,
+    // seção "Auditoria do script inline bloqueado (pós-#368)" para o que
+    // foi e não foi possível confirmar sobre o efeito real dela aqui.
+    // advancedFraudPrevention É DELIBERADAMENTE mantido no default (true,
+    // não passado): é uma opção separada, documentada como controle de
+    // prevenção de fraude (não de telemetria genérica) -- desativá-la afeta
+    // aprovação/risco de fraude e não há evidência de que esteja ligada a
+    // este script-src específico.
+    if (!mpInstance) mpInstance = new window.MercadoPago(cfg.public_key, { locale: "pt-BR", trackingDisabled: true });
 
     let pedido;
     try {

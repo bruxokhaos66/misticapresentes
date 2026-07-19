@@ -1,0 +1,10 @@
+body { font-family: system-ui, sans-serif; max-width: 960px; margin: 24px auto; padding: 0 16px; color: #222; }
+h1 { font-size: 1.25rem; }
+.aviso { background: #fff3cd; border: 1px solid #d9a441; padding: 12px; border-radius: 6px; margin-bottom: 16px; }
+fieldset { margin-bottom: 16px; }
+label { display: block; margin-bottom: 8px; }
+input[type="text"] { width: 100%; padding: 6px; box-sizing: border-box; }
+.container { height: 20px; display: inline-block; border: 1px solid #999; border-radius: 3px; padding: 2px 4px; width: 200px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.85rem; margin-top: 8px; }
+th, td { border: 1px solid #ccc; padding: 4px 6px; text-align: left; vertical-align: top; }
+.checklist label { font-weight: normal; }

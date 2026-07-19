@@ -50,6 +50,17 @@ test.describe("Montagem do CardForm (mock do SDK, ver limitação de rede acima)
     expect(config.autoMount).toBe(true);
   });
 
+  test("new MercadoPago() é chamado com trackingDisabled: true e sem desativar advancedFraudPrevention", async ({ page }) => {
+    await page.goto("/tests/e2e/fixtures/mercadopago-cardform-fixture.html");
+    await page.locator('[data-payment-method="cartao"]').waitFor({ state: "visible" });
+    await page.click('[data-payment-method="cartao"]');
+
+    await expect.poll(() => page.evaluate(() => window.__mpConstructorOptionsCapturadas.length)).toBeGreaterThan(0);
+    const options = await page.evaluate(() => window.__mpConstructorOptionsCapturadas[0]);
+    expect(options.trackingDisabled).toBe(true);
+    expect(options).not.toHaveProperty("advancedFraudPrevention");
+  });
+
   test("identificationType usa <select>, não <input>", async ({ page }) => {
     await page.goto("/tests/e2e/fixtures/mercadopago-cardform-fixture.html");
     const tag = await page.evaluate(() => document.getElementById("mpIdentificationType").tagName);

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<!--
+  Ferramenta de homologação manual -- NÃO faz parte do site público, não é
+  linkada de nenhuma página real e não deve ir para produção.
+
+  Objetivo: dar a um humano com acesso de rede real a sdk.mercadopago.com
+  (este sandbox de desenvolvimento não tem -- ver docs/admin/CSP.md) um jeito
+  de executar exatamente o procedimento pedido para decidir se o script
+  inline bloqueado pela CSP (script-src) é necessário para o CardForm ficar
+  interativo:
+
+    1. Carrega o SDK real (https://sdk.mercadopago.com/js/v2) com a MESMA
+       CSP de produção (script-src sem 'unsafe-inline'/hash) já aplicada
+       nesta própria página. O próprio CSS/JS desta página são arquivos
+       externos (sem <style>/<script> inline) pela mesma razão que o resto
+       do site é: um bloco inline seria bloqueado pela CSP da própria
+       página.
+    2. Escuta securitypolicyviolation e mostra numa tabela, na tela (não só
+       no console), só os campos pedidos: effectiveDirective, blockedURI,
+       sourceFile, lineNumber, columnNumber, sample. NUNCA captura ou exibe
+       número de cartão, CVV, token, CPF, e-mail ou credenciais -- o listener
+       só lê o evento de violação de CSP, que não tem acesso a esses dados
+       (ver mp-csp-diagnostico.js).
+    3. Monta um CardForm mínimo (Public Key informada na própria página, só
+       em memória, nunca persistida) para permitir testar clique, digitação,
+       parcelas, elementFromPoint e foco nos 3 iframes reais.
+    4. Um checklist manual ao lado, com os mesmos itens do procedimento de
+       homologação em docs/admin/CSP.md.
+
+  Uso: sirva esta pasta com um servidor HTTP (file:// bloqueia o
+  document.head.appendChild(script) em alguns navegadores) num ambiente com
+  internet real, informe uma Public Key de TESTE/sandbox do Mercado Pago,
+  recarregue pelo menos 5 vezes (janela normal, anônima, outro navegador) e
+  preencha o checklist. Os hashes reportados no Console (mensagem "Refused to
+  execute inline script... sha256-...") devem ser colados manualmente no
+  campo de anotação -- o SecurityPolicyViolationEvent não expõe esse hash
+  como propriedade JS, só o Console imprime.
+-->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; script-src 'self' https://sdk.mercadopago.com https://www.googletagmanager.com https://connect.facebook.net; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://*.mercadopago.com https://*.mercadopago.com.br https://api.mercadolibre.com; frame-src https://*.mercadopago.com https://*.mercadopago.com.br; worker-src 'self'; manifest-src 'self'" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Diagnóstico CSP x CardForm (uso manual, não é página pública)</title>
+<link rel="stylesheet" href="mp-csp-diagnostico.css" />
+</head>
+<body>
+<h1>Diagnóstico: script inline bloqueado pela CSP x CardForm interativo</h1>
+<p class="aviso">
+  Ferramenta de uso manual/local para homologação real -- não é parte do
+  site publicado, não referenciar em nenhuma página do checkout. Nunca cole
+  aqui um cartão real fora de um ambiente de teste/sandbox do Mercado Pago.
+</p>
+
+<fieldset>
+  <legend>1. Public Key de TESTE (sandbox)</legend>
+  <label>
+    Public Key (TEST-...)
+    <input type="text" id="publicKey" placeholder="TEST-xxxxxxxx-xxxx-..." autocomplete="off" />
+  </label>
+  <button type="button" id="montar">Carregar SDK e montar CardForm</button>
+</fieldset>
+
+<fieldset>
+  <legend>2. Campos do CardForm (Secure Fields reais do Mercado Pago)</legend>
+  <form id="form-checkout">
+    <label>Número do cartão <div id="form-checkout__cardNumber" class="container"></div></label>
+    <label>Validade <div id="form-checkout__expirationDate" class="container"></div></label>
+    <label>CVV <div id="form-checkout__securityCode" class="container"></div></label>
+    <label>Nome impresso <input type="text" id="form-checkout__cardholderName" /></label>
+    <label>Parcelas <select id="form-checkout__installments"></select></label>
+    <label>Emissor <select id="form-checkout__issuer"></select></label>
+    <label>Tipo de documento <select id="form-checkout__identificationType"></select></label>
+    <label>Número do documento <input type="text" id="form-checkout__identificationNumber" /></label>
+    <label>E-mail <input type="email" id="form-checkout__cardholderEmail" /></label>
+  </form>
+  <p id="statusMontagem">Aguardando Public Key.</p>
+</fieldset>
+
+<fieldset>
+  <legend>3. Checklist manual (marcar durante o teste real)</legend>
+  <div class="checklist">
+    <label><input type="checkbox" /> Erro de script-src inline desapareceu do Console</label>
+    <label><input type="checkbox" /> Número do cartão recebe clique</label>
+    <label><input type="checkbox" /> Número do cartão aceita digitação</label>
+    <label><input type="checkbox" /> Validade aceita digitação</label>
+    <label><input type="checkbox" /> CVV aceita digitação</label>
+    <label><input type="checkbox" /> Parcelas carregam (options {'>'} 0)</label>
+    <label><input type="checkbox" /> document.elementFromPoint no centro do iframe retorna o próprio iframe</label>
+    <label><input type="checkbox" /> iframe recebe foco (document.activeElement dentro do container após clique)</label>
+  </div>
+  <p>
+    Hashes observados nesta sessão (colar manualmente, um por recarregamento):
+    <br /><textarea id="hashesColados" rows="5" style="width:100%"></textarea>
+  </p>
+</fieldset>
+
+<fieldset>
+  <legend>4. Violações de CSP capturadas nesta página (securitypolicyviolation)</legend>
+  <table id="violacoes">
+    <thead>
+      <tr>
+        <th>effectiveDirective</th><th>blockedURI</th><th>sourceFile</th>
+        <th>lineNumber</th><th>columnNumber</th><th>sample</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</fieldset>
+
+<script src="mp-csp-diagnostico.js"></script>
+</body>
+</html>

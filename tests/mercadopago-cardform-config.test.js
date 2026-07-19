@@ -54,7 +54,9 @@ function loadCheckout({ enabled = true, publicKey = "TEST-PUBLIC-KEY" } = {}) {
   global.window.misticaCriarPedido = async () => ({ id: 42, pixTxid: "txid-teste", totalFinal: 199.9 });
 
   const capturedConfigs = [];
-  global.window.MercadoPago = function MockMercadoPago() {
+  const capturedConstructorOptions = [];
+  global.window.MercadoPago = function MockMercadoPago(_publicKey, options) {
+    capturedConstructorOptions.push(options);
     this.cardForm = (config) => {
       capturedConfigs.push(config);
       return { getCardFormData: () => ({}) };
@@ -76,7 +78,7 @@ function loadCheckout({ enabled = true, publicKey = "TEST-PUBLIC-KEY" } = {}) {
   global.requestAnimationFrame = (callback) => setTimeout(callback, 0);
 
   require("../v2-mercadopago-checkout.js");
-  return { checkout: global.window.misticaMercadoPagoCheckout, capturedConfigs };
+  return { checkout: global.window.misticaMercadoPagoCheckout, capturedConfigs, capturedConstructorOptions };
 }
 
 test("cardForm() é chamado com iframe: true (Secure Fields exigem isso quando os campos são <div>)", async () => {
@@ -98,6 +100,29 @@ test("cardForm() é chamado com iframe: true (Secure Fields exigem isso quando o
   assert.equal(config.form.expirationDate.id, "mpExpirationDate");
   assert.equal(config.form.securityCode.id, "mpSecurityCode");
   assert.equal(config.form.identificationType.id, "mpIdentificationType");
+});
+
+test("new MercadoPago() é chamado com trackingDisabled: true e não desativa advancedFraudPrevention", async () => {
+  const { checkout, capturedConstructorOptions } = loadCheckout();
+
+  checkout.alternarFormaPagamento("cartao");
+
+  let tentativas = 0;
+  while (capturedConstructorOptions.length === 0 && tentativas < 50) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    tentativas += 1;
+  }
+
+  assert.equal(capturedConstructorOptions.length, 1, "new MercadoPago() deveria ter sido chamado exatamente uma vez");
+  const options = capturedConstructorOptions[0];
+  // trackingDisabled: true -- opção oficial (ver README @mercadopago/sdk-js)
+  // mais próxima do script inline de telemetria bloqueado pela CSP; ver
+  // docs/admin/CSP.md para o que foi/não foi confirmado sobre o efeito real.
+  assert.equal(options.trackingDisabled, true);
+  // advancedFraudPrevention nunca deve ser passado como false por este
+  // arquivo -- é uma opção de prevenção de fraude, não de telemetria, e
+  // desativá-la tem impacto direto em aprovação/risco (não decidido aqui).
+  assert.equal(Object.prototype.hasOwnProperty.call(options, "advancedFraudPrevention"), false);
 });
 
 test("integração desabilitada: cardForm() nunca é chamado", async () => {

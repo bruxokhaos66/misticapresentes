@@ -176,6 +176,122 @@ desapareceram do Console e que o CardForm aceita clique/digitação nos 3
 campos, reconhece o BIN e carrega parcelas -- ver "Procedimento de
 homologação real" no fim deste arquivo.
 
+### Auditoria do script inline bloqueado (pós-#368)
+
+Depois das PRs #364/#365/#367/#368, o campo continuou reportado como sem
+clique/digitação em navegador real, com a mesma violação de `script-src`
+documentada acima (inline script bloqueado, hash `sha256-
+ED3LX2MEfaqqX5WV3GnfgYRAVm3XvX0aNWaf1la6psU=` reportado nesta execução --
+diferente dos dois hashes já registrados em execuções anteriores). Esta
+mudança tratou a hipótese anterior ("é só telemetria") como **não
+confirmada** e investigou de novo, com os seguintes resultados:
+
+**1. Este ambiente continua sem acesso de rede a `sdk.mercadopago.com`.**
+Confirmado de novo, desta vez de forma explícita e reproduzível: o proxy
+de saída deste sandbox responde `403` a toda tentativa de `CONNECT` para
+`sdk.mercadopago.com:443` (`curl` direto e `WebFetch` — ambos falham com
+403; `$HTTPS_PROXY/__agentproxy/status` lista os rejects em
+`recentRelayFailures`). Isso significa que **nenhuma das validações que
+exigem o SDK real** (capturar o `securitypolicyviolation` real do
+navegador, confirmar estabilidade do hash em 5+ recarregamentos, testar
+`trackingDisabled`/`advancedFraudPrevention` contra o comportamento real,
+clicar/digitar nos Secure Fields reais, homologar em sandbox com cartão de
+teste) pôde ser executada nesta mudança — mesma limitação já registrada em
+todas as correções anteriores deste arquivo. Nada abaixo deve ser lido
+como confirmação de que o cartão funciona.
+
+**2. Nova evidência: migrar para o pacote npm `@mercadopago/sdk-js` não
+evita o script inline.** O registro npm (`registry.npmjs.org`) é
+acessível neste ambiente, então foi possível baixar e inspecionar o pacote
+oficial (`npm pack @mercadopago/sdk-js`, versão 0.0.3, `dist/index.js`).
+O `loadMercadoPago()` do pacote faz exatamente a mesma coisa que o
+`<script src="https://sdk.mercadopago.com/js/v2">` da versão CDN: injeta
+um `<script>` **externo** apontando para `https://sdk.mercadopago.com/js/v2`
+e resolve uma Promise quando ele carrega -- não existe nenhum caminho
+alternativo de carregamento nem bootstrap diferente no pacote npm. O
+bundle servido por essa mesma URL (`js/v2`) é idêntico nos dois casos; é
+de dentro desse bundle -- não do loader -- que vem o script inline
+reportado. Portanto **migrar de CDN para npm não muda nada em relação a
+este bloqueio de CSP**: não há necessidade de fazer essa migração (evitada
+nesta mudança, como o item 6 do procedimento pedia para só migrar com
+prova de que resolve o problema -- aqui está a prova do contrário).
+
+**3. Opções oficiais do SDK confirmadas (README do pacote, seção API):**
+
+| Opção | Default | Descrição oficial |
+|---|---|---|
+| `trackingDisabled` | `false` | "Enable/disable tracking of generic usage metrics" |
+| `advancedFraudPrevention` | `true` | "Set the advanced fraud prevention status" |
+
+Essas duas opções e seus defaults foram confirmados tanto no
+`README.md` do pacote `@mercadopago/sdk-js` baixado do npm (fonte
+primária, texto idêntico) quanto em buscas públicas sobre o SDK. Não há
+documentação oficial associando explicitamente qualquer uma delas ao
+script inline reportado neste ticket -- a suposição de que
+`trackingDisabled` é a opção mais próxima do script de telemetria é uma
+inferência (nome da opção + correlação já registrada com a violação de
+`connect-src` para `api.mercadolibre.com/tracks` e o console.error
+`Could not send event`), não uma confirmação do fabricante.
+
+**4. Ação tomada nesta mudança:** `trackingDisabled: true` foi adicionado
+à chamada `new MercadoPago(publicKey, options)` em
+`v2-mercadopago-checkout.js`, por ser (a) uma opção oficial documentada
+pelo próprio SDK, (b) a opção cujo nome/descrição melhor corresponde à
+hipótese de telemetria já registrada, e (c) uma mudança que não relaxa a
+CSP nem depende de hash instável. `advancedFraudPrevention` **não** foi
+alterado -- continua no default (`true`, nunca passado como `false`): é
+uma opção de prevenção de fraude, não de telemetria genérica, e desativá-
+la tem impacto direto e não documentado nesta mudança sobre
+aprovação/risco de fraude (o próprio ticket pede para não fazer isso sem
+documentar esse impacto, e não há como medir esse impacto sem
+processar pagamentos reais em produção).
+
+**5. O hash não foi adicionado a `script-src`.** O próprio ticket já
+lista 3 hashes diferentes observados em execuções anteriores para o que é
+descrito como o mesmo script -- evidência direta de instabilidade (CSP
+hash exige o conteúdo do script ser byte-a-byte idêntico para o hash
+bater; um hash que muda entre execuções nunca autoriza consistentemente o
+mesmo script, e cada mudança de hash reabre exatamente o mesmo sintoma
+"campo sem interação" até alguém notar e atualizar a CSP de novo). Sem
+acesso de rede ao SDK real neste ambiente, não há como este PR
+independentemente confirmar ou refutar essa instabilidade -- então, por
+segurança, o hash não foi adicionado. `tests/test_csp_meta.py::
+test_csp_script_src_sem_hash_nao_validado` trava essa decisão (falha se
+qualquer `sha256-` aparecer em `script-src`).
+
+**6. Ferramenta criada para fechar o loop:** como este ambiente não pode
+executar os passos 2-6 e 8 do procedimento pedido (capturar o evento real,
+testar em 5+ recarregamentos/navegadores/dispositivos, validar
+`trackingDisabled`/`advancedFraudPrevention` contra o SDK real, testar
+clique/digitação/parcelas/`elementFromPoint`/foco), foi adicionada
+`tests/manual/mp-csp-diagnostico.html` (+ `.css`/`.js` externos, sem
+inline, para não violar a própria CSP da página) -- uma página para um
+humano abrir num navegador com acesso de rede real, com:
+- a mesma CSP de produção já aplicada;
+- o listener de `securitypolicyviolation` pedido no ticket, mostrando
+  `effectiveDirective`/`blockedURI`/`sourceFile`/`lineNumber`/
+  `columnNumber`/`sample` numa tabela na tela (nunca lê nem loga
+  cartão/CVV/token/CPF/e-mail -- o evento de violação de CSP não tem
+  acesso a esses dados);
+- um CardForm mínimo com Public Key de teste informada na hora (nunca
+  persistida) para testar interatividade real;
+- o checklist manual do procedimento de homologação abaixo.
+
+`tests/e2e/csp-diagnostico-tool.spec.js` testa só o MECANISMO de captura
+dessa ferramenta (uma violação sintética de `script-src`, não o SDK real)
+-- confirma que a tabela recebe a linha e que nenhum termo sensível
+aparece nela.
+
+**Conclusão desta mudança:** não foi possível, neste ambiente, provar nem
+refutar com evidência real se o script inline é funcionalmente necessário
+para os Secure Fields ficarem interativos. `trackingDisabled: true` foi
+adicionado como a mudança mais segura e melhor fundamentada disponível sem
+acesso ao SDK real, mas seu efeito sobre o script inline especificamente
+**não foi validado**. O cartão continua **não homologado**:
+`MERCADO_PAGO_ENABLED` permanece `false` em produção até alguém com acesso
+de rede real executar `tests/manual/mp-csp-diagnostico.html` e o
+procedimento de homologação abaixo.
+
 ### Por que `img-src` inclui `https:` (qualquer origem HTTPS)
 
 O cadastro de produto (`backend/product_routes.py::_validar_url_https`)
@@ -266,6 +382,21 @@ conectado à mesma função que já existia.
   do que o necessário). Escuta `document.addEventListener(
   "securitypolicyviolation", ...)` e falha se sobrar qualquer violação
   relacionada ao Mercado Pago.
+- `tests/e2e/csp-diagnostico-tool.spec.js` (Playwright, novo nesta
+  correção): testa o mecanismo de captura de
+  `tests/manual/mp-csp-diagnostico.html` (ferramenta de homologação
+  manual, não é página pública) com uma violação de CSP sintética --
+  confirma que a tabela na tela recebe `effectiveDirective`/`sourceFile`/
+  etc. e que nenhum termo sensível (cartão/CVV/token/CPF) aparece nela.
+- `tests/mercadopago-cardform-config.test.js` (Node): além da checagem já
+  existente de `iframe: true`, confirma que `new MercadoPago(publicKey,
+  options)` recebe `trackingDisabled: true` e nunca recebe
+  `advancedFraudPrevention` (mantém o default do SDK).
+- `tests/test_csp_meta.py::test_csp_script_src_sem_hash_nao_validado`
+  (novo nesta correção): confirma que `script-src` não contém nenhum hash
+  `sha256-` -- trava a decisão de não adicionar o hash reportado sem
+  confirmação de estabilidade (ver "Auditoria do script inline bloqueado
+  (pós-#368)").
 - `tests/test_seguranca_reforcada.py`: atualizado para os novos valores de
   `Permissions-Policy` (`payment=(self)`) e `Cross-Origin-Opener-Policy`
   (`same-origin-allow-popups`) da API.
@@ -313,6 +444,10 @@ domínios customizados com HTTPS forçado (fora do nosso controle direto).
 Nenhum ambiente de desenvolvimento usado para preparar esta política tem
 acesso de rede a `sdk.mercadopago.com` nem a `api.mercadolibre.com` — a
 validação abaixo só pode ser feita num sandbox com acesso real à internet.
+`tests/manual/mp-csp-diagnostico.html` automatiza a parte de captura do
+passo 3 abaixo (sirva a pasta `tests/manual/` com um servidor HTTP local e
+abra a página com a Public Key de teste) -- o restante (clique/digitação
+reais, homologação com cartão de teste completo) continua manual.
 
 1. Ativar `MERCADO_PAGO_ENABLED=true` e configurar a Public Key de
    **sandbox/teste** (nunca a de produção neste passo) no backend.
