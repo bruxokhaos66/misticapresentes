@@ -8,6 +8,7 @@ from pathlib import Path
 from fastapi import APIRouter, Header, HTTPException
 from fastapi.responses import JSONResponse
 
+from backend.admin_logistica_routes import registrar_rotas_admin_logistica
 from backend.admin_pedidos_routes import registrar_rotas_admin_pedidos
 from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.database import conectar
@@ -21,6 +22,7 @@ logger = get_logger(__name__)
 # main.py importa pedido_notificacao_routes antes deste módulo. O registro
 # tardio reaproveita o mesmo APIRouter administrativo já incluído pela API.
 registrar_rotas_admin_pedidos()
+registrar_rotas_admin_logistica()
 
 router = APIRouter(prefix="/api", tags=["status-sistema"])
 
