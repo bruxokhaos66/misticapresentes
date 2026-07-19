@@ -4,6 +4,8 @@ Os testes usam o banco temporário da suíte e não fazem chamadas externas nem
 alteram o fluxo financeiro do Mercado Pago.
 """
 
+from pathlib import Path
+
 from backend.database import conectar
 from tests.test_pedido_unificado import HEADERS, client, criar_pedido_publico
 
@@ -121,3 +123,21 @@ def test_alteracao_logistica_e_auditada_sem_segredos_financeiros():
     assert "codigo_rastreio" in texto
     for proibido in ("access_token", "card_token", "cvv", "pix_copia_cola"):
         assert proibido not in texto
+
+
+def test_modulo_logistico_esta_integrado_sem_persistir_pii_no_navegador():
+    raiz = Path(__file__).resolve().parents[1]
+    html = (raiz / "admin-pedidos.html").read_text(encoding="utf-8").lower()
+    javascript = (raiz / "admin-pedidos-logistica.js").read_text(encoding="utf-8").lower()
+    css = (raiz / "admin-pedidos-logistica.css").read_text(encoding="utf-8").lower()
+
+    assert "admin-pedidos-logistica.css" in html
+    assert "admin-pedidos-logistica.js" in html
+    assert "/api/pedidos/${pedidoid}/logistica" in javascript
+    assert 'method: "patch"' in javascript
+    assert "localstorage" not in javascript
+    assert "sessionstorage" not in javascript
+    assert ".innerhtml" not in javascript
+    assert "access_token" not in javascript
+    assert "cvv" not in javascript
+    assert "@media (max-width: 720px)" in css
