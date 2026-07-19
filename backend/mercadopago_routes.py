@@ -45,7 +45,7 @@ from backend.payment_routes import (
     tentar_transicao_status_pagamento,
 )
 from backend.payment_webhook_routes import STATUS_PROVEDOR_EM_ANALISE, STATUS_PROVEDOR_PARA_INTERNO
-from backend.pedido_comercial import rotulo_forma_pagamento, sanitizar_status_detail
+from backend.pedido_comercial import rotulo_forma_pagamento, rotulo_parcelas, sanitizar_status_detail
 from backend.rate_limit import limitar_requisicoes
 
 logger = get_logger(__name__)
@@ -219,10 +219,6 @@ def pagar_com_cartao(payload: CartaoPagamentoIn, idempotency_key: str | None = H
     # (POST /tentativas/{id}/consultar), nunca com uma nova cobrança.
     status_provedor_efetivo = resultado.status
     if resultado.currency_id and resultado.currency_id.upper() != "BRL":
-        # Defesa em profundidade: a loja só opera em reais. Mesmo que o
-        # Mercado Pago tenha respondido "approved" numa moeda inesperada
-        # (conta mal configurada), nunca conciliamos como se fosse BRL --
-        # fica registrado como divergência, nunca confirma o pedido sozinho.
         logger.warning(
             "mercadopago_cartao_moeda_inesperada",
             extra={"evento": "mp_cartao_moeda_invalida", "moeda": resultado.currency_id, "pedido_id": payload.pedido_id},
@@ -238,13 +234,6 @@ def pagar_com_cartao(payload: CartaoPagamentoIn, idempotency_key: str | None = H
     }.get(status_interno_pagamento, "recusado")
     agora2 = datetime.now().isoformat(timespec="seconds")
 
-    # Diagnóstico interno sanitizado: status/status_detail do Mercado Pago
-    # são códigos genéricos do provedor (ex.: "cc_rejected_bad_filled_
-    # security_code", "cc_rejected_insufficient_amount"), nunca dado de
-    # cartão/pessoal -- por isso podem ir para o log estruturado, ao
-    # contrário da mensagem amigável (essa sim nunca expõe o código bruto ao
-    # cliente, ver _mensagem_amigavel). token, número do cartão, CVV, CPF e
-    # e-mail do pagador NUNCA aparecem aqui.
     logger.info(
         "mercadopago_cartao_resultado",
         extra={
@@ -291,10 +280,6 @@ def pagar_com_cartao(payload: CartaoPagamentoIn, idempotency_key: str | None = H
         conn.commit()
 
     if resultado.status in STATUS_PROVEDOR_EM_ANALISE:
-        # Pagamento ainda em análise no provedor: o pedido fica visível como
-        # "em processamento" para o cliente, sem pedir que pague de novo
-        # imediatamente. Mesma transição atômica usada pelo webhook (ver
-        # backend/payment_webhook_routes.py) -- reaproveitada, não duplicada.
         with conectar() as conn:
             for status_de_origem in ("Aguardando pagamento", "Pagamento divergente"):
                 if tentar_transicao_status_pagamento(conn, payload.pedido_id, status_de_origem, "Pagamento em análise"):
@@ -302,26 +287,20 @@ def pagar_com_cartao(payload: CartaoPagamentoIn, idempotency_key: str | None = H
                     break
                 conn.rollback()
 
-    # Rótulo real (Crédito/Débito + bandeira) a partir do payment_type_id
-    # devolvido pelo Mercado Pago -- nunca mais fixo em "Cartão de crédito"
-    # independente do tipo real (ver auditoria: débito nunca aparecia como
-    # débito porque este texto era hardcoded).
     forma_rotulo = rotulo_forma_pagamento(resultado.payment_type_id, resultado.payment_method_id)
+    parcelas_rotulo = rotulo_parcelas(payload.installments)
+    forma_pagamento_texto = f"{forma_rotulo}, {parcelas_rotulo}"
     status_detail_sanitizado = sanitizar_status_detail(resultado.status_detail)
 
     resposta_pagamento = None
     if resultado.id:
-        # Idempotency-Key determinística por (pagamento MP, status): se o
-        # webhook para o MESMO evento chegar segundos depois (ordem não
-        # garantida), converge para a mesma chave e é deduplicado, nunca
-        # reprocessado nem duplicado.
         resposta_pagamento = registrar_pagamento(
             PagamentoIn(
                 venda_id=payload.pedido_id,
-                forma=f"{forma_rotulo}, {payload.installments}x",
+                forma=forma_pagamento_texto,
                 valor=resultado.transaction_amount or total_final,
                 status=status_interno_pagamento,
-                observacao=f"{forma_rotulo} via Mercado Pago, {payload.installments}x (status do provedor: {resultado.status})",
+                observacao=f"{forma_rotulo} via Mercado Pago, {parcelas_rotulo} (status do provedor: {resultado.status})",
                 usuario="Cliente (Mercado Pago)",
                 identificador_evento=resultado.id,
             ),
@@ -343,7 +322,7 @@ def pagar_com_cartao(payload: CartaoPagamentoIn, idempotency_key: str | None = H
                      WHERE id=?
                     """,
                     (
-                        resultado.id, f"{forma_rotulo}, {payload.installments}x",
+                        resultado.id, forma_pagamento_texto,
                         resultado.payment_type_id, resultado.payment_method_id, payload.installments,
                         status_detail_sanitizado, payload.payer.email, agora2, payload.pedido_id,
                     ),
@@ -407,11 +386,13 @@ def reconsultar_tentativa(tentativa_id: int, sessao: dict = Depends(exigir_sessa
     }.get(status_interno_pagamento, "pendente")
 
     forma_rotulo = rotulo_forma_pagamento(resultado.payment_type_id, resultado.payment_method_id)
+    parcelas_reconsulta = max(1, int(resultado.installments or tentativa["parcelas"] or 1))
+    forma_pagamento_texto = f"{forma_rotulo}, {rotulo_parcelas(parcelas_reconsulta)}"
 
     with conectar() as conn:
         conn.execute(
-            "UPDATE tentativas_pagamento SET status_externo=?, status_interno=?, payment_type_id=COALESCE(?, payment_type_id), bandeira=COALESCE(?, bandeira), atualizado_em=? WHERE id=?",
-            (resultado.status, status_interno_tentativa, resultado.payment_type_id, resultado.payment_method_id, agora, tentativa_id),
+            "UPDATE tentativas_pagamento SET status_externo=?, status_interno=?, payment_type_id=COALESCE(?, payment_type_id), bandeira=COALESCE(?, bandeira), parcelas=?, atualizado_em=? WHERE id=?",
+            (resultado.status, status_interno_tentativa, resultado.payment_type_id, resultado.payment_method_id, parcelas_reconsulta, agora, tentativa_id),
         )
         registrar_auditoria(
             conn,
@@ -426,7 +407,7 @@ def reconsultar_tentativa(tentativa_id: int, sessao: dict = Depends(exigir_sessa
     resposta_pagamento = registrar_pagamento(
         PagamentoIn(
             venda_id=int(tentativa["pedido_id"]),
-            forma=forma_rotulo,
+            forma=forma_pagamento_texto,
             valor=resultado.transaction_amount,
             status=status_interno_pagamento,
             observacao="Reconsulta administrativa do status no Mercado Pago",
@@ -442,10 +423,10 @@ def reconsultar_tentativa(tentativa_id: int, sessao: dict = Depends(exigir_sessa
                 """
                 UPDATE pedidos
                    SET payment_provider='mercadopago', provider_payment_id=?, forma_pagamento=?,
-                       payment_type_id=?, payment_method_id=?, data_aprovacao=COALESCE(data_aprovacao, ?)
+                       payment_type_id=?, payment_method_id=?, parcelas=?, data_aprovacao=COALESCE(data_aprovacao, ?)
                  WHERE id=?
                 """,
-                (resultado.id, forma_rotulo, resultado.payment_type_id, resultado.payment_method_id, agora, int(tentativa["pedido_id"])),
+                (resultado.id, forma_pagamento_texto, resultado.payment_type_id, resultado.payment_method_id, parcelas_reconsulta, agora, int(tentativa["pedido_id"])),
             )
             conn.commit()
     return {"ok": True, "status_provedor": resultado.status, "resultado": resposta_pagamento}
