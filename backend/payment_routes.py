@@ -97,14 +97,55 @@ def validar_site_api_key(chave_recebida: str | None):
     validar_chave_api(chave_recebida, "Configure MISTICA_SITE_API_KEY ou MISTICA_SYNC_KEY para permitir escrita pela API.")
 
 
-def registrar_log_status(conn, venda_id: int, status: str, usuario: str, observacao: str):
+def registrar_log_status(conn, venda_id: int, status: str, usuario: str, observacao: str, tipo: str = "pagamento", origem: str | None = None):
+    """tipo distingue uma mudança de situação financeira ('pagamento', o
+    default -- preserva o significado de todo chamador já existente) de uma
+    mudança de situação comercial/atendimento ('pedido', ver
+    backend/pedido_comercial.py). origem é inferida do texto de `usuario`
+    quando não informada explicitamente, para nunca exigir que cada chamador
+    já existente seja reescrito."""
     conn.execute(
         """
-        INSERT INTO pedido_status_log (venda_id, status, usuario, observacao, data_hora)
-        VALUES (?,?,?,?,?)
+        INSERT INTO pedido_status_log (venda_id, status, usuario, observacao, data_hora, tipo, origem)
+        VALUES (?,?,?,?,?,?,?)
         """,
-        (venda_id, status, usuario or "Admin", observacao or "", datetime.now().isoformat(timespec="seconds")),
+        (
+            venda_id, status, usuario or "Admin", observacao or "",
+            datetime.now().isoformat(timespec="seconds"), tipo, origem or _origem_da_transicao(usuario),
+        ),
     )
+
+
+def _origem_da_transicao(usuario: Optional[str]) -> str:
+    texto = str(usuario or "").strip().lower()
+    if texto.startswith("webhook"):
+        return "webhook"
+    if texto.startswith("cliente"):
+        return "cliente"
+    if not texto or texto == "sistema":
+        return "sistema"
+    return "administrador"
+
+
+def _marcar_pedido_comercial_confirmado(conn, venda_id: int, usuario: str, agora: str) -> None:
+    """Avança pedidos.status_pedido de 'novo' para 'confirmado' assim que o
+    pagamento é aprovado (Pix ou cartão, manual ou via webhook -- chamado a
+    partir do único ponto de confirmação financeira, _aplicar_resultado_
+    confirmacao). Idempotente: só transiciona pedidos ainda 'novo' ou sem
+    situação comercial definida (dados legados antes desta coluna existir);
+    uma segunda confirmação (ex.: reconsulta administrativa) nunca regride
+    nem duplica a entrada no histórico."""
+    cur = conn.execute(
+        "UPDATE pedidos SET status_pedido='confirmado', data_aprovacao=COALESCE(data_aprovacao, ?) "
+        "WHERE id=? AND (status_pedido IS NULL OR status_pedido='novo')",
+        (agora, venda_id),
+    )
+    if cur.rowcount > 0:
+        registrar_log_status(
+            conn, venda_id, "confirmado", usuario,
+            "Pedido confirmado comercialmente após aprovação do pagamento.",
+            tipo="pedido",
+        )
 
 
 def _mascarar_identificador(valor: Optional[str]) -> Optional[str]:
@@ -236,6 +277,7 @@ def _aplicar_resultado_confirmacao(conn, venda_id: int, status_pedido_atual: str
             return False
         estoque_baixado_agora = baixar_estoque_do_pedido(conn, venda_id, usuario, agora, "Baixa automática ao confirmar pagamento")
         registrar_log_status(conn, venda_id, status_final, usuario, observacao_status)
+        _marcar_pedido_comercial_confirmado(conn, venda_id, usuario, agora)
         return estoque_baixado_agora
 
     observacao = (motivo or "Divergência de valor no pagamento.") + f" Recebido: R$ {valor_recebido:.2f} | Esperado: R$ {valor_esperado:.2f}."

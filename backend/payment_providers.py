@@ -23,7 +23,13 @@ from typing import Optional, Protocol
 class EventoPagamentoProvider:
     """Evento de pagamento normalizado, já extraído do payload específico de
     um provedor. `evento_id` é o identificador do evento no provedor (usado
-    para idempotência em webhook_eventos — nunca o pix_txid/chave Pix)."""
+    para idempotência em webhook_eventos — nunca o pix_txid/chave Pix).
+
+    payment_type_id/payment_method_id/installments/status_detail vêm sempre
+    do provedor (nunca inferidos, ex.: nunca deduzidos do número de
+    parcelas) — usados pelo painel para diferenciar Pix, crédito e débito
+    (ver backend/pedido_comercial.py::rotulo_forma_pagamento). Podem ser
+    None para provedores/eventos que não os informam."""
 
     provedor: str
     evento_id: str
@@ -31,6 +37,10 @@ class EventoPagamentoProvider:
     provider_payment_id: str
     valor_recebido: float
     status: str
+    payment_type_id: Optional[str] = None
+    payment_method_id: Optional[str] = None
+    installments: Optional[int] = None
+    status_detail: Optional[str] = None
 
 
 class PaymentProvider(Protocol):

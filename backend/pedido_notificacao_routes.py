@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from backend.audit import registrar_auditoria
 from backend.database import conectar
 from backend.order_status_routes import (
+    STATUS_PEDIDO_AGUARDANDO_ENCOMENDA,
     STATUS_PEDIDO_COMPROVANTE_ENVIADO,
     STATUS_PEDIDO_PAGAMENTO_EM_ANALISE,
     cancelar_pedido as cancelar_pedido_api_key,
@@ -34,6 +35,13 @@ STATUS_PIX_PENDENTES = {
     STATUS_PEDIDO_COMPROVANTE_ENVIADO,
     STATUS_PEDIDO_PAGAMENTO_EM_ANALISE,
 }
+
+# Status financeiro "aprovado" para QUALQUER forma de pagamento (Pix ou
+# cartão, manual ou via webhook) -- usado só pela notificação unificada
+# abaixo (nunca pela fila de conferência manual do Pix, que continua restrita
+# a STATUS_PIX_PENDENTES, inalterada, para não quebrar o painel Pix já em
+# produção durante a transição).
+STATUS_PEDIDO_APROVADO = {"Pagamento confirmado", STATUS_PEDIDO_AGUARDANDO_ENCOMENDA}
 
 # Transições aceitas pelas ações do cliente/admin deste arquivo. Cada chave é
 # o status de origem; o valor é o status de destino. Qualquer outra
@@ -96,6 +104,52 @@ def listar_pedidos_pix_pendentes(limite: int = Query(100, ge=1, le=500), sessao:
         # seleciona pix_txid/chave Pix/tokens — o painel (resumo ou completo)
         # não precisa desses dados para exibir ou operar os pedidos, e assim
         # eles nunca trafegam para o navegador do administrador.
+        pedidos = [venda_para_pedido(conn, row) for row in rows]
+    total_nao_visualizados = sum(1 for pedido in pedidos if not pedido.get("visualizado_admin_em"))
+    return {
+        "ok": True,
+        "total": len(pedidos),
+        "total_nao_visualizados": total_nao_visualizados,
+        "pedidos": pedidos,
+    }
+
+
+@router.get("/pedidos/notificacoes/pendentes")
+def listar_pedidos_para_notificacao(limite: int = Query(100, ge=1, le=500), sessao: dict = Depends(exigir_sessao_ou_chave_api())):
+    """Fila unificada de pedidos que precisam da atenção do administrador,
+    independente da forma de pagamento (Pix ou cartão de crédito/débito,
+    manual ou via webhook do Mercado Pago) -- Parte 5 da unificação
+    comercial de pedidos.
+
+    Une dois grupos, sem duplicar nenhuma tabela nova:
+    - pedidos ainda em conferência manual (mesmo filtro de
+      listar_pedidos_pix_pendentes, hoje só alcançado pelo fluxo Pix);
+    - QUALQUER pedido aprovado (Pix ou cartão) ainda não visualizado pelo
+      administrador -- antes desta mudança, um cartão aprovado nunca entrava
+      em nenhuma fila, porque ele nunca passa pelos status de conferência
+      manual do Pix (confirma automaticamente e pula direto para "Pagamento
+      confirmado"). Some da fila assim que marcado como visualizado (POST
+      /api/pedidos/{id}/visualizar, já existente e reaproveitado), nunca
+      cresce sem limite.
+    """
+    with conectar() as conn:
+        expirar_pedidos_pendentes(conn)
+        placeholders_pendentes = ",".join("?" for _ in STATUS_PIX_PENDENTES)
+        placeholders_aprovados = ",".join("?" for _ in STATUS_PEDIDO_APROVADO)
+        rows = conn.execute(
+            f"""
+            SELECT id, cliente, telefone, email, data_venda, total_final, forma_pagamento,
+                   payment_provider, payment_type_id, payment_method_id, parcelas, status,
+                   status_pedido, forma_recebimento, data_iso, expira_em,
+                   visualizado_admin_em, visualizado_admin_por, comprovante_enviado_em
+            FROM pedidos
+            WHERE COALESCE(status,'') IN ({placeholders_pendentes})
+               OR (COALESCE(status,'') IN ({placeholders_aprovados}) AND visualizado_admin_em IS NULL)
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (*STATUS_PIX_PENDENTES, *STATUS_PEDIDO_APROVADO, limite),
+        ).fetchall()
         pedidos = [venda_para_pedido(conn, row) for row in rows]
     total_nao_visualizados = sum(1 for pedido in pedidos if not pedido.get("visualizado_admin_em"))
     return {
