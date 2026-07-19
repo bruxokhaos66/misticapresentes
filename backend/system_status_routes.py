@@ -8,7 +8,7 @@ from pathlib import Path
 from fastapi import APIRouter, Header, HTTPException
 from fastapi.responses import JSONResponse
 
-from backend.admin_logistica_routes import registrar_rotas_admin_logistica
+from backend.admin_logistica_routes import garantir_schema_logistica, registrar_rotas_admin_logistica
 from backend.admin_pedidos_routes import registrar_rotas_admin_pedidos
 from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.database import conectar
@@ -19,8 +19,10 @@ from database.backup import backup_habilitado
 
 logger = get_logger(__name__)
 
-# main.py importa pedido_notificacao_routes antes deste módulo. O registro
-# tardio reaproveita o mesmo APIRouter administrativo já incluído pela API.
+# main.py importa pedido_notificacao_routes antes deste módulo. O bootstrap
+# prepara o schema logístico uma única vez e registra as rotas no mesmo
+# APIRouter administrativo já incluído pela API.
+garantir_schema_logistica()
 registrar_rotas_admin_pedidos()
 registrar_rotas_admin_logistica()
 
