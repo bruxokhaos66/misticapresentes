@@ -27,44 +27,51 @@ def _texto_seguro(valor, limite: int) -> str | None:
     return texto[:limite] or None
 
 
-def _garantir_schema_logistica(conn) -> None:
-    colunas = {
-        row["name"] for row in conn.execute("PRAGMA table_info(pedidos)").fetchall()
-    }
-    desejadas = {
-        "forma_recebimento": "TEXT",
-        "endereco_entrega": "TEXT",
-        "transportadora": "TEXT",
-        "codigo_rastreio": "TEXT",
-        "prazo_entrega": "TEXT",
-        "observacao_logistica": "TEXT",
-        "logistica_atualizada_em": "TEXT",
-        "logistica_atualizada_por": "TEXT",
-    }
-    for nome, tipo in desejadas.items():
-        if nome not in colunas:
-            conn.execute(f"ALTER TABLE pedidos ADD COLUMN {nome} {tipo}")
+def garantir_schema_logistica() -> None:
+    """Aplica o schema aditivo uma vez durante o bootstrap da API.
 
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS pedido_logistica_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            pedido_id INTEGER NOT NULL,
-            forma_recebimento TEXT NOT NULL,
-            endereco_entrega TEXT,
-            transportadora TEXT,
-            codigo_rastreio TEXT,
-            prazo_entrega TEXT,
-            observacao TEXT,
-            usuario TEXT NOT NULL,
-            data_hora TEXT NOT NULL
+    As rotas não executam DDL durante requisições, evitando contenção de lock e
+    mantendo leitura/atualização logística separadas da preparação do banco.
+    """
+    with conectar() as conn:
+        colunas = {
+            row["name"] for row in conn.execute("PRAGMA table_info(pedidos)").fetchall()
+        }
+        desejadas = {
+            "forma_recebimento": "TEXT",
+            "endereco_entrega": "TEXT",
+            "transportadora": "TEXT",
+            "codigo_rastreio": "TEXT",
+            "prazo_entrega": "TEXT",
+            "observacao_logistica": "TEXT",
+            "logistica_atualizada_em": "TEXT",
+            "logistica_atualizada_por": "TEXT",
+        }
+        for nome, tipo in desejadas.items():
+            if nome not in colunas:
+                conn.execute(f"ALTER TABLE pedidos ADD COLUMN {nome} {tipo}")
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS pedido_logistica_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                pedido_id INTEGER NOT NULL,
+                forma_recebimento TEXT NOT NULL,
+                endereco_entrega TEXT,
+                transportadora TEXT,
+                codigo_rastreio TEXT,
+                prazo_entrega TEXT,
+                observacao TEXT,
+                usuario TEXT NOT NULL,
+                data_hora TEXT NOT NULL
+            )
+            """
         )
-        """
-    )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_pedido_logistica_log_pedido "
-        "ON pedido_logistica_log(pedido_id, id DESC)"
-    )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_pedido_logistica_log_pedido "
+            "ON pedido_logistica_log(pedido_id, id DESC)"
+        )
+        conn.commit()
 
 
 def registrar_rotas_admin_logistica() -> None:
@@ -77,7 +84,6 @@ def registrar_rotas_admin_logistica() -> None:
     ):
         del sessao
         with conectar() as conn:
-            _garantir_schema_logistica(conn)
             pedido = conn.execute(
                 """
                 SELECT id, status, status_pedido, forma_recebimento,
@@ -134,7 +140,6 @@ def registrar_rotas_admin_logistica() -> None:
         agora = datetime.now().isoformat(timespec="seconds")
 
         with conectar() as conn:
-            _garantir_schema_logistica(conn)
             pedido = conn.execute(
                 """
                 SELECT id, status, status_pedido, forma_recebimento,
