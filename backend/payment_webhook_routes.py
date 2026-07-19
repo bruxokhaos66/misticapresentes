@@ -160,23 +160,14 @@ async def receber_webhook_pagamento(provedor: str, request: Request):
     # de importar rotas "pesadas" só quando necessário no processamento de
     # webhook, igual ao restante do módulo antes desta mudança.
     from backend.payment_routes import PagamentoIn, registrar_pagamento, tentar_transicao_status_pagamento
-    from backend.pedido_comercial import rotulo_forma_pagamento, sanitizar_status_detail
+    from backend.pedido_comercial import rotulo_forma_pagamento, rotulo_parcelas, sanitizar_status_detail
 
-    # Rótulo real (Pix/Crédito/Débito + bandeira) construído a partir dos
-    # dados que o Mercado Pago de fato informou -- nunca mais um texto fixo
-    # "Cartão de crédito" para qualquer tipo de pagamento (ver auditoria:
-    # payment_type_id chegava do provedor e era descartado antes desta
-    # mudança, então débito nunca aparecia como débito no painel).
-    # Mesmo formato de `forma` usado pelo retorno imediato do checkout de
-    # cartão (backend/mercadopago_routes.py::pagar_com_cartao) -- `forma`
-    # entra no hash de idempotência (_payload_idempotencia_pagamento) e as
-    # duas chamadas convergem deliberadamente na MESMA Idempotency-Key
-    # (mesmo pagamento, mesmo status); textos diferentes fariam a segunda
-    # chamada colidir como "mesma chave, payload diferente" (409) em vez de
-    # ser deduplicada.
+    # O retorno imediato, o webhook e a reconsulta devem gerar exatamente o
+    # mesmo texto comercial. Isso preserva a chave de idempotência e evita
+    # exibir "1x" quando a compra foi à vista.
     forma_rotulo = rotulo_forma_pagamento(evento.payment_type_id, evento.payment_method_id)
     parcelas_evento = max(1, int(evento.installments or 1))
-    forma_pagamento_texto = f"{forma_rotulo}, {parcelas_evento}x"
+    forma_pagamento_texto = f"{forma_rotulo}, {rotulo_parcelas(parcelas_evento)}"
     status_detail_sanitizado = sanitizar_status_detail(evento.status_detail)
 
     chave_interna = os.environ.get("MISTICA_SITE_API_KEY", "").strip() or os.environ.get("MISTICA_SYNC_KEY", "").strip()
@@ -200,10 +191,8 @@ async def receber_webhook_pagamento(provedor: str, request: Request):
     )
 
     if evento.status in STATUS_PROVEDOR_EM_ANALISE:
-        # Pagamento ainda em análise no provedor: o pedido fica visível como
-        # "em processamento" para o cliente, sem exigir pagamento de novo.
-        # Transição best-effort (não falha o webhook se o pedido já mudou de
-        # status por outro motivo concorrente).
+        # Pagamento ainda em análise no provedor: o pedido fica visível ao
+        # cliente como "em processamento", sem exigir pagamento de novo.
         with conectar() as conn:
             for status_de_origem in ("Aguardando pagamento", "Pagamento divergente"):
                 if tentar_transicao_status_pagamento(conn, evento.venda_id, status_de_origem, "Pagamento em análise"):
@@ -239,20 +228,17 @@ async def receber_webhook_pagamento(provedor: str, request: Request):
             (agora, evento.provedor, evento.evento_id),
         )
         if status_interno_pagamento == "Confirmado" and isinstance(resposta, dict) and resposta.get("status_conciliacao") == "ok":
-            # Só grava o provedor no pedido quando a confirmação foi de fato
-            # aceita (conciliação ok) -- nunca sobre um pedido que ficou
-            # divergente/tardio, para o painel administrativo nunca mostrar
-            # um provedor "confirmado" que na prática não confirmou nada.
             conn.execute(
                 """
                 UPDATE pedidos
-                   SET payment_provider=?, provider_payment_id=?, payment_type_id=?, payment_method_id=?,
+                   SET payment_provider=?, provider_payment_id=?, forma_pagamento=?, payment_type_id=?, payment_method_id=?,
                        parcelas=?, status_detail_sanitizado=?, data_aprovacao=COALESCE(data_aprovacao, ?)
                  WHERE id=?
                 """,
                 (
-                    evento.provedor, evento.provider_payment_id, evento.payment_type_id, evento.payment_method_id,
-                    max(1, int(evento.installments or 1)), status_detail_sanitizado, agora, evento.venda_id,
+                    evento.provedor, evento.provider_payment_id, forma_pagamento_texto,
+                    evento.payment_type_id, evento.payment_method_id,
+                    parcelas_evento, status_detail_sanitizado, agora, evento.venda_id,
                 ),
             )
         conn.commit()
