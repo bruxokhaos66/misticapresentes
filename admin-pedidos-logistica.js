@@ -7,7 +7,7 @@
   const titulo = document.getElementById("detalhePedidoTitulo");
   const conteudo = document.getElementById("detalhePedidoConteudo");
   const operacoes = new Set();
-  let pedidoRenderizado = null;
+  const carregamentos = new Set();
 
   if (!dialog || !titulo || !conteudo) return;
 
@@ -145,11 +145,12 @@
 
   async function montarLogistica() {
     const pedidoId = pedidoIdAtual();
-    if (!pedidoId || pedidoRenderizado === pedidoId) return;
+    if (!pedidoId) return;
     if (!conteudo.querySelector(".admin-detalhe-secao")) return;
     if (conteudo.querySelector(`[data-modulo-logistica='${pedidoId}']`)) return;
+    if (carregamentos.has(pedidoId)) return;
 
-    pedidoRenderizado = pedidoId;
+    carregamentos.add(pedidoId);
     const placeholder = elemento("section", "admin-detalhe-secao admin-logistica-secao");
     placeholder.dataset.moduloLogistica = String(pedidoId);
     placeholder.append(elemento("h3", "", "Logística de retirada ou entrega"));
@@ -158,12 +159,16 @@
 
     try {
       const dados = await apiFetch(`/api/pedidos/${pedidoId}/logistica`);
-      placeholder.replaceWith(criarModulo(pedidoId, dados));
+      if (placeholder.isConnected) placeholder.replaceWith(criarModulo(pedidoId, dados));
     } catch (error) {
-      placeholder.replaceChildren(
-        elemento("h3", "", "Logística de retirada ou entrega"),
-        elemento("p", "admin-logistica-status", error.message || "Não foi possível carregar a logística.")
-      );
+      if (placeholder.isConnected) {
+        placeholder.replaceChildren(
+          elemento("h3", "", "Logística de retirada ou entrega"),
+          elemento("p", "admin-logistica-status", error.message || "Não foi possível carregar a logística.")
+        );
+      }
+    } finally {
+      carregamentos.delete(pedidoId);
     }
   }
 
@@ -172,8 +177,4 @@
     window.requestAnimationFrame(montarLogistica);
   });
   observer.observe(conteudo, { childList: true });
-
-  dialog.addEventListener("close", () => {
-    pedidoRenderizado = null;
-  });
 })();
