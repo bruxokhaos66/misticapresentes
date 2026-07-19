@@ -1,0 +1,77 @@
+.admin-logistica-secao {
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  padding-top: 1rem;
+}
+
+.admin-logistica-ajuda,
+.admin-logistica-aviso,
+.admin-logistica-status {
+  margin: 0.4rem 0 0;
+  line-height: 1.5;
+}
+
+.admin-logistica-ajuda {
+  opacity: 0.8;
+}
+
+.admin-logistica-aviso {
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+.admin-logistica-status {
+  font-weight: 600;
+}
+
+.admin-logistica-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+  margin-top: 1rem;
+}
+
+.admin-logistica-campo {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.admin-logistica-campo span {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.admin-logistica-campo input,
+.admin-logistica-campo select,
+.admin-logistica-campo textarea {
+  width: 100%;
+  min-width: 0;
+}
+
+.admin-logistica-campo:has(textarea),
+.admin-logistica-aviso,
+.admin-logistica-status,
+.admin-logistica-form .btn {
+  grid-column: 1 / -1;
+}
+
+.admin-logistica-form .btn {
+  justify-self: start;
+}
+
+@media (max-width: 720px) {
+  .admin-logistica-form {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-logistica-campo:has(textarea),
+  .admin-logistica-aviso,
+  .admin-logistica-status,
+  .admin-logistica-form .btn {
+    grid-column: auto;
+  }
+
+  .admin-logistica-form .btn {
+    width: 100%;
+  }
+}
