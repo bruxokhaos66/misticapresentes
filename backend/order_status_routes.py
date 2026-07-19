@@ -520,6 +520,11 @@ def cancelar_com_reposicao(conn, venda_id: int, usuario: str, observacao: str | 
 
     estoque_reposto = repor_estoque_cancelamento(conn, venda_id, usuario, agora)
     motivo = _sanitizar_motivo_cancelamento(observacao) or "Cancelado"
+    # Situação comercial (Parte 6): sempre separada da financeira, mas um
+    # pedido cancelado nunca deve continuar aparecendo como "novo"/"em
+    # preparação" no painel -- best-effort (não bloqueia o cancelamento se a
+    # coluna ainda não existir em um banco muito antigo sem migração).
+    conn.execute("UPDATE pedidos SET status_pedido='cancelado' WHERE id=?", (venda_id,))
     # Cancelar um pedido que já tinha pagamento confirmado não apaga nem
     # estorna o pagamento (fora de escopo — ver "fluxo de estorno
     # financeiro" nas exclusões deste PR); fica só marcado aqui para que a
@@ -558,7 +563,11 @@ def listar_pedidos(status: str = "", limite: int = Query(100, ge=1, le=500), ses
                        origem, observacao_pedido, estoque_baixado, estoque_baixado_em,
                        estoque_reservado, expira_em, pix_txid, pix_copia_cola, confirmado_automaticamente,
                        visualizado_admin_em, visualizado_admin_por, comprovante_enviado_em,
-                       expirado_em, payment_provider, provider_payment_id
+                       expirado_em, payment_provider, provider_payment_id,
+                       email, forma_recebimento, endereco_cep, endereco_rua, endereco_numero,
+                       endereco_complemento, endereco_bairro, endereco_cidade, endereco_uf, frete,
+                       payment_type_id, payment_method_id, parcelas, status_detail_sanitizado,
+                       data_aprovacao, status_pedido, codigo_rastreio
                 FROM pedidos
                 WHERE COALESCE(status,'')=?
                 ORDER BY id DESC
@@ -574,7 +583,11 @@ def listar_pedidos(status: str = "", limite: int = Query(100, ge=1, le=500), ses
                        origem, observacao_pedido, estoque_baixado, estoque_baixado_em,
                        estoque_reservado, expira_em, pix_txid, pix_copia_cola, confirmado_automaticamente,
                        visualizado_admin_em, visualizado_admin_por, comprovante_enviado_em,
-                       expirado_em, payment_provider, provider_payment_id
+                       expirado_em, payment_provider, provider_payment_id,
+                       email, forma_recebimento, endereco_cep, endereco_rua, endereco_numero,
+                       endereco_complemento, endereco_bairro, endereco_cidade, endereco_uf, frete,
+                       payment_type_id, payment_method_id, parcelas, status_detail_sanitizado,
+                       data_aprovacao, status_pedido, codigo_rastreio
                 FROM pedidos
                 ORDER BY id DESC
                 LIMIT ?
@@ -612,7 +625,11 @@ def obter_pedido(venda_id: int, sessao: dict = Depends(exigir_sessao_ou_chave_ap
                    origem, observacao_pedido, estoque_baixado, estoque_baixado_em,
                    estoque_reservado, expira_em, pix_txid, pix_copia_cola, confirmado_automaticamente,
                        visualizado_admin_em, visualizado_admin_por, comprovante_enviado_em,
-                       expirado_em, payment_provider, provider_payment_id
+                       expirado_em, payment_provider, provider_payment_id,
+                       email, forma_recebimento, endereco_cep, endereco_rua, endereco_numero,
+                       endereco_complemento, endereco_bairro, endereco_cidade, endereco_uf, frete,
+                       payment_type_id, payment_method_id, parcelas, status_detail_sanitizado,
+                       data_aprovacao, status_pedido, codigo_rastreio
             FROM pedidos
             WHERE id=?
             """,

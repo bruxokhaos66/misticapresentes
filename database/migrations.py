@@ -528,6 +528,7 @@ def init_db():
 
     _criar_tabelas_isis_content_studio()
     _criar_tabelas_mercadopago()
+    _criar_pedido_comercial_unificado()
 
     _BANCOS_MIGRADOS.add(db_path_atual)
 
@@ -793,3 +794,117 @@ def _criar_tabelas_mercadopago():
         "ON tentativas_pagamento(provedor, provider_payment_id) WHERE provider_payment_id IS NOT NULL",
     ]:
         _exec_tolerante(sql_idx)
+
+
+def _backfill_status_pedido_comercial():
+    """Preenche pedidos.status_pedido (situação comercial: novo, confirmado,
+    em_preparacao, pronto_retirada, enviado, concluido, cancelado) a partir do
+    status financeiro já existente, para linhas que ainda estão em 'novo'/NULL
+    (o DEFAULT da coluna, ver ALTER TABLE acima) — idempotente: rodar de novo
+    nunca sobrescreve uma situação comercial já promovida (por este backfill,
+    por uma confirmação de pagamento real via _marcar_pedido_comercial_
+    confirmado, ou manualmente pelo administrador). Nunca inventa
+    'em_preparacao'/'enviado'/'concluido' para dados legados: um pedido pago
+    sem indicação melhor vira 'confirmado', nunca um estágio de atendimento
+    mais avançado que não temos evidência de ter ocorrido. Um pedido
+    genuinamente novo (ainda não pago) permanece 'novo': a cláusula
+    status_pedido='novo' só o promove quando o status financeiro já mostra
+    pagamento aprovado/cancelado, nunca ao contrário."""
+    query_db(
+        "UPDATE pedidos SET status_pedido='confirmado' "
+        "WHERE (status_pedido IS NULL OR status_pedido='novo') AND status IN ('Pagamento confirmado','Aguardando encomenda')",
+        commit=True,
+    )
+    query_db(
+        "UPDATE pedidos SET status_pedido='cancelado' "
+        "WHERE (status_pedido IS NULL OR status_pedido='novo') AND status='Cancelado'",
+        commit=True,
+    )
+    # Qualquer linha residual sem o DEFAULT aplicado (bancos migrados antes
+    # da coluna ter DEFAULT) cai em 'novo'.
+    query_db("UPDATE pedidos SET status_pedido='novo' WHERE status_pedido IS NULL", commit=True)
+
+
+def _criar_pedido_comercial_unificado():
+    """Unificação comercial de pedidos Pix + cartão (issue de unificação de
+    pedidos): NENHUMA tabela nova de pedido é criada aqui — `pedidos` já é a
+    fonte única para os dois provedores (ver backend/payment_routes.py::
+    registrar_pagamento, reaproveitada por Pix manual/webhook e por
+    Mercado Pago cartão, sem cópia paralela). Esta migração só adiciona
+    colunas aditivas (nunca remove/renomeia nada) para o painel conseguir
+    exibir, para qualquer pedido, dados hoje só coletados para cartão
+    (payment_type_id/payment_method_id/parcelas) ou nunca coletados
+    (entrega/retirada, frete, situação comercial separada da financeira).
+
+    tentativas_pagamento/pagamentos/webhook_eventos (tentativas de
+    pagamento, idempotência, auditoria, conciliação) não são alteradas em
+    estrutura por esta função além da coluna aditiva de payment_type_id —
+    seguem sendo a fonte técnica de conciliação financeira, preservada."""
+    for col, typ in [
+        # Dados de contato adicionais para o registro comercial (Parte 2).
+        # Hoje só o checkout de cartão coleta e-mail (backend/mercadopago_
+        # routes.py::PayerIn) — pedidos Pix ficam sem, o que é esperado até o
+        # checkout ser unificado (Fase 3); nunca inventamos um e-mail.
+        ("email", "TEXT"),
+        # Entrega ou retirada — NULL para todo pedido existente (não
+        # definido), nunca um valor padrão inventado. Ver Parte 4/7: pedidos
+        # antigos exigem uma etapa própria de conclusão, sem alterar o valor
+        # já pago.
+        ("forma_recebimento", "TEXT"),
+        ("endereco_cep", "TEXT"),
+        ("endereco_rua", "TEXT"),
+        ("endereco_numero", "TEXT"),
+        ("endereco_complemento", "TEXT"),
+        ("endereco_bairro", "TEXT"),
+        ("endereco_cidade", "TEXT"),
+        ("endereco_uf", "TEXT"),
+        ("frete", "REAL DEFAULT 0"),
+        # Dados reais do Mercado Pago (nunca inferidos por número de
+        # parcelas — ver backend/mercadopago_provider.py). NULL para pedidos
+        # Pix (não se aplica) e para pedidos de cartão anteriores a esta
+        # mudança (o dado existia na API do provedor mas era descartado
+        # antes de chegar ao banco — não reconstruído retroativamente).
+        ("payment_type_id", "TEXT"),
+        ("payment_method_id", "TEXT"),
+        ("parcelas", "INTEGER DEFAULT 1"),
+        # status_detail do Mercado Pago já truncado/sanitizado antes de
+        # gravar (nunca o texto bruto sem limite) — ver
+        # backend/mercadopago_routes.py e backend/payment_webhook_routes.py.
+        ("status_detail_sanitizado", "TEXT"),
+        ("data_aprovacao", "TEXT"),
+        # Situação comercial do pedido (atendimento), sempre separada da
+        # situação financeira (pedidos.status): novo, confirmado,
+        # em_preparacao, pronto_retirada, enviado, concluido, cancelado. Ver
+        # backend/pedido_comercial.py::STATUS_PEDIDO_COMERCIAL. DEFAULT
+        # 'novo' se aplica tanto às linhas já existentes (nesta migração)
+        # quanto a todo pedido criado a partir de agora -- sem isso, um
+        # pedido novo ficaria com status_pedido NULL até a próxima
+        # reexecução do backfill abaixo, em vez de 'novo' desde a criação.
+        ("status_pedido", "TEXT DEFAULT 'novo'"),
+        ("codigo_rastreio", "TEXT"),
+    ]:
+        _exec_tolerante(f"ALTER TABLE pedidos ADD COLUMN {col} {typ}")
+    _exec_tolerante("CREATE INDEX IF NOT EXISTS idx_pedidos_status_pedido ON pedidos(status_pedido)")
+    _exec_tolerante("CREATE INDEX IF NOT EXISTS idx_pedidos_email ON pedidos(email)")
+
+    _backfill_status_pedido_comercial()
+
+    # payment_type_id real do Mercado Pago na tentativa (bandeira já grava
+    # payment_method_id — ver backend/mercadopago_routes.py — só faltava o
+    # tipo real credit_card/debit_card).
+    _exec_tolerante("ALTER TABLE tentativas_pagamento ADD COLUMN payment_type_id TEXT")
+
+    # Histórico de status com tipo (financeiro vs comercial) e origem
+    # (sistema/webhook/administrador/cliente) — Parte 6. Aditivo: linhas já
+    # existentes recebem os defaults ('pagamento'/'sistema'), preservando o
+    # significado original de cada entrada sem precisar reclassificar nada
+    # retroativamente (nunca sabemos a origem real de uma linha antiga).
+    _exec_tolerante(
+        "ALTER TABLE pedido_status_log ADD COLUMN tipo TEXT NOT NULL DEFAULT 'pagamento' "
+        "CHECK(tipo IN ('pagamento','pedido'))"
+    )
+    _exec_tolerante(
+        "ALTER TABLE pedido_status_log ADD COLUMN origem TEXT NOT NULL DEFAULT 'sistema' "
+        "CHECK(origem IN ('sistema','webhook','administrador','cliente'))"
+    )
+    _exec_tolerante("CREATE INDEX IF NOT EXISTS idx_pedido_status_log_venda_tipo ON pedido_status_log(venda_id, tipo)")

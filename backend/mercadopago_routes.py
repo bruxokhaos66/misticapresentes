@@ -45,6 +45,7 @@ from backend.payment_routes import (
     tentar_transicao_status_pagamento,
 )
 from backend.payment_webhook_routes import STATUS_PROVEDOR_EM_ANALISE, STATUS_PROVEDOR_PARA_INTERNO
+from backend.pedido_comercial import rotulo_forma_pagamento, sanitizar_status_detail
 from backend.rate_limit import limitar_requisicoes
 
 logger = get_logger(__name__)
@@ -264,7 +265,7 @@ def pagar_com_cartao(payload: CartaoPagamentoIn, idempotency_key: str | None = H
         conn.execute(
             """
             UPDATE tentativas_pagamento
-               SET provider_payment_id=?, status_interno=?, status_externo=?, bandeira=?,
+               SET provider_payment_id=?, status_interno=?, status_externo=?, bandeira=?, payment_type_id=?,
                    motivo_recusa=?, atualizado_em=?
              WHERE id=?
             """,
@@ -273,6 +274,7 @@ def pagar_com_cartao(payload: CartaoPagamentoIn, idempotency_key: str | None = H
                 status_interno_tentativa,
                 resultado.status,
                 resultado.payment_method_id,
+                resultado.payment_type_id,
                 (resultado.status_detail[:200] if status_interno_pagamento == "Recusado" else None),
                 agora2,
                 tentativa_id,
@@ -300,6 +302,13 @@ def pagar_com_cartao(payload: CartaoPagamentoIn, idempotency_key: str | None = H
                     break
                 conn.rollback()
 
+    # Rótulo real (Crédito/Débito + bandeira) a partir do payment_type_id
+    # devolvido pelo Mercado Pago -- nunca mais fixo em "Cartão de crédito"
+    # independente do tipo real (ver auditoria: débito nunca aparecia como
+    # débito porque este texto era hardcoded).
+    forma_rotulo = rotulo_forma_pagamento(resultado.payment_type_id, resultado.payment_method_id)
+    status_detail_sanitizado = sanitizar_status_detail(resultado.status_detail)
+
     resposta_pagamento = None
     if resultado.id:
         # Idempotency-Key determinística por (pagamento MP, status): se o
@@ -309,10 +318,10 @@ def pagar_com_cartao(payload: CartaoPagamentoIn, idempotency_key: str | None = H
         resposta_pagamento = registrar_pagamento(
             PagamentoIn(
                 venda_id=payload.pedido_id,
-                forma="Cartão de crédito (Mercado Pago)",
+                forma=f"{forma_rotulo}, {payload.installments}x",
                 valor=resultado.transaction_amount or total_final,
                 status=status_interno_pagamento,
-                observacao=f"Cartão de crédito via Mercado Pago, {payload.installments}x (status do provedor: {resultado.status})",
+                observacao=f"{forma_rotulo} via Mercado Pago, {payload.installments}x (status do provedor: {resultado.status})",
                 usuario="Cliente (Mercado Pago)",
                 identificador_evento=resultado.id,
             ),
@@ -326,8 +335,18 @@ def pagar_com_cartao(payload: CartaoPagamentoIn, idempotency_key: str | None = H
             )
             if status_interno_pagamento == "Confirmado" and isinstance(resposta_pagamento, dict) and resposta_pagamento.get("status_conciliacao") == "ok":
                 conn.execute(
-                    "UPDATE pedidos SET payment_provider='mercadopago', provider_payment_id=?, forma_pagamento=? WHERE id=?",
-                    (resultado.id, f"Cartão de crédito {payload.installments}x (Mercado Pago)", payload.pedido_id),
+                    """
+                    UPDATE pedidos
+                       SET payment_provider='mercadopago', provider_payment_id=?, forma_pagamento=?,
+                           payment_type_id=?, payment_method_id=?, parcelas=?, status_detail_sanitizado=?,
+                           email=COALESCE(email, ?), data_aprovacao=COALESCE(data_aprovacao, ?)
+                     WHERE id=?
+                    """,
+                    (
+                        resultado.id, f"{forma_rotulo}, {payload.installments}x",
+                        resultado.payment_type_id, resultado.payment_method_id, payload.installments,
+                        status_detail_sanitizado, payload.payer.email, agora2, payload.pedido_id,
+                    ),
                 )
             conn.commit()
 
@@ -387,10 +406,12 @@ def reconsultar_tentativa(tentativa_id: int, sessao: dict = Depends(exigir_sessa
         "Estornado": "estornado",
     }.get(status_interno_pagamento, "pendente")
 
+    forma_rotulo = rotulo_forma_pagamento(resultado.payment_type_id, resultado.payment_method_id)
+
     with conectar() as conn:
         conn.execute(
-            "UPDATE tentativas_pagamento SET status_externo=?, status_interno=?, atualizado_em=? WHERE id=?",
-            (resultado.status, status_interno_tentativa, agora, tentativa_id),
+            "UPDATE tentativas_pagamento SET status_externo=?, status_interno=?, payment_type_id=COALESCE(?, payment_type_id), bandeira=COALESCE(?, bandeira), atualizado_em=? WHERE id=?",
+            (resultado.status, status_interno_tentativa, resultado.payment_type_id, resultado.payment_method_id, agora, tentativa_id),
         )
         registrar_auditoria(
             conn,
@@ -405,7 +426,7 @@ def reconsultar_tentativa(tentativa_id: int, sessao: dict = Depends(exigir_sessa
     resposta_pagamento = registrar_pagamento(
         PagamentoIn(
             venda_id=int(tentativa["pedido_id"]),
-            forma="Cartão de crédito (Mercado Pago)",
+            forma=forma_rotulo,
             valor=resultado.transaction_amount,
             status=status_interno_pagamento,
             observacao="Reconsulta administrativa do status no Mercado Pago",
@@ -415,4 +436,16 @@ def reconsultar_tentativa(tentativa_id: int, sessao: dict = Depends(exigir_sessa
         x_mistica_api_key=_chave_interna(),
         idempotency_key=f"webhook_mercadopago:{resultado.id}:{resultado.status}",
     )
+    if status_interno_pagamento == "Confirmado" and isinstance(resposta_pagamento, dict) and resposta_pagamento.get("status_conciliacao") == "ok":
+        with conectar() as conn:
+            conn.execute(
+                """
+                UPDATE pedidos
+                   SET payment_provider='mercadopago', provider_payment_id=?, forma_pagamento=?,
+                       payment_type_id=?, payment_method_id=?, data_aprovacao=COALESCE(data_aprovacao, ?)
+                 WHERE id=?
+                """,
+                (resultado.id, forma_rotulo, resultado.payment_type_id, resultado.payment_method_id, agora, int(tentativa["pedido_id"])),
+            )
+            conn.commit()
     return {"ok": True, "status_provedor": resultado.status, "resultado": resposta_pagamento}

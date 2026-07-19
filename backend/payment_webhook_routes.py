@@ -70,7 +70,7 @@ def _payload_hash(payload_bruto: bytes) -> str:
     return hashlib.sha256(payload_bruto).hexdigest()
 
 
-def _atualizar_tentativa_pagamento(conn, *, pedido_id: int, provedor: str, provider_payment_id: str, status_externo: str, status_interno: str, evento_id: str, pagamento_id: int | None, valor: float, agora: str):
+def _atualizar_tentativa_pagamento(conn, *, pedido_id: int, provedor: str, provider_payment_id: str, status_externo: str, status_interno: str, evento_id: str, pagamento_id: int | None, valor: float, agora: str, payment_type_id: str | None = None, payment_method_id: str | None = None, parcelas: int | None = None):
     """Atualiza a tentativa de pagamento correspondente (criada por
     backend/mercadopago_routes.py na cobrança inicial) ou cria um registro
     mínimo se o webhook chegou antes/sem uma tentativa local conhecida (ex.:
@@ -79,10 +79,11 @@ def _atualizar_tentativa_pagamento(conn, *, pedido_id: int, provedor: str, provi
     atualizado = conn.execute(
         """
         UPDATE tentativas_pagamento
-           SET status_externo=?, status_interno=?, evento_notificacao_id=?, pagamento_id=COALESCE(?, pagamento_id), atualizado_em=?
+           SET status_externo=?, status_interno=?, evento_notificacao_id=?, pagamento_id=COALESCE(?, pagamento_id),
+               payment_type_id=COALESCE(?, payment_type_id), bandeira=COALESCE(?, bandeira), atualizado_em=?
          WHERE provedor=? AND provider_payment_id=?
         """,
-        (status_externo, status_interno, evento_id, pagamento_id, agora, provedor, provider_payment_id),
+        (status_externo, status_interno, evento_id, pagamento_id, payment_type_id, payment_method_id, agora, provedor, provider_payment_id),
     )
     if atualizado.rowcount > 0:
         return
@@ -90,10 +91,10 @@ def _atualizar_tentativa_pagamento(conn, *, pedido_id: int, provedor: str, provi
         """
         INSERT INTO tentativas_pagamento
             (pedido_id, pagamento_id, provedor, metodo, provider_payment_id, idempotency_key,
-             status_interno, status_externo, valor, parcelas, evento_notificacao_id, criado_em, atualizado_em)
-        VALUES (?, ?, ?, 'desconhecido', ?, ?, ?, ?, ?, 1, ?, ?, ?)
+             status_interno, status_externo, valor, parcelas, bandeira, payment_type_id, evento_notificacao_id, criado_em, atualizado_em)
+        VALUES (?, ?, ?, 'desconhecido', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (pedido_id, pagamento_id, provedor, provider_payment_id, f"webhook:{evento_id}", status_interno, status_externo, valor, evento_id, agora, agora),
+        (pedido_id, pagamento_id, provedor, provider_payment_id, f"webhook:{evento_id}", status_interno, status_externo, valor, max(1, int(parcelas or 1)), payment_method_id, payment_type_id, evento_id, agora, agora),
     )
 
 
@@ -159,6 +160,24 @@ async def receber_webhook_pagamento(provedor: str, request: Request):
     # de importar rotas "pesadas" só quando necessário no processamento de
     # webhook, igual ao restante do módulo antes desta mudança.
     from backend.payment_routes import PagamentoIn, registrar_pagamento, tentar_transicao_status_pagamento
+    from backend.pedido_comercial import rotulo_forma_pagamento, sanitizar_status_detail
+
+    # Rótulo real (Pix/Crédito/Débito + bandeira) construído a partir dos
+    # dados que o Mercado Pago de fato informou -- nunca mais um texto fixo
+    # "Cartão de crédito" para qualquer tipo de pagamento (ver auditoria:
+    # payment_type_id chegava do provedor e era descartado antes desta
+    # mudança, então débito nunca aparecia como débito no painel).
+    # Mesmo formato de `forma` usado pelo retorno imediato do checkout de
+    # cartão (backend/mercadopago_routes.py::pagar_com_cartao) -- `forma`
+    # entra no hash de idempotência (_payload_idempotencia_pagamento) e as
+    # duas chamadas convergem deliberadamente na MESMA Idempotency-Key
+    # (mesmo pagamento, mesmo status); textos diferentes fariam a segunda
+    # chamada colidir como "mesma chave, payload diferente" (409) em vez de
+    # ser deduplicada.
+    forma_rotulo = rotulo_forma_pagamento(evento.payment_type_id, evento.payment_method_id)
+    parcelas_evento = max(1, int(evento.installments or 1))
+    forma_pagamento_texto = f"{forma_rotulo}, {parcelas_evento}x"
+    status_detail_sanitizado = sanitizar_status_detail(evento.status_detail)
 
     chave_interna = os.environ.get("MISTICA_SITE_API_KEY", "").strip() or os.environ.get("MISTICA_SYNC_KEY", "").strip()
     # A chave de idempotência inclui o status: o MESMO evento_id pode gerar
@@ -169,7 +188,7 @@ async def receber_webhook_pagamento(provedor: str, request: Request):
     resposta = registrar_pagamento(
         PagamentoIn(
             venda_id=evento.venda_id,
-            forma=f"Cartão de crédito ({evento.provedor.title()})",
+            forma=forma_pagamento_texto,
             valor=evento.valor_recebido,
             status=status_interno_pagamento,
             observacao=f"Confirmado automaticamente via webhook {evento.provedor} (status do provedor: {evento.status})",
@@ -211,6 +230,9 @@ async def receber_webhook_pagamento(provedor: str, request: Request):
             pagamento_id=resposta.get("id") if isinstance(resposta, dict) else None,
             valor=evento.valor_recebido,
             agora=agora,
+            payment_type_id=evento.payment_type_id,
+            payment_method_id=evento.payment_method_id,
+            parcelas=evento.installments,
         )
         conn.execute(
             "UPDATE webhook_eventos SET processado_em=? WHERE provedor=? AND evento_id=?",
@@ -222,8 +244,16 @@ async def receber_webhook_pagamento(provedor: str, request: Request):
             # divergente/tardio, para o painel administrativo nunca mostrar
             # um provedor "confirmado" que na prática não confirmou nada.
             conn.execute(
-                "UPDATE pedidos SET payment_provider=?, provider_payment_id=? WHERE id=?",
-                (evento.provedor, evento.provider_payment_id, evento.venda_id),
+                """
+                UPDATE pedidos
+                   SET payment_provider=?, provider_payment_id=?, payment_type_id=?, payment_method_id=?,
+                       parcelas=?, status_detail_sanitizado=?, data_aprovacao=COALESCE(data_aprovacao, ?)
+                 WHERE id=?
+                """,
+                (
+                    evento.provedor, evento.provider_payment_id, evento.payment_type_id, evento.payment_method_id,
+                    max(1, int(evento.installments or 1)), status_detail_sanitizado, agora, evento.venda_id,
+                ),
             )
         conn.commit()
 

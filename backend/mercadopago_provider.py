@@ -147,4 +147,8 @@ class MercadoPagoProvider:
             provider_payment_id=str(resultado.id),
             valor_recebido=float(resultado.transaction_amount),
             status=resultado.status,
+            payment_type_id=resultado.payment_type_id,
+            payment_method_id=resultado.payment_method_id,
+            installments=resultado.installments,
+            status_detail=resultado.status_detail,
         )
