@@ -14,11 +14,8 @@ FORMAS_RECEBIMENTO = {"retirada", "entrega"}
 
 class LogisticaPedidoIn(BaseModel):
     forma_recebimento: str = Field(min_length=1, max_length=20)
-    endereco_entrega: str | None = Field(default=None, max_length=500)
-    transportadora: str | None = Field(default=None, max_length=120)
     codigo_rastreio: str | None = Field(default=None, max_length=120)
-    prazo_entrega: str | None = Field(default=None, max_length=80)
-    observacao_logistica: str | None = Field(default=None, max_length=500)
+    observacao: str | None = Field(default=None, max_length=280)
 
 
 def _texto_seguro(valor, limite: int) -> str | None:
@@ -27,54 +24,14 @@ def _texto_seguro(valor, limite: int) -> str | None:
     return texto[:limite] or None
 
 
-def garantir_schema_logistica() -> None:
-    """Aplica o schema aditivo uma vez durante o bootstrap da API.
-
-    As rotas não executam DDL durante requisições, evitando contenção de lock e
-    mantendo leitura/atualização logística separadas da preparação do banco.
-    """
-    with conectar() as conn:
-        colunas = {
-            row["name"] for row in conn.execute("PRAGMA table_info(pedidos)").fetchall()
-        }
-        desejadas = {
-            "forma_recebimento": "TEXT",
-            "endereco_entrega": "TEXT",
-            "transportadora": "TEXT",
-            "codigo_rastreio": "TEXT",
-            "prazo_entrega": "TEXT",
-            "observacao_logistica": "TEXT",
-            "logistica_atualizada_em": "TEXT",
-            "logistica_atualizada_por": "TEXT",
-        }
-        for nome, tipo in desejadas.items():
-            if nome not in colunas:
-                conn.execute(f"ALTER TABLE pedidos ADD COLUMN {nome} {tipo}")
-
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS pedido_logistica_log (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                pedido_id INTEGER NOT NULL,
-                forma_recebimento TEXT NOT NULL,
-                endereco_entrega TEXT,
-                transportadora TEXT,
-                codigo_rastreio TEXT,
-                prazo_entrega TEXT,
-                observacao TEXT,
-                usuario TEXT NOT NULL,
-                data_hora TEXT NOT NULL
-            )
-            """
-        )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_pedido_logistica_log_pedido "
-            "ON pedido_logistica_log(pedido_id, id DESC)"
-        )
-        conn.commit()
-
-
 def registrar_rotas_admin_logistica() -> None:
+    """Registra o primeiro incremento logístico usando somente schema existente.
+
+    A Fase 3 começa de forma aditiva e conservadora: forma de recebimento e
+    rastreio já existem em pedidos. Transportadora, prazo, endereço estruturado
+    e histórico dedicado serão adicionados em incremento posterior com migração
+    centralizada e testes próprios, nunca por DDL durante import ou requisição.
+    """
     from backend.pedido_notificacao_routes import router
 
     @router.get("/pedidos/{venda_id}/logistica")
@@ -87,9 +44,7 @@ def registrar_rotas_admin_logistica() -> None:
             pedido = conn.execute(
                 """
                 SELECT id, status, status_pedido, forma_recebimento,
-                       endereco_entrega, transportadora, codigo_rastreio,
-                       prazo_entrega, observacao_logistica,
-                       logistica_atualizada_em, logistica_atualizada_por
+                       codigo_rastreio, observacao_pedido
                   FROM pedidos
                  WHERE id=?
                 """,
@@ -97,20 +52,7 @@ def registrar_rotas_admin_logistica() -> None:
             ).fetchone()
             if not pedido:
                 raise HTTPException(status_code=404, detail="Pedido não encontrado")
-            historico = conn.execute(
-                """
-                SELECT id, forma_recebimento, endereco_entrega, transportadora,
-                       codigo_rastreio, prazo_entrega, observacao, usuario, data_hora
-                  FROM pedido_logistica_log
-                 WHERE pedido_id=?
-                 ORDER BY id DESC
-                 LIMIT 100
-                """,
-                (venda_id,),
-            ).fetchall()
-            resposta = dict(pedido)
-            resposta["historico_logistica"] = [dict(item) for item in historico]
-            return resposta
+            return dict(pedido)
 
     @router.patch("/pedidos/{venda_id}/logistica")
     def atualizar_logistica(
@@ -122,18 +64,12 @@ def registrar_rotas_admin_logistica() -> None:
         if forma not in FORMAS_RECEBIMENTO:
             raise HTTPException(status_code=400, detail="Forma de recebimento inválida.")
 
-        endereco = _texto_seguro(payload.endereco_entrega, 500)
-        transportadora = _texto_seguro(payload.transportadora, 120)
         rastreio = _texto_seguro(payload.codigo_rastreio, 120)
-        prazo = _texto_seguro(payload.prazo_entrega, 80)
-        observacao = _texto_seguro(payload.observacao_logistica, 500)
-
-        if forma == "entrega" and not endereco:
-            raise HTTPException(status_code=400, detail="Informe o endereço para pedidos com entrega.")
-        if forma == "retirada" and (transportadora or rastreio):
+        observacao = _texto_seguro(payload.observacao, 280)
+        if forma == "retirada" and rastreio:
             raise HTTPException(
                 status_code=400,
-                detail="Transportadora e rastreio não se aplicam a pedidos para retirada.",
+                detail="Código de rastreio não se aplica a pedidos para retirada.",
             )
 
         usuario = _texto_seguro(sessao.get("nome") or sessao.get("login") or "Admin", 120) or "Admin"
@@ -143,8 +79,7 @@ def registrar_rotas_admin_logistica() -> None:
             pedido = conn.execute(
                 """
                 SELECT id, status, status_pedido, forma_recebimento,
-                       endereco_entrega, transportadora, codigo_rastreio,
-                       prazo_entrega, observacao_logistica
+                       codigo_rastreio, observacao_pedido
                   FROM pedidos
                  WHERE id=?
                 """,
@@ -156,25 +91,29 @@ def registrar_rotas_admin_logistica() -> None:
                 raise HTTPException(status_code=409, detail="Pedido cancelado não pode ter a logística alterada.")
 
             antes = dict(pedido)
-            conn.execute(
+            claim = conn.execute(
                 """
                 UPDATE pedidos
-                   SET forma_recebimento=?, endereco_entrega=?, transportadora=?,
-                       codigo_rastreio=?, prazo_entrega=?, observacao_logistica=?,
-                       logistica_atualizada_em=?, logistica_atualizada_por=?
+                   SET forma_recebimento=?, codigo_rastreio=?, observacao_pedido=?
                  WHERE id=?
+                   AND COALESCE(forma_recebimento,'')=COALESCE(?, '')
+                   AND COALESCE(codigo_rastreio,'')=COALESCE(?, '')
                 """,
-                (forma, endereco, transportadora, rastreio, prazo, observacao, agora, usuario, venda_id),
+                (
+                    forma,
+                    rastreio,
+                    observacao if observacao is not None else pedido["observacao_pedido"],
+                    venda_id,
+                    pedido["forma_recebimento"],
+                    pedido["codigo_rastreio"],
+                ),
             )
-            conn.execute(
-                """
-                INSERT INTO pedido_logistica_log
-                    (pedido_id, forma_recebimento, endereco_entrega, transportadora,
-                     codigo_rastreio, prazo_entrega, observacao, usuario, data_hora)
-                VALUES (?,?,?,?,?,?,?,?,?)
-                """,
-                (venda_id, forma, endereco, transportadora, rastreio, prazo, observacao, usuario, agora),
-            )
+            if claim.rowcount != 1:
+                raise HTTPException(
+                    status_code=409,
+                    detail="O pedido foi atualizado por outra operação. Atualize a tela e tente novamente.",
+                )
+
             registrar_auditoria(
                 conn,
                 "pedido",
@@ -186,11 +125,9 @@ def registrar_rotas_admin_logistica() -> None:
                     "status_financeiro": pedido["status"],
                     "status_pedido": pedido["status_pedido"],
                     "forma_recebimento": forma,
-                    "endereco_entrega": endereco,
-                    "transportadora": transportadora,
                     "codigo_rastreio": rastreio,
-                    "prazo_entrega": prazo,
-                    "observacao_logistica": observacao,
+                    "observacao_pedido": observacao if observacao is not None else pedido["observacao_pedido"],
+                    "atualizado_em": agora,
                 },
             )
             conn.commit()
@@ -199,5 +136,6 @@ def registrar_rotas_admin_logistica() -> None:
             "ok": True,
             "venda_id": venda_id,
             "forma_recebimento": forma,
+            "codigo_rastreio": rastreio,
             "logistica_atualizada_em": agora,
         }
