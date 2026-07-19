@@ -466,6 +466,94 @@ substituídos por atributos `data-*` + delegação de eventos central:
 Nenhuma lógica de negócio mudou — só a forma como o clique/erro é
 conectado à mesma função que já existia.
 
+## Correção de contraste: Secure Fields e campo de Parcelas (visual, não CSP)
+
+Depois de confirmado que os Secure Fields aceitam clique/foco/digitação no
+checkout publicado (ver seção acima), foi reportado um problema visual
+separado: o texto digitado em Número do cartão, Validade e CVV ficava
+quase invisível sobre o fundo escuro, e o campo "Parcelas" aparecia como
+uma faixa clara destoante do tema. **Isso não é CSP** -- CSP não controla
+cor de texto/fundo de elemento nenhum; ficou registrado aqui só porque é o
+mesmo componente (CardForm) já documentado neste arquivo.
+
+**Causa confirmada** (duas, ambas em CSS/JS do frontend, nenhuma no
+backend nem na CSP):
+
+1. `.mp-secure-field` (o `<div>` que envolve cada iframe de Secure Field)
+   dependia de `@media (prefers-color-scheme: dark)` -- o tema do
+   sistema operacional do visitante, não o tema do site (que é sempre
+   escuro, em todo o resto do site, sem nenhum outro uso de
+   `prefers-color-scheme`). Com o SO em modo claro, caía no fundo branco
+   fixo (`background: #fff`) e numa borda clara vinda de
+   `var(--border, #d8d0ea)` -- `--border` não existe em `v2.css` (só em
+   `styles.css`, que `index.html` nem carrega), então o fallback claro
+   `#d8d0ea` sempre valia. Com o SO em modo escuro, o campo usava o fundo
+   escuro certo, mas o texto DIGITADO dentro do iframe nunca teve cor
+   definida (item 2) -- daí "texto escuro quase invisível sobre fundo
+   escuro".
+2. `cardForm()` nunca passava a opção `style` documentada pelo SDK (ver
+   [`fields.md#style`](https://github.com/mercadopago/sdk-js/blob/main/docs/fields.md#style))
+   para `cardNumber`/`expirationDate`/`securityCode` -- o Secure Field
+   usava a cor de texto padrão do próprio Mercado Pago, nunca ajustada ao
+   tema da Mística.
+3. (Parcelas) `<select id="mpInstallments">` nunca teve CSS -- `v2.css`
+   só estiliza `input, textarea` (não `select`), então o navegador usa o
+   combo box nativo (claro na maioria dos navegadores/SOs).
+
+Comprovado com screenshot antes/depois (`index.html` real, CardForm
+mockado do mesmo jeito que
+`tests/e2e/mercadopago-cardform-production-dom.spec.js`, sem tocar rede):
+antes, os 3 campos e o seletor de parcelas aparecem como retângulos
+brancos sólidos sobre o checkout escuro; depois, os mesmos elementos usam
+o mesmo fundo escuro com borda dourada sutil dos demais campos do
+formulário.
+
+**Correção (mínima, só nestes dois arquivos):**
+
+- `v2-mercadopago-checkout.js`: adiciona `MP_SECURE_FIELD_STYLE` (`color:
+  "#F7E7BE"`, `placeholderColor: "rgba(247, 231, 190, 0.55)"`, `fontSize:
+  "16px"`, `fontWeight: "500"`, `fontFamily: "Inter, system-ui,
+  sans-serif"`) e passa `style: MP_SECURE_FIELD_STYLE` para os três
+  campos (`cardNumber`, `expirationDate`, `securityCode`) dentro de
+  `cardForm({ form: {...} })`. Só as propriedades documentadas em
+  `fields.md#style` foram usadas -- **não existe `backgroundColor` nem
+  estados `:focus`/`:valid`/`:invalid` nessa API** (o iframe é de outra
+  origem; CSS do nosso documento não alcança o conteúdo dele). Pedidos do
+  ticket que dependiam dessas propriedades (fundo interno "transparente"
+  via API, caret e estados focus/valid/invalid controlados via `style`)
+  não são possíveis pela API oficial -- o que dá para controlar do nosso
+  lado é o fundo/borda do wrapper (`.mp-secure-field`, item abaixo), não o
+  interior do iframe.
+- `v2-mercadopago-checkout.css`: `.mp-secure-field` passa a usar sempre
+  `background: rgba(0, 0, 0, .28)` e `border-color: var(--line, ...)` (o
+  mesmo tratamento visual dos demais `<input>` do checkout, ver `v2.css`)
+  -- removido o `@media (prefers-color-scheme: dark)`, já que o tema não
+  depende do SO em nenhum outro lugar do site. Adicionada uma regra
+  `.card-panel select` com o mesmo fundo/borda/cor de texto, cobrindo o
+  `<select id="mpInstallments">` (parcelas) -- `#mpIssuer` e
+  `#mpIdentificationType` também são `<select>` dentro de `.card-panel`,
+  mas ambos ficam `hidden` no HTML, então a regra não muda nada visível
+  neles.
+
+**Nada mais mudou**: CSP (`<meta http-equiv="Content-Security-Policy">`),
+backend, Pix, webhook, `MERCADO_PAGO_ENABLED`, seletores dos campos
+(`id`s inalterados), fluxo de pagamento e lifecycle de mount/unmount
+continuam exatamente como estavam.
+
+**Testes**: `tests/mercadopago-cardform-config.test.js` ganhou dois testes
+-- um confirma que os três campos recebem exatamente o `style` esperado
+(e que `color`/`placeholderColor` são diferentes, e que `backgroundColor`
+não é enviado -- não é suportado), outro confirma estaticamente que o CSS
+não depende mais de `prefers-color-scheme` nem de `--border`, e que
+`.mp-secure-field`/`.card-panel select` usam o fundo escuro esperado.
+`tests/e2e/mercadopago-cardform-mount.spec.js` ganhou o mesmo teste de
+`style` via Playwright (fixture com Chromium real). Os testes já
+existentes de montagem/DOM/CSP (`mercadopago-cardform-mount.spec.js`,
+`mercadopago-cardform-production-dom.spec.js`, `csp-mercadopago-
+cardform.spec.js`, `csp.spec.js`) continuam passando sem alteração --
+confirma que a correção visual não afetou clique/foco/digitação, contagem
+de iframes, nem a CSP.
+
 ## Testes
 
 - `tests/test_csp_meta.py` (Python, sem navegador): confirma que as 23

@@ -21,6 +21,24 @@
   const SDK_URL = "https://sdk.mercadopago.com/js/v2";
   const ATTEMPT_KEY_STORAGE_PREFIX = "mistica_mp_tentativa_";
 
+  // Estilo dos Secure Fields (número, validade, CVV) -- iframes do próprio
+  // Mercado Pago, então só as propriedades documentadas em
+  // github.com/mercadopago/sdk-js/blob/main/docs/fields.md#style têm efeito:
+  // color, fontFamily, fontSize, fontStyle, fontVariant, fontWeight, height,
+  // margin*, padding*, placeholderColor, textAlign, width. NÃO existe
+  // backgroundColor nem estados por CSS (:focus/:valid/:invalid) na API --
+  // o fundo/borda de cada campo é resolvido pelo wrapper .mp-secure-field
+  // (ver v2-mercadopago-checkout.css), não por aqui. Sem isso, o SDK usa a
+  // cor de texto padrão dele (escura), que fica ilegível sobre o fundo
+  // escuro do tema premium da Mística.
+  const MP_SECURE_FIELD_STYLE = {
+    color: "#F7E7BE",
+    fontSize: "16px",
+    fontWeight: "500",
+    fontFamily: "Inter, system-ui, sans-serif",
+    placeholderColor: "rgba(247, 231, 190, 0.55)",
+  };
+
   let mpConfig = null; // { enabled, public_key }
   let mpInstance = null;
   let cardForm = null;
@@ -208,9 +226,9 @@
       form: {
         id: "mpCardForm",
         cardholderName: { id: "mpCardholderName", placeholder: "Nome impresso no cartão" },
-        cardNumber: { id: "mpCardNumber", placeholder: "0000 0000 0000 0000" },
-        expirationDate: { id: "mpExpirationDate", placeholder: "MM/AA" },
-        securityCode: { id: "mpSecurityCode", placeholder: "CVV" },
+        cardNumber: { id: "mpCardNumber", placeholder: "0000 0000 0000 0000", style: MP_SECURE_FIELD_STYLE },
+        expirationDate: { id: "mpExpirationDate", placeholder: "MM/AA", style: MP_SECURE_FIELD_STYLE },
+        securityCode: { id: "mpSecurityCode", placeholder: "CVV", style: MP_SECURE_FIELD_STYLE },
         installments: { id: "mpInstallments" },
         identificationType: { id: "mpIdentificationType" },
         identificationNumber: { id: "mpDocNumber", placeholder: "CPF" },
