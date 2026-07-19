@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; script-src 'self' https://sdk.mercadopago.com https://www.googletagmanager.com https://connect.facebook.net; style-src 'self' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://api.misticaesotericos.com.br https://*.mercadopago.com https://*.mercadopago.com.br https://www.google-analytics.com https://analytics.google.com https://www.googletagmanager.com https://www.facebook.com https://connect.facebook.net https://api.mercadolibre.com; frame-src https://www.youtube.com https://*.mercadopago.com https://*.mercadopago.com.br; worker-src 'self' blob:; manifest-src 'self'; media-src 'self' blob: https://api.misticaesotericos.com.br; upgrade-insecure-requests" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Pedidos — Mística Presentes</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="admin-pedidos.css" />
+</head>
+<body class="admin-pedidos-body">
+<header class="site-header">
+  <nav class="container nav">
+    <a class="brand" href="index.html" aria-label="Mística Presentes"><span class="brand-mark" aria-hidden="true">☾</span><span class="brand-copy"><strong>Mística Presentes</strong><small>Pedidos unificados</small></span></a>
+    <div class="admin-pedidos-nav"><a class="btn btn-small btn-ghost" href="admin.html">Painel geral</a><a class="btn btn-small btn-ghost" href="admin-pedidos-pix.html">Pedidos Pix — legado</a></div>
+  </nav>
+</header>
+
+<main class="container admin-pedidos-main">
+  <section id="loginPanelPedidos" class="form-panel admin-pedidos-login">
+    <p class="eyebrow">Acesso restrito</p>
+    <h1>Entrar no painel de pedidos</h1>
+    <form id="loginFormPedidos">
+      <label>Usuário<input id="loginUserPedidos" type="text" autocomplete="username" required /></label>
+      <label>Senha<input id="loginSenhaPedidos" type="password" autocomplete="current-password" required /></label>
+      <button class="btn btn-full" type="submit">Entrar</button>
+      <p id="loginStatusPedidos" class="admin-pedidos-note" hidden></p>
+    </form>
+  </section>
+
+  <section id="painelPedidos" hidden>
+    <div class="admin-pedidos-topbar">
+      <div><p class="eyebrow">Operação comercial</p><h1>Todos os pedidos</h1><p class="admin-pedidos-note">Pix, crédito e débito em uma única fila. O status financeiro é somente leitura.</p></div>
+      <div class="admin-pedidos-top-actions"><span id="contadorPedidos" class="admin-pedidos-counter">0 pedidos</span><span id="contadorNovosPedidos" class="admin-pedidos-counter novo" hidden>0 novos</span><label><input id="somPedidosToggle" type="checkbox" checked /> Som para pedido novo</label><button id="btnAtualizarPedidos" class="btn btn-small btn-ghost" type="button">Atualizar</button><button id="btnSairPedidos" class="btn btn-small btn-ghost" type="button">Sair</button></div>
+    </div>
+
+    <section class="admin-pedidos-filtros" aria-label="Filtros de pedidos">
+      <label>Busca<input id="filtroBuscaPedidos" type="search" placeholder="Número, nome, telefone ou e-mail" /></label>
+      <label>Pagamento<select id="filtroPagamentoPedidos"><option value="">Todos</option><option value="pix">Pix</option><option value="credit_card">Crédito</option><option value="debit_card">Débito</option></select></label>
+      <label>Financeiro<select id="filtroFinanceiroPedidos"><option value="">Todos</option></select></label>
+      <label>Comercial<select id="filtroComercialPedidos"><option value="">Todos</option><option value="novo">Novo</option><option value="confirmado">Confirmado</option><option value="em_preparacao">Em preparação</option><option value="pronto_retirada">Pronto para retirada</option><option value="enviado">Enviado</option><option value="concluido">Concluído</option><option value="cancelado">Cancelado</option></select></label>
+      <label>De<input id="filtroDataInicioPedidos" type="date" /></label>
+      <label>Até<input id="filtroDataFimPedidos" type="date" /></label>
+      <label class="admin-pedidos-check"><input id="filtroSomenteNovosPedidos" type="checkbox" /> Somente novos</label>
+      <button id="btnLimparFiltrosPedidos" class="btn btn-small btn-ghost" type="button">Limpar filtros</button>
+    </section>
+
+    <p id="statusListaPedidos" class="admin-pedidos-note" role="status">Carregando pedidos...</p>
+    <div id="listaPedidosUnificados" class="admin-pedidos-lista" aria-live="polite"></div>
+  </section>
+</main>
+
+<dialog id="detalhePedidoDialog" class="admin-pedido-dialog">
+  <form method="dialog" class="admin-pedido-dialog-top"><strong id="detalhePedidoTitulo">Detalhes do pedido</strong><button class="btn btn-small btn-ghost" value="cancel">Fechar</button></form>
+  <div id="detalhePedidoConteudo"></div>
+</dialog>
+
+<script src="site-config.js"></script>
+<script src="admin-pedidos.js" defer></script>
+</body>
+</html>
