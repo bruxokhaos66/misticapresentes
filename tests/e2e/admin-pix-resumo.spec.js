@@ -104,7 +104,7 @@ test.describe("admin.html: resumo de Pedidos Pix", () => {
     await page.click("#pixResumoAtualizar");
     await expect(page.locator(".pedido-pix-resumo-card")).toBeVisible();
     await expect(page.locator("#pixResumoAvisoNovo")).toBeVisible();
-    await expect(page.locator("#pixResumoAvisoNovo")).toContainText("Novo pedido Pix");
+    await expect(page.locator("#pixResumoAvisoNovo")).toContainText("Novo pedido recebido");
     await expect(page.locator("#badgeHeaderPixPedidos")).toBeVisible();
     await expect(page.locator("#badgeHeaderPixPedidos")).toHaveText("1");
   });
