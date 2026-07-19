@@ -29,7 +29,12 @@ from backend.idempotency import (
 )
 from backend.logging_config import get_logger
 from backend.mercadopago_client import MercadoPagoIndisponivel, criar_pagamento_cartao, consultar_pagamento
-from backend.mercadopago_flags import mercado_pago_habilitado, public_key_mercadopago
+from backend.mercadopago_flags import (
+    ambiente_mercadopago,
+    diagnostico_credenciais_mercadopago,
+    mercado_pago_habilitado,
+    public_key_mercadopago,
+)
 from backend.order_status_routes import expirar_pedidos_pendentes
 from backend.panel_sessions import exigir_sessao_ou_chave_api
 from backend.payment_routes import (
@@ -231,6 +236,29 @@ def pagar_com_cartao(payload: CartaoPagamentoIn, idempotency_key: str | None = H
         "Estornado": "estornado",
     }.get(status_interno_pagamento, "recusado")
     agora2 = datetime.now().isoformat(timespec="seconds")
+
+    # Diagnóstico interno sanitizado: status/status_detail do Mercado Pago
+    # são códigos genéricos do provedor (ex.: "cc_rejected_bad_filled_
+    # security_code", "cc_rejected_insufficient_amount"), nunca dado de
+    # cartão/pessoal -- por isso podem ir para o log estruturado, ao
+    # contrário da mensagem amigável (essa sim nunca expõe o código bruto ao
+    # cliente, ver _mensagem_amigavel). token, número do cartão, CVV, CPF e
+    # e-mail do pagador NUNCA aparecem aqui.
+    logger.info(
+        "mercadopago_cartao_resultado",
+        extra={
+            "evento": "mp_cartao_resultado",
+            "pedido_id": payload.pedido_id,
+            "tentativa_id": tentativa_id,
+            "status_interno": status_interno_tentativa,
+            "status_provedor": resultado.status,
+            "status_detail_provedor": resultado.status_detail[:200] if resultado.status_detail else None,
+            "payment_method_id": resultado.payment_method_id,
+            "installments": payload.installments,
+            "ambiente": ambiente_mercadopago(),
+            **diagnostico_credenciais_mercadopago(),
+        },
+    )
 
     with conectar() as conn:
         conn.execute(

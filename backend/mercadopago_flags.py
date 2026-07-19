@@ -57,3 +57,34 @@ def mercado_pago_habilitado() -> bool:
 
 def mercado_pago_webhook_configurado() -> bool:
     return mercado_pago_habilitado() and bool(webhook_secret_mercadopago())
+
+
+def _prefixo_credencial(valor: str) -> str:
+    """Classifica só pelo PREFIXO da credencial (nunca pelo valor inteiro) --
+    o próprio painel do Mercado Pago rotula credenciais como "de teste"
+    (prefixo TEST-) ou "de produção" (prefixo APP_USR-). Usado só para
+    diagnóstico (nunca loga a credencial em si, só esta classificação)."""
+    if valor.startswith("TEST-"):
+        return "teste"
+    if valor.startswith("APP_USR-"):
+        return "producao"
+    return "desconhecido"
+
+
+def diagnostico_credenciais_mercadopago() -> dict:
+    """Diagnóstico seguro (sem expor a Public Key/Access Token) de uma causa
+    comum de recusa que não é "o cartão é ruim": Public Key e Access Token
+    de ambientes diferentes (ex.: Public Key de produção com Access Token
+    de teste, ou vice-versa) -- o Mercado Pago aceita o token gerado no
+    navegador mas recusa a cobrança no backend porque as credenciais não
+    pertencem à mesma aplicação/ambiente. Só classifica pelo prefixo, nunca
+    loga nem devolve a credencial inteira."""
+    public_key = _prefixo_credencial(public_key_mercadopago())
+    access_token = _prefixo_credencial(access_token_mercadopago())
+    consistentes = "desconhecido" not in (public_key, access_token) and public_key == access_token
+    return {
+        "public_key_ambiente": public_key,
+        "access_token_ambiente": access_token,
+        "ambiente_declarado": ambiente_mercadopago(),
+        "credenciais_consistentes": consistentes,
+    }

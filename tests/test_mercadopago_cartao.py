@@ -449,3 +449,83 @@ def test_moeda_diferente_de_brl_nunca_confirma_pedido():
     assert resposta.json()["status"] != "aprovado"
     detalhe = client.get(f"/api/pedidos/{pedido['id']}", headers=HEADERS).json()
     assert detalhe["status"] != "Pagamento confirmado"
+
+
+# ---------------------------------------------------------------------------
+# Diagnóstico interno sanitizado (Parte 3 da revisão do checkout de cartão):
+# status/status_detail do provedor precisam ficar visíveis no log estruturado
+# para investigação, mas token, número do cartão, CVV, CPF e e-mail do
+# pagador NUNCA podem aparecer -- nem mesmo mascarados, já que este log nem
+# recebe esses campos como entrada.
+# ---------------------------------------------------------------------------
+
+_CAMPOS_SENSIVEIS_PROIBIDOS = (
+    "card_token_",  # prefixo usado pelos tokens de teste deste arquivo
+    "cliente@example.com",
+    "12345678900",
+)
+
+
+def _log_resultado_cartao(caplog, pedido, resultado):
+    import logging
+
+    with caplog.at_level(logging.INFO, logger="backend.mercadopago_routes"):
+        resposta = pagar_cartao(pedido, resultado)
+    registros = [r for r in caplog.records if getattr(r, "evento", None) == "mp_cartao_resultado"]
+    return resposta, registros
+
+
+def test_log_resultado_cartao_recusado_traz_status_detail_sem_dado_sensivel(caplog):
+    pedido = criar_pedido_publico(70.0)
+    recusado = resultado_mp(pedido, status="rejected", status_detail="cc_rejected_bad_filled_security_code", payment_id="")
+    resposta, registros = _log_resultado_cartao(caplog, pedido, recusado)
+
+    assert resposta.status_code == 200
+    assert len(registros) == 1
+    record = registros[0]
+    assert record.status_detail_provedor == "cc_rejected_bad_filled_security_code"
+    assert record.status_provedor == "rejected"
+    assert record.status_interno == "recusado"
+    assert record.pedido_id == pedido["id"]
+    assert "credenciais_consistentes" in record.__dict__
+
+    texto = f"{record.getMessage()} {record.__dict__}".lower()
+    for proibido in _CAMPOS_SENSIVEIS_PROIBIDOS:
+        assert proibido not in texto, f"log vazou dado sensível: {proibido}"
+    for campo in ("token", "cvv", "numero_cartao", "access_token", "public_key"):
+        assert not hasattr(record, campo)
+
+
+def test_log_resultado_cartao_aprovado_tambem_registra_diagnostico(caplog):
+    pedido = criar_pedido_publico(80.0)
+    aprovado = resultado_mp(pedido, status="approved", status_detail="accredited")
+    resposta, registros = _log_resultado_cartao(caplog, pedido, aprovado)
+
+    assert resposta.status_code == 200
+    assert len(registros) == 1
+    assert registros[0].status_interno == "aprovado"
+    assert registros[0].status_detail_provedor == "accredited"
+
+
+def test_diagnostico_credenciais_mercadopago_detecta_ambientes_misturados(monkeypatch):
+    from backend.mercadopago_flags import diagnostico_credenciais_mercadopago
+
+    monkeypatch.setenv("MERCADO_PAGO_PUBLIC_KEY", "TEST-abc123")
+    monkeypatch.setenv("MERCADO_PAGO_ACCESS_TOKEN", "APP_USR-xyz789")
+    diagnostico = diagnostico_credenciais_mercadopago()
+    assert diagnostico["public_key_ambiente"] == "teste"
+    assert diagnostico["access_token_ambiente"] == "producao"
+    assert diagnostico["credenciais_consistentes"] is False
+    # nunca devolve a credencial em si, só a classificação de ambiente
+    for valor in diagnostico.values():
+        assert "abc123" not in str(valor)
+        assert "xyz789" not in str(valor)
+
+
+def test_diagnostico_credenciais_mercadopago_consistentes(monkeypatch):
+    from backend.mercadopago_flags import diagnostico_credenciais_mercadopago
+
+    monkeypatch.setenv("MERCADO_PAGO_PUBLIC_KEY", "TEST-abc123")
+    monkeypatch.setenv("MERCADO_PAGO_ACCESS_TOKEN", "TEST-def456")
+    diagnostico = diagnostico_credenciais_mercadopago()
+    assert diagnostico["credenciais_consistentes"] is True

@@ -65,12 +65,18 @@
 /* <select> não herda o estilo de <input>/<textarea> do tema (v2.css só
    cobre input/textarea) -- sem isso, o navegador renderiza o campo
    "Parcelas" com o combo box padrão dele (normalmente claro), uma faixa
-   clara destoante no meio do checkout escuro. */
+   clara destoante no meio do checkout escuro. Altura/padding/raio batem
+   exatamente com os demais <input> do formulário (v2.css, regra
+   `input, textarea`) -- o campo Parcelas fica na mesma linha do CPF
+   (.mp-card-row) e precisa ter o mesmo tamanho dele, não um valor
+   aproximado. padding-right maior dá respiro para a seta nativa do
+   navegador não ficar colada na borda. */
 .card-panel select {
   width: 100%;
+  height: 47px;
   border: 1px solid var(--line, rgba(242, 201, 109, .28));
-  border-radius: 14px;
-  padding: 13px 14px;
+  border-radius: 16px;
+  padding: 13px 38px 13px 14px;
   background: rgba(0, 0, 0, .28);
   color: var(--cream, #fff6dd);
   outline: none;
@@ -82,14 +88,45 @@
   cursor: not-allowed;
 }
 
+/* Estados focus/valid/invalid dos 3 campos "externos" (nome, CPF, e-mail --
+   <input> comuns, não Secure Fields). Usa :not(:placeholder-shown) para só
+   sinalizar erro depois que o campo tem conteúdo (nunca no carregamento da
+   página, com o formulário vazio) -- os 3 campos têm placeholder no HTML
+   propositalmente para isso funcionar. Foco já é tratado globalmente por
+   `input:focus-visible` (v2.css); aqui só cobre valid/invalid. */
+.card-panel input:not(:placeholder-shown):invalid {
+  border-color: rgba(255, 130, 130, .6);
+}
+
+.card-panel input:not(:placeholder-shown):valid {
+  border-color: rgba(189, 209, 122, .45);
+}
+
+/* #mpCardStatus (aria-live="polite", ver index.html) já anuncia a mudança
+   para leitor de tela; falta o mesmo tratamento visual dado ao Pix para
+   texto de recusa (.pix-pedido-status[data-tone="expirado"] -- mesma
+   paleta, reaproveitada aqui). #b3261e/#1b7f3a antigos tinham ~3:1 de
+   contraste sobre o fundo escuro do card-panel (abaixo do mínimo 4.5:1 do
+   WCAG AA para texto normal) -- as cores novas (mesmas de
+   .pix-pedido-status) têm contraste >7:1 sobre este fundo. margin
+   inferior/superior de 14px evita que o alerta encoste no rótulo do e-mail
+   acima ou no botão "Pagar com cartão" abaixo. */
 #mpCardStatus[data-tone="erro"] {
-  color: #b3261e;
+  display: block;
+  margin: 14px 0 16px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 130, 130, .5);
+  border-left: 3px solid rgba(255, 130, 130, .85);
+  border-radius: 14px;
+  background: rgba(255, 90, 90, .12);
+  color: #ffdada;
+  font-weight: 750;
 }
 
 #mpCardStatus[data-tone="sucesso"] {
-  color: #1b7f3a;
+  color: #dff1a4;
 }
 
 #mpCardStatus[data-tone="info"] {
-  color: inherit;
+  color: var(--muted, #d7c8ad);
 }

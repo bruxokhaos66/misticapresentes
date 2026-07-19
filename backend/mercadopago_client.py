@@ -138,15 +138,30 @@ def criar_pagamento_cartao(
     if resposta.status_code not in (200, 201) or not payload.get("id"):
         # Erro de validação (4xx): cartão/token inválido, dados incompletos
         # etc. Não é indisponibilidade -- é uma recusa/erro de requisição,
-        # tratado pelo chamador como pagamento não realizado.
+        # tratado pelo chamador como pagamento não realizado. `cause` é uma
+        # lista de códigos/descrições genéricos do provedor (ex.: {"code":
+        # 2006, "description": "Invalid card_number"}) -- nunca contém o
+        # número do cartão, token, CVV ou dado do pagador, só o nome do
+        # campo com problema, então é seguro logar para diagnóstico.
+        causas = [
+            {"code": c.get("code"), "description": c.get("description")}
+            for c in (payload.get("cause") or [])
+            if isinstance(c, dict)
+        ][:5]
+        detalhe = str(payload.get("message") or payload.get("error") or "erro_desconhecido")[:200]
         logger.info(
             "mercadopago_pagamento_rejeitado_na_criacao",
-            extra={"evento": "mp_criar_pagamento_rejeitado", "status_code": resposta.status_code},
+            extra={
+                "evento": "mp_criar_pagamento_rejeitado",
+                "status_code": resposta.status_code,
+                "detalhe": detalhe,
+                "causas": causas,
+            },
         )
         return ResultadoPagamentoMP(
             id="",
             status="rejected",
-            status_detail=str(payload.get("message") or payload.get("error") or "erro_desconhecido")[:200],
+            status_detail=detalhe,
             transaction_amount=float(transaction_amount),
             installments=max(1, int(installments or 1)),
             payment_method_id=payment_method_id,
