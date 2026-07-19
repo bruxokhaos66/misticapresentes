@@ -50,6 +50,37 @@ test.describe("Montagem do CardForm (mock do SDK, ver limitação de rede acima)
     expect(config.autoMount).toBe(true);
   });
 
+  test("cardNumber/expirationDate/securityCode recebem style com cor de texto clara e placeholder distinto", async ({ page }) => {
+    await page.goto("/tests/e2e/fixtures/mercadopago-cardform-fixture.html");
+    await page.locator('[data-payment-method="cartao"]').waitFor({ state: "visible" });
+    await page.click('[data-payment-method="cartao"]');
+
+    await expect.poll(() => page.evaluate(() => window.__mpConfigsCapturados.length)).toBeGreaterThan(0);
+    const config = await page.evaluate(() => window.__mpConfigsCapturados[0]);
+
+    for (const campo of ["cardNumber", "expirationDate", "securityCode"]) {
+      const style = config.form[campo].style;
+      expect(style, `form.${campo}.style`).toBeTruthy();
+      expect(style.color).toBe("#F7E7BE");
+      expect(style.placeholderColor).toBe("rgba(247, 231, 190, 0.55)");
+      expect(style.fontSize).toBe("16px");
+      expect(style.fontWeight).toBe("500");
+      expect(style).not.toHaveProperty("backgroundColor");
+      expect(style.color).not.toBe(style.placeholderColor);
+    }
+  });
+
+  test("new MercadoPago() é chamado com trackingDisabled: true e sem desativar advancedFraudPrevention", async ({ page }) => {
+    await page.goto("/tests/e2e/fixtures/mercadopago-cardform-fixture.html");
+    await page.locator('[data-payment-method="cartao"]').waitFor({ state: "visible" });
+    await page.click('[data-payment-method="cartao"]');
+
+    await expect.poll(() => page.evaluate(() => window.__mpConstructorOptionsCapturadas.length)).toBeGreaterThan(0);
+    const options = await page.evaluate(() => window.__mpConstructorOptionsCapturadas[0]);
+    expect(options.trackingDisabled).toBe(true);
+    expect(options).not.toHaveProperty("advancedFraudPrevention");
+  });
+
   test("identificationType usa <select>, não <input>", async ({ page }) => {
     await page.goto("/tests/e2e/fixtures/mercadopago-cardform-fixture.html");
     const tag = await page.evaluate(() => document.getElementById("mpIdentificationType").tagName);

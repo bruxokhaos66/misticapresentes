@@ -132,6 +132,24 @@ def test_csp_unsafe_inline_so_existe_em_style_src_attr(pagina):
 
 
 @pytest.mark.parametrize("pagina", PAGINAS_PUBLICAS)
+def test_csp_script_src_sem_hash_nao_validado(pagina):
+    """script-src não contém nenhum hash sha256- de script inline.
+
+    O hash do script inline bloqueado (bootstrap de telemetria do
+    MercadoPago.js v2) já variou entre execuções reportadas neste projeto
+    (3 hashes diferentes observados para o mesmo script em momentos
+    distintos) -- evidência de que ele NÃO é estável, então não é elegível
+    para script-src via hash (CSP hash exige o conteúdo byte-a-byte do
+    script ser idêntico). Nenhum ambiente disponível para preparar esta
+    política teve acesso de rede ao SDK real para revalidar isso. Ver
+    docs/admin/CSP.md, seção "Auditoria do script inline bloqueado
+    (pós-#368)"."""
+    csp = _csp_de(pagina)
+    script_src = re.search(r"script-src ([^;]+);", csp).group(1)
+    assert "sha256-" not in script_src
+
+
+@pytest.mark.parametrize("pagina", PAGINAS_PUBLICAS)
 def test_csp_connect_src_autoriza_apenas_host_exato_do_mercadolibre_tracks(pagina):
     """O SDK MercadoPago.js v2 envia telemetria própria (device fingerprint/
     analytics do CardForm) para https://api.mercadolibre.com/tracks -- host
