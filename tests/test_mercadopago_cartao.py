@@ -449,3 +449,183 @@ def test_moeda_diferente_de_brl_nunca_confirma_pedido():
     assert resposta.json()["status"] != "aprovado"
     detalhe = client.get(f"/api/pedidos/{pedido['id']}", headers=HEADERS).json()
     assert detalhe["status"] != "Pagamento confirmado"
+
+
+# ---------------------------------------------------------------------------
+# Diagnóstico interno sanitizado (Parte 3 da revisão do checkout de cartão):
+# status/status_detail do provedor precisam ficar visíveis no log estruturado
+# para investigação, mas token, número do cartão, CVV, CPF e e-mail do
+# pagador NUNCA podem aparecer -- nem mesmo mascarados, já que este log nem
+# recebe esses campos como entrada.
+# ---------------------------------------------------------------------------
+
+_CAMPOS_SENSIVEIS_PROIBIDOS = (
+    "card_token_",  # prefixo usado pelos tokens de teste deste arquivo
+    "cliente@example.com",
+    "12345678900",
+)
+
+
+def _log_resultado_cartao(caplog, pedido, resultado):
+    import logging
+
+    with caplog.at_level(logging.INFO, logger="backend.mercadopago_routes"):
+        resposta = pagar_cartao(pedido, resultado)
+    registros = [r for r in caplog.records if getattr(r, "evento", None) == "mp_cartao_resultado"]
+    return resposta, registros
+
+
+def test_log_resultado_cartao_recusado_traz_status_detail_sem_dado_sensivel(caplog):
+    pedido = criar_pedido_publico(70.0)
+    recusado = resultado_mp(pedido, status="rejected", status_detail="cc_rejected_bad_filled_security_code", payment_id="")
+    resposta, registros = _log_resultado_cartao(caplog, pedido, recusado)
+
+    assert resposta.status_code == 200
+    assert len(registros) == 1
+    record = registros[0]
+    assert record.status_detail_provedor == "cc_rejected_bad_filled_security_code"
+    assert record.status_provedor == "rejected"
+    assert record.status_interno == "recusado"
+    assert record.pedido_id == pedido["id"]
+    assert "possible_environment_mismatch" in record.__dict__
+    assert "credential_environment_confidence" in record.__dict__
+
+    texto = f"{record.getMessage()} {record.__dict__}".lower()
+    for proibido in _CAMPOS_SENSIVEIS_PROIBIDOS:
+        assert proibido not in texto, f"log vazou dado sensível: {proibido}"
+    for campo in ("token", "cvv", "numero_cartao", "access_token", "public_key"):
+        assert not hasattr(record, campo)
+
+
+def test_log_resultado_cartao_aprovado_tambem_registra_diagnostico(caplog):
+    pedido = criar_pedido_publico(80.0)
+    aprovado = resultado_mp(pedido, status="approved", status_detail="accredited")
+    resposta, registros = _log_resultado_cartao(caplog, pedido, aprovado)
+
+    assert resposta.status_code == 200
+    assert len(registros) == 1
+    assert registros[0].status_interno == "aprovado"
+    assert registros[0].status_detail_provedor == "accredited"
+
+
+def test_diagnostico_credenciais_mercadopago_sinaliza_prefixos_divergentes_sem_afirmar_certeza(monkeypatch):
+    """O prefixo é só um indício (a doc oficial admite variação conforme a
+    solução) -- por isso o diagnóstico nunca afirma "inconsistente" com
+    certeza, só sinaliza baixa confiança para investigação manual no painel
+    do Mercado Pago."""
+    from backend.mercadopago_flags import diagnostico_credenciais_mercadopago
+
+    monkeypatch.setenv("MERCADO_PAGO_PUBLIC_KEY", "TEST-abc123")
+    monkeypatch.setenv("MERCADO_PAGO_ACCESS_TOKEN", "APP_USR-xyz789")
+    diagnostico = diagnostico_credenciais_mercadopago()
+    assert diagnostico["public_key_prefix_hint"] == "test_prefix"
+    assert diagnostico["access_token_prefix_hint"] == "app_usr_prefix"
+    assert diagnostico["possible_environment_mismatch"] is True
+    assert diagnostico["credential_environment_confidence"] == "low"
+    # nunca devolve a credencial em si, só o nome do prefixo observado
+    for valor in diagnostico.values():
+        assert "abc123" not in str(valor)
+        assert "xyz789" not in str(valor)
+
+
+def test_diagnostico_credenciais_mercadopago_prefixos_iguais_nao_e_garantia(monkeypatch):
+    """Prefixos iguais reduzem o sinal de divergência, mas o diagnóstico
+    nunca declara "consistente" com certeza -- confiança continua "low" e a
+    confirmação real depende de checar o painel do Mercado Pago."""
+    from backend.mercadopago_flags import diagnostico_credenciais_mercadopago
+
+    monkeypatch.setenv("MERCADO_PAGO_PUBLIC_KEY", "TEST-abc123")
+    monkeypatch.setenv("MERCADO_PAGO_ACCESS_TOKEN", "TEST-def456")
+    diagnostico = diagnostico_credenciais_mercadopago()
+    assert diagnostico["possible_environment_mismatch"] is False
+    assert diagnostico["credential_environment_confidence"] == "low"
+
+
+def test_diagnostico_credenciais_mercadopago_nunca_bloqueia_pagamento():
+    """A heurística de prefixo é só diagnóstico -- mesmo com prefixos
+    divergentes, o pagamento segue seu fluxo normal (aprovado/pendente/
+    recusado conforme a resposta real do provedor), nunca é barrado por
+    causa do diagnóstico."""
+    pedido = criar_pedido_publico(90.0)
+    aprovado = resultado_mp(pedido, status="approved", status_detail="accredited")
+    resposta = pagar_cartao(pedido, aprovado)
+    assert resposta.status_code == 200
+    assert resposta.json()["status"] == "aprovado"
+
+
+# ---------------------------------------------------------------------------
+# Cenários oficiais de cartão de teste do Mercado Pago (sandbox), conforme
+# https://www.mercadopago.com.br/developers/pt/docs/checkout-api/integration-test/test-cards
+# e https://www.mercadopago.com.br/developers/pt/docs/your-integrations/test/accounts
+#
+# O cartão Visa 4235 6477 2802 5682 (CVV 123, validade 11/30) é dado
+# PÚBLICO de teste do próprio Mercado Pago -- nunca é um cartão real, por
+# isso pode aparecer em texto aqui (ao contrário de qualquer token/PAN real,
+# que este projeto nunca loga nem persiste). O nome do titular é quem
+# decide o resultado simulado, não o número do cartão:
+#   - "APRO" -> pagamento aprovado (status_detail "accredited")
+#   - "OTHE" -> pagamento recusado por erro geral (status_detail
+#     "cc_rejected_other_reason") -- é o cenário OFICIAL de reprovação
+#     esperada em sandbox, não evidência de bug.
+#   - "CONT" -> pendente; "CALL"/"FUND"/"SECU"/"EXPI"/"FORM" -> outras
+#     recusas específicas (autorização, saldo, CVV, validade, dados).
+# CPF de teste associado: 12345678909.
+#
+# A recusa vista na imagem de validação usava o titular "OTHE" -- pelo
+# comportamento documentado, é uma reprovação ESPERADA do cenário de teste,
+# não evidência de defeito no fluxo de cartão. Estes testes não chamam a
+# API real do Mercado Pago (nenhum teste automatizado deste projeto chama);
+# eles documentam e travam o comportamento do NOSSO backend diante da
+# resposta que o Mercado Pago publica para cada cenário.
+# ---------------------------------------------------------------------------
+
+CARTAO_TESTE_MERCADOPAGO = {
+    "bandeira": "visa",
+    "numero_mascarado": "4235 6477 2802 ****",  # dado público de teste, nunca um cartão real
+    "validade": "11/30",
+    "documento_teste": "12345678909",
+}
+
+
+def test_cenario_oficial_APRO_simula_pagamento_aprovado():
+    """Titular "APRO" (documentação oficial) -> aprovado/accredited. Este é
+    o cenário correto para validar aprovação em sandbox -- não o cartão da
+    imagem, que usava "OTHE" propositalmente (ou não) para simular recusa."""
+    pedido = criar_pedido_publico(55.0)
+    aprovado = resultado_mp(pedido, status="approved", status_detail="accredited", payment_method_id="visa")
+    resposta = pagar_cartao(
+        pedido,
+        aprovado,
+        payer={"email": "cliente.teste@example.com", "documento_numero": CARTAO_TESTE_MERCADOPAGO["documento_teste"]},
+    )
+    assert resposta.status_code == 200
+    corpo = resposta.json()
+    assert corpo["status"] == "aprovado"
+    assert corpo["aprovado"] is True
+    detalhe = client.get(f"/api/pedidos/{pedido['id']}", headers=HEADERS).json()
+    assert detalhe["status"] == "Pagamento confirmado"
+
+
+def test_cenario_oficial_OTHE_simula_recusa_esperada_do_cartao_de_teste():
+    """Titular "OTHE" (documentação oficial) -> recusado/cc_rejected_other_
+    reason. Reprovação ESPERADA do cenário de teste, não bug -- o pedido
+    continua disponível para nova tentativa (com "APRO" ou outro método),
+    nunca é cancelado só por causa disso."""
+    pedido = criar_pedido_publico(55.0)
+    recusado = resultado_mp(
+        pedido, status="rejected", status_detail="cc_rejected_other_reason", payment_id="", payment_method_id="visa"
+    )
+    resposta = pagar_cartao(
+        pedido,
+        recusado,
+        payer={"email": "cliente.teste@example.com", "documento_numero": CARTAO_TESTE_MERCADOPAGO["documento_teste"]},
+    )
+    assert resposta.status_code == 200
+    corpo = resposta.json()
+    assert corpo["status"] == "recusado"
+    assert corpo["aprovado"] is False
+    # mensagem ao cliente continua genérica -- nunca expõe o status_detail
+    # bruto do provedor, mesmo sendo um cenário de teste conhecido
+    assert "cc_rejected_other_reason" not in corpo["mensagem"]
+    detalhe = client.get(f"/api/pedidos/{pedido['id']}", headers=HEADERS).json()
+    assert detalhe["status"] == "Aguardando pagamento"  # pedido segue disponível para nova tentativa
