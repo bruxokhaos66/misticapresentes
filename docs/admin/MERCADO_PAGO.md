@@ -108,3 +108,54 @@ mostra o provedor quando não é o Pix manual, e um botão "Ver tentativas de
 pagamento" lista todas as tentativas (Mercado Pago e futuros provedores)
 com status, parcelas, motivo de recusa sanitizado e botão para reconsultar
 o status diretamente no Mercado Pago.
+
+## Diagnóstico interno de tentativas (status/status_detail)
+
+Além do painel, cada tentativa de cartão gera um log estruturado
+(`mercadopago_cartao_resultado`, `backend/mercadopago_routes.py`) com
+`status`/`status_detail` do provedor, `payment_method_id`, `installments`
+e um diagnóstico heurístico de ambiente das credenciais — nunca token,
+número do cartão, CVV, CPF ou e-mail. Ver
+`backend/mercadopago_flags.diagnostico_credenciais_mercadopago()`: os
+prefixos `TEST-`/`APP_USR-` são só um INDÍCIO (a documentação oficial
+admite variação conforme a solução), nunca uma prova — o diagnóstico
+sinaliza `possible_environment_mismatch`/`credential_environment_confidence:
+"low"`, nunca afirma certeza nem bloqueia o pagamento. A confirmação real
+de que Public Key e Access Token pertencem à mesma aplicação/ambiente só
+existe olhando o painel do Mercado Pago
+(https://www.mercadopago.com.br/developers/panel).
+
+## Cartões de teste (sandbox) — cenários oficiais
+
+Fonte: [Cartões de teste](https://www.mercadopago.com.br/developers/pt/docs/checkout-api/integration-test/test-cards)
+e [Contas de teste](https://www.mercadopago.com.br/developers/pt/docs/your-integrations/test/accounts)
+(Mercado Pago Developers).
+
+Em sandbox, o **nome do titular** informado decide o resultado simulado —
+não importa qual cartão de teste é usado com ele:
+
+| Titular | Resultado simulado | `status_detail` típico |
+|---|---|---|
+| `APRO` | Aprovado | `accredited` |
+| `OTHE` | Recusado (erro geral) | `cc_rejected_other_reason` |
+| `CONT` | Pendente | — |
+| `CALL` | Recusado (precisa autorizar) | `cc_rejected_call_for_authorize` |
+| `FUND` | Recusado (saldo insuficiente) | `cc_rejected_insufficient_amount` |
+| `SECU` | Recusado (CVV inválido) | `cc_rejected_bad_filled_security_code` |
+| `EXPI` | Recusado (validade inválida) | `cc_rejected_bad_filled_date` |
+| `FORM` | Recusado (erro de preenchimento) | `cc_rejected_bad_filled_other` |
+
+CPF de teste associado: `12345678909`. Cartão de teste Visa usado na
+validação desta revisão: `4235 6477 2802 5682`, CVV `123`, validade
+`11/30` — dado público de teste do próprio Mercado Pago, nunca um cartão
+real.
+
+**A reprovação registrada na imagem de validação usava o titular `OTHE`
+— pelo comportamento documentado acima, isso é uma reprovação ESPERADA do
+cenário de teste, não evidência de bug no fluxo de cartão.** Para validar
+aprovação em sandbox, o cenário correto é repetir o mesmo cartão com o
+titular `APRO`. Ver `tests/test_mercadopago_cartao.py` (`test_cenario_
+oficial_APRO_simula_pagamento_aprovado` e `test_cenario_oficial_OTHE_
+simula_recusa_esperada_do_cartao_de_teste`) para os testes automatizados
+que documentam e travam o comportamento do nosso backend diante de cada
+um desses dois cenários.

@@ -60,31 +60,52 @@ def mercado_pago_webhook_configurado() -> bool:
 
 
 def _prefixo_credencial(valor: str) -> str:
-    """Classifica só pelo PREFIXO da credencial (nunca pelo valor inteiro) --
-    o próprio painel do Mercado Pago rotula credenciais como "de teste"
-    (prefixo TEST-) ou "de produção" (prefixo APP_USR-). Usado só para
-    diagnóstico (nunca loga a credencial em si, só esta classificação)."""
+    """Só um INDÍCIO textual, nunca uma prova. `TEST-`/`APP_USR-` é a
+    convenção mais comum do Mercado Pago para credencial de teste/produção,
+    mas a documentação oficial admite variação conforme a solução -- existem
+    integrações em que a credencial de teste também começa com `APP_USR-`.
+    Por isso esta função NUNCA decide sozinha se uma credencial é de teste
+    ou produção; ela só devolve o texto do prefixo observado, para quem for
+    investigar (nunca a credencial inteira)."""
     if valor.startswith("TEST-"):
-        return "teste"
+        return "test_prefix"
     if valor.startswith("APP_USR-"):
-        return "producao"
-    return "desconhecido"
+        return "app_usr_prefix"
+    if not valor:
+        return "not_configured"
+    return "unknown_prefix"
 
 
 def diagnostico_credenciais_mercadopago() -> dict:
-    """Diagnóstico seguro (sem expor a Public Key/Access Token) de uma causa
-    comum de recusa que não é "o cartão é ruim": Public Key e Access Token
-    de ambientes diferentes (ex.: Public Key de produção com Access Token
-    de teste, ou vice-versa) -- o Mercado Pago aceita o token gerado no
-    navegador mas recusa a cobrança no backend porque as credenciais não
-    pertencem à mesma aplicação/ambiente. Só classifica pelo prefixo, nunca
-    loga nem devolve a credencial inteira."""
-    public_key = _prefixo_credencial(public_key_mercadopago())
-    access_token = _prefixo_credencial(access_token_mercadopago())
-    consistentes = "desconhecido" not in (public_key, access_token) and public_key == access_token
+    """Diagnóstico HEURÍSTICO e NÃO-BLOQUEANTE (nunca impede nem falha um
+    pagamento) de uma causa possível de recusa que não é "o cartão é ruim":
+    Public Key e Access Token pertencerem a aplicações/ambientes diferentes
+    no Mercado Pago -- o token gerado no navegador com uma Public Key ainda
+    assim pode ser aceito por um Access Token de outra aplicação/ambiente na
+    tokenização, mas a cobrança em si ser recusada.
+
+    Os prefixos (`TEST-`/`APP_USR-`) são só um SINAL, não uma garantia --
+    por isso esta função nunca afirma "credenciais consistentes" nem
+    "inconsistentes" com certeza, só sinaliza `possible_environment_mismatch`
+    quando os prefixos observados divergem, sempre com
+    `credential_environment_confidence: "low"`. A única confirmação
+    definitiva é manual: checar no painel do Mercado Pago
+    (https://www.mercadopago.com.br/developers/panel) que a Public Key e o
+    Access Token em uso foram copiados da MESMA aplicação e do MESMO modo
+    (teste ou produção) -- nunca só pelo formato do texto.
+
+    Nunca loga nem devolve a credencial em si, só o nome do prefixo
+    observado."""
+    public_hint = _prefixo_credencial(public_key_mercadopago())
+    access_hint = _prefixo_credencial(access_token_mercadopago())
+    sinais_conhecidos = {"test_prefix", "app_usr_prefix"}
+    possible_mismatch = (
+        public_hint in sinais_conhecidos and access_hint in sinais_conhecidos and public_hint != access_hint
+    )
     return {
-        "public_key_ambiente": public_key,
-        "access_token_ambiente": access_token,
+        "public_key_prefix_hint": public_hint,
+        "access_token_prefix_hint": access_hint,
         "ambiente_declarado": ambiente_mercadopago(),
-        "credenciais_consistentes": consistentes,
+        "possible_environment_mismatch": possible_mismatch,
+        "credential_environment_confidence": "low",
     }
