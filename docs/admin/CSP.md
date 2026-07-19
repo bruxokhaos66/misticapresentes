@@ -282,15 +282,127 @@ dessa ferramenta (uma violação sintética de `script-src`, não o SDK real)
 -- confirma que a tabela recebe a linha e que nenhum termo sensível
 aparece nela.
 
-**Conclusão desta mudança:** não foi possível, neste ambiente, provar nem
-refutar com evidência real se o script inline é funcionalmente necessário
-para os Secure Fields ficarem interativos. `trackingDisabled: true` foi
-adicionado como a mudança mais segura e melhor fundamentada disponível sem
-acesso ao SDK real, mas seu efeito sobre o script inline especificamente
-**não foi validado**. O cartão continua **não homologado**:
-`MERCADO_PAGO_ENABLED` permanece `false` em produção até alguém com acesso
-de rede real executar `tests/manual/mp-csp-diagnostico.html` e o
-procedimento de homologação abaixo.
+**Conclusão original desta mudança (revista abaixo):** não foi possível,
+neste ambiente, provar nem refutar com evidência real se o script inline é
+funcionalmente necessário para os Secure Fields ficarem interativos.
+`trackingDisabled: true` foi adicionado como a mudança mais segura e
+melhor fundamentada disponível sem acesso ao SDK real, mas seu efeito
+sobre o script inline especificamente não pôde ser validado neste
+ambiente.
+
+### CORREÇÃO da conclusão acima -- evidência real obtida manualmente
+
+Depois desta mudança, um humano com acesso de rede normal executou
+`tests/manual/mp-csp-diagnostico.html` contra o SDK real do Mercado Pago
+(fora deste ambiente de desenvolvimento). Resultado, registrado aqui
+porque contradiz a suposição anterior deste arquivo:
+
+- `typeof window.MercadoPago` retornou `"function"` (SDK carregou).
+- Os 3 iframes reais de Secure Field foram criados, com origem
+  `secure-fields.mercadopago.com`.
+- `mpCardNumber`/`mpExpirationDate`/`mpSecurityCode` ficaram dentro do
+  viewport, com geometria válida.
+- `document.elementFromPoint` no centro de cada campo retornou o próprio
+  iframe (nenhum overlay interceptando).
+- Número, validade e CVV **aceitaram digitação**.
+- O emissor foi reconhecido (Mastercard, no cartão de teste usado).
+- As parcelas carregaram no seletor.
+- **A violação de CSP do script inline (`script-src`) continuou aparecendo
+  no Console durante todo o teste** -- ela não desapareceu, mas o CardForm
+  funcionou de ponta a ponta mesmo assim.
+
+**Isso invalida a hipótese "o script inline bloqueado é a causa do campo
+não aceitar clique/digitação".** O script continuou bloqueado e o campo
+funcionou. A hipótese registrada nas PRs #364/#365/#367/#368/#369 --
+"talvez o script inline seja necessário para o Secure Field ficar
+interativo" -- **não se sustenta** com esta evidência: ela mostra o
+oposto, um caso onde ele ficou bloqueado o tempo todo e o CardForm
+funcionou mesmo assim.
+
+**Consequência para a CSP: não relaxar.** Como o script inline bloqueado
+não está comprovado como causa de bloqueio nenhum, ele **não é
+justificativa** para adicionar `'unsafe-inline'`, hash ou qualquer outra
+exceção a `script-src`. A CSP desta mudança continua exatamente como
+estava (sem hash, sem `unsafe-inline`, sem `unsafe-eval`) -- agora com um
+motivo ainda mais forte para não mexer nela: não há mais nem a hipótese de
+necessidade funcional sustentando um relaxamento futuro.
+
+### Comparação DOM/CSS: diagnóstico x checkout real (produção)
+
+Como o diagnóstico funcionou (evidência acima) mas havia relato de que o
+**checkout publicado** da loja não aceita clique, foi feita uma comparação
+controlada para isolar se a diferença está no DOM/CSS de produção. Com o
+MESMO mock de SDK (iframe `about:blank` do tamanho calculado no instante de
+`cardForm()`, idêntico ao já usado em
+`tests/e2e/mercadopago-cardform-mount.spec.js`) montado dentro do
+`index.html` REAL -- CSS de produção completo, header sticky,
+`.form-panel::before`, todo o cascade do site --, em vez da página de
+diagnóstico isolada:
+
+| Verificação | `index.html` real (CSS de produção completo) |
+|---|---|
+| `cardForm()` monta exatamente 3 iframes | ✅ |
+| cada iframe com largura/altura > 0 | ✅ |
+| `elementFromPoint` no centro de cada iframe retorna o próprio iframe | ✅ |
+| clique no iframe → `document.activeElement` é o iframe | ✅ |
+| `.form-panel::before` intercepta o clique | ❌ Não -- já tem `pointer-events: none` explícito |
+| alternar Pix→cartão→Pix→cartão duplica iframes/instâncias | ❌ Não -- 1 `cardForm()`, 1 iframe por campo |
+
+**Conclusão: o DOM/CSS de produção não bloqueia o CardForm.** Quando o SDK
+consegue montar um iframe de verdade (do tamanho/posição certos), o layout
+completo de produção deixa esse iframe clicável e focável -- igual ao
+comportamento da página de diagnóstico isolada. Essa prova foi fixada como
+regressão automática em
+`tests/e2e/mercadopago-cardform-production-dom.spec.js` (roda nos projetos
+`desktop-chromium` e `mobile-chromium` do `playwright.config.js`): se uma
+mudança futura de CSS introduzir um overlay/`pointer-events`/`z-index` que
+cubra os campos, esses testes quebram.
+
+**O que essa comparação NÃO prova:** o mock só reproduz a mecânica de um
+iframe (tamanho, posição, DOM) -- não o conteúdo interno de um iframe do
+SDK real. Continua sem responder por que o **checkout publicado**
+especificamente não aceitou clique, já que (a) o teste manual com
+`mp-csp-diagnostico.html` funcionou com o SDK real, e (b) esta comparação
+mostra que o DOM/CSS de produção não é a causa. A lista abaixo enumera o
+que seria necessário verificar para achar essa diferença -- itens que este
+ambiente não consegue checar sozinho por não ter rede real para o site
+publicado nem para `sdk.mercadopago.com` (confirmado de novo:
+`curl https://www.misticaesotericos.com.br` e
+`curl https://sdk.mercadopago.com/js/v2` retornam `CONNECT tunnel failed,
+403` neste sandbox):
+
+| O que comparar | Diagnóstico (`mp-csp-diagnostico.html`, funcionou) | Checkout publicado (não aceitou clique) | Como verificar |
+|---|---|---|---|
+| Public Key efetivamente usada | Digitada manualmente na página (sandbox) | Vem de `/api/payments/mercadopago/config` → `backend/mercadopago_flags.py::public_key_mercadopago()` (env `MERCADO_PAGO_PUBLIC_KEY` do servidor) | Comparar os dois valores; conferir se a key do publicado é sandbox ou produção |
+| `trackingDisabled` | `true` (hardcoded no `mp-csp-diagnostico.js`) | `true` só se o checkout publicado estiver rodando o `v2-mercadopago-checkout.js` **desta mudança** (commit `3354122` em diante) | Ver items de versão/cache abaixo |
+| Versão/conteúdo de `v2-mercadopago-checkout.js` carregado | Arquivo local, sempre o do commit atual | Depende do que o CDN/GitHub Pages está servindo | `curl` o arquivo publicado e comparar com `git show HEAD:v2-mercadopago-checkout.js`, ou ver o Console: a query string `?v=20260718-cartao-mercadopago` (cache-busting) precisa bater com a do HTML publicado |
+| Cache/CDN/GitHub Pages | N/A (servido local) | GitHub Pages pode servir uma versão em cache até o CDN expirar | Recarregar com "disable cache" no DevTools e conferir o header `Age`/`Last-Modified` da resposta |
+| Commit realmente publicado | N/A | Precisa bater com o HEAD desta análise | Conferir a Action `deploy-pages.yml` mais recente com sucesso e o SHA publicado |
+| Instâncias de `MercadoPago`/`cardForm()` | 1 de cada (clique manual único no botão "Montar") | Deveria ser 1 de cada (guarda de remontagem em `v2-mercadopago-checkout.js`, coberta por `mercadopago-cardform-mount.spec.js` e pelo novo `mercadopago-cardform-production-dom.spec.js`) | `window.MercadoPago` sobrescrito mais de uma vez? Múltiplos listeners de clique no botão Pix/Cartão? |
+| Chamadas de mount/unmount | 1 mount, sem unmount (nunca alternou) | Depende de quantas vezes o cliente alternou Pix↔Cartão antes de reportar o problema | Instrumentar temporariamente (`console.count`) ou usar o Network/Performance tab |
+| Erros de `onError` | N/A -- `cardForm()` neste projeto não define callback `onError` (só `onFormMounted`, `onInstallmentsReceived`, `onSubmit`, `onFetching` -- ver `v2-mercadopago-checkout.js`) | Mesmo -- nenhum `onError` capturado hoje | Isso é um ponto cego real: se o SDK sinalizar erro por um canal que não escutamos, não aparece em lugar nenhum do nosso código |
+| Resposta de `/api/payments/mercadopago/config` | Mockada/pública, `enabled:true` | Precisa ser lida diretamente (Network tab) no domínio publicado | Comparar `enabled`/`public_key` retornados |
+| Estado de `MERCADO_PAGO_ENABLED` | N/A | Se o checkout publicado mostra o botão "Cartão de crédito", `MERCADO_PAGO_ENABLED` **já está `true` nesse ambiente** (senão `iniciar()` mantém o botão `hidden` -- ver `v2-mercadopago-checkout.js`) | Confirmar com quem administra o deploy qual env está configurado onde; **este repositório não muda isso** (`.env.example` continua `false`) |
+| Seletores enviados ao `cardForm()` | `form-checkout__cardNumber` etc. (nomes do README oficial) | `mpCardNumber`/`mpExpirationDate`/`mpSecurityCode` (ver `v2-mercadopago-checkout.js`) -- nomes diferentes, mas isso é só rotulagem, não deveria mudar comportamento | Comparar a config capturada via `window.__mpConfigsCapturados` (mesmo padrão dos testes) no publicado |
+| Os 3 iframes existem no publicado | Sim (evidência manual) | Não verificado nesta mudança -- precisa de alguém abrir o DevTools no site publicado | `document.querySelectorAll('#mpCardNumber iframe, #mpExpirationDate iframe, #mpSecurityCode iframe').length` deveria ser 3 |
+| Geometria/`elementFromPoint` no publicado | ✅ (evidência manual) | Não verificado nesta mudança | Mesmo script do checklist de `mp-csp-diagnostico.js`, rodado no publicado |
+
+**Nenhuma correção foi implementada a partir desta tabela.** Sem uma
+diferença concreta identificada entre o diagnóstico (que funcionou) e o
+checkout publicado (que não aceitou clique), qualquer mudança de código
+seria um chute. O próximo passo é alguém com acesso ao site publicado
+preencher a coluna "Checkout publicado" acima -- a origem mais provável,
+dado que o diagnóstico já provou que o SDK real funciona e esta seção já
+provou que o DOM/CSS de produção não bloqueia, é a linha **Public
+Key**, **versão publicada de `v2-mercadopago-checkout.js`** ou **cache/CDN
+servindo uma versão antiga** -- mas isso precisa ser confirmado, não
+presumido.
+
+**Card continua não homologado.** `MERCADO_PAGO_ENABLED` não foi alterado
+por este repositório (continua `false` em `.env.example` e
+`backend/mercadopago_flags.py`); se o ambiente publicado tem a flag ligada
+para o teste manual acima, isso é uma decisão de infraestrutura fora deste
+PR.
 
 ### Por que `img-src` inclui `https:` (qualquer origem HTTPS)
 
@@ -382,6 +494,15 @@ conectado à mesma função que já existia.
   do que o necessário). Escuta `document.addEventListener(
   "securitypolicyviolation", ...)` e falha se sobrar qualquer violação
   relacionada ao Mercado Pago.
+- `tests/e2e/mercadopago-cardform-production-dom.spec.js` (Playwright,
+  novo nesta correção, roda em `desktop-chromium` e `mobile-chromium`):
+  regressão permanente que prova que o DOM/CSS COMPLETOS de produção
+  (`index.html`, cascade real do site) não bloqueiam o CardForm --
+  monta exatamente 3 iframes com o mesmo mock de SDK das fixtures,
+  confirma largura/altura > 0, `elementFromPoint` retornando o próprio
+  iframe, foco após clique, `.form-panel::before` com `pointer-events:
+  none`, e ausência de duplicação ao alternar Pix↔cartão repetidamente.
+  Ver seção "Comparação DOM/CSS: diagnóstico x checkout real (produção)".
 - `tests/e2e/csp-diagnostico-tool.spec.js` (Playwright, novo nesta
   correção): testa o mecanismo de captura de
   `tests/manual/mp-csp-diagnostico.html` (ferramenta de homologação
