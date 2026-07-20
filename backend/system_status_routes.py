@@ -15,6 +15,7 @@ from backend.database import conectar
 from backend.infra_diagnostics import banco_acessivel, diagnostico_disco_completo, escrita_disco_segura
 from backend.logging_config import get_logger
 from backend.order_product_lookup import instalar_busca_produto_persistido
+from backend.product_code_integrity import instalar_integridade_codigo_produto
 from config import API_URL, DB_PATH, OFFICIAL_DOMAIN, SERVER_URL
 from database.backup import backup_habilitado
 
@@ -24,6 +25,11 @@ logger = get_logger(__name__)
 # precisam continuar localizando o produto para baixa ou reposição de estoque,
 # mesmo que ele seja inativado depois da criação do pedido.
 instalar_busca_produto_persistido()
+
+# O código de um produto inativo continua reservado pelo índice único do banco.
+# A instalação alinha a checagem da API a essa regra e converte uma eventual
+# corrida concorrente de INSERT/UPDATE em resposta HTTP 409 amigável.
+instalar_integridade_codigo_produto()
 
 # main.py importa pedido_notificacao_routes antes deste módulo. O registro
 # tardio reaproveita o mesmo APIRouter administrativo já incluído pela API,
