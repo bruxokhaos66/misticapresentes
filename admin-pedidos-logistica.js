@@ -8,6 +8,7 @@
   const conteudo = document.getElementById("detalhePedidoConteudo");
   const operacoes = new Set();
   const carregamentos = new Set();
+  let rafMontagem = null;
 
   if (!dialog || !titulo || !conteudo) return;
 
@@ -39,8 +40,8 @@
     return match ? Number(match[1]) : null;
   }
 
-  function criarCampo(rotulo, controle) {
-    const label = elemento("label", "admin-logistica-campo");
+  function criarCampo(rotulo, controle, largo = false) {
+    const label = elemento("label", `admin-logistica-campo${largo ? " admin-logistica-campo-largo" : ""}`);
     label.append(elemento("span", "", rotulo), controle);
     return label;
   }
@@ -63,11 +64,7 @@
     const forma = elemento("select", "admin-logistica-select");
     forma.name = "forma_recebimento";
     forma.required = true;
-    forma.append(
-      new Option("Selecione", ""),
-      new Option("Retirada na loja", "retirada"),
-      new Option("Entrega", "entrega")
-    );
+    forma.append(new Option("Selecione", ""), new Option("Retirada na loja", "retirada"), new Option("Entrega", "entrega"));
     forma.value = String(dados.forma_recebimento || "").toLowerCase();
 
     const rastreio = elemento("input", "admin-logistica-rastreio");
@@ -100,7 +97,7 @@
       criarCampo("Forma de recebimento", forma),
       criarCampo("Código de rastreio", rastreio),
       aviso,
-      criarCampo("Observação logística", observacao),
+      criarCampo("Observação logística", observacao, true),
       salvar,
       status
     );
@@ -145,7 +142,7 @@
 
   async function montarLogistica() {
     const pedidoId = pedidoIdAtual();
-    if (!pedidoId) return;
+    if (!dialog.open || !pedidoId) return;
     if (!conteudo.querySelector(".admin-detalhe-secao")) return;
     if (conteudo.querySelector(`[data-modulo-logistica='${pedidoId}']`)) return;
     if (carregamentos.has(pedidoId)) return;
@@ -159,9 +156,11 @@
 
     try {
       const dados = await apiFetch(`/api/pedidos/${pedidoId}/logistica`);
-      if (placeholder.isConnected) placeholder.replaceWith(criarModulo(pedidoId, dados));
+      if (placeholder.isConnected && dialog.open && pedidoIdAtual() === pedidoId) {
+        placeholder.replaceWith(criarModulo(pedidoId, dados));
+      }
     } catch (error) {
-      if (placeholder.isConnected) {
+      if (placeholder.isConnected && pedidoIdAtual() === pedidoId) {
         placeholder.replaceChildren(
           elemento("h3", "", "Logística de retirada ou entrega"),
           elemento("p", "admin-logistica-status", error.message || "Não foi possível carregar a logística.")
@@ -172,9 +171,20 @@
     }
   }
 
-  const observer = new MutationObserver(() => {
+  function agendarMontagem() {
     if (!dialog.open) return;
-    window.requestAnimationFrame(montarLogistica);
-  });
+    if (rafMontagem !== null) cancelAnimationFrame(rafMontagem);
+    rafMontagem = requestAnimationFrame(() => {
+      rafMontagem = null;
+      montarLogistica();
+    });
+  }
+
+  const observer = new MutationObserver(agendarMontagem);
   observer.observe(conteudo, { childList: true });
+
+  dialog.addEventListener("close", () => {
+    if (rafMontagem !== null) cancelAnimationFrame(rafMontagem);
+    rafMontagem = null;
+  });
 })();
