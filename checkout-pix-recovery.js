@@ -33,6 +33,8 @@
   }
 
   function avisar(mensagem, etapa) {
+    const status = document.getElementById("pixStatus");
+    if (status) status.textContent = mensagem;
     window.dispatchEvent(new CustomEvent("mistica:checkout-pix-recovery", {
       detail: { mensagem, etapa },
     }));
