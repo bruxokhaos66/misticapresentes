@@ -87,9 +87,9 @@ test("guard de produção instala limpeza e remove coleções locais sensíveis"
   assert.equal(harness.window.misticaProductionGuard.enabled, true);
   assert.equal(harness.window.misticaProductionGuard.apiBase, "https://api.example.test");
   assert.equal(harness.scrubCalls, 1);
-  assert.deepEqual(harness.context.clients, []);
-  assert.deepEqual(harness.context.sales, []);
-  assert.deepEqual(harness.context.suppliers, []);
+  assert.equal(harness.context.clients.length, 0);
+  assert.equal(harness.context.sales.length, 0);
+  assert.equal(harness.context.suppliers.length, 0);
 });
 
 test("guard não é instalado fora do modo de produção", () => {
