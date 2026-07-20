@@ -53,6 +53,7 @@ from backend.upload_routes import CURSOS_DIR, UPLOAD_DIR as PRODUTOS_UPLOAD_DIR,
 from backend.user_sync_routes import router as user_sync_router
 from backend.site_stock_routes import router as site_stock_router
 from backend.system_status_routes import router as system_status_router
+from backend.admin_dashboard_routes import router as admin_dashboard_router
 from config import hash_password_pbkdf2
 from database.migrations import init_db
 from database.backup import backup_habilitado, scheduler_backup
@@ -296,6 +297,7 @@ app.include_router(payment_webhook_router)
 app.include_router(mercadopago_router)
 app.include_router(upload_router)
 app.include_router(system_status_router)
+app.include_router(admin_dashboard_router)
 app.include_router(backup_router)
 app.include_router(course_router)
 app.include_router(aluno_router)

@@ -1,0 +1,11 @@
+.admin-homologacao-lista{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.admin-homologacao-item{display:flex;align-items:flex-start;gap:12px;padding:16px;border-radius:16px;background:#fff;border:1px solid rgba(38,51,35,.12);box-shadow:0 10px 26px rgba(37,46,33,.08)}
+.admin-homologacao-luz{width:14px;height:14px;border-radius:999px;margin-top:4px;flex:none}
+.admin-homologacao-luz.verde{background:#3f9d5c}
+.admin-homologacao-luz.amarelo{background:#e0a721}
+.admin-homologacao-luz.vermelho{background:#c53a3a}
+.admin-homologacao-luz.info{background:#3d6fa8}
+.admin-homologacao-texto h3{margin:0 0 4px;font-size:1rem}
+.admin-homologacao-texto p{margin:0;color:#5c6658;font-size:.92rem;line-height:1.4}
+.admin-homologacao-selo{display:inline-block;margin-top:6px;font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:#6a7466}
+@media(max-width:760px){.admin-homologacao-lista{grid-template-columns:1fr}}

@@ -1,0 +1,25 @@
+.admin-operacoes-body{background:linear-gradient(180deg,#f7f4ee,#eee8dc);min-height:100vh}
+.admin-operacoes-main{padding:32px 16px 64px}
+.admin-operacoes-login{max-width:440px;margin:40px auto}
+.admin-operacoes-login form{display:grid;gap:14px}
+.admin-operacoes-login label{display:grid;gap:6px;font-weight:700}
+.admin-operacoes-login input{min-height:44px;border:1px solid rgba(40,52,38,.2);border-radius:12px;padding:10px 12px;background:#fff;color:#1e281d}
+.admin-operacoes-note{color:#5c6658;margin:4px 0 0}
+.admin-operacoes-nav{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.admin-operacoes-topbar{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:18px;flex-wrap:wrap}
+.admin-operacoes-topbar h1{margin:.2rem 0}
+.admin-operacoes-top-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.admin-operacoes-alertas{display:grid;gap:10px;margin-bottom:20px}
+.admin-operacoes-alerta{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:14px;font-weight:700;background:#eef1e9;border:1px solid rgba(38,51,35,.12)}
+.admin-operacoes-alerta.nivel-alerta{background:#fbe7e7;color:#7b2d2d;border-color:rgba(123,45,45,.2)}
+.admin-operacoes-alerta.nivel-atencao{background:#fdf1dc;color:#7a5416;border-color:rgba(122,84,22,.2)}
+.admin-operacoes-alerta.nivel-info{background:#e6eef7;color:#264a72;border-color:rgba(38,74,114,.2)}
+.admin-operacoes-grade{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.admin-operacoes-card{background:#fff;border:1px solid rgba(38,51,35,.12);border-radius:16px;padding:16px;box-shadow:0 10px 26px rgba(37,46,33,.08);display:grid;gap:6px;align-content:start}
+.admin-operacoes-card small{color:#6a7466;font-weight:800;letter-spacing:.02em;text-transform:uppercase;font-size:.75rem}
+.admin-operacoes-card strong{font-size:1.4rem;color:#25301f}
+.admin-operacoes-card.destaque strong{color:#7b2d47}
+.admin-operacoes-vazio{padding:20px;text-align:center;background:#fff;border-radius:16px;color:#687064}
+@media(max-width:1100px){.admin-operacoes-grade{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:760px){.admin-operacoes-grade{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:520px){.admin-operacoes-grade{grid-template-columns:1fr}.admin-operacoes-topbar{display:grid}.admin-operacoes-nav{width:100%}}

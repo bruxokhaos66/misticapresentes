@@ -15,7 +15,7 @@
 <header class="site-header">
   <nav class="container nav">
     <a class="brand" href="index.html" aria-label="Mística Presentes"><span class="brand-mark" aria-hidden="true">☾</span><span class="brand-copy"><strong>Mística Presentes</strong><small>Pedidos unificados</small></span></a>
-    <div class="admin-pedidos-nav"><a class="btn btn-small btn-ghost" href="admin.html">Painel geral</a><a class="btn btn-small btn-ghost" href="admin-pedidos-pix.html">Pedidos Pix — legado</a></div>
+    <div class="admin-pedidos-nav"><a class="btn btn-small btn-ghost" href="admin.html">Painel geral</a><a class="btn btn-small btn-ghost" href="admin-operacoes.html">Centro de Operações</a><a class="btn btn-small btn-ghost" href="admin-pedidos-pix.html">Pedidos Pix — legado</a></div>
   </nav>
 </header>
 
@@ -36,6 +36,23 @@
       <div><p class="eyebrow">Operação comercial</p><h1>Todos os pedidos</h1><p class="admin-pedidos-note">Pix, crédito e débito em uma única fila. O status financeiro é somente leitura.</p></div>
       <div class="admin-pedidos-top-actions"><span id="contadorPedidos" class="admin-pedidos-counter">0 pedidos</span><span id="contadorNovosPedidos" class="admin-pedidos-counter novo" hidden>0 novos</span><label><input id="somPedidosToggle" type="checkbox" checked /> Som para pedido novo</label><button id="btnAtualizarPedidos" class="btn btn-small btn-ghost" type="button">Atualizar</button><button id="btnSairPedidos" class="btn btn-small btn-ghost" type="button">Sair</button></div>
     </div>
+
+    <section class="admin-pedidos-filtros-rapidos" aria-label="Filtros rápidos de pedidos">
+      <div class="admin-pedidos-chips" data-grupo="periodo">
+        <button type="button" class="admin-pedido-chip" data-periodo="hoje">Hoje</button>
+        <button type="button" class="admin-pedido-chip" data-periodo="ontem">Ontem</button>
+        <button type="button" class="admin-pedido-chip" data-periodo="7dias">7 dias</button>
+        <button type="button" class="admin-pedido-chip" data-periodo="30dias">30 dias</button>
+      </div>
+      <div class="admin-pedidos-chips" data-grupo="estado">
+        <button type="button" class="admin-pedido-chip" data-estado="pago">Pago</button>
+        <button type="button" class="admin-pedido-chip" data-estado="pendente">Pendente</button>
+        <button type="button" class="admin-pedido-chip" data-estado="cancelado">Cancelado</button>
+        <button type="button" class="admin-pedido-chip" data-estado="enviado">Enviado</button>
+        <button type="button" class="admin-pedido-chip" data-estado="pix">Pix</button>
+        <button type="button" class="admin-pedido-chip" data-estado="cartao">Cartão</button>
+      </div>
+    </section>
 
     <section class="admin-pedidos-filtros" aria-label="Filtros de pedidos">
       <label>Busca<input id="filtroBuscaPedidos" type="search" placeholder="Número, nome, telefone ou e-mail" /></label>
