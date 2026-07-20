@@ -15,7 +15,7 @@ inventado.
 from __future__ import annotations
 
 from backend.database import conectar
-from backend.infra_diagnostics import banco_acessivel, diagnostico_disco_completo, escrita_disco_segura
+from backend.infra_diagnostics import diagnostico_disco_completo, escrita_disco_segura
 from backend.mercadopago_flags import mercado_pago_habilitado, mercado_pago_webhook_configurado
 from backend.pix import config_pix
 from database.backup import backup_habilitado
@@ -30,8 +30,14 @@ def _item(chave: str, titulo: str, status: str, detalhe: str) -> dict:
     return {"chave": chave, "titulo": titulo, "status": status, "detalhe": detalhe}
 
 
-def _checar_banco() -> dict:
-    ok = banco_acessivel()
+def _checar_banco(conn) -> dict:
+    # Reaproveita a conexão já aberta por obter_checklist_homologacao em vez
+    # de abrir uma segunda (o que banco_acessivel() faria por conta própria).
+    try:
+        conn.execute("SELECT 1").fetchone()
+        ok = True
+    except Exception:
+        ok = False
     return _item("banco", "Banco de dados", VERDE if ok else VERMELHO, "Conexão e leitura ok." if ok else "Banco inacessível.")
 
 
@@ -130,7 +136,7 @@ def _checar_sistema(disco_item: dict, banco_item: dict) -> dict:
 
 def obter_checklist_homologacao() -> dict:
     with conectar() as conn:
-        banco_item = _checar_banco()
+        banco_item = _checar_banco(conn)
         disco_item = _checar_disco(conn)
         itens = [
             banco_item,

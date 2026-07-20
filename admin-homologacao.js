@@ -72,6 +72,7 @@
   }
 
   async function carregar() {
+    ultimaAtualizacao.textContent = "Verificando checklist...";
     try {
       const dados = await apiFetch("/api/painel/operacoes/homologacao");
       renderLista(dados.itens);

@@ -25,7 +25,7 @@
 
   const CARDS = [
     { chave: "pedidos_aguardando_pagamento", titulo: "Aguardando pagamento", tipo: "int" },
-    { chave: "pedidos_pagos_aguardando_envio", titulo: "Pagos aguardando envio", tipo: "int" },
+    { chave: "pedidos_pagos_aguardando_envio", titulo: "Pagos aguardando envio/retirada", tipo: "int" },
     { chave: "pedidos_enviados_hoje", titulo: "Enviados hoje", tipo: "int" },
     { chave: "faturamento_hoje", titulo: "Faturamento hoje", tipo: "moeda", destaque: true },
     { chave: "faturamento_mes", titulo: "Faturamento do mês", tipo: "moeda", destaque: true },
@@ -106,6 +106,7 @@
   async function carregar() {
     if (carregando) return;
     carregando = true;
+    ultimaAtualizacao.textContent = "Carregando indicadores...";
     try {
       const dados = await apiFetch("/api/painel/operacoes/dashboard");
       renderGrade(dados);

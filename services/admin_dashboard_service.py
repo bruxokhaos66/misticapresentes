@@ -43,8 +43,6 @@ def _somar(conn, sql: str, params: tuple = ()) -> float:
 
 def _calcular_kpis(conn) -> dict:
     hoje = _hoje_str()
-    hoje_like = f"{hoje}%"
-    mes_like = f"{_mes_str()}%"
 
     aguardando_pagamento = _contar(
         conn,
@@ -128,16 +126,12 @@ def _calcular_kpis(conn) -> dict:
         (_mes_str(),),
     )
 
-    campanhas_ativas = _contar(
-        conn,
-        """
-        SELECT COUNT(*) FROM campanhas
-         WHERE COALESCE(ativo,1)=1
-           AND (data_inicio IS NULL OR data_inicio='' OR data_inicio<=?)
-           AND (data_fim IS NULL OR data_fim='' OR data_fim>=?)
-        """,
-        (hoje, hoje),
-    )
+    # Mesmo critério de vigência já usado por backend/campaign_routes.py
+    # (listar_campanhas_ativas, a rota pública consumida pelo site) --
+    # reaproveitado aqui em vez de duplicar a comparação de datas.
+    from backend.campaign_routes import listar_campanhas_ativas
+
+    campanhas_ativas = len(listar_campanhas_ativas())
 
     return {
         "gerado_em": datetime.now().isoformat(timespec="seconds"),
@@ -166,7 +160,7 @@ def _montar_alertas(kpis: dict) -> list[dict]:
     if kpis["pedidos_aguardando_pagamento"] > 0:
         alertas.append({"tipo": "pedidos_aguardando_pagamento", "nivel": "info", "mensagem": f"{kpis['pedidos_aguardando_pagamento']} pedido(s) aguardando pagamento."})
     if kpis["pedidos_pagos_aguardando_envio"] > 0:
-        alertas.append({"tipo": "pedidos_aguardando_envio", "nivel": "atencao", "mensagem": f"{kpis['pedidos_pagos_aguardando_envio']} pedido(s) pagos aguardando envio."})
+        alertas.append({"tipo": "pedidos_aguardando_envio", "nivel": "atencao", "mensagem": f"{kpis['pedidos_pagos_aguardando_envio']} pedido(s) pagos aguardando envio/retirada."})
     return alertas
 
 
