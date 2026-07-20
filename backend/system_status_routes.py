@@ -14,6 +14,7 @@ from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.database import conectar
 from backend.infra_diagnostics import banco_acessivel, diagnostico_disco_completo, escrita_disco_segura
 from backend.logging_config import get_logger
+from backend.order_observation_limits import instalar_limite_observacao_pedido
 from backend.order_product_lookup import instalar_busca_produto_persistido
 from backend.playlist_response_safety import instalar_resposta_segura_playlist
 from backend.product_code_integrity import instalar_integridade_codigo_produto
@@ -35,6 +36,11 @@ instalar_integridade_codigo_produto()
 # A playlist é pública, mas detalhes crus de falha do SQLite/ambiente pertencem
 # apenas aos logs internos. A resposta externa conserva somente um código curto.
 instalar_resposta_segura_playlist()
+
+# Observações administrativas entram no histórico e no registro principal do
+# pedido. O limite é aplicado antes de qualquer escrita para impedir payloads
+# excessivos e crescimento indevido de logs.
+instalar_limite_observacao_pedido()
 
 # main.py importa pedido_notificacao_routes antes deste módulo. O registro
 # tardio reaproveita o mesmo APIRouter administrativo já incluído pela API,
