@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; script-src 'self' https://sdk.mercadopago.com https://www.googletagmanager.com https://connect.facebook.net; style-src 'self' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://api.misticaesotericos.com.br https://*.mercadopago.com https://*.mercadopago.com.br https://www.google-analytics.com https://analytics.google.com https://www.googletagmanager.com https://www.facebook.com https://connect.facebook.net https://api.mercadolibre.com; frame-src https://www.youtube.com https://*.mercadopago.com https://*.mercadopago.com.br; worker-src 'self' blob:; manifest-src 'self'; media-src 'self' blob: https://api.misticaesotericos.com.br; upgrade-insecure-requests" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Centro de Operações — Mística Presentes</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="admin-operacoes.css" />
+</head>
+<body class="admin-operacoes-body">
+<header class="site-header">
+  <nav class="container nav">
+    <a class="brand" href="index.html" aria-label="Mística Presentes"><span class="brand-mark" aria-hidden="true">☾</span><span class="brand-copy"><strong>Mística Presentes</strong><small>Centro de Operações</small></span></a>
+    <div class="admin-operacoes-nav">
+      <a class="btn btn-small btn-ghost" href="admin.html">Painel geral</a>
+      <a class="btn btn-small btn-ghost" href="admin-pedidos.html">Pedidos</a>
+      <a class="btn btn-small btn-ghost" href="admin-homologacao.html">Homologação</a>
+    </div>
+  </nav>
+</header>
+
+<main class="container admin-operacoes-main">
+  <section id="loginPanelOperacoes" class="form-panel admin-operacoes-login">
+    <p class="eyebrow">Acesso restrito</p>
+    <h1>Entrar no Centro de Operações</h1>
+    <form id="loginFormOperacoes">
+      <label>Usuário<input id="loginUserOperacoes" type="text" autocomplete="username" required /></label>
+      <label>Senha<input id="loginSenhaOperacoes" type="password" autocomplete="current-password" required /></label>
+      <button class="btn btn-full" type="submit">Entrar</button>
+      <p id="loginStatusOperacoes" class="admin-operacoes-note" hidden></p>
+    </form>
+  </section>
+
+  <section id="painelOperacoes" hidden>
+    <div class="admin-operacoes-topbar">
+      <div>
+        <p class="eyebrow">Visão geral em tempo real</p>
+        <h1>Centro de Operações</h1>
+        <p id="ultimaAtualizacaoOperacoes" class="admin-operacoes-note">Última atualização: —</p>
+      </div>
+      <div class="admin-operacoes-top-actions">
+        <button id="btnAtualizarOperacoes" class="btn btn-small btn-ghost" type="button">Atualizar agora</button>
+        <button id="btnSairOperacoes" class="btn btn-small btn-ghost" type="button">Sair</button>
+      </div>
+    </div>
+
+    <section id="alertasOperacoes" class="admin-operacoes-alertas" aria-live="polite"></section>
+
+    <section id="gradeOperacoes" class="admin-operacoes-grade" aria-label="Indicadores operacionais" aria-live="polite"></section>
+  </section>
+</main>
+
+<script src="site-config.js"></script>
+<script src="admin-operacoes.js" defer></script>
+</body>
+</html>

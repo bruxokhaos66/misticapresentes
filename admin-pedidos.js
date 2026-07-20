@@ -38,6 +38,45 @@
   let pollTimer = null;
   let carregando = false;
   const operacoesEmAndamento = new Set();
+  let filtroRapidoEstado = null;
+
+  function inicioDoDia(offsetDias = 0) {
+    const data = new Date();
+    data.setDate(data.getDate() + offsetDias);
+    data.setHours(0, 0, 0, 0);
+    return data;
+  }
+
+  function fimDoDia(offsetDias = 0) {
+    const data = inicioDoDia(offsetDias);
+    data.setHours(23, 59, 59, 999);
+    return data;
+  }
+
+  function aplicarFiltroPeriodo(chave) {
+    const formatarDataInput = (data) => `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, "0")}-${String(data.getDate()).padStart(2, "0")}`;
+    const mapa = {
+      hoje: [inicioDoDia(0), fimDoDia(0)],
+      ontem: [inicioDoDia(-1), fimDoDia(-1)],
+      "7dias": [inicioDoDia(-6), fimDoDia(0)],
+      "30dias": [inicioDoDia(-29), fimDoDia(0)],
+    };
+    const [inicio, fim] = mapa[chave] || [];
+    filtros.inicio.value = inicio ? formatarDataInput(inicio) : "";
+    filtros.fim.value = fim ? formatarDataInput(fim) : "";
+  }
+
+  function pedidoAtendeFiltroRapido(pedido) {
+    if (!filtroRapidoEstado) return true;
+    const financeiro = String(pedido.status || "");
+    if (filtroRapidoEstado === "pendente") return financeiro === "Aguardando pagamento" || financeiro === "Pagamento divergente";
+    if (filtroRapidoEstado === "cancelado") return financeiro === "Cancelado" || pedido.status_pedido === "cancelado";
+    if (filtroRapidoEstado === "pago") return financeiro !== "Aguardando pagamento" && financeiro !== "Pagamento divergente" && financeiro !== "Cancelado";
+    if (filtroRapidoEstado === "enviado") return pedido.status_pedido === "enviado";
+    if (filtroRapidoEstado === "pix") return tipoPagamento(pedido) === "pix";
+    if (filtroRapidoEstado === "cartao") return tipoPagamento(pedido) === "credit_card" || tipoPagamento(pedido) === "debit_card";
+    return true;
+  }
 
   const ROTULOS_COMERCIAIS = {
     novo: "Novo",
@@ -137,7 +176,8 @@
         && (!filtros.comercial.value || String(pedido.status_pedido || "novo") === filtros.comercial.value)
         && (!filtros.novos.checked || !pedido.visualizado_admin_em)
         && (!inicio || (data && data >= inicio))
-        && (!fim || (data && data <= fim));
+        && (!fim || (data && data <= fim))
+        && pedidoAtendeFiltroRapido(pedido);
     }).sort((a, b) => {
       const da = dataPedido(a)?.getTime() || Number(a.id) || 0;
       const db = dataPedido(b)?.getTime() || Number(b.id) || 0;
@@ -416,8 +456,36 @@
   });
 
   Object.values(filtros).forEach((controle) => controle.addEventListener("input", renderizar));
+
+  document.querySelectorAll(".admin-pedido-chip[data-periodo]").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      const ativo = chip.classList.contains("ativo");
+      document.querySelectorAll(".admin-pedido-chip[data-periodo]").forEach((outro) => outro.classList.remove("ativo"));
+      if (ativo) {
+        filtros.inicio.value = "";
+        filtros.fim.value = "";
+      } else {
+        chip.classList.add("ativo");
+        aplicarFiltroPeriodo(chip.dataset.periodo);
+      }
+      renderizar();
+    });
+  });
+
+  document.querySelectorAll(".admin-pedido-chip[data-estado]").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      const ativo = chip.classList.contains("ativo");
+      document.querySelectorAll(".admin-pedido-chip[data-estado]").forEach((outro) => outro.classList.remove("ativo"));
+      filtroRapidoEstado = ativo ? null : chip.dataset.estado;
+      if (!ativo) chip.classList.add("ativo");
+      renderizar();
+    });
+  });
+
   document.getElementById("btnLimparFiltrosPedidos").addEventListener("click", () => {
     Object.values(filtros).forEach((controle) => { if (controle.type === "checkbox") controle.checked = false; else controle.value = ""; });
+    filtroRapidoEstado = null;
+    document.querySelectorAll(".admin-pedido-chip.ativo").forEach((chip) => chip.classList.remove("ativo"));
     renderizar();
   });
   document.getElementById("btnAtualizarPedidos").addEventListener("click", () => carregarPedidos());

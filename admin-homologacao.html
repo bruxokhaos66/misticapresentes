@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; script-src 'self' https://sdk.mercadopago.com https://www.googletagmanager.com https://connect.facebook.net; style-src 'self' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://api.misticaesotericos.com.br https://*.mercadopago.com https://*.mercadopago.com.br https://www.google-analytics.com https://analytics.google.com https://www.googletagmanager.com https://www.facebook.com https://connect.facebook.net https://api.mercadolibre.com; frame-src https://www.youtube.com https://*.mercadopago.com https://*.mercadopago.com.br; worker-src 'self' blob:; manifest-src 'self'; media-src 'self' blob: https://api.misticaesotericos.com.br; upgrade-insecure-requests" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Homologação — Mística Presentes</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="admin-operacoes.css" />
+  <link rel="stylesheet" href="admin-homologacao.css" />
+</head>
+<body class="admin-operacoes-body">
+<header class="site-header">
+  <nav class="container nav">
+    <a class="brand" href="index.html" aria-label="Mística Presentes"><span class="brand-mark" aria-hidden="true">☾</span><span class="brand-copy"><strong>Mística Presentes</strong><small>Homologação</small></span></a>
+    <div class="admin-operacoes-nav">
+      <a class="btn btn-small btn-ghost" href="admin.html">Painel geral</a>
+      <a class="btn btn-small btn-ghost" href="admin-operacoes.html">Centro de Operações</a>
+    </div>
+  </nav>
+</header>
+
+<main class="container admin-operacoes-main">
+  <section id="loginPanelHomolog" class="form-panel admin-operacoes-login">
+    <p class="eyebrow">Acesso restrito a administradores</p>
+    <h1>Entrar na Homologação</h1>
+    <form id="loginFormHomolog">
+      <label>Usuário<input id="loginUserHomolog" type="text" autocomplete="username" required /></label>
+      <label>Senha<input id="loginSenhaHomolog" type="password" autocomplete="current-password" required /></label>
+      <button class="btn btn-full" type="submit">Entrar</button>
+      <p id="loginStatusHomolog" class="admin-operacoes-note" hidden></p>
+    </form>
+  </section>
+
+  <section id="painelHomolog" hidden>
+    <div class="admin-operacoes-topbar">
+      <div>
+        <p class="eyebrow">Checklist técnico de homologação comercial</p>
+        <h1>Homologação</h1>
+        <p id="ultimaAtualizacaoHomolog" class="admin-operacoes-note">Última verificação: —</p>
+      </div>
+      <div class="admin-operacoes-top-actions">
+        <button id="btnAtualizarHomolog" class="btn btn-small btn-ghost" type="button">Verificar novamente</button>
+        <button id="btnSairHomolog" class="btn btn-small btn-ghost" type="button">Sair</button>
+      </div>
+    </div>
+
+    <p class="admin-operacoes-note">Itens marcados como <strong>Info</strong> exigem verificação manual (não são medidos automaticamente pelo backend) — nunca aparecem como aprovados sem checagem real.</p>
+
+    <section id="listaHomolog" class="admin-homologacao-lista" aria-label="Itens de homologação" aria-live="polite"></section>
+  </section>
+</main>
+
+<script src="site-config.js"></script>
+<script src="admin-homologacao.js" defer></script>
+</body>
+</html>
