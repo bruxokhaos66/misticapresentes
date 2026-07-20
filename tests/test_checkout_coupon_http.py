@@ -10,10 +10,10 @@ from fastapi.testclient import TestClient
 from backend.database import conectar
 
 
-TEST_API_KEY = os.environ.get("MISTICA_SITE_API_KEY") or ("test-" + "api-key")
+TEST_API_KEY = "test-api-key"  # pragma: allowlist secret
 os.environ["MISTICA_SITE_API_KEY"] = TEST_API_KEY
 os.environ["MISTICA_SYNC_KEY"] = TEST_API_KEY
-os.environ.setdefault("MISTICA_PIX_KEY", "checkout-coupon" + "@example.invalid")
+os.environ.setdefault("MISTICA_PIX_KEY", "checkout-coupon@example.com")  # pragma: allowlist secret
 
 main = importlib.import_module("backend.main")
 client = TestClient(main.app)
