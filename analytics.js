@@ -68,3 +68,16 @@
     });
   }
 })();
+
+// Recuperação do checkout Pix é um módulo funcional independente de analytics.
+// Este arquivo já é carregado antes de app.js/mobile-sync.js em todas as páginas
+// comerciais; o loader local preserva a CSP ('self') e o módulo aguarda a API
+// window.misticaCriarPedido existir antes de instalar a proteção.
+(() => {
+  if (document.querySelector('script[data-checkout-pix-recovery]')) return;
+  const script = document.createElement("script");
+  script.src = "checkout-pix-recovery.js?v=20260720-homologacao-pr3";
+  script.defer = true;
+  script.dataset.checkoutPixRecovery = "1";
+  document.head.appendChild(script);
+})();
