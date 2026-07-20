@@ -15,6 +15,7 @@ from backend.database import conectar
 from backend.infra_diagnostics import banco_acessivel, diagnostico_disco_completo, escrita_disco_segura
 from backend.logging_config import get_logger
 from backend.order_product_lookup import instalar_busca_produto_persistido
+from backend.playlist_response_safety import instalar_resposta_segura_playlist
 from backend.product_code_integrity import instalar_integridade_codigo_produto
 from config import API_URL, DB_PATH, OFFICIAL_DOMAIN, SERVER_URL
 from database.backup import backup_habilitado
@@ -30,6 +31,10 @@ instalar_busca_produto_persistido()
 # A instalação alinha a checagem da API a essa regra e converte uma eventual
 # corrida concorrente de INSERT/UPDATE em resposta HTTP 409 amigável.
 instalar_integridade_codigo_produto()
+
+# A playlist é pública, mas detalhes crus de falha do SQLite/ambiente pertencem
+# apenas aos logs internos. A resposta externa conserva somente um código curto.
+instalar_resposta_segura_playlist()
 
 # main.py importa pedido_notificacao_routes antes deste módulo. O registro
 # tardio reaproveita o mesmo APIRouter administrativo já incluído pela API,
