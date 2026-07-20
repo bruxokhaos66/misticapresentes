@@ -1,59 +1,138 @@
-// Regression notes for the public site production guard.
-// These tests are intentionally dependency-free so they can be ported to Playwright/Jest later.
-// Run in a browser-like test harness by loading app.js, mobile-sync.js and site-production-guard.js.
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const test = require("node:test");
+const vm = require("node:vm");
 
-const siteProductionGuardScenarios = [
-  {
-    name: "sale waits for API before clearing cart or changing stock",
-    steps: [
-      "Seed cart with one API-synchronized product.",
-      "Mock POST /api/vendas with 200 and a venda_id.",
-      "Click [data-generate-pix].",
-      "Expect cart to clear only after POST succeeds.",
-      "Expect stock not to be reduced locally before syncNow refreshes from API.",
-    ],
-  },
-  {
-    name: "sale API failure preserves cart and does not lower stock",
-    steps: [
-      "Seed cart with one API-synchronized product.",
-      "Mock POST /api/vendas with 500 or network error.",
-      "Click [data-generate-pix].",
-      "Expect cart to remain available for retry.",
-      "Expect local stock to remain unchanged.",
-      "Expect a misticaPendingOrders record for operator review.",
-    ],
-  },
-  {
-    name: "client data is not persisted locally in production",
-    steps: [
-      "Submit #clientForm with CPF, address and WhatsApp.",
-      "Mock POST /api/clientes success.",
-      "Expect localStorage.misticaClients to be absent.",
-      "Expect backup payload clients array to be empty.",
-    ],
-  },
-  {
-    name: "cancel and status updates require API confirmation",
-    steps: [
-      "Render history action buttons from mobile-sync.js.",
-      "Mock cancel/status endpoints as failed.",
-      "Click cancel/status.",
-      "Expect sale.status and stock to remain unchanged locally.",
-      "Mock endpoint success and retry.",
-      "Expect syncNow to be requested after confirmation.",
-    ],
-  },
-  {
-    name: "admin local writes are blocked on the public site",
-    steps: [
-      "Submit admin/product/supplier forms or export/backup buttons.",
-      "Expect the guard to stop propagation before legacy handlers run.",
-      "Expect message instructing use of authenticated Mística Painel/API.",
-    ],
-  },
-];
+const guardSource = fs.readFileSync(
+  path.join(__dirname, "..", "site-production-guard.js"),
+  "utf8",
+);
 
-if (typeof module !== "undefined") {
-  module.exports = { siteProductionGuardScenarios };
+function createHarness({ production = true, createOrder } = {}) {
+  const listeners = new Map();
+  const elements = new Map();
+  const statusElement = { id: "pixStatus", textContent: "", style: {} };
+  const pixButton = {
+    disabled: false,
+    attributes: {},
+    setAttribute(name, value) {
+      this.attributes[name] = value;
+    },
+  };
+  elements.set("pixStatus", statusElement);
+
+  const document = {
+    readyState: "complete",
+    querySelector(selector) {
+      if (selector === "[data-generate-pix]") return pixButton;
+      return null;
+    },
+    getElementById(id) {
+      return elements.get(id) || null;
+    },
+    addEventListener(type, callback) {
+      listeners.set(type, callback);
+    },
+  };
+
+  let scrubCalls = 0;
+  const window = {
+    misticaSiteConfig: production
+      ? { serverMode: "production", apiBaseUrl: "https://api.example.test/" }
+      : {},
+    misticaSecureStorage: {
+      removeForbiddenKeys() {
+        scrubCalls += 1;
+      },
+    },
+    misticaCatalogState: "ready",
+    misticaCriarPedido: createOrder,
+  };
+
+  const context = {
+    window,
+    document,
+    console,
+    cart: [{ id: 1, qty: 1, price: 10 }],
+    products: [{ id: 1, apiId: 101, codigo: "P-1" }],
+    clients: [{ nome: "Cliente" }],
+    sales: [{ id: 1 }],
+    suppliers: [{ id: 1 }],
+    getTotal: () => 10,
+    hasEnoughStockForCart: () => true,
+    setTimeout,
+    clearTimeout,
+    Promise,
+  };
+  context.globalThis = context;
+
+  vm.createContext(context);
+  vm.runInContext(guardSource, context, { filename: "site-production-guard.js" });
+
+  return {
+    context,
+    window,
+    statusElement,
+    pixButton,
+    get scrubCalls() {
+      return scrubCalls;
+    },
+  };
 }
+
+test("guard de produção instala limpeza e remove coleções locais sensíveis", () => {
+  const harness = createHarness({ production: true });
+
+  assert.equal(harness.window.misticaProductionGuard.enabled, true);
+  assert.equal(harness.window.misticaProductionGuard.apiBase, "https://api.example.test");
+  assert.equal(harness.scrubCalls, 1);
+  assert.equal(harness.context.clients.length, 0);
+  assert.equal(harness.context.sales.length, 0);
+  assert.equal(harness.context.suppliers.length, 0);
+});
+
+test("guard não é instalado fora do modo de produção", () => {
+  const harness = createHarness({ production: false });
+
+  assert.equal(harness.window.misticaProductionGuard, undefined);
+  assert.equal(harness.scrubCalls, 0);
+  assert.equal(harness.context.cart.length, 1);
+});
+
+test("falha ao gerar Pix preserva carrinho e libera o botão", async () => {
+  const harness = createHarness({
+    production: true,
+    createOrder: async () => {
+      throw new Error("falha temporária");
+    },
+  });
+  const event = {
+    preventDefault() {},
+    stopImmediatePropagation() {},
+  };
+
+  await harness.window.misticaProductionGuard.checkout(event);
+
+  assert.equal(harness.context.cart.length, 1);
+  assert.equal(harness.window.misticaProductionGuard.pendingOrderId, null);
+  assert.equal(harness.pixButton.disabled, false);
+  assert.match(harness.statusElement.textContent, /falha temporária/i);
+});
+
+test("Pix válido mantém carrinho e registra pedido somente em memória", async () => {
+  const harness = createHarness({
+    production: true,
+    createOrder: async () => ({ id: 42, pixPayload: "000201", pixInfo: {} }),
+  });
+  const event = {
+    preventDefault() {},
+    stopImmediatePropagation() {},
+  };
+
+  await harness.window.misticaProductionGuard.checkout(event);
+
+  assert.equal(harness.context.cart.length, 1);
+  assert.equal(harness.window.misticaProductionGuard.pendingOrderId, 42);
+  assert.match(harness.statusElement.textContent, /pedido #42 criado/i);
+});
