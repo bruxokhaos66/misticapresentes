@@ -14,10 +14,16 @@ from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.database import conectar
 from backend.infra_diagnostics import banco_acessivel, diagnostico_disco_completo, escrita_disco_segura
 from backend.logging_config import get_logger
+from backend.order_product_lookup import instalar_busca_produto_persistido
 from config import API_URL, DB_PATH, OFFICIAL_DOMAIN, SERVER_URL
 from database.backup import backup_habilitado
 
 logger = get_logger(__name__)
+
+# A flag produtos.ativo controla somente novas vendas. Pedidos já persistidos
+# precisam continuar localizando o produto para baixa ou reposição de estoque,
+# mesmo que ele seja inativado depois da criação do pedido.
+instalar_busca_produto_persistido()
 
 # main.py importa pedido_notificacao_routes antes deste módulo. O registro
 # tardio reaproveita o mesmo APIRouter administrativo já incluído pela API,
