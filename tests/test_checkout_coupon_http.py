@@ -103,7 +103,7 @@ def test_checkout_aplica_desconto_fixo_do_banco_e_ignora_valores_do_cliente():
     assert data["subtotal"] == 50.0
     assert data["desconto"] == 12.5
     assert data["total_final"] == 37.5
-    assert data["cupom"] == cupom
+    assert data["cupom"] == cupom.upper()
     assert data["frete_gratis"] is False
 
 
@@ -118,5 +118,5 @@ def test_checkout_frete_gratis_nao_reduz_valor_dos_produtos():
     assert data["subtotal"] == 80.0
     assert data["desconto"] == 0.0
     assert data["total_final"] == 80.0
-    assert data["cupom"] == cupom
+    assert data["cupom"] == cupom.upper()
     assert data["frete_gratis"] is True
