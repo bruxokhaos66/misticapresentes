@@ -71,6 +71,35 @@ def test_desconto_fixo_nunca_ultrapassa_subtotal():
         conn.close()
 
 
+def test_desconto_percentual_calcula_e_arredonda_corretamente():
+    conn = _conexao()
+    try:
+        _inserir_campanha(conn, codigo="PERC15", tipo="desconto_percentual", valor=15)
+        campanha = buscar_cupom_ativo(conn, "perc15")
+
+        assert campanha is not None
+        # 15% de 33.33 = 4.9995, que deve arredondar para 5.00 (ROUND_HALF_UP).
+        resultado = calcular_desconto_cupom(campanha, subtotal=33.33)
+        assert resultado["desconto"] == 5.0
+        assert resultado["frete_gratis"] is False
+    finally:
+        conn.close()
+
+
+def test_desconto_percentual_nunca_ultrapassa_subtotal():
+    conn = _conexao()
+    try:
+        _inserir_campanha(conn, codigo="PERC120", tipo="desconto_percentual", valor=120)
+        campanha = buscar_cupom_ativo(conn, "perc120")
+
+        assert campanha is not None
+        resultado = calcular_desconto_cupom(campanha, subtotal=40)
+        # 120% de 40 seria 48, mas o desconto nunca pode ultrapassar o subtotal.
+        assert resultado["desconto"] == 40.0
+    finally:
+        conn.close()
+
+
 def test_frete_gratis_nao_altera_subtotal():
     conn = _conexao()
     try:
