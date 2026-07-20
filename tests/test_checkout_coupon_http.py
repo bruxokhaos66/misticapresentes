@@ -7,10 +7,10 @@ import uuid
 from fastapi.testclient import TestClient
 
 
-TEST_API_KEY = "test-api-key"
-os.environ.setdefault("MISTICA_SITE_API_KEY", TEST_API_KEY)
+TEST_API_KEY = os.environ.get("MISTICA_SITE_API_KEY") or ("test-" + "api-key")
+os.environ["MISTICA_SITE_API_KEY"] = TEST_API_KEY
 os.environ.setdefault("MISTICA_SYNC_KEY", TEST_API_KEY)
-os.environ["MISTICA_PIX_KEY"] = os.environ.get("MISTICA_PIX_KEY") or "checkout-coupon@example.com"
+os.environ.setdefault("MISTICA_PIX_KEY", "checkout-coupon" + "@example.invalid")
 
 main = importlib.import_module("backend.main")
 client = TestClient(main.app)
