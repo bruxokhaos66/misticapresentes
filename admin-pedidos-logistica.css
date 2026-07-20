@@ -48,7 +48,7 @@
   min-width: 0;
 }
 
-.admin-logistica-campo:has(textarea),
+.admin-logistica-campo-largo,
 .admin-logistica-aviso,
 .admin-logistica-status,
 .admin-logistica-form .btn {
@@ -64,7 +64,7 @@
     grid-template-columns: 1fr;
   }
 
-  .admin-logistica-campo:has(textarea),
+  .admin-logistica-campo-largo,
   .admin-logistica-aviso,
   .admin-logistica-status,
   .admin-logistica-form .btn {
