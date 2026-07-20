@@ -94,6 +94,73 @@ def test_checkout_bloqueia_quantidade_acima_do_estoque():
     assert "estoque insuficiente" in response.json()["detail"].lower()
 
 
+def test_checkout_rejeita_produto_inexistente():
+    payload = {
+        "cliente": "Cliente teste",
+        "itens": [
+            {
+                "produto_id": 999999999,
+                "codigo_p": codigo_unico("INEXISTENTE"),
+                "quantidade": 1,
+                "valor_unitario": 0.01,
+                "valor_total": 0.01,
+            }
+        ],
+        "subtotal": 0.01,
+        "total_final": 0.01,
+    }
+    headers = {"X-Forwarded-For": f"198.51.100.{int(uuid.uuid4().hex[:2], 16) or 1}"}
+    response = client.post("/api/checkout/pedidos", json=payload, headers=headers)
+
+    assert response.status_code == 404
+    assert "não encontrado" in response.json()["detail"].lower()
+
+
+def test_checkout_rejeita_quantidade_zero_ou_negativa():
+    produto = criar_produto(preco=15.0, quantidade=5)
+    for quantidade_invalida in (0, -1):
+        payload = {
+            "cliente": "Cliente teste",
+            "itens": [
+                {
+                    "produto_id": produto["id"],
+                    "codigo_p": produto["codigo_p"],
+                    "quantidade": quantidade_invalida,
+                    "valor_unitario": 0.01,
+                    "valor_total": 0.01,
+                }
+            ],
+            "subtotal": 0.01,
+            "total_final": 0.01,
+        }
+        headers = {"X-Forwarded-For": f"198.51.100.{int(uuid.uuid4().hex[:2], 16) or 1}"}
+        response = client.post("/api/checkout/pedidos", json=payload, headers=headers)
+        assert response.status_code == 422, response.text
+
+
+def test_checkout_rejeita_preco_e_valores_negativos_enviados_pelo_cliente():
+    produto = criar_produto(preco=15.0, quantidade=5)
+    payload = {
+        "cliente": "Cliente teste",
+        "itens": [
+            {
+                "produto_id": produto["id"],
+                "codigo_p": produto["codigo_p"],
+                "quantidade": 1,
+                "valor_unitario": -15.0,
+                "valor_total": -15.0,
+            }
+        ],
+        "subtotal": -15.0,
+        "desconto": -5.0,
+        "total_final": -20.0,
+    }
+    headers = {"X-Forwarded-For": f"198.51.100.{int(uuid.uuid4().hex[:2], 16) or 1}"}
+    response = client.post("/api/checkout/pedidos", json=payload, headers=headers)
+
+    assert response.status_code == 422
+
+
 def test_checkout_rejeita_cupom_inexistente_sem_aplicar_desconto_enviado():
     produto = criar_produto(preco=50.0, quantidade=2)
 

@@ -107,6 +107,22 @@ def test_checkout_aplica_desconto_fixo_do_banco_e_ignora_valores_do_cliente():
     assert data["frete_gratis"] is False
 
 
+def test_checkout_aplica_desconto_percentual_do_banco_e_ignora_desconto_adulterado():
+    produto = _criar_produto(preco=200.0)
+    cupom = _criar_campanha(tipo="desconto_percentual", valor=25)
+
+    response = _checkout(produto, cupom)
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["subtotal"] == 200.0
+    # 25% de 200.0 calculado pelo backend; o payload enviou desconto=9999.0.
+    assert data["desconto"] == 50.0
+    assert data["total_final"] == 150.0
+    assert data["cupom"] == cupom.upper()
+    assert data["frete_gratis"] is False
+
+
 def test_checkout_frete_gratis_nao_reduz_valor_dos_produtos():
     produto = _criar_produto(preco=80.0)
     cupom = _criar_campanha(tipo="frete_gratis", valor=0)
