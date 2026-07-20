@@ -1,0 +1,114 @@
+name: Aplicar correção homologação PR 1
+
+on:
+  push:
+    branches:
+      - fix/homologacao-financeiro-estoque
+
+permissions:
+  contents: write
+
+jobs:
+  aplicar-e-validar:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/homologacao-financeiro-estoque
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Aplicar patch mínimo e testes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          alvo = Path('backend/order_status_routes.py')
+          texto = alvo.read_text(encoding='utf-8')
+          substituicoes = {
+              'SELECT id, codigo_p, nome, quantidade FROM produtos WHERE codigo_p=? AND COALESCE(ativo,1)=1':
+                  'SELECT id, codigo_p, nome, quantidade FROM produtos WHERE codigo_p=?',
+              'SELECT id, codigo_p, nome, quantidade FROM produtos WHERE id=? AND COALESCE(ativo,1)=1':
+                  'SELECT id, codigo_p, nome, quantidade FROM produtos WHERE id=?',
+              'SELECT id, codigo_p, nome, quantidade FROM produtos WHERE lower(trim(nome))=lower(trim(?)) AND COALESCE(ativo,1)=1':
+                  'SELECT id, codigo_p, nome, quantidade FROM produtos WHERE lower(trim(nome))=lower(trim(?))',
+          }
+          for antigo, novo in substituicoes.items():
+              if antigo not in texto:
+                  raise SystemExit(f'Trecho esperado não encontrado: {antigo}')
+              texto = texto.replace(antigo, novo, 1)
+
+          marcador = 'def buscar_produto_para_baixa(conn, item):\n'
+          comentario = '''def buscar_produto_para_baixa(conn, item):\n    """Localiza o produto autoritativo de um item de pedido já persistido.\n\n    Não filtra ``ativo``: inativar um produto impede novas vendas, mas não pode\n    apagar a referência necessária para concluir, cancelar ou repor estoque de\n    pedidos criados anteriormente. A identidade continua sendo resolvida por\n    código/ID e, apenas como compatibilidade legada, por nome.\n    """\n'''
+          if marcador not in texto:
+              raise SystemExit('Função buscar_produto_para_baixa não encontrada')
+          texto = texto.replace(marcador, comentario, 1)
+          alvo.write_text(texto, encoding='utf-8')
+
+          testes = Path('tests/test_pedido_encomenda_pagamento.py')
+          conteudo = testes.read_text(encoding='utf-8')
+          bloco = r'''
+
+# Homologação PR 1 — produto físico inativado após a criação do pedido.
+
+
+def test_produto_inativado_apos_pedido_ainda_pode_ser_baixado_na_confirmacao():
+    produto = criar_produto(sob_encomenda=False, quantidade=5)
+    pedido = _inserir_pedido_itens_direto([
+        (produto["codigo_p"], produto["nome"], 2, produto["custo"], produto["preco"], round(produto["preco"] * 2, 2), TIPO_ITEM_FISICO),
+    ])
+
+    with conectar() as conn:
+        conn.execute("UPDATE produtos SET ativo=0 WHERE id=?", (produto["id"],))
+        conn.commit()
+
+    resposta = confirmar(pedido["id"], pedido["total_final"])
+    assert resposta.status_code == 200, resposta.text
+    assert resposta.json()["confirmado"] is True
+    assert estoque(produto["id"]) == 3
+
+
+def test_produto_inativado_apos_baixa_ainda_pode_ser_reposto_no_cancelamento():
+    from backend.order_status_routes import baixar_estoque_do_pedido, repor_estoque_cancelamento
+
+    produto = criar_produto(sob_encomenda=False, quantidade=5)
+    pedido = _inserir_pedido_itens_direto([
+        (produto["codigo_p"], produto["nome"], 2, produto["custo"], produto["preco"], round(produto["preco"] * 2, 2), TIPO_ITEM_FISICO),
+    ])
+    agora = datetime.now().isoformat(timespec="seconds")
+
+    with conectar() as conn:
+        assert baixar_estoque_do_pedido(conn, pedido["id"], "Teste", agora) is True
+        conn.execute("UPDATE produtos SET ativo=0 WHERE id=?", (produto["id"],))
+        assert repor_estoque_cancelamento(conn, pedido["id"], "Teste", agora) is True
+        conn.commit()
+
+    assert estoque(produto["id"]) == 5
+'''
+          if 'test_produto_inativado_apos_pedido_ainda_pode_ser_baixado_na_confirmacao' not in conteudo:
+              testes.write_text(conteudo + bloco, encoding='utf-8')
+          PY
+
+      - name: Instalar dependências
+        run: python -m pip install -r requirements.txt
+
+      - name: Testes específicos
+        run: python -m pytest -q tests/test_pedido_encomenda_pagamento.py --tb=short
+
+      - name: Verificar diff
+        run: git diff --check
+
+      - name: Commitar correção validada
+        shell: bash
+        run: |
+          rm -f .github/workflows/homologacao-pr1-apply.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add backend/order_status_routes.py tests/test_pedido_encomenda_pagamento.py .github/workflows/homologacao-pr1-apply.yml
+          git commit -m 'fix(estoque): preserva pedidos quando produto é inativado'
+          git push origin HEAD:fix/homologacao-financeiro-estoque
