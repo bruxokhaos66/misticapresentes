@@ -3,8 +3,11 @@ from __future__ import annotations
 import importlib
 import os
 import uuid
+from datetime import datetime
 
 from fastapi.testclient import TestClient
+
+from backend.database import conectar
 
 
 TEST_API_KEY = os.environ.get("MISTICA_SITE_API_KEY") or ("test-" + "api-key")
@@ -38,18 +41,29 @@ def _criar_produto(*, preco: float = 50.0, quantidade: int = 3) -> dict:
 
 def _criar_campanha(*, tipo: str, valor: float) -> str:
     codigo = _codigo("CUPOM")
-    response = client.post(
-        "/api/campanhas",
-        json={
-            "titulo": f"Campanha {codigo}",
-            "tipo": tipo,
-            "valor": valor,
-            "codigo_cupom": codigo,
-            "ativo": True,
-        },
-        headers=HEADERS,
-    )
-    assert response.status_code == 200, response.text
+    agora = datetime.now().isoformat(timespec="seconds")
+    with conectar() as conn:
+        conn.execute(
+            """
+            INSERT INTO campanhas (
+                titulo, descricao, tipo, valor, codigo_cupom, ativo,
+                data_inicio, data_fim, criado_em, atualizado_em
+            ) VALUES (?,?,?,?,?,?,?,?,?,?)
+            """,
+            (
+                f"Campanha {codigo}",
+                "Teste HTTP de cupom",
+                tipo,
+                valor,
+                codigo,
+                1,
+                None,
+                None,
+                agora,
+                agora,
+            ),
+        )
+        conn.commit()
     return codigo
 
 
