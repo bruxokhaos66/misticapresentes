@@ -1,16 +1,17 @@
 name: Aplicar correção homologação PR 1
 
 on:
-  push:
+  pull_request:
     branches:
-      - fix/homologacao-financeiro-estoque
+      - main
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: write
 
 jobs:
   aplicar-e-validar:
-    if: github.actor != 'github-actions[bot]'
+    if: github.head_ref == 'fix/homologacao-financeiro-estoque' && github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
