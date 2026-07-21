@@ -82,10 +82,12 @@ def _chave_interna() -> str:
 
 
 class EnderecoCobrancaIn(BaseModel):
-    """Endereço de cobrança do cartão -- só enriquece o sinal de risco do
-    Mercado Pago (additional_info.payer.address); nunca é persistido (ver
-    _resolver_endereco_cobranca), nunca bloqueia a cobrança se ausente
-    (compatibilidade com integrações/testes que não enviam este campo)."""
+    """Endereço de cobrança do cartão -- enviado em payer.address (ver
+    backend/mercadopago_client.py::criar_pagamento_cartao para a fonte
+    oficial que confirma esse campo, não additional_info.payer.address);
+    nunca é persistido (ver _resolver_endereco_cobranca), nunca bloqueia a
+    cobrança se ausente (compatibilidade com integrações/testes que não
+    enviam este campo)."""
 
     usar_mesmo_da_entrega: bool = True
     cep: Optional[str] = Field(default=None, max_length=12)
@@ -195,16 +197,17 @@ def _cooldown_alto_risco_restante(conn, pedido_id: int, agora: str) -> int:
 
 
 def _resolver_endereco_cobranca(pedido, endereco: Optional[EnderecoCobrancaIn]) -> Optional[dict]:
-    """Monta additional_info.payer.address -- ÚNICOS campos documentados pela
-    API do Mercado Pago para endereço do pagador (zip_code/street_name/
-    street_number/neighborhood/city/federal_unit; ver payer.address na
-    referência oficial de POST /v1/payments), nunca inventa propriedade nova
-    nem duplica o mesmo dado em payer.address e additional_info ao mesmo
-    tempo. 'Usar o mesmo endereço da entrega' só é aceito quando o pedido é
-    de fato de entrega e já tem endereço gravado (pedidos.endereco_*, Fase 3
-    -- PR #386); do contrário, exige os campos explícitos desta requisição.
-    Nunca persiste o endereço de cobrança em nenhuma tabela -- ele só existe
-    na memória do processo pelo tempo desta requisição."""
+    """Monta o dict devolvido a criar_pagamento_cartao(billing_address=...),
+    que o coloca em payer.address -- ÚNICOS campos documentados pelos SDKs
+    oficiais do Mercado Pago para o endereço completo do pagador
+    (zip_code/street_name/street_number/neighborhood/city/federal_unit; ver
+    a fonte primária citada em backend/mercadopago_client.py::
+    criar_pagamento_cartao), nunca inventa propriedade nova. 'Usar o mesmo
+    endereço da entrega' só é aceito quando o pedido é de fato de entrega e
+    já tem endereço gravado (pedidos.endereco_*, Fase 3 -- PR #386); do
+    contrário, exige os campos explícitos desta requisição. Nunca persiste o
+    endereço de cobrança em nenhuma tabela -- ele só existe na memória do
+    processo pelo tempo desta requisição."""
     if endereco is None:
         return None
     forma_recebimento = str(pedido["forma_recebimento"] or "")

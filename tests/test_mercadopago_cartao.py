@@ -9,6 +9,7 @@ pode gerar cobrança real.
 import importlib
 import os
 import uuid
+from datetime import datetime, timedelta
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -651,9 +652,10 @@ def test_cenario_oficial_OTHE_simula_recusa_esperada_do_cartao_de_teste():
 
 
 # ---------------------------------------------------------------------------
-# Endereço de cobrança (reformulação do checkout): additional_info.payer.
-# address -- só os campos documentados pela API do Mercado Pago, nunca
-# persistido em nenhuma tabela. Ver backend/mercadopago_routes.py::
+# Endereço de cobrança (reformulação do checkout): payer.address -- só os
+# campos documentados pelos SDKs oficiais do Mercado Pago (ver a fonte
+# primária citada em backend/mercadopago_client.py::criar_pagamento_cartao),
+# nunca persistido em nenhuma tabela. Ver backend/mercadopago_routes.py::
 # _resolver_endereco_cobranca.
 # ---------------------------------------------------------------------------
 
@@ -712,7 +714,7 @@ def test_endereco_cobranca_reaproveita_endereco_de_entrega_quando_marcado():
 
 def test_endereco_cobranca_reaproveitar_entrega_ignorado_quando_pedido_e_retirada():
     """'Usar o mesmo endereço da entrega' não faz sentido para retirada (não
-    há endereço de entrega gravado) -- nenhum additional_info é enviado,
+    há endereço de entrega gravado) -- nenhum payer.address é enviado,
     nunca inventa um endereço."""
     pedido = criar_pedido_publico(65.0)
     aprovado = resultado_mp(pedido, status="approved")
@@ -728,10 +730,10 @@ def test_endereco_cobranca_reaproveitar_entrega_ignorado_quando_pedido_e_retirad
     assert kwargs["billing_address"] is None
 
 
-def test_endereco_cobranca_ausente_nao_envia_additional_info():
+def test_endereco_cobranca_ausente_nao_envia_endereco():
     """Compatibilidade: chamadores que nunca enviam endereco_cobranca (ex.:
     todos os outros testes deste arquivo) continuam funcionando exatamente
-    como antes -- billing_address é None, nenhum additional_info é montado."""
+    como antes -- billing_address é None, payer.address nunca é montado."""
     pedido = criar_pedido_publico(65.0)
     aprovado = resultado_mp(pedido, status="approved")
     mocks = []
@@ -759,11 +761,19 @@ def test_endereco_cobranca_cep_invalido_e_rejeitado():
     assert resposta.status_code == 422
 
 
-def test_billing_address_no_client_mercadopago_usa_additional_info_payer_address():
+def test_billing_address_no_client_mercadopago_usa_payer_address():
     """Confirma o formato exato do payload enviado ao Mercado Pago (única
-    integração real testada: mercadopago_client.criar_pagamento_cartao),
-    nunca payer.address (reservado a outros meios de pagamento) e nunca uma
-    propriedade fora das documentadas pela API."""
+    integração real testada: mercadopago_client.criar_pagamento_cartao) --
+    payer.address, com só os campos documentados pelos SDKs oficiais do
+    Mercado Pago (mercadopago/sdk-nodejs::PayerRequest.address/AddressRequest
+    e mercadopago/sdk-dotnet::PaymentPayerRequest.Address/
+    PaymentPayerAddressRequest, confirmados por clone direto do GitHub nesta
+    revisão de homologação -- ver a fonte primária citada em
+    backend/mercadopago_client.py::criar_pagamento_cartao). NUNCA
+    additional_info.payer.address (schema reduzido nos mesmos SDKs, sem
+    neighborhood/city/federal_unit -- destino errado usado numa versão
+    anterior desta integração, corrigido nesta revisão) e nunca uma
+    propriedade fora das documentadas."""
     import httpx
 
     from backend.mercadopago_client import criar_pagamento_cartao
@@ -788,10 +798,10 @@ def test_billing_address_no_client_mercadopago_usa_additional_info_payer_address
             external_reference="1", description="Pedido #1",
             billing_address={"zip_code": "89870000", "street_name": "Rua X", "street_number": "1", "neighborhood": "Centro", "city": "Pinhalzinho", "federal_unit": "SC"},
         )
-    assert capturado["json"]["additional_info"] == {
-        "payer": {"address": {"zip_code": "89870000", "street_name": "Rua X", "street_number": "1", "neighborhood": "Centro", "city": "Pinhalzinho", "federal_unit": "SC"}}
+    assert capturado["json"]["payer"]["address"] == {
+        "zip_code": "89870000", "street_name": "Rua X", "street_number": "1", "neighborhood": "Centro", "city": "Pinhalzinho", "federal_unit": "SC",
     }
-    assert "address" not in capturado["json"]["payer"]
+    assert "additional_info" not in capturado["json"]
 
 
 # ---------------------------------------------------------------------------
@@ -838,3 +848,66 @@ def test_cooldown_alto_risco_nao_se_aplica_a_recusa_comum():
     r2 = pagar_cartao(pedido, aprovado)
     assert r2.status_code == 200
     assert r2.json()["status"] == "aprovado"
+
+
+def test_cooldown_alto_risco_expira_apos_a_janela():
+    """O cooldown nunca é permanente: passado COOLDOWN_ALTO_RISCO_SEGUNDOS,
+    uma nova tentativa é aceita normalmente. Simula a passagem do tempo
+    reescrevendo tentativas_pagamento.atualizado_em diretamente (mesmo
+    campo que _cooldown_alto_risco_restante lê), sem depender de esperar de
+    verdade na suíte."""
+    from backend.database import conectar as conectar_backend
+    from backend.mercadopago_routes import COOLDOWN_ALTO_RISCO_SEGUNDOS
+
+    pedido = criar_pedido_publico(45.0)
+    recusado = resultado_mp(pedido, status="rejected", status_detail="cc_rejected_high_risk", payment_id="")
+    r1 = pagar_cartao(pedido, recusado)
+    assert r1.status_code == 200
+
+    passado = (datetime.now() - timedelta(seconds=COOLDOWN_ALTO_RISCO_SEGUNDOS + 5)).isoformat(timespec="seconds")
+    with conectar_backend() as conn:
+        conn.execute(
+            "UPDATE tentativas_pagamento SET atualizado_em=? WHERE pedido_id=? AND provedor='mercadopago'",
+            (passado, pedido["id"]),
+        )
+        conn.commit()
+
+    aprovado = resultado_mp(pedido, status="approved", payment_id="mp-retry-apos-cooldown")
+    r2 = pagar_cartao(pedido, aprovado)
+    assert r2.status_code == 200
+    assert r2.json()["status"] == "aprovado"
+
+
+def test_cooldown_alto_risco_e_por_pedido_nunca_bloqueia_outro_pedido():
+    """A chave do cooldown é o pedido_id (tentativas_pagamento.pedido_id) --
+    uma recusa de alto risco no pedido A nunca bloqueia uma tentativa de
+    cartão no pedido B, mesmo que ambos aconteçam em sequência rápida."""
+    pedido_a = criar_pedido_publico(45.0)
+    pedido_b = criar_pedido_publico(45.0)
+
+    recusado = resultado_mp(pedido_a, status="rejected", status_detail="cc_rejected_high_risk", payment_id="")
+    r1 = pagar_cartao(pedido_a, recusado)
+    assert r1.status_code == 200
+
+    aprovado_b = resultado_mp(pedido_b, status="approved", payment_id="mp-pedido-b-aprovado")
+    r2 = pagar_cartao(pedido_b, aprovado_b)
+    assert r2.status_code == 200
+    assert r2.json()["status"] == "aprovado"
+
+
+def test_cooldown_alto_risco_nunca_bloqueia_pix():
+    """O cooldown é exclusivo da rota de cartão -- Pix continua confirmando
+    normalmente mesmo com uma recusa de alto risco recente no mesmo
+    pedido."""
+    pedido = criar_pedido_publico(45.0)
+    recusado = resultado_mp(pedido, status="rejected", status_detail="cc_rejected_high_risk", payment_id="")
+    r1 = pagar_cartao(pedido, recusado)
+    assert r1.status_code == 200
+
+    resposta_pix = client.post(
+        "/api/pagamentos",
+        json={"venda_id": pedido["id"], "forma": "Pix", "valor": pedido["total_final"], "status": "Confirmado"},
+        headers={**HEADERS, "X-Forwarded-For": ip_unico(), "Idempotency-Key": str(uuid.uuid4())},
+    )
+    assert resposta_pix.status_code == 200
+    assert resposta_pix.json()["status_conciliacao"] == "ok"

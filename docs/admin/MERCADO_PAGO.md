@@ -140,13 +140,34 @@ opcional (`backend/mercadopago_routes.py::EnderecoCobrancaIn`):
   entrega.
 - Nunca é persistido em nenhuma tabela — existe só na memória do processo
   pelo tempo da requisição (`_resolver_endereco_cobranca`).
-- Enviado ao Mercado Pago em `additional_info.payer.address` (campos
-  `zip_code`/`street_name`/`street_number`/`neighborhood`/`city`/
-  `federal_unit`, conforme a referência de `POST /v1/payments`) — nunca em
-  `payer.address` (reservado a outros meios de pagamento, ex. boleto), para
-  não duplicar o mesmo dado em dois lugares do payload. Ausente quando o
-  cliente não informa endereço de cobrança — comportamento idêntico ao
-  existente antes desta mudança (compatibilidade total).
+- Enviado ao Mercado Pago em **`payer.address`** (campos `zip_code`/
+  `street_name`/`street_number`/`neighborhood`/`city`/`federal_unit`) —
+  **nunca** em `additional_info.payer.address`, que nos SDKs oficiais é um
+  schema reduzido (só `zip_code`/`street_name`/`street_number`, sem
+  `neighborhood`/`city`/`federal_unit`) usado para dado comportamental do
+  pagador (par de `first_name`/`last_name`/`registration_date`), não para
+  endereço de cobrança completo.
+  - **Fonte primária** (revisão de homologação da PR #388 — a
+    documentação HTML oficial retornou 403 por bloqueio do proxy desta
+    sessão; confirmado por clone direto do GitHub dos dois SDKs oficiais do
+    próprio Mercado Pago): `mercadopago/sdk-nodejs`,
+    `src/clients/payment/create/types.ts` (`PayerRequest.address:
+    AddressRequest`, que estende `Address` com `neighborhood`/`city`/
+    `federal_unit`) e `src/clients/payment/commonTypes.ts`
+    (`PayerAdditionalInfo.address: Address`, sem esses três campos);
+    `mercadopago/sdk-dotnet`,
+    `src/MercadoPago/Client/Payment/PaymentPayerRequest.cs` (`Address:
+    PaymentPayerAddressRequest`) e
+    `PaymentAdditionalInfoPayerRequest.cs` (`Address: AddressRequest`,
+    base, sem os três campos extras).
+  - Uma versão anterior desta integração (primeiro commit da PR #388)
+    enviava para `additional_info.payer.address` — corrigido na revisão de
+    homologação após confirmação na fonte primária acima; ver
+    `tests/test_mercadopago_cartao.py::
+    test_billing_address_no_client_mercadopago_usa_payer_address`.
+- Ausente quando o cliente não informa endereço de cobrança —
+  comportamento idêntico ao existente antes desta mudança (compatibilidade
+  total).
 
 ## Mensagens amigáveis por status_detail + cooldown de alto risco
 
