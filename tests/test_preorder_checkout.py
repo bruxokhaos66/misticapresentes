@@ -39,6 +39,7 @@ def payload(produtos: list[tuple[dict, int]], *, ciente: bool = False) -> dict:
         "cliente": "Cliente teste encomenda",
         "telefone": "11999999999",
         "ciente_sob_encomenda": ciente,
+        "forma_recebimento": "retirada",
         "itens": [
             {
                 "produto_id": produto["id"],

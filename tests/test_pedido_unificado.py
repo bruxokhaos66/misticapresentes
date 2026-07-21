@@ -56,7 +56,7 @@ def criar_pedido_publico(preco: float, quantidade: int = 1) -> dict:
     produto = criar_produto(preco, quantidade=quantidade + 10)
     resposta = client.post(
         "/api/checkout/pedidos",
-        json={"cliente": "Cliente Unificação", "telefone": "5599999999999", "itens": [{"produto_id": produto["id"], "quantidade": quantidade}]},
+        json={"cliente": "Cliente Unificação", "telefone": "5599999999999", "forma_recebimento": "retirada", "itens": [{"produto_id": produto["id"], "quantidade": quantidade}]},
         headers={"X-Forwarded-For": ip_unico()},
     )
     assert resposta.status_code == 200, resposta.text

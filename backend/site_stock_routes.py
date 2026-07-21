@@ -9,11 +9,12 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.audit import registrar_auditoria
 from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.database import conectar, listar
+from backend.frete import PRAZO_ENTREGA_DIAS_UTEIS, UF_BRASIL, calcular_frete, normalizar_texto, normalizar_uf
 from backend.idempotency import (
     concluir_chave_idempotente,
     liberar_chave_idempotente,
@@ -22,6 +23,7 @@ from backend.idempotency import (
 from backend.logging_config import get_logger
 from backend.order_status_routes import MINUTOS_EXPIRACAO_PEDIDO_PENDENTE, STATUS_PEDIDO, TIPO_ITEM_FISICO
 from backend.panel_sessions import exigir_sessao_ou_chave_api
+from backend.pedido_comercial import FORMAS_RECEBIMENTO
 from backend.pix import gerar_pix_do_pedido
 from backend.rate_limit import _client_ip, limitar_requisicoes
 from config import DB_PATH
@@ -78,6 +80,71 @@ class VendaSiteIn(BaseModel):
     # cupom, o servidor busca a campanha vigente e recalcula o desconto.
     cupom: Optional[str] = None
     itens: list[ItemEstoqueSite] = Field(default_factory=list)
+
+    # Fase 3 — entrega ou retirada no checkout. Somente "retirada"/"entrega"
+    # são aceitos (nunca texto livre); None preserva o comportamento anterior
+    # para chamadores que ainda não migraram (ver VendaSiteIn usado fora do
+    # checkout público). frete/endereco_* NUNCA são aceitos do cliente para
+    # gravação: o servidor sempre recalcula o frete e ignora/zera o endereço
+    # quando a forma é "retirada" (ver registrar_venda_site).
+    forma_recebimento: Optional[str] = Field(default=None, max_length=20)
+    email: Optional[str] = Field(default=None, max_length=180)
+    endereco_cep: Optional[str] = Field(default=None, max_length=12)
+    endereco_rua: Optional[str] = Field(default=None, max_length=200)
+    endereco_numero: Optional[str] = Field(default=None, max_length=20)
+    endereco_complemento: Optional[str] = Field(default=None, max_length=120)
+    endereco_bairro: Optional[str] = Field(default=None, max_length=120)
+    endereco_cidade: Optional[str] = Field(default=None, max_length=120)
+    endereco_uf: Optional[str] = Field(default=None, max_length=8)
+
+    @field_validator("forma_recebimento")
+    @classmethod
+    def _validar_forma_recebimento(cls, valor):
+        if valor is None:
+            return None
+        normalizado = normalizar_texto(valor)
+        if normalizado not in FORMAS_RECEBIMENTO:
+            raise ValueError("forma_recebimento deve ser 'retirada' ou 'entrega'.")
+        return normalizado
+
+    @field_validator("endereco_uf")
+    @classmethod
+    def _validar_uf(cls, valor):
+        if valor is None or not str(valor).strip():
+            return None
+        uf = normalizar_uf(valor)
+        if uf not in UF_BRASIL:
+            raise ValueError("UF inválida.")
+        return uf
+
+    @field_validator("endereco_cep")
+    @classmethod
+    def _validar_cep(cls, valor):
+        if valor is None or not str(valor).strip():
+            return None
+        digitos = "".join(ch for ch in str(valor) if ch.isdigit())
+        if len(digitos) != 8:
+            raise ValueError("CEP inválido: informe 8 dígitos.")
+        return digitos
+
+    @model_validator(mode="after")
+    def _validar_endereco_para_entrega(self):
+        if self.forma_recebimento != "entrega":
+            return self
+        campos_obrigatorios = {
+            "endereco_cep": self.endereco_cep,
+            "endereco_rua": self.endereco_rua,
+            "endereco_numero": self.endereco_numero,
+            "endereco_bairro": self.endereco_bairro,
+            "endereco_cidade": self.endereco_cidade,
+            "endereco_uf": self.endereco_uf,
+        }
+        faltando = [campo for campo, valor in campos_obrigatorios.items() if not str(valor or "").strip()]
+        if faltando:
+            raise ValueError(
+                "Endereço incompleto para entrega: informe CEP, rua, número, bairro, cidade e UF."
+            )
+        return self
 
 
 class AcessoSiteIn(BaseModel):
@@ -293,6 +360,31 @@ def payload_idempotencia_venda(venda: VendaSiteIn) -> dict:
         "telefone": venda.telefone,
         "cupom": str(venda.cupom or "").strip().upper(),
         "itens": itens,
+        # Fase 3: pedidos com a mesma "assinatura" de carrinho mas modalidade
+        # ou endereço diferentes NUNCA podem colidir como o mesmo pedido
+        # idempotente (ex.: cliente aperta "voltar" e troca retirada por
+        # entrega, ou muda de cidade) — por isso entram no hash canônico.
+        "forma_recebimento": venda.forma_recebimento,
+        "endereco_cep": venda.endereco_cep,
+        "endereco_cidade": normalizar_texto(venda.endereco_cidade),
+        "endereco_uf": normalizar_uf(venda.endereco_uf) if venda.endereco_uf else None,
+        "endereco_normalizado": (
+            normalizar_texto(
+                " ".join(
+                    filter(
+                        None,
+                        [
+                            venda.endereco_rua,
+                            venda.endereco_numero,
+                            venda.endereco_complemento,
+                            venda.endereco_bairro,
+                        ],
+                    )
+                )
+            )
+            if venda.forma_recebimento == "entrega"
+            else None
+        ),
     }
 
 
@@ -351,23 +443,51 @@ def registrar_venda_site(
                     raise HTTPException(status_code=400, detail="Cupom inválido ou expirado.")
                 cupom_info = calcular_desconto_cupom(campanha, subtotal)
                 desconto = cupom_info["desconto"]
-            total_final = float(_centavos(subtotal - desconto))
+
+            # Fase 3 — entrega ou retirada: a modalidade e o endereço só são
+            # gravados como enviados pelo cliente quando a forma é "entrega".
+            # Para "retirada" (ou quando a modalidade não foi informada, caso
+            # de chamadores que ainda não migraram), o endereço é sempre
+            # ignorado/gravado como NULL — nunca aceito por engano do
+            # navegador (ver VendaSiteIn._validar_endereco_para_entrega, que
+            # já impede "entrega" sem endereço completo).
+            forma_recebimento = venda.forma_recebimento
+            frete_gratis = bool(cupom_info["frete_gratis"]) if cupom_info else False
+            if forma_recebimento == "entrega":
+                endereco_cep = venda.endereco_cep
+                endereco_rua = limitar_texto(venda.endereco_rua, 200) or None
+                endereco_numero = limitar_texto(venda.endereco_numero, 20) or None
+                endereco_complemento = limitar_texto(venda.endereco_complemento, 120) or None
+                endereco_bairro = limitar_texto(venda.endereco_bairro, 120) or None
+                endereco_cidade = limitar_texto(venda.endereco_cidade, 120) or None
+                endereco_uf = venda.endereco_uf
+            else:
+                endereco_cep = endereco_rua = endereco_numero = None
+                endereco_complemento = endereco_bairro = endereco_cidade = endereco_uf = None
+
+            frete = calcular_frete(forma_recebimento, endereco_cidade, endereco_uf, frete_gratis=frete_gratis)
+            total_final = float(_centavos(_centavos(subtotal) - _centavos(desconto) + _centavos(frete)))
+            email = limitar_texto(venda.email, 180) or None
 
             cur = conn.execute(
                 """
                 INSERT INTO pedidos (
-                    cliente, telefone, data_venda, subtotal, desconto, taxa, total_final,
+                    cliente, telefone, email, data_venda, subtotal, desconto, taxa, frete, total_final,
                     forma_pagamento, vendedor, status, data_iso, dia_operacional,
-                    origem, expira_em, cupom
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    origem, expira_em, cupom, forma_recebimento,
+                    endereco_cep, endereco_rua, endereco_numero, endereco_complemento,
+                    endereco_bairro, endereco_cidade, endereco_uf
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     venda.cliente,
                     telefone or None,
+                    email,
                     data_venda,
                     subtotal,
                     desconto,
                     0.0,
+                    frete,
                     total_final,
                     venda.forma_pagamento,
                     venda.vendedor,
@@ -377,6 +497,14 @@ def registrar_venda_site(
                     venda.origem,
                     expira_em,
                     codigo_cupom or None,
+                    forma_recebimento,
+                    endereco_cep,
+                    endereco_rua,
+                    endereco_numero,
+                    endereco_complemento,
+                    endereco_bairro,
+                    endereco_cidade,
+                    endereco_uf,
                 ),
             )
             venda_id = int(cur.lastrowid)
@@ -438,7 +566,10 @@ def registrar_venda_site(
                 "subtotal": subtotal,
                 "desconto": desconto,
                 "cupom": codigo_cupom or None,
-                "frete_gratis": bool(cupom_info["frete_gratis"]) if cupom_info else False,
+                "frete_gratis": frete_gratis,
+                "frete": frete,
+                "forma_recebimento": forma_recebimento,
+                "prazo_entrega_dias_uteis": PRAZO_ENTREGA_DIAS_UTEIS if forma_recebimento == "entrega" else None,
                 "total_final": total_final,
                 "estoque_baixado": venda.baixa_estoque,
                 "estoque_reservado": pedido_pendente and venda.baixa_estoque,

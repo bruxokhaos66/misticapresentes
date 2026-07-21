@@ -46,6 +46,7 @@ def criar_pedido(produto: dict, *, quantidade: int = 1, ciente: bool = False) ->
         json={
             "cliente": "Cliente ciclo",
             "ciente_sob_encomenda": ciente,
+            "forma_recebimento": "retirada",
             "itens": [
                 {
                     "produto_id": produto["id"],

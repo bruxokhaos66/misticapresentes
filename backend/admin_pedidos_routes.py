@@ -29,6 +29,14 @@ TRANSICOES_COMERCIAIS = {
     "cancelado": set(),
 }
 
+# Fase 3: "pronto_retirada" só existe para pedidos retirados na loja e
+# "enviado" só para pedidos com entrega — nunca o inverso (um pedido de
+# retirada não pode ser marcado como "enviado" nem um de entrega como
+# "pronto para retirada"). Estados sem exigência específica de modalidade
+# (novo/confirmado/em_preparacao/concluido/cancelado) não aparecem aqui.
+STATUS_EXCLUSIVO_RETIRADA = {"pronto_retirada"}
+STATUS_EXCLUSIVO_ENTREGA = {"enviado"}
+
 
 class StatusComercialIn(BaseModel):
     status_pedido: str = Field(min_length=1, max_length=40)
@@ -47,6 +55,8 @@ def _pedido_detalhado(conn, venda_id: int) -> dict:
         SELECT id, cliente, telefone, email, data_venda, data_iso, subtotal, desconto,
                taxa, frete, total_final, forma_pagamento, payment_type_id,
                payment_method_id, parcelas, status, status_pedido, forma_recebimento,
+               endereco_cep, endereco_rua, endereco_numero, endereco_complemento,
+               endereco_bairro, endereco_cidade, endereco_uf,
                codigo_rastreio, data_aprovacao, observacao_pedido,
                visualizado_admin_em, visualizado_admin_por
           FROM pedidos
@@ -133,7 +143,7 @@ def registrar_rotas_admin_pedidos() -> None:
 
         with conectar() as conn:
             pedido = conn.execute(
-                "SELECT id, status, status_pedido FROM pedidos WHERE id=?",
+                "SELECT id, status, status_pedido, forma_recebimento FROM pedidos WHERE id=?",
                 (venda_id,),
             ).fetchone()
             if not pedido:
@@ -152,6 +162,18 @@ def registrar_rotas_admin_pedidos() -> None:
                 raise HTTPException(
                     status_code=409,
                     detail=f"Não é permitido alterar a situação comercial de '{atual}' para '{destino}'.",
+                )
+
+            forma_recebimento = str(pedido["forma_recebimento"] or "").strip().lower()
+            if destino in STATUS_EXCLUSIVO_RETIRADA and forma_recebimento != "retirada":
+                raise HTTPException(
+                    status_code=409,
+                    detail="'Pronto para retirada' só se aplica a pedidos com retirada na loja.",
+                )
+            if destino in STATUS_EXCLUSIVO_ENTREGA and forma_recebimento != "entrega":
+                raise HTTPException(
+                    status_code=409,
+                    detail="'Enviado' só se aplica a pedidos com entrega.",
                 )
 
             # Cancelamento comercial não cancela, estorna ou aprova pagamento.

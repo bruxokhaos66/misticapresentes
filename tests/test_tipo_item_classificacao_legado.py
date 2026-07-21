@@ -162,7 +162,7 @@ def test_novo_pedido_encomenda_recebe_classificacao_explicita_nunca_ambigua():
     resposta = client.post(
         "/api/checkout/pedidos",
         headers={"X-Forwarded-For": ip_unico()},
-        json={"cliente": "Cliente", "ciente_sob_encomenda": True, "itens": [{"produto_id": produto["id"], "codigo_p": produto["codigo_p"], "quantidade": 1}]},
+        json={"cliente": "Cliente", "ciente_sob_encomenda": True, "forma_recebimento": "retirada", "itens": [{"produto_id": produto["id"], "codigo_p": produto["codigo_p"], "quantidade": 1}]},
     )
     assert resposta.status_code == 200, resposta.text
     with conectar() as conn:
@@ -352,6 +352,7 @@ def test_checkout_publico_ignora_tipo_item_enviado_pelo_cliente_para_produto_enc
         json={
             "cliente": "Cliente",
             "ciente_sob_encomenda": True,
+            "forma_recebimento": "retirada",
             "itens": [{"produto_id": produto["id"], "codigo_p": produto["codigo_p"], "quantidade": 1, "tipo_item": "fisico"}],
         },
     )

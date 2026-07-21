@@ -70,6 +70,7 @@ def _criar_campanha(*, tipo: str, valor: float) -> str:
 def _checkout(produto: dict, cupom: str):
     payload = {
         "cliente": "Cliente cupom HTTP",
+        "forma_recebimento": "retirada",
         "itens": [
             {
                 "produto_id": produto["id"],

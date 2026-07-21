@@ -83,7 +83,7 @@ def criar_pedido_encomenda(produto: dict, *, quantidade: int = 1) -> dict:
     resposta = client.post(
         "/api/checkout/pedidos",
         headers={"X-Forwarded-For": ip_unico()},
-        json={"cliente": "Cliente cancelamento encomenda", "ciente_sob_encomenda": True, "itens": [{"produto_id": produto["id"], "codigo_p": produto["codigo_p"], "quantidade": quantidade}]},
+        json={"cliente": "Cliente cancelamento encomenda", "ciente_sob_encomenda": True, "forma_recebimento": "retirada", "itens": [{"produto_id": produto["id"], "codigo_p": produto["codigo_p"], "quantidade": quantidade}]},
     )
     assert resposta.status_code == 200, resposta.text
     return resposta.json()

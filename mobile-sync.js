@@ -257,6 +257,7 @@
   // esperado para um Pix que realmente já venceu.
   const CHECKOUT_KEY_TTL_MS = 20 * 60 * 1000;
   let idempotencyKeyAtual = null;
+  let assinaturaAtual = null;
 
   function gerarIdempotencyKey() {
     if (window.crypto?.randomUUID) return window.crypto.randomUUID();
@@ -272,11 +273,22 @@
     return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
   }
 
-  function assinaturaCarrinho(itensPedido) {
-    return itensPedido
+  function assinaturaCarrinho(itensPedido, dadosEntrega) {
+    const itens = itensPedido
       .map(item => `${item.produto_id}:${item.quantidade}`)
       .sort()
       .join("|");
+    // Fase 3: a assinatura também depende da modalidade e do endereço —
+    // trocar retirada por entrega (ou mudar de cidade) para o MESMO carrinho
+    // nunca pode reutilizar a idempotency key de uma tentativa anterior.
+    const entrega = dadosEntrega || {};
+    const partesEntrega = [
+      entrega.forma_recebimento || "",
+      entrega.endereco_cep || "",
+      entrega.endereco_cidade || "",
+      entrega.endereco_uf || "",
+    ].join(":");
+    return `${itens}#${partesEntrega}`;
   }
 
   function lerChaveArmazenada() {
@@ -298,9 +310,10 @@
   // enviado. Reload da página e múltiplas abas com o mesmo carrinho
   // convergem para a mesma chave (localStorage é compartilhado entre abas da
   // mesma origem); um carrinho diferente sempre gera uma chave nova.
-  function idempotencyKeyParaItens(itensPedido) {
-    const signature = assinaturaCarrinho(itensPedido);
-    if (idempotencyKeyAtual) return idempotencyKeyAtual;
+  function idempotencyKeyParaItens(itensPedido, dadosEntrega) {
+    const signature = assinaturaCarrinho(itensPedido, dadosEntrega);
+    if (idempotencyKeyAtual && assinaturaAtual === signature) return idempotencyKeyAtual;
+    assinaturaAtual = signature;
 
     const armazenada = lerChaveArmazenada();
     if (armazenada && armazenada.signature === signature) {
@@ -314,6 +327,7 @@
 
   function reiniciarIdempotencyKey() {
     idempotencyKeyAtual = null;
+    assinaturaAtual = null;
     limparChaveArmazenada();
   }
 
@@ -324,6 +338,18 @@
     const cienteSobEncomenda = confirmarCondicoesEncomenda(itensCarrinho);
     const itensPedido = montarItensPedido(itensCarrinho);
     const dataIso = new Date().toISOString();
+
+    // Fase 3: a escolha entre retirada e entrega é obrigatória antes do
+    // pagamento — window.misticaEntrega é preenchido pela seção "Como você
+    // deseja receber seu pedido?" do checkout (checkout-entrega-retirada.js).
+    // O servidor também valida tudo isso de novo (nunca confia só no
+    // frontend), mas falhar cedo aqui evita uma chamada de rede inútil.
+    const dadosEntrega = window.misticaEntrega?.obterDadosParaPedido?.();
+    if (!dadosEntrega || !dadosEntrega.forma_recebimento) {
+      window.misticaEntrega?.focarSecaoRecebimento?.();
+      throw new Error("Escolha como deseja receber seu pedido: retirada na loja ou entrega no endereço.");
+    }
+
     const payload = {
       origem: "site",
       cliente: "Pedido site/celular",
@@ -337,11 +363,12 @@
       cupom: window.misticaCupomAtivo || null,
       ciente_sob_encomenda: cienteSobEncomenda,
       itens: itensPedido,
+      ...dadosEntrega,
     };
 
     const resposta = await api("/api/checkout/pedidos", {
       method: "POST",
-      headers: { "Idempotency-Key": idempotencyKeyParaItens(itensPedido) },
+      headers: { "Idempotency-Key": idempotencyKeyParaItens(itensPedido, dadosEntrega) },
       body: JSON.stringify(payload),
     });
 
@@ -368,6 +395,10 @@
       totalFinal: Number(resposta.total_final || 0),
       desconto: Number(resposta.desconto || 0),
       sobEncomenda: Boolean(resposta.sob_encomenda),
+      formaRecebimento: resposta.forma_recebimento || null,
+      frete: Number(resposta.frete || 0),
+      freteGratis: Boolean(resposta.frete_gratis),
+      prazoEntregaDiasUteis: resposta.prazo_entrega_dias_uteis || null,
     };
   }
 

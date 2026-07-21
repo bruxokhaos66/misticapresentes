@@ -108,6 +108,16 @@ async function prepararCheckoutComMock(page) {
   // nesta PR).
   await page.waitForFunction(() => !!window.misticaMercadoPagoCheckout && typeof window.misticaGetCart === "function");
 
+  // Fase 3: a escolha de modalidade é obrigatória antes de qualquer
+  // tentativa de pagamento (Pix ou cartão) — window.misticaEntrega.
+  // podeProsseguir() bloqueia garantirPedidoAtual() sem ela, mesmo com
+  // misticaCriarPedido sobrescrito abaixo. "Retirar na loja" mantém o foco
+  // deste arquivo na mecânica do CardForm (DOM/CSS), sem exigir endereço.
+  await page.locator('[data-recebimento-radio][value="retirada"]').evaluate((el) => {
+    el.checked = true;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+
   await page.evaluate(() => {
     window.misticaGetCart = () => [{ id: "produto-teste", qty: 1 }];
     window.misticaCriarPedido = async () => ({ id: 999, pixTxid: "txid-teste", totalFinal: 150.5 });

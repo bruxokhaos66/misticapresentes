@@ -41,6 +41,7 @@ def payload_checkout(produto: dict, quantidade: int = 1, *, ciente: bool = False
         "cliente": "Cliente teste acompanhamento",
         "telefone": "11988887777",
         "ciente_sob_encomenda": ciente,
+        "forma_recebimento": "retirada",
         "itens": [{"produto_id": produto["id"], "codigo_p": produto["codigo_p"], "quantidade": quantidade}],
     }
 

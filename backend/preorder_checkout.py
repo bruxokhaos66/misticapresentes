@@ -8,6 +8,7 @@ from fastapi import HTTPException, Request
 from backend.audit import registrar_auditoria
 from backend.campaign_routes import buscar_cupom_ativo, calcular_desconto_cupom
 from backend.database import conectar
+from backend.frete import PRAZO_ENTREGA_DIAS_UTEIS, calcular_frete
 from backend.idempotency import (
     concluir_chave_idempotente,
     liberar_chave_idempotente,
@@ -141,23 +142,48 @@ def registrar_checkout_publico(
                     raise HTTPException(status_code=400, detail="Cupom inválido ou expirado.")
                 cupom_info = calcular_desconto_cupom(campanha, float(subtotal))
                 desconto = float(cupom_info["desconto"])
-            total_final = float(_centavos(subtotal - _centavos(desconto)))
+
+            # Fase 3 — entrega ou retirada (mesma regra de site_stock_routes.py::
+            # registrar_venda_site, aplicada aqui porque o caminho sob encomenda
+            # tem seu próprio INSERT em pedidos): endereço só é gravado quando a
+            # forma é "entrega"; para "retirada" é sempre ignorado/NULL.
+            forma_recebimento = venda.forma_recebimento
+            frete_gratis = bool(cupom_info["frete_gratis"]) if cupom_info else False
+            if forma_recebimento == "entrega":
+                endereco_cep = venda.endereco_cep
+                endereco_rua = (venda.endereco_rua or "").strip()[:200] or None
+                endereco_numero = (venda.endereco_numero or "").strip()[:20] or None
+                endereco_complemento = (venda.endereco_complemento or "").strip()[:120] or None
+                endereco_bairro = (venda.endereco_bairro or "").strip()[:120] or None
+                endereco_cidade = (venda.endereco_cidade or "").strip()[:120] or None
+                endereco_uf = venda.endereco_uf
+            else:
+                endereco_cep = endereco_rua = endereco_numero = None
+                endereco_complemento = endereco_bairro = endereco_cidade = endereco_uf = None
+
+            frete = calcular_frete(forma_recebimento, endereco_cidade, endereco_uf, frete_gratis=frete_gratis)
+            total_final = float(_centavos(_centavos(subtotal) - _centavos(desconto) + _centavos(frete)))
+            email = (venda.email or "").strip()[:180] or None
 
             cur = conn.execute(
                 """
                 INSERT INTO pedidos (
-                    cliente, telefone, data_venda, subtotal, desconto, taxa, total_final,
+                    cliente, telefone, email, data_venda, subtotal, desconto, taxa, frete, total_final,
                     forma_pagamento, vendedor, status, data_iso, dia_operacional,
-                    origem, expira_em, cupom, estoque_baixado, estoque_reservado
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    origem, expira_em, cupom, estoque_baixado, estoque_reservado, forma_recebimento,
+                    endereco_cep, endereco_rua, endereco_numero, endereco_complemento,
+                    endereco_bairro, endereco_cidade, endereco_uf
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     venda.cliente,
                     telefone or None,
+                    email,
                     data_venda,
                     float(subtotal),
                     desconto,
                     0.0,
+                    frete,
                     total_final,
                     "Pix site/celular",
                     "Site/Celular",
@@ -169,6 +195,14 @@ def registrar_checkout_publico(
                     codigo_cupom or None,
                     0,
                     0,
+                    forma_recebimento,
+                    endereco_cep,
+                    endereco_rua,
+                    endereco_numero,
+                    endereco_complemento,
+                    endereco_bairro,
+                    endereco_cidade,
+                    endereco_uf,
                 ),
             )
             pedido_id = int(cur.lastrowid)
@@ -206,7 +240,10 @@ def registrar_checkout_publico(
                 "subtotal": float(subtotal),
                 "desconto": desconto,
                 "cupom": codigo_cupom or None,
-                "frete_gratis": bool(cupom_info["frete_gratis"]) if cupom_info else False,
+                "frete_gratis": frete_gratis,
+                "frete": frete,
+                "forma_recebimento": forma_recebimento,
+                "prazo_entrega_dias_uteis": PRAZO_ENTREGA_DIAS_UTEIS if forma_recebimento == "entrega" else None,
                 "total_final": total_final,
                 "estoque_baixado": False,
                 "estoque_reservado": False,

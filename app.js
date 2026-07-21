@@ -237,7 +237,7 @@ function renderProducts() { if (!productGrid) return; productGrid.innerHTML = pr
 function validateQuantity(rawQty, productId) { const qty = Number.parseInt(rawQty, 10); const available = getStock(productId); const inCart = cart.find(item => item.id === productId)?.qty || 0; if (!Number.isInteger(qty) || qty < 1) return { ok: false, message: "Informe uma quantidade inteira maior que zero." }; if (qty + inCart > available) return { ok: false, message: `Estoque insuficiente. Disponível: ${Math.max(available - inCart, 0)}.` }; return { ok: true, qty }; }
 function addToCart(productId) { const product = products.find(item => item.id === productId); if (!product) return; const qtyInput = document.getElementById(`qty-${safeId(productId)}`); const validation = validateQuantity(qtyInput.value, productId); if (!validation.ok) return setStatus(validation.message); const existing = cart.find(item => item.id === productId); const sob = Boolean(window.misticaEncomenda && window.misticaEncomenda.isSobEncomenda(product)); if (existing) { existing.qty += validation.qty; existing.sob = sob; } else cart.push({ id: product.id, name: product.name, price: product.price, qty: validation.qty, sob }); window.misticaResetIdempotencyKey?.(); resetGerarPixStateOnCartChange(); saveState(); renderCart(); renderProducts(); setStatus(`${product.name} adicionado ao carrinho.`); window.misticaTrack?.("add_to_cart", { currency: "BRL", value: product.price * validation.qty, items: [{ item_id: product.id, item_name: product.name, price: product.price, quantity: validation.qty }] }); }
 function removeFromCart(productId) { cart = cart.filter(item => item.id !== productId); window.misticaResetIdempotencyKey?.(); resetGerarPixStateOnCartChange(); saveState(); renderCart(); renderProducts(); }
-function clearCart() { cart = []; window.misticaCupomAtivo = null; window.misticaResetIdempotencyKey?.(); resetGerarPixStateOnCartChange(); const cupomInput = document.getElementById("cartCoupon"); if (cupomInput) cupomInput.value = ""; const cupomStatus = document.getElementById("couponStatus"); if (cupomStatus) cupomStatus.hidden = true; pixPayloadInput.value = ""; setStatus("Carrinho limpo. Adicione produtos para gerar um novo Pix."); clearQrCanvas(); pararAcompanhamentoPedido(); const el = reservaStatusEl(); if (el) { el.textContent = ""; el.hidden = true; } const statusEl = document.getElementById("pixPedidoStatus"); if (statusEl) statusEl.hidden = true; setCheckoutStep("carrinho"); saveState(); renderCart(); renderProducts(); }
+function clearCart() { cart = []; window.misticaCupomAtivo = null; window.misticaCupomEstimativa = null; window.misticaResetIdempotencyKey?.(); resetGerarPixStateOnCartChange(); const cupomInput = document.getElementById("cartCoupon"); if (cupomInput) cupomInput.value = ""; const cupomStatus = document.getElementById("couponStatus"); if (cupomStatus) cupomStatus.hidden = true; pixPayloadInput.value = ""; setStatus("Carrinho limpo. Adicione produtos para gerar um novo Pix."); clearQrCanvas(); pararAcompanhamentoPedido(); const el = reservaStatusEl(); if (el) { el.textContent = ""; el.hidden = true; } const statusEl = document.getElementById("pixPedidoStatus"); if (statusEl) statusEl.hidden = true; setCheckoutStep("carrinho"); saveState(); renderCart(); renderProducts(); }
 // Identifica itens sob encomenda no carrinho. Prioriza o marcador salvo no
 // próprio item (definido no addToCart), com fallback para a regra central caso
 // o produto ainda esteja no catálogo carregado.
@@ -262,16 +262,25 @@ function updatePixPanelVisibility() {
   // Só a ausência de itens no carrinho decide o estado "idle" aqui; os
   // estados "busy" (requisição em curso) e "gerado" (Pix já emitido para
   // este pedido) são controlados por setGerarPixVisualState() e não podem
-  // ser reabertos só porque o carrinho foi re-renderizado.
-  if (generateBtn && gerarPixEstadoAtual === "idle") generateBtn.disabled = !cart.length;
+  // ser reabertos só porque o carrinho foi re-renderizado. Fase 3: também
+  // não reabre enquanto a modalidade de recebimento (retirada/entrega +
+  // endereço, quando aplicável) não estiver pronta — window.misticaEntrega
+  // é a ÚNICA fonte dessa checagem (checkout-entrega-retirada.js), nunca
+  // duplicada aqui.
+  if (generateBtn && gerarPixEstadoAtual === "idle") {
+    const prontoEntrega = typeof window.misticaEntrega?.podeProsseguir !== "function" || window.misticaEntrega.podeProsseguir();
+    generateBtn.disabled = !cart.length || !prontoEntrega;
+    generateBtn.setAttribute("aria-disabled", String(generateBtn.disabled));
+  }
   const whatsappBtn = document.querySelector("[data-send-sale-whatsapp]");
   if (whatsappBtn) whatsappBtn.disabled = !cart.length;
 }
+window.misticaAtualizarBotaoPix = updatePixPanelVisibility;
 function cartItemLineHtml(item) {
   const subtotal = item.price * item.qty;
   return `<div class="cart-item"><div class="cart-item-detail"><span class="cart-item-name">${escapeHtml(item.name)}</span><span class="cart-item-line"><span>${item.qty} × ${currency.format(item.price)}</span><span class="cart-item-subtotal">Subtotal: ${currency.format(subtotal)}</span></span>${cartItemIsEncomenda(item) ? `<span class="cart-encomenda-tag">${escapeHtml((window.misticaEncomenda && window.misticaEncomenda.BADGE) || "Sob encomenda")}</span>` : ""}</div><button class="cart-remove" type="button" aria-label="Remover ${escapeHtml(item.name)} do carrinho" data-remove-from-cart="${escapeHtml(item.id)}">Remover</button></div>`;
 }
-function renderCart() { updateCartCount(); renderCrossSell(); updateCheckoutEncomendaBox(); updatePixPanelVisibility(); if (!cartList || !cartTotal) return; if (!cartReady) { cartList.innerHTML = `<div class="cart-item"><span>Carregando catálogo oficial para exibir seu carrinho...</span></div>`; cartTotal.textContent = currency.format(0); return; } if (!cart.length) cartList.innerHTML = `<div class="cart-empty"><p>Seu carrinho está vazio. Explore nossos produtos e encontre algo especial para sua intenção.</p><a class="btn btn-small" href="#produtos">Ver produtos</a></div>`; else cartList.innerHTML = cart.map(cartItemLineHtml).join(""); cartTotal.textContent = currency.format(getTotal()); }
+function renderCart() { updateCartCount(); renderCrossSell(); updateCheckoutEncomendaBox(); updatePixPanelVisibility(); if (!cartList || !cartTotal) return; if (!cartReady) { cartList.innerHTML = `<div class="cart-item"><span>Carregando catálogo oficial para exibir seu carrinho...</span></div>`; cartTotal.textContent = currency.format(0); return; } if (!cart.length) cartList.innerHTML = `<div class="cart-empty"><p>Seu carrinho está vazio. Explore nossos produtos e encontre algo especial para sua intenção.</p><a class="btn btn-small" href="#produtos">Ver produtos</a></div>`; else cartList.innerHTML = cart.map(cartItemLineHtml).join(""); cartTotal.textContent = currency.format(getTotal()); window.misticaEntrega?.atualizarResumo?.(); }
 
 // Cross-sell no carrinho: sugere até 4 produtos disponíveis que ainda não
 // estão no carrinho, priorizando categorias diferentes das já escolhidas
@@ -296,6 +305,7 @@ function renderCrossSell() {
   box.innerHTML = `<p class="eyebrow">Combine seu ritual</p><h3>Quem levou esses, também gostou de</h3><div class="cross-sell-grid">${sugestoes.map(product => `<div class="cross-sell-card"><span aria-hidden="true">${escapeHtml(product.icon || "✨")}</span><strong>${escapeHtml(product.name)}</strong><small>${currency.format(product.price)}</small><button class="btn btn-ghost btn-full" type="button" data-add-to-cart="${escapeHtml(product.id)}">Adicionar</button></div>`).join("")}</div>`;
 }
 function getTotal() { return cart.reduce((sum, item) => sum + item.price * item.qty, 0); }
+window.misticaCartTotal = getTotal;
 function renderClients() { if (!clientList) return; if (!clients.length) { clientList.innerHTML = `<div class="client-item"><span>Nenhum cliente cadastrado ainda.</span></div>`; return; } clientList.replaceChildren(); clients.slice(0, 5).forEach(client => { const item = document.createElement("div"); item.className = "client-item"; const name = document.createElement("strong"); name.textContent = client.name; const cpf = document.createElement("span"); cpf.textContent = `CPF: ${client.cpf}`; const whatsapp = document.createElement("span"); whatsapp.textContent = `WhatsApp: ${client.whatsapp}`; const address = document.createElement("span"); address.textContent = client.address; item.append(name, cpf, document.createElement("br"), whatsapp, document.createElement("br"), address); clientList.appendChild(item); }); }
 function renderHistory() { if (!salesHistory) return; if (!sales.length) { salesHistory.innerHTML = `<div class="history-item"><span>Nenhuma venda registrada ainda.</span></div>`; return; } salesHistory.innerHTML = sales.slice(0, 10).map(sale => `<div class="history-item"><strong>${currency.format(sale.total)} • ${new Date(sale.date).toLocaleString("pt-BR")}</strong><span>${sale.items.map(item => `${item.qty}x ${item.name}`).join(" | ")}</span><span>Status: ${sale.status}</span></div>`).join(""); }
 function renderStock() { if (!stockList) return renderAdminDashboard(); stockList.innerHTML = products.map(product => { const current = getStock(product.id); const low = current <= storeConfig.minStock; return `<div class="stock-item"><div><strong>${escapeHtml(product.name)}</strong><span>${escapeHtml(product.category)}</span></div><span class="stock-badge ${low ? "stock-low" : ""}">${current} un.</span></div>`; }).join(""); renderAdminDashboard(); }
@@ -503,6 +513,14 @@ async function generatePix() {
   // está em andamento ou já existe um Pix gerado válido para este carrinho,
   // um novo clique não deve disparar outro pedido.
   if (gerarPixEstadoAtual === "busy" || gerarPixEstadoAtual === "gerado") return;
+  // Fase 3: nenhum pedido/tentativa de pagamento é criado sem modalidade de
+  // recebimento válida — o botão já fica desabilitado nesse caso
+  // (updatePixPanelVisibility), mas este guard cobre qualquer acionamento
+  // alternativo (ex.: tecla Enter, evento sintético) sem tocar o carrinho.
+  if (typeof window.misticaEntrega?.podeProsseguir === "function" && !window.misticaEntrega.podeProsseguir()) {
+    window.misticaEntrega.focarSecaoRecebimento?.();
+    return setStatus("Escolha retirada ou entrega para continuar.");
+  }
   const total = getTotal();
   if (!cart.length || total <= 0) return setStatus("Adicione pelo menos um produto ao carrinho antes de gerar o Pix.");
   if (!hasEnoughStockForCart()) return setStatus("Existe produto no carrinho acima do estoque disponível. Ajuste antes de gerar o Pix.");
@@ -549,6 +567,7 @@ async function generatePix() {
   setGerarPixVisualState("gerado");
   setPedidoStatusLabel("Aguardando pagamento");
   setCheckoutStep("pagamento");
+  window.misticaEntrega?.exibirConfirmacao?.(pedido);
   mostrarBotaoComprovanteWhatsapp(pedido, total);
   iniciarAcompanhamentoPedido(pedido);
   saveSale(pedido);
@@ -652,6 +671,11 @@ function handleSupplierSubmit(event) { event.preventDefault(); const supplier = 
 // guardamos o código aplicado e mostramos uma prévia; o navegador nunca define
 // o valor do desconto.
 window.misticaCupomAtivo = null;
+// Estimativa (somente exibição) do desconto/frete-grátis do cupom já
+// validado, para o resumo do checkout recalcular o frete estimado — o
+// backend sempre recalcula o valor real ao criar o pedido, nunca confia
+// nesta estimativa.
+window.misticaCupomEstimativa = null;
 function couponApiBase() { return String((window.misticaSiteConfig || {}).apiBaseUrl || "https://api.misticaesotericos.com.br").replace(/\/$/, ""); }
 function setCouponStatus(message, error = false) {
   const el = document.getElementById("couponStatus");
@@ -677,18 +701,24 @@ async function applyCoupon() {
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.valido) {
       window.misticaCupomAtivo = null;
+      window.misticaCupomEstimativa = null;
       setCouponStatus(data.motivo || "Cupom inválido ou expirado.", true);
+      window.misticaEntrega?.atualizarResumo?.();
       return;
     }
     window.misticaCupomAtivo = codigo;
+    window.misticaCupomEstimativa = { desconto: Number(data.desconto || 0), freteGratis: Boolean(data.frete_gratis) };
     if (data.frete_gratis) {
       setCouponStatus(`Cupom ${codigo} aplicado: frete grátis. Confirmado ao gerar o Pix.`);
     } else {
       setCouponStatus(`Cupom ${codigo} aplicado: -${currency.format(data.desconto || 0)}. Total: ${currency.format(data.total_com_desconto ?? subtotal)} (confirmado ao gerar o Pix).`);
     }
+    window.misticaEntrega?.atualizarResumo?.();
   } catch {
     window.misticaCupomAtivo = null;
+    window.misticaCupomEstimativa = null;
     setCouponStatus("Não foi possível validar o cupom agora. Tente novamente.", true);
+    window.misticaEntrega?.atualizarResumo?.();
   }
 }
 

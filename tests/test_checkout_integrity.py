@@ -37,6 +37,7 @@ def criar_produto(*, preco: float = 37.9, quantidade: int = 3) -> dict:
 def pedido(produto: dict, *, quantidade: int = 1, extras: dict | None = None):
     payload = {
         "cliente": "Cliente teste",
+        "forma_recebimento": "retirada",
         "itens": [
             {
                 "produto_id": produto["id"],
@@ -97,6 +98,7 @@ def test_checkout_bloqueia_quantidade_acima_do_estoque():
 def test_checkout_rejeita_produto_inexistente():
     payload = {
         "cliente": "Cliente teste",
+        "forma_recebimento": "retirada",
         "itens": [
             {
                 "produto_id": 999999999,

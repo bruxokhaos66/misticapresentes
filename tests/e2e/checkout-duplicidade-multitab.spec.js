@@ -27,6 +27,23 @@ async function prepararCatalogo(page) {
   }));
 }
 
+// Fase 3: a escolha de modalidade é obrigatória e o botão "Gerar Pix" começa
+// desabilitado até uma opção ser marcada. Estes testes não avaliam frete ou
+// endereço, então usamos "Retirar na loja" (frete zero, sem campos extras)
+// para manter o foco no comportamento original de idempotência/duplicidade.
+async function selecionarRetirada(page) {
+  // .evaluate() em vez de .check(): pode haver reflow logo após um
+  // reload (banners/imagens assentando), e .check() falha por
+  // "element is not stable" nesse instante — marcar o radio e
+  // disparar "change" direto no DOM é equivalente e não depende de
+  // estabilidade visual.
+  await page.locator('[data-recebimento-radio][value="retirada"]').evaluate((el) => {
+  el.checked = true;
+  el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect(page.locator("[data-generate-pix]")).toBeEnabled();
+}
+
 function respostaPedido(id) {
   return {
     id,
@@ -57,6 +74,7 @@ test.describe("checkout: duplicidade de pedido em refresh e múltiplas abas", ()
     await page.goto("/index.html");
     await expect.poll(() => page.evaluate(() => window.misticaCatalogState)).toBe("ready");
     await page.locator("[data-product-grid] button", { hasText: "Adicionar" }).click();
+    await selecionarRetirada(page);
 
     const gerarPix = page.locator("[data-generate-pix]");
     await gerarPix.dispatchEvent("click");
@@ -67,6 +85,8 @@ test.describe("checkout: duplicidade de pedido em refresh e múltiplas abas", ()
     await page.reload();
     await expect.poll(() => page.evaluate(() => window.misticaCatalogState)).toBe("ready");
     await expect(page.locator("#cartList")).toContainText("Amuleto de teste");
+    // Fase 3: a modalidade não é persistida — o reload volta a exigi-la.
+    await selecionarRetirada(page);
 
     await page.locator("[data-generate-pix]").dispatchEvent("click");
     await expect.poll(() => chavesRecebidas.length).toBe(2);
@@ -100,11 +120,13 @@ test.describe("checkout: duplicidade de pedido em refresh e múltiplas abas", ()
     await expect.poll(() => pageA.evaluate(() => window.misticaCatalogState)).toBe("ready");
     await pageA.locator("[data-product-grid] button", { hasText: "Adicionar" }).click();
     await expect(pageA.locator("#cartList")).toContainText("Amuleto de teste");
+    await selecionarRetirada(pageA);
 
     // Aba B abre depois, já enxergando o mesmo carrinho persistido.
     await pageB.goto("/index.html");
     await expect.poll(() => pageB.evaluate(() => window.misticaCatalogState)).toBe("ready");
     await expect(pageB.locator("#cartList")).toContainText("Amuleto de teste");
+    await selecionarRetirada(pageB);
 
     await pageA.locator("[data-generate-pix]").dispatchEvent("click");
     await expect.poll(() => chavesRecebidas.length).toBe(1);
@@ -139,6 +161,7 @@ test.describe("checkout: duplicidade de pedido em refresh e múltiplas abas", ()
     await expect.poll(() => page.evaluate(() => window.misticaCatalogState)).toBe("ready");
     const adicionar = page.locator("[data-product-grid] button", { hasText: "Adicionar" });
     await adicionar.click();
+    await selecionarRetirada(page);
 
     const gerarPix = page.locator("[data-generate-pix]");
     await gerarPix.dispatchEvent("click");
