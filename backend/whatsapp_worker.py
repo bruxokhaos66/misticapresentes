@@ -240,7 +240,17 @@ def processar_lote_outbox(limite: int = _LOTE_PADRAO, worker_id: str | None = No
 async def _worker_periodico(intervalo_segundos: int = 30):
     while True:
         try:
-            resultado = processar_lote_outbox()
+            # processar_lote_outbox() é síncrona e faz até `limite` chamadas
+            # HTTP sequenciais (bloqueantes) à Graph API -- chamá-la direto
+            # aqui bloquearia o ÚNICO event loop do processo (o
+            # render.yaml/uvicorn não usa múltiplos workers) pela duração
+            # inteira do lote sempre que a Meta estiver lenta/indisponível,
+            # travando toda e qualquer outra requisição em andamento
+            # (inclusive o webhook do Mercado Pago) até o timeout de cada
+            # chamada expirar. asyncio.to_thread roda o lote em uma thread
+            # separada, liberando o loop -- mesmo padrão já usado em
+            # backend/main.py para shutdown_remote_uploads.
+            resultado = await asyncio.to_thread(processar_lote_outbox)
             if resultado.get("processed"):
                 logger.info("whatsapp_worker_ciclo", extra={"evento": "whatsapp_worker_ciclo", **resultado})
         except Exception as exc:

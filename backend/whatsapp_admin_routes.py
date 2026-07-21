@@ -104,10 +104,18 @@ def reprocessar_notificacao(notificacao_id: int, sessao: dict = Depends(exigir_s
             raise HTTPException(status_code=404, detail="Notificação não encontrada.")
         if str(linha["status"]) not in _STATUS_REPROCESSAVEIS:
             raise HTTPException(status_code=409, detail=f"Notificação em '{linha['status']}' não pode ser reprocessada.")
-        conn.execute(
+        claim = conn.execute(
             "UPDATE notification_outbox SET status='retry', next_attempt_at=?, attempts=0, last_error_code=NULL, last_error_summary=NULL, updated_at=? WHERE id=? AND status='permanently_failed'",
             (agora, agora, notificacao_id),
         )
+        if claim.rowcount == 0:
+            # Corrida perdida entre a leitura acima e este UPDATE (ex.: o
+            # worker reivindicou a linha por outro motivo, ou outra
+            # requisição administrativa já mudou o status) -- nunca
+            # informa "reprocessado" para um estado que já não é mais o
+            # que foi lido.
+            atual = conn.execute("SELECT status FROM notification_outbox WHERE id=?", (notificacao_id,)).fetchone()
+            raise HTTPException(status_code=409, detail=f"O status mudou nesse meio-tempo (agora '{atual['status'] if atual else 'desconhecido'}'). Atualize a página e tente novamente.")
         registrar_auditoria(
             conn, "notification_outbox", notificacao_id, "reprocessar_manual", usuario,
             depois={"event_type": linha["event_type"], "order_id": linha["order_id"]},
@@ -128,10 +136,17 @@ def cancelar_notificacao(notificacao_id: int, sessao: dict = Depends(exigir_sess
             raise HTTPException(status_code=404, detail="Notificação não encontrada.")
         if str(linha["status"]) not in _STATUS_CANCELAVEIS:
             raise HTTPException(status_code=409, detail=f"Notificação em '{linha['status']}' não pode ser cancelada.")
-        conn.execute(
+        claim = conn.execute(
             "UPDATE notification_outbox SET status='cancelled', updated_at=? WHERE id=? AND status IN ('pending','retry')",
             (agora, notificacao_id),
         )
+        if claim.rowcount == 0:
+            # Corrida perdida contra o worker (que pode ter reivindicado a
+            # linha entre a leitura acima e este UPDATE) -- nunca informa
+            # "cancelado" quando, na verdade, o envio pode já estar em
+            # andamento ou ter sido concluído.
+            atual = conn.execute("SELECT status FROM notification_outbox WHERE id=?", (notificacao_id,)).fetchone()
+            raise HTTPException(status_code=409, detail=f"O status mudou nesse meio-tempo (agora '{atual['status'] if atual else 'desconhecido'}'); o envio pode já estar em andamento. Atualize a página e tente novamente.")
         registrar_auditoria(conn, "notification_outbox", notificacao_id, "cancelar_manual", usuario)
         conn.commit()
     return {"ok": True, "id": notificacao_id, "status": "cancelled"}

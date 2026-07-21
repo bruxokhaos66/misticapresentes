@@ -87,6 +87,49 @@ crescer a ponto de a Fase de produção mostrar contenção real; a troca é
 apenas operacional (variável de ambiente + serviço novo no Render), o
 código do worker já suporta os dois modos sem alteração.
 
+### Classificação de segurança para a infraestrutura atual
+
+`render.yaml` sobe um único serviço web (`startCommand: uvicorn
+backend.main:app ...`, sem `--workers`) no plano `starter`, sem
+configuração de autoscaling — hoje **uma única instância de processo**.
+Nessa condição, **segura**: `_worker_periodico` só é criado quando
+`whatsapp_habilitado()` é verdadeiro, encerra corretamente no shutdown
+(cancelado e aguardado junto das demais tarefas do `lifespan`, mesmo padrão
+de `tarefa_expiracao`), nunca mantém uma transação de banco aberta durante
+o `sleep` (cada ciclo abre e fecha sua própria conexão dentro de
+`processar_lote_outbox`) e roda em lote limitado (20 por ciclo, a cada 30s).
+
+Duas ressalvas relevantes encontradas na homologação desta PR (ambas
+corrigidas nesta mesma branch, ver changelog no topo do arquivo/PR):
+
+1. **Bloqueio do event loop**: `processar_lote_outbox()` é síncrona e faz
+   chamadas HTTP bloqueantes (`httpx.Client`, não `AsyncClient`) — chamada
+   direta dentro da corrotina periódica bloquearia o único event loop do
+   processo pela duração do lote inteiro sempre que a Meta estiver lenta,
+   travando **toda e qualquer outra requisição em andamento no mesmo
+   processo, inclusive o webhook do Mercado Pago**. Corrigido com
+   `asyncio.to_thread` (mesmo padrão já usado em `backend/main.py` para
+   `shutdown_remote_uploads`).
+2. **Corrida em ações administrativas**: `reprocessar`/`cancelar` liam o
+   status e faziam um `UPDATE` condicional sem checar `rowcount` — uma
+   corrida perdida contra o worker (ou outra ação administrativa
+   concorrente) fazia a rota responder sucesso mesmo sem ter mudado nada.
+   Corrigido checando `rowcount` e respondendo 409 nesse caso.
+
+**Múltiplas instâncias (não é o caso hoje, mas avaliado):** o CAS por linha
+(`UPDATE ... WHERE id=? AND status=?`) é seguro sob SQLite mesmo com dois
+processos escrevendo no mesmo arquivo (SQLite serializa escritores) — duas
+instâncias nunca processariam a MESMA linha ao mesmo tempo. Só que, na
+prática, múltiplas instâncias **não são suportadas por esta arquitetura
+como um todo**, independentemente desta feature: o banco é SQLite num
+único Persistent Disk do Render, que só pode estar montado em uma instância
+por vez — o restante do backend (não só as notificações WhatsApp) já
+pressupõe uma única instância. Migrar para múltiplas instâncias exigiria
+antes uma migração de banco (ex.: Postgres) que está totalmente fora do
+escopo desta PR. Classificação: **segura para a infraestrutura atual (uma
+única instância); a arquitetura de banco já impede múltiplas instâncias
+hoje, então esse risco não é específico desta feature.**
+
 ---
 
 ## 2. Eventos administrativos
@@ -327,6 +370,41 @@ na mesma linha.
 
 Nenhuma chave usa CPF, e-mail, telefone, nome ou qualquer PII do comprador.
 
+### Garantia real de entrega: dois níveis distintos
+
+A idempotência acima garante que **o evento nunca é enfileirado duas vezes**
+(nível de enfileiramento/outbox) — isso é `exactly once` de fato, garantido
+pela constraint `UNIQUE(idempotency_key)` do próprio banco.
+
+Isso é diferente de garantir que **a mensagem nunca é enviada duas vezes**
+pela Cloud API (nível de envio). A Cloud API da Meta **não oferece** (na
+documentação oficial atual) uma chave de idempotência aceita pelo endpoint
+`POST /{phone_number_id}/messages` para deduplicar envios do lado do
+servidor da Meta — ao contrário de outras integrações deste sistema (ex.:
+`X-Idempotency-Key` do Mercado Pago), não há como pedir à Meta "não envie
+de novo se eu já pedi este envio antes".
+
+Existe uma janela real, embora estreita, de possível duplicidade: entre
+`provider.send_template()` retornar `ok=True` (a Meta já aceitou a
+mensagem e devolveu `provider_message_id`) e `_marcar_sucesso` gravar esse
+resultado na linha do outbox (`backend/whatsapp_worker.py::_processar_linha`),
+um crash do processo deixaria a linha em `status='processing'`. Depois do
+timeout de lock (5 min, `_LOCK_TIMEOUT_SEGUNDOS`), outro ciclo do worker
+reivindica essa linha novamente e **reenvia a mesma mensagem** — porque,
+do ponto de vista do outbox, ela nunca foi confirmada como enviada.
+
+Classificação honesta: **at least once** no nível de envio para o cenário
+de crash nessa janela específica (baixa probabilidade — a janela é uma
+única instrução Python seguida de um `UPDATE` local, tipicamente
+sub-milissegundo — mas não nula); **effectively once** no caminho feliz
+(sem crash). Esta implementação **não** garante *exactly once* de ponta a
+ponta e a documentação/painel não devem afirmar isso. Não foi implementada
+nenhuma mitigação adicional (ex.: persistir o `provider_message_id`
+imediatamente após a resposta da Meta em uma escrita separada anterior à
+transição de status, reduzindo — mas não eliminando — a janela) nesta PR;
+se o volume de produção justificar, é um endurecimento futuro possível sem
+mudança de arquitetura.
+
 ---
 
 ## 11. Retry, backoff e classificação de erros
@@ -425,6 +503,23 @@ lido da variável de ambiente do processo em tempo real.
 - `WHATSAPP_ADMIN_PAINEL_URL` está reservada na configuração mas nenhum
   template desta PR inclui link — adicionar apenas com decisão de negócio
   explícita, sempre HTTPS e sem dado pessoal na URL.
+- **Sem alerta proativo.** Observabilidade é só *pull* (`GET
+  /api/admin/whatsapp-notificacoes/status` e o histórico) — não existe
+  nenhum mecanismo desta PR que avise ativamente um administrador (e-mail,
+  push, outro canal) se o worker parar, a fila crescer, a configuração
+  ficar inválida, templates forem rejeitados, o token expirar, houver rate
+  limit sustentado ou locks abandonados se acumularem. Detectar essas
+  condições hoje depende de alguém consultar o endpoint de status
+  periodicamente (manual) ou de ferramentas externas de monitoramento
+  configuradas fora desta implementação. Também não há nenhuma métrica no
+  formato Prometheus/OpenMetrics — só os campos já citados na seção de
+  Monitoramento, expostos apenas via API autenticada.
+- **Garantia de entrega**: `effectively once` no caminho feliz, `at least
+  once` num crash na janela estreita entre a Meta aceitar o envio e o
+  outbox local gravar isso — ver seção 10, "Garantia real de entrega".
+  Nunca `exactly once` de ponta a ponta.
+- **Sem UI de painel.** Só a API REST administrativa existe nesta PR — ver
+  seção 17 ("Fora do escopo").
 
 ---
 
@@ -462,3 +557,14 @@ lido da variável de ambiente do processo em tempo real.
 - Armazenamento de token/segredo no painel administrativo (frontend) — as
   credenciais continuam exclusivamente em variáveis de ambiente do
   servidor.
+- **Tela visual do painel administrativo.** Esta PR entrega somente a API
+  REST administrativa (`backend/whatsapp_admin_routes.py`: histórico,
+  status operacional, reprocessar, cancelar), autenticada e testada — não
+  uma página HTML/JS própria nem uma seção nova dentro de
+  `admin-pedidos.html` (ou equivalente) para o operador navegar
+  visualmente. Consumir esses endpoints em alguma tela existente/nova do
+  painel é trabalho de frontend ainda não feito; até lá, a operação só
+  consegue inspecionar/agir sobre a fila via chamada direta à API (ou uma
+  ferramenta como `curl`/Postman autenticada). Revisão visual/de
+  acessibilidade (desktop, mobile, teclado, `aria-live`, layout shift) não
+  se aplica por não haver UI para revisar.

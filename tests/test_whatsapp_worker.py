@@ -241,3 +241,48 @@ def test_backoff_dentro_da_faixa_esperada(monkeypatch):
     assert 60 <= intervalo1 <= 75
     assert 120 <= intervalo2 <= 150
     assert intervalo2 > intervalo1
+
+
+def test_worker_periodico_nao_bloqueia_o_event_loop(monkeypatch):
+    """processar_lote_outbox() é síncrona e pode fazer chamadas HTTP
+    bloqueantes (até WHATSAPP_REQUEST_TIMEOUT_SECONDS por mensagem). Se
+    _worker_periodico a chamasse direto (sem asyncio.to_thread), ela
+    travaria o único event loop do processo (uvicorn roda sem --workers,
+    ver render.yaml) durante todo o lote -- inclusive o webhook do Mercado
+    Pago, que compartilha o mesmo processo.
+
+    Prova por tempo de relógio (não só contagem final, que sempre bateria
+    mesmo bloqueando -- asyncio.gather só espera as corrotinas
+    terminarem, sem prazo): um "lote lento" de 0.3s rodando em paralelo com
+    uma corrotina que leva 0.2s só pode terminar em ~0.3s (dominado pelo
+    maior) se o loop nunca for bloqueado; se bloquear, o tempo total sobe
+    para ~0.3s + 0.2s = 0.5s (serializado)."""
+    import asyncio
+    import time
+
+    worker_mod, *_ = _reload_habilitado(monkeypatch)
+
+    def _lote_lento(*args, **kwargs):
+        time.sleep(0.3)  # simula uma chamada HTTP bloqueante lenta
+        return {"skipped": False, "processed": 0, "enviado": 0, "retry": 0, "falha_permanente": 0, "lock_perdido": 0}
+
+    monkeypatch.setattr(worker_mod, "processar_lote_outbox", _lote_lento)
+
+    async def _outra_corrotina_concorrente():
+        for _ in range(10):
+            await asyncio.sleep(0.02)
+
+    async def _cenario():
+        tarefa_worker = asyncio.create_task(worker_mod._worker_periodico(intervalo_segundos=999))
+        inicio = time.monotonic()
+        await _outra_corrotina_concorrente()
+        duracao = time.monotonic() - inicio
+        tarefa_worker.cancel()
+        with __import__("contextlib").suppress(asyncio.CancelledError):
+            await tarefa_worker
+        return duracao
+
+    duracao = asyncio.run(_cenario())
+    # Concorrente de verdade: ~0.2s (a corrotina não espera o "lote lento"
+    # de 0.3s terminar). Bloqueando o loop, ficaria em ~0.5s ou mais.
+    assert duracao < 0.4, f"event loop parece ter sido bloqueado pelo worker (duração={duracao:.3f}s)"
