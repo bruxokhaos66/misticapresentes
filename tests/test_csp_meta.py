@@ -178,8 +178,14 @@ def test_csp_autoriza_apenas_origens_conhecidas_do_mercado_pago(pagina):
     restrito ao próprio provedor de pagamento, não um curinga global."""
     csp = _csp_de(pagina)
     script_src = re.search(r"script-src ([^;]+);", csp).group(1)
+    # sdk.mercadopago.com carrega o SDK MercadoPago.js v2 (tokenização/
+    # CardForm); www.mercadopago.com é o host EXATO e oficialmente
+    # documentado do script de Device ID (v2/security.js) -- nenhum outro
+    # host do Mercado Pago é aceito em script-src.
     for host in re.findall(r"https://([a-zA-Z0-9.-]*mercadopago[a-zA-Z0-9.-]*)", script_src):
-        assert host == "sdk.mercadopago.com", f"{pagina}: script-src com host inesperado do Mercado Pago: {host}"
+        assert host in {"sdk.mercadopago.com", "www.mercadopago.com"}, (
+            f"{pagina}: script-src com host inesperado do Mercado Pago: {host}"
+        )
     for diretiva in ("connect-src", "frame-src"):
         m = re.search(rf"{diretiva} ([^;]+);", csp)
         if not m:
@@ -195,6 +201,28 @@ def test_index_permite_sdk_mercadopago_para_tokenizacao():
     assert "https://sdk.mercadopago.com" in csp  # script-src: carrega o SDK
     connect_src = re.search(r"connect-src ([^;]+);", csp).group(1)
     assert "https://*.mercadopago.com" in connect_src  # tokenização/parcelas/emissor
+
+
+def test_index_permite_script_de_device_id_via_csp():
+    """Device ID (antifraude, ver docs oficiais "Integrate the Device ID") --
+    script oficial carregado dinamicamente só quando o cliente abre "Cartão
+    de crédito" (v2-mercadopago-checkout.js::carregarScriptDeviceId(), nunca
+    em toda página -- ver docs/admin/CSP.md), mas a origem já precisa estar
+    liberada em script-src (host exato, sem curinga) antes disso."""
+    csp = _csp_de("index.html")
+    assert "https://www.mercadopago.com" in csp
+
+
+def test_v2_mercadopago_checkout_carrega_script_de_device_id_dinamicamente_nao_estatico():
+    """O script de Device ID nunca é uma tag <script> estática em index.html
+    (isso o carregaria em toda visita, inclusive quem nunca abre o checkout
+    de cartão) -- é injetado via JS só quando "Cartão de crédito" é aberto,
+    mesmo padrão já usado para o SDK MercadoPago.js v2 (carregarSdk())."""
+    conteudo = _ler("index.html")
+    assert "mercadopago.com/v2/security.js" not in conteudo
+    js = (ROOT / "v2-mercadopago-checkout.js").read_text(encoding="utf-8")
+    assert "https://www.mercadopago.com/v2/security.js" in js
+    assert "carregarScriptDeviceId" in js
 
 
 def test_frontend_nunca_referencia_endpoint_privado_de_criacao_de_pagamento_mercadopago():

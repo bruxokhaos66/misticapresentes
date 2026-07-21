@@ -95,6 +95,8 @@ def criar_pagamento_cartao(
     description: str,
     notification_url: Optional[str] = None,
     billing_address: Optional[dict] = None,
+    additional_info_items: Optional[list] = None,
+    device_id: Optional[str] = None,
 ) -> ResultadoPagamentoMP:
     """Cria uma cobrança de cartão no Mercado Pago. `token` é o token de
     cartão gerado no navegador pelo SDK oficial (dados de cartão nunca
@@ -126,7 +128,20 @@ def criar_pagamento_cartao(
     last_name/registration_date -- não é o conceito de endereço de
     cobrança); o endereço COMPLETO com bairro/cidade/UF só existe em
     payer.address. Versão anterior desta função enviava para
-    additional_info.payer.address -- corrigido nesta revisão."""
+    additional_info.payer.address -- corrigido nesta revisão.
+
+    `additional_info_items`, quando informado, já vem pronto de
+    backend/mercadopago_routes.py::_itens_additional_info só com os campos
+    documentados em additional_info.items (id/title/quantity/unit_price;
+    ver commonTypes.ts do mercadopago/sdk-nodejs) -- produto/quantidade/
+    valor sempre calculados pelo backend, nunca confiados ao cliente.
+
+    `device_id`, quando informado, é o Device ID coletado no navegador pelo
+    script oficial do Mercado Pago (https://www.mercadopago.com/v2/
+    security.js) -- encaminhado SEMPRE no header X-meli-session-id (nunca
+    como campo do corpo JSON), conforme documentado publicamente (Mercado
+    Pago, "Integrate the Device ID"/"How to improve payment approval":
+    X-meli-session-id: device_id). Nunca logado por esta função."""
     corpo = {
         "transaction_amount": round(float(transaction_amount), 2),
         "token": token,
@@ -146,13 +161,19 @@ def criar_pagamento_cartao(
         corpo["notification_url"] = notification_url
     if billing_address:
         corpo["payer"]["address"] = billing_address
+    if additional_info_items:
+        corpo["additional_info"] = {"items": additional_info_items}
+
+    headers = {"X-Idempotency-Key": idempotency_key}
+    if device_id:
+        headers["X-meli-session-id"] = device_id
 
     try:
         with _cliente() as cliente:
             resposta = cliente.post(
                 "/v1/payments",
                 json=corpo,
-                headers={"X-Idempotency-Key": idempotency_key},
+                headers=headers,
             )
     except httpx.HTTPError as exc:
         logger.warning("mercadopago_indisponivel", extra={"evento": "mp_criar_pagamento_erro_rede"})

@@ -19,6 +19,15 @@
   const config = window.misticaSiteConfig || {};
   const API_BASE = String(config.apiBaseUrl || "https://api.misticaesotericos.com.br").replace(/\/$/, "");
   const SDK_URL = "https://sdk.mercadopago.com/js/v2";
+  // Script OFICIAL de Device ID (antifraude), ver docs/admin/CSP.md e
+  // obterDeviceId() abaixo. Carregado dinamicamente (mesmo padrão de
+  // carregarSdk() logo abaixo) só quando o cliente abre "Cartão de
+  // crédito" -- nunca no carregamento da página inteira. Isso evita uma
+  // requisição/telemetria de antifraude desnecessária para quem nunca usa
+  // cartão (a maioria acessa só para ver produtos ou paga via Pix), e evita
+  // que uma página fria (sem checkout aberto) dependa de um script de
+  // terceiro que não tem papel nenhum ali.
+  const DEVICE_ID_SCRIPT_URL = "https://www.mercadopago.com/v2/security.js";
   const ATTEMPT_KEY_STORAGE_PREFIX = "mistica_mp_tentativa_";
 
   // Estilo dos Secure Fields (número, validade, CVV) -- iframes do próprio
@@ -80,6 +89,71 @@
 
   function currency(valor) {
     return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(valor || 0);
+  }
+
+  // ---------------------------------------------------------------------
+  // Device ID (antifraude) -- mecanismo OFICIAL do Mercado Pago
+  // (https://www.mercadopago.com/v2/security.js), carregado dinamicamente
+  // (nunca em toda página, só quando "Cartão de crédito" é aberto -- ver
+  // carregarScriptDeviceId(), chamado por montarFormularioCartao() junto
+  // com o SDK do CardForm). Esse script cria a variável global
+  // window.MP_DEVICE_SESSION_ID de forma assíncrona (tempo de coleta não é
+  // determinístico); nunca geramos um identificador próprio nem usamos
+  // fingerprinting externo -- só lemos essa variável, com um timeout curto
+  // para nunca travar o checkout caso o script não carregue (bloqueado por
+  // adblock, rede lenta, CSP de terceiros etc.). Nunca logado no console,
+  // nunca gravado em localStorage/sessionStorage -- só existe como valor
+  // local desta função, enviado apenas junto da tentativa de pagamento com
+  // cartão (nunca no Pix, que não precisa dele).
+  // ---------------------------------------------------------------------
+  const DEVICE_ID_TIMEOUT_MS = 1500;
+  const DEVICE_ID_POLL_MS = 100;
+  let deviceIdScriptLoadPromise = null;
+
+  function carregarScriptDeviceId() {
+    if (window.MP_DEVICE_SESSION_ID) return Promise.resolve();
+    if (deviceIdScriptLoadPromise) return deviceIdScriptLoadPromise;
+    deviceIdScriptLoadPromise = new Promise((resolve) => {
+      // Nunca trava a montagem do CardForm por causa disso (nem em erro
+      // síncrono nem assíncrono) -- sucesso ou falha do script só afetam
+      // se obterDeviceId() encontra um valor ou expira pelo próprio
+      // timeout dela.
+      try {
+        const script = document.createElement("script");
+        script.src = DEVICE_ID_SCRIPT_URL;
+        script.setAttribute("view", "checkout");
+        script.async = true;
+        script.onload = () => resolve();
+        script.onerror = () => resolve();
+        document.head.appendChild(script);
+      } catch {
+        resolve();
+      }
+    });
+    return deviceIdScriptLoadPromise;
+  }
+
+  function obterDeviceId() {
+    return new Promise((resolve) => {
+      const decorridoMax = DEVICE_ID_TIMEOUT_MS;
+      const inicio = Date.now();
+      (function tentar() {
+        const valor = window.MP_DEVICE_SESSION_ID;
+        if (typeof valor === "string" && valor.trim()) {
+          resolve(valor.trim());
+          return;
+        }
+        if (Date.now() - inicio >= decorridoMax) {
+          // Indisponibilidade sanitizada, sem detalhe técnico ao cliente --
+          // o pagamento segue sem o Device ID (o backend nunca bloqueia por
+          // ausência dele; é um sinal adicional de antifraude, não um
+          // requisito para processar o cartão).
+          resolve(null);
+          return;
+        }
+        window.setTimeout(tentar, DEVICE_ID_POLL_MS);
+      })();
+    });
   }
 
   // ---------------------------------------------------------------------
@@ -423,6 +497,12 @@
   async function montarFormularioCartao() {
     const cfg = await obterConfigPublica();
     if (!cfg.enabled || !cfg.public_key) return;
+    // Disparado em paralelo, nunca aguardado aqui -- carregar o script de
+    // Device ID nunca deve atrasar/bloquear a montagem do CardForm; o
+    // tempo extra que ele ganha até o submit (preenchimento do cartão
+    // pelo cliente) só aumenta a chance de obterDeviceId() encontrar o
+    // valor pronto na hora de pagar.
+    carregarScriptDeviceId();
     await carregarSdk();
     // trackingDisabled: true -- opção oficial do SDK (mercadopago/sdk-js,
     // README "API": "Enable/disable tracking of generic usage metrics",
@@ -719,6 +799,11 @@
     definirCarregando(true);
     setCardStatus("Processando pagamento com segurança pelo Mercado Pago...", "info");
 
+    // Iniciado em paralelo com a tokenização (nunca depois) -- só um valor
+    // de leitura local, nunca atrasa o pagamento além do próprio timeout
+    // curto de obterDeviceId().
+    const deviceIdPromise = obterDeviceId();
+
     // Cada tentativa gera um CardToken NOVO pelo SDK -- nunca reaproveita
     // getCardFormData().token isolado (pode refletir uma tokenização
     // anterior já consumida). dadosFormulario só fornece o que não é o
@@ -752,6 +837,8 @@
       return setCardStatus("Complete os dados do cartão para consultar as parcelas.", "erro");
     }
 
+    const deviceId = await deviceIdPromise;
+
     const pedidoId = pedidoAtual.id;
     const idempotencyKey = obterChaveTentativa(pedidoId);
     const corpo = {
@@ -761,6 +848,7 @@
       payment_method_id: dadosFormulario.paymentMethodId,
       installments: installmentsSelecionadas,
       issuer_id: dadosFormulario.issuerId || null,
+      device_id: deviceId || undefined,
       payer: {
         email: dadosFormulario.cardholderEmail,
         documento_tipo: dadosFormulario.identificationType || "CPF",
@@ -893,5 +981,7 @@
     // cartão/credenciais.
     normalizarMensagemErro,
     definirEstadoParcelas,
+    obterDeviceId,
+    carregarScriptDeviceId,
   };
 })();
