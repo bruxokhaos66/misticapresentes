@@ -368,6 +368,7 @@
       // Só limpa o carrinho DEPOIS da confirmação do servidor -- nunca antes
       // (evita perder o carrinho se a cobrança falhar) e nunca com base
       // apenas numa resposta local/otimista do navegador.
+      window.misticaEntrega?.exibirConfirmacao?.({ id: pedidoId });
       window.clearCart?.();
       if (typeof window.misticaPagamentoCartaoAprovado === "function") {
         window.misticaPagamentoCartaoAprovado(pedidoId, resposta);

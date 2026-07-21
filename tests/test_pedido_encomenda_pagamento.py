@@ -77,6 +77,7 @@ def criar_pedido_encomenda(produto: dict, *, quantidade: int = 1) -> dict:
             "cliente": "Cliente encomenda pagamento",
             "telefone": "11999999999",
             "ciente_sob_encomenda": True,
+            "forma_recebimento": "retirada",
             "itens": [{"produto_id": produto["id"], "codigo_p": produto["codigo_p"], "quantidade": quantidade}],
         },
     )

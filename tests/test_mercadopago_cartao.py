@@ -51,7 +51,7 @@ def criar_pedido_publico(preco: float, quantidade: int = 1) -> dict:
     produto = criar_produto(preco, quantidade=quantidade + 10)
     resposta = client.post(
         "/api/checkout/pedidos",
-        json={"cliente": "Cliente MP", "telefone": "5599999999999", "itens": [{"produto_id": produto["id"], "quantidade": quantidade}]},
+        json={"cliente": "Cliente MP", "telefone": "5599999999999", "forma_recebimento": "retirada", "itens": [{"produto_id": produto["id"], "quantidade": quantidade}]},
         headers={"X-Forwarded-For": ip_unico()},
     )
     assert resposta.status_code == 200, resposta.text
@@ -333,7 +333,7 @@ def test_estoque_reservado_na_criacao_nao_e_baixado_de_novo_na_aprovacao_do_cart
 
     resposta = client.post(
         "/api/checkout/pedidos",
-        json={"cliente": "Cliente Estoque", "telefone": "5599999999999", "itens": [{"produto_id": produto["id"], "quantidade": 3}]},
+        json={"cliente": "Cliente Estoque", "telefone": "5599999999999", "forma_recebimento": "retirada", "itens": [{"produto_id": produto["id"], "quantidade": 3}]},
         headers={"X-Forwarded-For": ip_unico()},
     )
     pedido = resposta.json()
@@ -365,7 +365,7 @@ def test_expiracao_libera_estoque_reservado_de_pedido_pago_com_cartao():
     produto = resposta.json()
     resposta = client.post(
         "/api/checkout/pedidos",
-        json={"cliente": "Cliente Expiração", "telefone": "5599999999999", "itens": [{"produto_id": produto["id"], "quantidade": 2}]},
+        json={"cliente": "Cliente Expiração", "telefone": "5599999999999", "forma_recebimento": "retirada", "itens": [{"produto_id": produto["id"], "quantidade": 2}]},
         headers={"X-Forwarded-For": ip_unico()},
     )
     pedido = resposta.json()
@@ -406,7 +406,7 @@ def test_mesma_unidade_de_estoque_nao_e_vendida_duas_vezes_entre_pix_e_cartao():
 
     resposta1 = client.post(
         "/api/checkout/pedidos",
-        json={"cliente": "Cliente Pix", "telefone": "5599999999999", "itens": [{"produto_id": produto["id"], "quantidade": 1}]},
+        json={"cliente": "Cliente Pix", "telefone": "5599999999999", "forma_recebimento": "retirada", "itens": [{"produto_id": produto["id"], "quantidade": 1}]},
         headers={"X-Forwarded-For": ip_unico()},
     )
     assert resposta1.status_code == 200
@@ -414,7 +414,7 @@ def test_mesma_unidade_de_estoque_nao_e_vendida_duas_vezes_entre_pix_e_cartao():
 
     resposta2 = client.post(
         "/api/checkout/pedidos",
-        json={"cliente": "Cliente Cartão", "telefone": "5599999999999", "itens": [{"produto_id": produto["id"], "quantidade": 1}]},
+        json={"cliente": "Cliente Cartão", "telefone": "5599999999999", "forma_recebimento": "retirada", "itens": [{"produto_id": produto["id"], "quantidade": 1}]},
         headers={"X-Forwarded-For": ip_unico()},
     )
     assert resposta2.status_code in (404, 409), "segundo pedido não pode reservar a mesma última unidade já reservada pelo primeiro"

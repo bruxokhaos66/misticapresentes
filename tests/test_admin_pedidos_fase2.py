@@ -66,8 +66,11 @@ def test_repeticao_nao_duplica_historico():
 
 
 def test_fluxo_comercial_permitido_ate_conclusao():
+    # criar_pedido_publico cria um pedido de retirada (Fase 3): o fluxo válido
+    # para retirada passa por "pronto_retirada", nunca por "enviado" (que é
+    # exclusivo de pedidos de entrega).
     pedido = criar_pedido_publico(25.0)
-    for status in ("confirmado", "em_preparacao", "enviado", "concluido"):
+    for status in ("confirmado", "em_preparacao", "pronto_retirada", "concluido"):
         resposta = alterar(pedido["id"], status)
         assert resposta.status_code == 200, resposta.text
     final = client.get(f"/api/pedidos/{pedido['id']}", headers=HEADERS).json()

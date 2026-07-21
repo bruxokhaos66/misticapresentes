@@ -38,6 +38,7 @@ def criar_produto_ultima_unidade() -> dict:
 def enviar_checkout(produto: dict, ip: str, barreira: threading.Barrier) -> tuple[int, dict]:
     payload = {
         "cliente": "Cliente concorrência",
+        "forma_recebimento": "retirada",
         "itens": [
             {
                 "produto_id": produto["id"],

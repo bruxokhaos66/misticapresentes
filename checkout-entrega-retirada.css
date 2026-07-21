@@ -1,0 +1,23 @@
+/* Fase 3 — entrega ou retirada no checkout */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.recebimento-panel { margin: 18px 0; }
+.recebimento-fieldset { border: 0; padding: 0; margin: 10px 0; display: grid; gap: 10px; }
+.recebimento-option { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid var(--line, #443); border-radius: 10px; cursor: pointer; }
+.recebimento-option input { width: 18px; height: 18px; flex: none; }
+.recebimento-info { margin: 10px 0; padding: 12px 14px; border-radius: 10px; background: rgba(255, 248, 230, 0.08); }
+.recebimento-endereco { display: grid; gap: 10px; margin-top: 10px; }
+.recebimento-endereco .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.recebimento-endereco label { display: grid; gap: 4px; font-weight: 600; font-size: .92rem; }
+.recebimento-endereco input { min-width: 0; }
+.cep-busca-row { display: flex; gap: 8px; align-items: flex-end; }
+.cep-busca-row label { flex: 1; }
+.resumo-entrega-box { margin: 14px 0; padding: 14px; border-radius: 10px; border: 1px solid var(--line, #443); }
+.resumo-entrega-linha { display: flex; justify-content: space-between; padding: 4px 0; }
+.resumo-entrega-total { font-weight: 700; border-top: 1px solid var(--line, #443); margin-top: 6px; padding-top: 8px; }
+.resumo-entrega-prazo, .resumo-entrega-nota { font-size: .85rem; opacity: .85; margin-top: 6px; }
+.confirmacao-pedido-box { margin: 14px 0; padding: 14px; border-radius: 10px; background: rgba(120, 220, 160, 0.12); }
+
+@media (max-width: 640px) {
+  .recebimento-endereco .form-row { grid-template-columns: 1fr; }
+  .cep-busca-row { flex-direction: column; align-items: stretch; }
+}

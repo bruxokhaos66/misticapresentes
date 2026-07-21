@@ -29,7 +29,11 @@ def test_repeticao_preserva_a_funcao_original_e_a_idempotencia_existente():
     mobile = ler("mobile-sync.js")
     assert "funcaoOriginal = window.misticaCriarPedido" in js
     assert "window.misticaCriarPedido = criarPedidoComRecuperacao" in js
-    assert 'headers: { "Idempotency-Key": idempotencyKeyParaItens(itensPedido) }' in mobile
+    # Fase 3: a chave de idempotência também depende da modalidade/endereço
+    # de entrega (ver mobile-sync.js::assinaturaCarrinho), então a chamada
+    # ganhou um segundo argumento — a idempotência em si (uma chave por
+    # tentativa de checkout) continua preservada.
+    assert 'headers: { "Idempotency-Key": idempotencyKeyParaItens(itensPedido, dadosEntrega) }' in mobile
     assert "misticaResetIdempotencyKey" not in js
 
 

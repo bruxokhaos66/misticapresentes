@@ -98,6 +98,29 @@
     cancelado: [],
   };
 
+  const ENDERECO_LOJA = "Mística Presentes — Galeria Ody, nº 2400, sala 07, Centro, Pinhalzinho/SC";
+
+  function rotuloRecebimento(pedido) {
+    const forma = String(pedido.forma_recebimento || "").toLowerCase();
+    if (forma === "retirada") return "Retirada na loja";
+    if (forma === "entrega") return "Entrega";
+    return "Forma de recebimento não definida";
+  }
+
+  function enderecoTexto(pedido) {
+    const forma = String(pedido.forma_recebimento || "").toLowerCase();
+    if (forma === "retirada") return ENDERECO_LOJA;
+    if (forma !== "entrega") return "—";
+    const partes = [
+      [pedido.endereco_rua, pedido.endereco_numero].filter(Boolean).join(", "),
+      pedido.endereco_complemento,
+      pedido.endereco_bairro,
+      [pedido.endereco_cidade, pedido.endereco_uf].filter(Boolean).join("/"),
+      pedido.endereco_cep,
+    ].filter(Boolean);
+    return partes.length ? partes.join(" — ") : "Endereço não informado";
+  }
+
   function elemento(tag, classe, texto) {
     const node = document.createElement(tag);
     if (classe) node.className = classe;
@@ -213,7 +236,8 @@
       campo("Pagamento", rotuloPagamento(pedido)),
       campo("Financeiro", pedido.status || "Não informado"),
       campo("Comercial", ROTULOS_COMERCIAIS[pedido.status_pedido || "novo"] || pedido.status_pedido),
-      campo("Recebimento", pedido.forma_recebimento || "Não informado"),
+      campo("Recebimento", rotuloRecebimento(pedido)),
+      campo("Endereço/Retirada", enderecoTexto(pedido)),
       campo("Frete", currency.format(Number(pedido.frete || 0))),
       campo("Rastreio", pedido.codigo_rastreio || "—"),
       campo("Aprovação", formatarData(pedido.data_aprovacao)),
@@ -318,7 +342,8 @@
       campo("Cliente", pedido.cliente), campo("Telefone", pedido.telefone), campo("E-mail", pedido.email),
       campo("Data", formatarData(pedido.data_iso || pedido.data_venda)), campo("Pagamento", rotuloPagamento(pedido)),
       campo("Financeiro", pedido.status), campo("Comercial", ROTULOS_COMERCIAIS[pedido.status_pedido || "novo"]),
-      campo("Recebimento", pedido.forma_recebimento), campo("Rastreio", pedido.codigo_rastreio),
+      campo("Recebimento", rotuloRecebimento(pedido)), campo("Rastreio", pedido.codigo_rastreio),
+      campo("Endereço/Retirada", enderecoTexto(pedido)),
       campo("Subtotal", currency.format(Number(pedido.subtotal || 0))), campo("Desconto", currency.format(Number(pedido.desconto || 0))),
       campo("Frete", currency.format(Number(pedido.frete || 0))), campo("Total", currency.format(Number(pedido.total_final || 0)))
     );

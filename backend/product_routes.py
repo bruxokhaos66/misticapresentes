@@ -266,6 +266,14 @@ def criar_pedido_checkout_publico(venda: CheckoutPublicoIn, request: Request):
     venda.status = "Aguardando pagamento"
     venda.vendedor = "Site/Celular"
     venda.forma_pagamento = "Pix site/celular"
+    # Fase 3: no checkout público, a escolha entre retirada e entrega é
+    # obrigatória antes do pagamento — VendaSiteIn aceita None só para
+    # preservar chamadores internos que não passam por este endpoint.
+    if venda.forma_recebimento not in ("retirada", "entrega"):
+        raise HTTPException(
+            status_code=400,
+            detail="Escolha como deseja receber o pedido: retirada na loja ou entrega no endereço.",
+        )
     idempotency_key = request.headers.get("Idempotency-Key")
     return registrar_checkout_publico(venda, request, _chave_interna_checkout(), idempotency_key)
 

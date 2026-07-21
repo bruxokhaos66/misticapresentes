@@ -65,6 +65,7 @@ def criar_pedido_pix(cliente: str = "Cliente Teste Pix", telefone: str = "499888
         json={
             "cliente": cliente,
             "telefone": telefone,
+            "forma_recebimento": "retirada",
             "itens": [{"produto_id": produto["id"], "codigo_p": produto["codigo_p"], "quantidade": 1}],
         },
         headers=_headers(),

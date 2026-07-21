@@ -75,6 +75,7 @@ def _criar_pedido_com_chave(chave: str, ip_final: int) -> tuple[dict, str]:
                 json={
                     "cliente": "Cliente teste apresentação Pix",
                     "telefone": "11999999999",
+                    "forma_recebimento": "retirada",
                     "itens": [{"produto_id": produto["id"], "quantidade": 1}],
                 },
                 headers={"X-Forwarded-For": f"198.51.100.{ip_final}"},

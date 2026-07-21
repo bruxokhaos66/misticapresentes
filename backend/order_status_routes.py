@@ -12,9 +12,14 @@ from pydantic import BaseModel, Field
 from backend.audit import registrar_auditoria
 from backend.api_security import validar_site_api_key as validar_chave_api
 from backend.database import conectar
+from backend.frete import PRAZO_ENTREGA_DIAS_UTEIS
 from backend.logging_config import get_logger
 from backend.panel_sessions import exigir_sessao_ou_chave_api, validar_sessao
 from backend.rate_limit import limitar_requisicoes
+
+# Endereço oficial de retirada — nunca inventar rua, CEP ou complemento além
+# do que está definido aqui (Fase 3 — entrega ou retirada no checkout).
+ENDERECO_LOJA = "Mística Presentes — Galeria Ody, nº 2400, sala 07, Centro, Pinhalzinho/SC"
 
 logger = get_logger(__name__)
 
@@ -700,8 +705,10 @@ def recibo_pedido(
     with conectar() as conn:
         venda = conn.execute(
             """
-            SELECT id, cliente, telefone, data_venda, subtotal, desconto, taxa, total_final,
-                   forma_pagamento, vendedor, status, origem, observacao_pedido, pix_txid
+            SELECT id, cliente, telefone, data_venda, subtotal, desconto, taxa, frete, total_final,
+                   forma_pagamento, vendedor, status, origem, observacao_pedido, pix_txid,
+                   forma_recebimento, endereco_cep, endereco_rua, endereco_numero,
+                   endereco_complemento, endereco_bairro, endereco_cidade, endereco_uf
             FROM pedidos
             WHERE id=?
             """,
@@ -727,6 +734,33 @@ def recibo_pedido(
         for pagamento in pagamentos
     ) or "<li>Nenhum pagamento registrado ainda.</li>"
 
+    forma_recebimento = venda["forma_recebimento"]
+    if forma_recebimento == "retirada":
+        linha_recebimento = f"<strong>Retirada:</strong> {_escape_html(ENDERECO_LOJA)}"
+        instrucao = (
+            f"Você será avisado quando o pedido estiver pronto para retirada na {_escape_html(ENDERECO_LOJA)}."
+        )
+    elif forma_recebimento == "entrega":
+        endereco = ", ".join(
+            _escape_html(parte)
+            for parte in [
+                f"{venda['endereco_rua'] or ''}, {venda['endereco_numero'] or ''}".strip(", "),
+                venda["endereco_complemento"],
+                venda["endereco_bairro"],
+                f"{venda['endereco_cidade'] or ''}/{venda['endereco_uf'] or ''}".strip("/"),
+                venda["endereco_cep"],
+            ]
+            if parte
+        )
+        linha_recebimento = f"<strong>Entrega:</strong> {endereco or 'endereço não informado'}"
+        instrucao = (
+            f"Seu pedido será preparado para envio após a confirmação do pagamento. "
+            f"O prazo estimado é de {PRAZO_ENTREGA_DIAS_UTEIS}."
+        )
+    else:
+        linha_recebimento = "<strong>Recebimento:</strong> Forma de recebimento não definida"
+        instrucao = ""
+
     html = f"""<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><title>Recibo do pedido #{venda_id}</title>
 <style>
@@ -740,11 +774,16 @@ td,th{{border-bottom:1px solid #ddd;padding:6px;text-align:left;font-size:13px}}
 <strong>Telefone:</strong> {_escape_html(venda['telefone']) or '—'}<br>
 <strong>Data:</strong> {_escape_html(venda['data_venda'])}<br>
 <strong>Status:</strong> {_escape_html(venda['status'])}<br>
-<strong>Origem:</strong> {_escape_html(venda['origem'])}</p>
+<strong>Origem:</strong> {_escape_html(venda['origem'])}<br>
+{linha_recebimento}</p>
 <table><thead><tr><th>Item</th><th>Qtd</th><th>Valor unit.</th><th>Total</th></tr></thead>
 <tbody>{linhas_itens}</tbody></table>
+<p>Subtotal: R$ {float(venda['subtotal'] or 0):.2f}<br>
+Desconto: R$ {float(venda['desconto'] or 0):.2f}<br>
+Frete: R$ {float(venda['frete'] or 0):.2f}</p>
 <p class="total">Total do pedido: R$ {float(venda['total_final'] or 0):.2f}</p>
 <p><strong>Pagamentos:</strong></p><ul>{linhas_pagamentos}</ul>
+{f'<p>{_escape_html(instrucao)}</p>' if instrucao else ''}
 <p><button onclick="window.print()">Imprimir</button></p>
 </body></html>"""
     return HTMLResponse(content=html)
@@ -763,7 +802,16 @@ def historico_status_pedido(
     alheios. Sessão administrativa ou X-Mistica-Api-Key seguem liberadas."""
     admin = _acesso_admin_valido(mistica_painel_sessao, x_mistica_api_key)
     with conectar() as conn:
-        venda = conn.execute("SELECT id, status, estoque_baixado, estoque_baixado_em, pix_txid FROM pedidos WHERE id=?", (venda_id,)).fetchone()
+        venda = conn.execute(
+            """
+            SELECT id, status, estoque_baixado, estoque_baixado_em, pix_txid,
+                   forma_recebimento, endereco_cep, endereco_rua, endereco_numero,
+                   endereco_complemento, endereco_bairro, endereco_cidade, endereco_uf,
+                   frete, total_final
+              FROM pedidos WHERE id=?
+            """,
+            (venda_id,),
+        ).fetchone()
         _exigir_acesso_pedido(venda, txid, admin)
         historico = conn.execute(
             """
@@ -774,14 +822,40 @@ def historico_status_pedido(
             """,
             (venda_id,),
         ).fetchall()
-    return {
+
+    forma_recebimento = venda["forma_recebimento"]
+    resposta = {
         "ok": True,
         "venda_id": venda_id,
         "status_atual": venda["status"],
         "estoque_baixado": bool(venda["estoque_baixado"]),
         "estoque_baixado_em": venda["estoque_baixado_em"],
         "historico": [dict(row) for row in historico],
+        "forma_recebimento": forma_recebimento,
+        "frete": float(venda["frete"] or 0),
+        "total_final": float(venda["total_final"] or 0),
     }
+    if forma_recebimento == "retirada":
+        resposta["endereco_loja"] = ENDERECO_LOJA
+        resposta["instrucao_recebimento"] = (
+            f"Você será avisado quando o pedido estiver pronto para retirada na {ENDERECO_LOJA}."
+        )
+    elif forma_recebimento == "entrega":
+        resposta["endereco_entrega"] = {
+            "cep": venda["endereco_cep"],
+            "rua": venda["endereco_rua"],
+            "numero": venda["endereco_numero"],
+            "complemento": venda["endereco_complemento"],
+            "bairro": venda["endereco_bairro"],
+            "cidade": venda["endereco_cidade"],
+            "uf": venda["endereco_uf"],
+        }
+        resposta["prazo_entrega_dias_uteis"] = PRAZO_ENTREGA_DIAS_UTEIS
+        resposta["instrucao_recebimento"] = (
+            f"Seu pedido será preparado para envio após a confirmação do pagamento. "
+            f"O prazo estimado é de {PRAZO_ENTREGA_DIAS_UTEIS}."
+        )
+    return resposta
 
 
 @router.post("/pedidos/{venda_id}/status", dependencies=[Depends(limitar_status_pedido)])

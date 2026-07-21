@@ -52,7 +52,7 @@ def criar_pedido_publico(preco: float, quantidade: int = 1) -> dict:
     produto = resposta.json()
     resposta = client.post(
         "/api/checkout/pedidos",
-        json={"cliente": "Cliente Webhook", "telefone": "5599999999999", "itens": [{"produto_id": produto["id"], "quantidade": quantidade}]},
+        json={"cliente": "Cliente Webhook", "telefone": "5599999999999", "forma_recebimento": "retirada", "itens": [{"produto_id": produto["id"], "quantidade": quantidade}]},
         headers={"X-Forwarded-For": ip_unico()},
     )
     assert resposta.status_code == 200, resposta.text
