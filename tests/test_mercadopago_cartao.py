@@ -9,6 +9,7 @@ pode gerar cobrança real.
 import importlib
 import os
 import uuid
+from dataclasses import replace
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
@@ -105,7 +106,7 @@ def pagar_cartao(pedido, resultado, idempotency_key=None, installments=1, captur
         "token": "card_token_" + uuid.uuid4().hex,
         "payment_method_id": "visa",
         "installments": installments,
-        "payer": {"email": "cliente@example.com", "documento_numero": "12345678900"},
+        "payer": {"email": "cliente@example.com", "nome": "Maria", "documento_numero": "12345678900"},
     }
     body.update(overrides)
     headers = {"Idempotency-Key": idempotency_key or str(uuid.uuid4()), "X-Forwarded-For": ip_unico()}
@@ -197,7 +198,7 @@ def test_idempotencia_clique_duplo_no_mesmo_pedido():
         "token": "card_token_" + uuid.uuid4().hex,
         "payment_method_id": "visa",
         "installments": 1,
-        "payer": {"email": "cliente@example.com", "documento_numero": "12345678900"},
+        "payer": {"email": "cliente@example.com", "nome": "Maria", "documento_numero": "12345678900"},
     }
     with patch("backend.mercadopago_routes.criar_pagamento_cartao", return_value=resultado) as mock_criar:
         r1 = client.post("/api/payments/mercadopago/card", json=body, headers={"Idempotency-Key": idem})
@@ -216,7 +217,7 @@ def test_idempotency_key_ausente_e_rejeitada():
             json={
                 "pedido_id": pedido["id"], "txid": pedido["pix_txid"], "token": "card_token_x",
                 "payment_method_id": "visa", "installments": 1,
-                "payer": {"email": "c@example.com", "documento_numero": "12345678900"},
+                "payer": {"email": "c@example.com", "nome": "Maria", "documento_numero": "12345678900"},
             },
         )
     assert resposta.status_code == 400
@@ -229,7 +230,7 @@ def test_pedido_inexistente():
             json={
                 "pedido_id": 999999999, "txid": "qualquer", "token": "card_token_x",
                 "payment_method_id": "visa", "installments": 1,
-                "payer": {"email": "c@example.com", "documento_numero": "12345678900"},
+                "payer": {"email": "c@example.com", "nome": "Maria", "documento_numero": "12345678900"},
             },
             headers={"Idempotency-Key": str(uuid.uuid4()), "X-Forwarded-For": ip_unico()},
         )
@@ -244,7 +245,7 @@ def test_acesso_pedido_sem_txid_correto_e_negado():
             json={
                 "pedido_id": pedido["id"], "txid": "txid-errado-000", "token": "card_token_x",
                 "payment_method_id": "visa", "installments": 1,
-                "payer": {"email": "c@example.com", "documento_numero": "12345678900"},
+                "payer": {"email": "c@example.com", "nome": "Maria", "documento_numero": "12345678900"},
             },
             headers={"Idempotency-Key": str(uuid.uuid4()), "X-Forwarded-For": ip_unico()},
         )
@@ -261,7 +262,7 @@ def test_mercado_pago_temporariamente_indisponivel():
             json={
                 "pedido_id": pedido["id"], "txid": pedido["pix_txid"], "token": "card_token_x",
                 "payment_method_id": "visa", "installments": 1,
-                "payer": {"email": "c@example.com", "documento_numero": "12345678900"},
+                "payer": {"email": "c@example.com", "nome": "Maria", "documento_numero": "12345678900"},
             },
             headers={"Idempotency-Key": str(uuid.uuid4()), "X-Forwarded-For": ip_unico()},
         )
@@ -277,7 +278,7 @@ def test_integracao_desativada_falha_graciosamente():
             json={
                 "pedido_id": pedido["id"], "txid": pedido["pix_txid"], "token": "card_token_x",
                 "payment_method_id": "visa", "installments": 1,
-                "payer": {"email": "c@example.com", "documento_numero": "12345678900"},
+                "payer": {"email": "c@example.com", "nome": "Maria", "documento_numero": "12345678900"},
             },
             headers={"Idempotency-Key": str(uuid.uuid4()), "X-Forwarded-For": ip_unico()},
         )
@@ -484,6 +485,7 @@ _CAMPOS_SENSIVEIS_PROIBIDOS = (
     "card_token_",  # prefixo usado pelos tokens de teste deste arquivo
     "cliente@example.com",
     "12345678900",
+    "maria",  # nome do comprador usado por padrão em pagar_cartao()
 )
 
 
@@ -617,7 +619,7 @@ def test_cenario_oficial_APRO_simula_pagamento_aprovado():
     resposta = pagar_cartao(
         pedido,
         aprovado,
-        payer={"email": "cliente.teste@example.com", "documento_numero": CARTAO_TESTE_MERCADOPAGO["documento_teste"]},
+        payer={"email": "cliente.teste@example.com", "nome": "Maria", "documento_numero": CARTAO_TESTE_MERCADOPAGO["documento_teste"]},
     )
     assert resposta.status_code == 200
     corpo = resposta.json()
@@ -639,7 +641,7 @@ def test_cenario_oficial_OTHE_simula_recusa_esperada_do_cartao_de_teste():
     resposta = pagar_cartao(
         pedido,
         recusado,
-        payer={"email": "cliente.teste@example.com", "documento_numero": CARTAO_TESTE_MERCADOPAGO["documento_teste"]},
+        payer={"email": "cliente.teste@example.com", "nome": "Maria", "documento_numero": CARTAO_TESTE_MERCADOPAGO["documento_teste"]},
     )
     assert resposta.status_code == 200
     corpo = resposta.json()
@@ -666,6 +668,7 @@ def test_endereco_cobranca_explicito_e_enviado_para_o_mercado_pago():
     aprovado = resultado_mp(pedido, status="approved")
     payer = {
         "email": "cliente@example.com",
+        "nome": "Maria",
         "documento_numero": "12345678900",
         "endereco_cobranca": {
             "usar_mesmo_da_entrega": False,
@@ -696,6 +699,7 @@ def test_endereco_cobranca_reaproveita_endereco_de_entrega_quando_marcado():
     aprovado = resultado_mp(pedido, status="approved")
     payer = {
         "email": "cliente@example.com",
+        "nome": "Maria",
         "documento_numero": "12345678900",
         "endereco_cobranca": {"usar_mesmo_da_entrega": True},
     }
@@ -721,6 +725,7 @@ def test_endereco_cobranca_reaproveitar_entrega_ignorado_quando_pedido_e_retirad
     aprovado = resultado_mp(pedido, status="approved")
     payer = {
         "email": "cliente@example.com",
+        "nome": "Maria",
         "documento_numero": "12345678900",
         "endereco_cobranca": {"usar_mesmo_da_entrega": True},
     }
@@ -748,6 +753,7 @@ def test_endereco_cobranca_cep_invalido_e_rejeitado():
     pedido = criar_pedido_publico(65.0)
     payer = {
         "email": "cliente@example.com",
+        "nome": "Maria",
         "documento_numero": "12345678900",
         "endereco_cobranca": {"usar_mesmo_da_entrega": False, "cep": "123", "rua": "Rua X", "numero": "1", "cidade": "Pinhalzinho", "uf": "SC"},
     }
@@ -1250,3 +1256,310 @@ def test_cooldown_alto_risco_nunca_bloqueia_pix():
     )
     assert resposta_pix.status_code == 200
     assert resposta_pix.json()["status_conciliacao"] == "ok"
+
+
+# ---------------------------------------------------------------------------
+# payer.first_name/last_name -- coletados por campos explícitos do checkout
+# (#mpBuyerFirstName/#mpBuyerLastName no frontend), NUNCA a partir de
+# cardholderName ("Nome impresso no cartão", o titular do cartão -- pode ser
+# outra pessoa) e nunca divididos automaticamente de um nome completo. `nome`
+# é obrigatório; `sobrenome` é opcional (nomes civis de uma única palavra
+# nunca são bloqueados nem preenchidos com valor inventado).
+# ---------------------------------------------------------------------------
+
+
+def test_nome_comprador_obrigatorio_e_enviado_como_first_name():
+    pedido = criar_pedido_publico(40.0)
+    aprovado = resultado_mp(pedido, status="approved")
+    mocks = []
+    resposta = pagar_cartao(
+        pedido, aprovado, capturar_mock=mocks,
+        payer={"email": "cliente@example.com", "nome": "  Ana   Maria  ", "documento_numero": "12345678900"},
+    )
+    assert resposta.status_code == 200, resposta.text
+    _, kwargs = mocks[0].call_args
+    assert kwargs["payer_first_name"] == "Ana Maria"  # espaços excessivos normalizados
+    assert kwargs["payer_last_name"] is None
+
+
+def test_sobrenome_comprador_opcional_e_enviado_quando_informado():
+    pedido = criar_pedido_publico(40.0)
+    aprovado = resultado_mp(pedido, status="approved")
+    mocks = []
+    resposta = pagar_cartao(
+        pedido, aprovado, capturar_mock=mocks,
+        payer={"email": "cliente@example.com", "nome": "Ana", "sobrenome": "Souza", "documento_numero": "12345678900"},
+    )
+    assert resposta.status_code == 200, resposta.text
+    _, kwargs = mocks[0].call_args
+    assert kwargs["payer_first_name"] == "Ana"
+    assert kwargs["payer_last_name"] == "Souza"
+
+
+def test_nome_comprador_de_uma_palavra_e_aceito_sem_exigir_sobrenome():
+    """Nome civil legítimo de uma única palavra (ex.: nomes indígenas,
+    artísticos ou de uma só palavra) nunca é bloqueado nem obrigado a ter
+    sobrenome -- last_name simplesmente não é enviado ao Mercado Pago."""
+    pedido = criar_pedido_publico(40.0)
+    aprovado = resultado_mp(pedido, status="approved")
+    mocks = []
+    resposta = pagar_cartao(
+        pedido, aprovado, capturar_mock=mocks,
+        payer={"email": "cliente@example.com", "nome": "Madonna", "documento_numero": "12345678900"},
+    )
+    assert resposta.status_code == 200, resposta.text
+    _, kwargs = mocks[0].call_args
+    assert kwargs["payer_first_name"] == "Madonna"
+    assert kwargs["payer_last_name"] is None
+
+
+def test_nome_comprador_composto_com_particula_hifen_apostrofo_e_acentos():
+    pedido = criar_pedido_publico(40.0)
+    aprovado = resultado_mp(pedido, status="approved")
+    mocks = []
+    resposta = pagar_cartao(
+        pedido, aprovado, capturar_mock=mocks,
+        payer={
+            "email": "cliente@example.com",
+            "nome": "José da Conceição",
+            "sobrenome": "O'Brien-Souza",
+            "documento_numero": "12345678900",
+        },
+    )
+    assert resposta.status_code == 200, resposta.text
+    _, kwargs = mocks[0].call_args
+    assert kwargs["payer_first_name"] == "José da Conceição"
+    assert kwargs["payer_last_name"] == "O'Brien-Souza"
+
+
+def test_sobrenome_ausente_nao_e_enviado_como_campo_vazio():
+    pedido = criar_pedido_publico(40.0)
+    aprovado = resultado_mp(pedido, status="approved")
+    mocks = []
+    resposta = pagar_cartao(
+        pedido, aprovado, capturar_mock=mocks,
+        payer={"email": "cliente@example.com", "nome": "Ana", "sobrenome": "   ", "documento_numero": "12345678900"},
+    )
+    assert resposta.status_code == 200, resposta.text
+    _, kwargs = mocks[0].call_args
+    assert kwargs["payer_last_name"] is None
+
+
+def test_nome_comprador_vazio_e_rejeitado():
+    pedido = criar_pedido_publico(40.0)
+    resposta = client.post(
+        "/api/payments/mercadopago/card",
+        json={
+            "pedido_id": pedido["id"], "txid": pedido["pix_txid"], "token": "card_token_" + uuid.uuid4().hex,
+            "payment_method_id": "visa", "installments": 1,
+            "payer": {"email": "cliente@example.com", "nome": "", "documento_numero": "12345678900"},
+        },
+        headers={"Idempotency-Key": str(uuid.uuid4()), "X-Forwarded-For": ip_unico()},
+    )
+    assert resposta.status_code == 422
+
+
+def test_nome_comprador_ausente_e_rejeitado():
+    pedido = criar_pedido_publico(40.0)
+    resposta = client.post(
+        "/api/payments/mercadopago/card",
+        json={
+            "pedido_id": pedido["id"], "txid": pedido["pix_txid"], "token": "card_token_" + uuid.uuid4().hex,
+            "payment_method_id": "visa", "installments": 1,
+            "payer": {"email": "cliente@example.com", "documento_numero": "12345678900"},
+        },
+        headers={"Idempotency-Key": str(uuid.uuid4()), "X-Forwarded-For": ip_unico()},
+    )
+    assert resposta.status_code == 422
+
+
+def test_nome_comprador_com_numeros_e_rejeitado():
+    pedido = criar_pedido_publico(40.0)
+    resposta = client.post(
+        "/api/payments/mercadopago/card",
+        json={
+            "pedido_id": pedido["id"], "txid": pedido["pix_txid"], "token": "card_token_" + uuid.uuid4().hex,
+            "payment_method_id": "visa", "installments": 1,
+            "payer": {"email": "cliente@example.com", "nome": "Ana123", "documento_numero": "12345678900"},
+        },
+        headers={"Idempotency-Key": str(uuid.uuid4()), "X-Forwarded-For": ip_unico()},
+    )
+    assert resposta.status_code == 422
+
+
+def test_nome_comprador_com_html_e_rejeitado():
+    pedido = criar_pedido_publico(40.0)
+    resposta = client.post(
+        "/api/payments/mercadopago/card",
+        json={
+            "pedido_id": pedido["id"], "txid": pedido["pix_txid"], "token": "card_token_" + uuid.uuid4().hex,
+            "payment_method_id": "visa", "installments": 1,
+            "payer": {"email": "cliente@example.com", "nome": "<script>alert(1)</script>", "documento_numero": "12345678900"},
+        },
+        headers={"Idempotency-Key": str(uuid.uuid4()), "X-Forwarded-For": ip_unico()},
+    )
+    assert resposta.status_code == 422
+
+
+def test_sobrenome_com_caracteres_invalidos_e_rejeitado():
+    pedido = criar_pedido_publico(40.0)
+    resposta = client.post(
+        "/api/payments/mercadopago/card",
+        json={
+            "pedido_id": pedido["id"], "txid": pedido["pix_txid"], "token": "card_token_" + uuid.uuid4().hex,
+            "payment_method_id": "visa", "installments": 1,
+            "payer": {"email": "cliente@example.com", "nome": "Ana", "sobrenome": "Souza99", "documento_numero": "12345678900"},
+        },
+        headers={"Idempotency-Key": str(uuid.uuid4()), "X-Forwarded-For": ip_unico()},
+    )
+    assert resposta.status_code == 422
+
+
+def test_nome_comprador_maior_que_limite_e_rejeitado():
+    pedido = criar_pedido_publico(40.0)
+    resposta = client.post(
+        "/api/payments/mercadopago/card",
+        json={
+            "pedido_id": pedido["id"], "txid": pedido["pix_txid"], "token": "card_token_" + uuid.uuid4().hex,
+            "payment_method_id": "visa", "installments": 1,
+            "payer": {"email": "cliente@example.com", "nome": "A" * 61, "documento_numero": "12345678900"},
+        },
+        headers={"Idempotency-Key": str(uuid.uuid4()), "X-Forwarded-For": ip_unico()},
+    )
+    assert resposta.status_code == 422
+
+
+def test_nome_comprador_nunca_aparece_no_log_de_resultado(caplog):
+    pedido = criar_pedido_publico(40.0)
+    aprovado = resultado_mp(pedido, status="approved")
+    resposta, registros = _log_resultado_cartao(caplog, pedido, aprovado)
+    assert resposta.status_code == 200
+    assert len(registros) == 1
+    texto = f"{registros[0].getMessage()} {registros[0].__dict__}".lower()
+    assert "maria" not in texto
+    for campo in ("nome", "sobrenome", "first_name", "last_name", "payer_first_name", "payer_last_name"):
+        assert not hasattr(registros[0], campo)
+
+
+def test_client_mercadopago_envia_first_name_e_last_name_quando_informados():
+    import httpx
+
+    from backend.mercadopago_client import criar_pagamento_cartao
+
+    capturado = {}
+
+    class FakeResponse:
+        status_code = 201
+
+        def json(self):
+            return {"id": "mp-nome-1", "status": "approved", "status_detail": "accredited", "transaction_amount": 10.0, "currency_id": "BRL"}
+
+    def fake_post(self, url, json=None, headers=None):
+        capturado["json"] = json
+        return FakeResponse()
+
+    with patch.object(httpx.Client, "post", fake_post):
+        criar_pagamento_cartao(
+            idempotency_key="k-nome", transaction_amount=10.0, token="tok", installments=1,
+            payment_method_id="visa", issuer_id=None, payer_email="c@example.com",
+            payer_doc_type="CPF", payer_doc_number="12345678900",
+            external_reference="1", description="Pedido #1",
+            payer_first_name="Ana Maria", payer_last_name="Souza",
+        )
+    assert capturado["json"]["payer"]["first_name"] == "Ana Maria"
+    assert capturado["json"]["payer"]["last_name"] == "Souza"
+
+
+def test_client_mercadopago_sem_sobrenome_nao_envia_last_name():
+    import httpx
+
+    from backend.mercadopago_client import criar_pagamento_cartao
+
+    capturado = {}
+
+    class FakeResponse:
+        status_code = 201
+
+        def json(self):
+            return {"id": "mp-nome-2", "status": "approved", "status_detail": "accredited", "transaction_amount": 10.0, "currency_id": "BRL"}
+
+    def fake_post(self, url, json=None, headers=None):
+        capturado["json"] = json
+        return FakeResponse()
+
+    with patch.object(httpx.Client, "post", fake_post):
+        criar_pagamento_cartao(
+            idempotency_key="k-sem-sobrenome", transaction_amount=10.0, token="tok", installments=1,
+            payment_method_id="visa", issuer_id=None, payer_email="c@example.com",
+            payer_doc_type="CPF", payer_doc_number="12345678900",
+            external_reference="1", description="Pedido #1",
+            payer_first_name="Madonna",
+        )
+    assert capturado["json"]["payer"]["first_name"] == "Madonna"
+    assert "last_name" not in capturado["json"]["payer"]
+
+
+# ---------------------------------------------------------------------------
+# Auditoria de débito -- o backend NUNCA presume crédito por padrão nem
+# bloqueia debit_card: payment_type_id/payment_method_id são sempre os
+# devolvidos pelo Mercado Pago (nunca hardcoded), installments é o que o
+# CardForm (SDK) realmente ofereceu para aquele cartão. Estes testes
+# confirmam esse comportamento já existente via mock -- nenhum cartão real,
+# nenhuma chamada real ao Mercado Pago. A habilitação EFETIVA de débito na
+# conta Mercado Pago não pode ser confirmada por teste automatizado (depende
+# de configuração da conta) -- ver relatório final para o caminho de
+# verificação manual no painel.
+# ---------------------------------------------------------------------------
+
+
+def test_pagamento_identificado_como_debit_card_e_processado_sem_discriminacao():
+    pedido = criar_pedido_publico(30.0)
+    aprovado = resultado_mp(pedido, status="approved", payment_method_id="master", installments=1)
+    # resultado_mp() sempre marca payment_type_id="credit_card" -- substitui
+    # aqui pelo cenário real de débito devolvido pelo provedor.
+    aprovado_debito = replace(aprovado, payment_type_id="debit_card")
+    resposta = pagar_cartao(pedido, aprovado_debito, installments=1)
+    assert resposta.status_code == 200, resposta.text
+    corpo = resposta.json()
+    assert corpo["status"] == "aprovado"
+    assert corpo["aprovado"] is True
+    detalhe = client.get(f"/api/pedidos/{pedido['id']}", headers=HEADERS).json()
+    assert detalhe["forma_pagamento"].startswith("Débito")
+
+
+def test_rotulo_forma_pagamento_debit_card_nunca_e_exibido_como_credito():
+    from backend.pedido_comercial import rotulo_forma_pagamento
+
+    assert rotulo_forma_pagamento("debit_card", "master") == "Débito · Mastercard"
+    assert rotulo_forma_pagamento("credit_card", "master") == "Crédito · Mastercard"
+    assert rotulo_forma_pagamento("debit_card", "master") != rotulo_forma_pagamento("credit_card", "master")
+
+
+def test_debito_recusado_por_metodo_nao_habilitado_retorna_mensagem_amigavel():
+    """Simula o provedor recusando a criação (4xx) por payment_method_id não
+    habilitado para a conta -- cenário real quando débito não está ativado
+    no painel do Mercado Pago. Nunca deve vazar o texto bruto do provedor."""
+    pedido = criar_pedido_publico(30.0)
+    recusado = resultado_mp(
+        pedido, status="rejected", status_detail="invalid_payment_method", payment_id="",
+        payment_method_id="debmaster",
+    )
+    recusado = replace(recusado, payment_type_id=None)
+    resposta = pagar_cartao(pedido, recusado, installments=1)
+    assert resposta.status_code == 200
+    corpo = resposta.json()
+    assert corpo["status"] == "recusado"
+    assert "invalid_payment_method" not in corpo["mensagem"]
+
+
+def test_installments_de_debito_permanece_em_1_quando_e_isso_que_o_sdk_envia():
+    """O backend nunca força um número de parcelas -- aceita o que o CardForm
+    (SDK oficial) realmente ofereceu. Para débito, o SDK só oferece 1 opção;
+    este teste confirma que o backend preserva installments=1 tal como
+    enviado, sem inflar nem exigir múltiplas parcelas."""
+    pedido = criar_pedido_publico(30.0)
+    aprovado = resultado_mp(pedido, status="approved", payment_method_id="maestro", installments=1)
+    aprovado_debito = replace(aprovado, payment_type_id="debit_card")
+    resposta = pagar_cartao(pedido, aprovado_debito, installments=1)
+    assert resposta.status_code == 200
+    assert resposta.json()["parcelas"] == 1
