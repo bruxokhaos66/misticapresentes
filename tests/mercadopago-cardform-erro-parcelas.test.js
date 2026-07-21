@@ -291,7 +291,7 @@ test("parcelas: uma única opção real (1x) continua sendo exibida, nunca escon
   assert.equal(mpInstallmentsEl.options.length, 1);
 });
 
-test("parcelas: mudar de cartão (nova identificação de bandeira) reseta para o estado inicial antes de nova consulta", async () => {
+test("parcelas: onBinChange (callback oficial do SDK para 'o número do cartão mudou') reseta parcelas antigas", async () => {
   const { checkout, capturedConfigs, mpInstallmentsEl } = loadCheckout();
 
   checkout.alternarFormaPagamento("cartao");
@@ -301,21 +301,61 @@ test("parcelas: mudar de cartão (nova identificação de bandeira) reseta para 
     tentativas += 1;
   }
   assert.equal(capturedConfigs.length, 1);
+  const { callbacks } = capturedConfigs[0];
+  assert.equal(typeof callbacks.onBinChange, "function", "cardForm() deveria configurar onBinChange (docs/card-form.md do mercadopago/sdk-js)");
 
   // Deixa o campo com uma opção "de uma bandeira anterior" antes de simular
-  // a reidentificação (troca do número do cartão).
+  // a digitação de um novo número de cartão.
   const antiga = makeOption();
   antiga.textContent = "1x de R$ 18,00";
   mpInstallmentsEl.appendChild(antiga);
   checkout.definirEstadoParcelas("opcoes");
   assert.equal(mpInstallmentsEl.disabled, false);
 
-  // onPaymentMethodsReceived dispara de novo quando o BIN muda -- nunca deve
-  // reaproveitar as parcelas da bandeira anterior.
-  const { callbacks } = capturedConfigs[0];
-  callbacks.onPaymentMethodsReceived(null, [{ id: "mastercard" }]);
+  // BIN completo (6+ dígitos) de uma bandeira nova -- nunca reaproveita as
+  // parcelas da bandeira anterior enquanto a nova consulta não responde.
+  callbacks.onBinChange("511111");
 
   assert.equal(mpInstallmentsEl.disabled, true, "parcelas antigas não podem continuar selecionáveis após trocar de cartão");
+});
+
+test("parcelas: onBinChange com BIN incompleto (cartão ainda sendo digitado) volta ao estado inicial", async () => {
+  const { checkout, capturedConfigs, mpInstallmentsEl, elementsById } = loadCheckout();
+
+  checkout.alternarFormaPagamento("cartao");
+  let tentativas = 0;
+  while (capturedConfigs.length === 0 && tentativas < 50) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    tentativas += 1;
+  }
+  const { callbacks } = capturedConfigs[0];
+
+  callbacks.onBinChange("41");
+
+  assert.equal(mpInstallmentsEl.disabled, true);
+  assert.equal(elementsById.mpInstallmentsNote.textContent, "Informe o cartão para ver as parcelas");
+});
+
+test("parcelas: onPaymentMethodsReceived com data.results (formato real do SDK, não array solto) nunca quebra e reseta em caso de erro/vazio", async () => {
+  const { checkout, capturedConfigs, mpInstallmentsEl } = loadCheckout();
+
+  checkout.alternarFormaPagamento("cartao");
+  let tentativas = 0;
+  while (capturedConfigs.length === 0 && tentativas < 50) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    tentativas += 1;
+  }
+  const { callbacks } = capturedConfigs[0];
+
+  const antiga = makeOption();
+  antiga.textContent = "1x de R$ 18,00";
+  mpInstallmentsEl.appendChild(antiga);
+  checkout.definirEstadoParcelas("opcoes");
+  assert.equal(mpInstallmentsEl.disabled, false);
+
+  // Formato real (mercadopago/sdk-js, docs/card-form.md): { paging, results }.
+  callbacks.onPaymentMethodsReceived(null, { paging: { total: 0 }, results: [] });
+  assert.equal(mpInstallmentsEl.disabled, true, "bandeira não reconhecida (results vazio) deveria voltar ao estado inicial");
 });
 
 test("parcelas: onInstallmentsReceived com erro do SDK nunca mostra [object Object] e desabilita o campo", async () => {

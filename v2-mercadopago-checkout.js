@@ -473,34 +473,47 @@
             }
           }, 300);
         },
-        // Dispara quando o SDK identifica (ou reidentifica) a bandeira a
-        // partir do BIN digitado -- é o sinal de "o número do cartão
-        // mudou" disponível nesta versão do CardForm (não existe um
-        // onCardNumberChange dedicado). Reseta o seletor de parcelas para
-        // "consultando" a cada identificação, para nunca reaproveitar a
-        // lista de parcelas de uma bandeira anterior enquanto a nova
-        // consulta de installments (que o próprio SDK dispara em seguida)
-        // ainda não respondeu.
-        onPaymentMethodsReceived: (error, paymentMethods) => {
-          if (error || !paymentMethods || !paymentMethods.length) {
+        // Sinal OFICIAL de "o número do cartão mudou" (mercadopago/sdk-js,
+        // docs/card-form.md: "onBinChange | bin: string | Callback
+        // triggered when BIN has changed") -- é este o hook correto para
+        // nunca reaproveitar a lista de parcelas de um cartão anterior
+        // enquanto a nova consulta de installments (disparada pelo próprio
+        // SDK em seguida) ainda não respondeu. BIN incompleto (cartão ainda
+        // sendo digitado) volta para o estado inicial; BIN completo entra
+        // em "consultando" até onInstallmentsReceived responder.
+        onBinChange: (bin) => {
+          if (!bin || String(bin).length < 6) {
             definirEstadoParcelas("inicial");
             return;
           }
           definirEstadoParcelas("carregando");
         },
-        // Callback oficial do SDK: (error, installments). O bug relatado
-        // ("parcelas não aparecem") vinha de este handler ignorar
-        // completamente o parâmetro de erro -- quando a consulta de
+        // (error, data) -- `data` é `{ paging, results: [...] }`
+        // (mercadopago/sdk-js, docs/card-form.md), NUNCA um array solto.
+        // Usado só como reforço de "bandeira não reconhecida" (onBinChange
+        // já cobre a troca do número do cartão).
+        onPaymentMethodsReceived: (error, data) => {
+          const resultados = data && Array.isArray(data.results) ? data.results : [];
+          if (error || resultados.length === 0) {
+            definirEstadoParcelas("inicial");
+          }
+        },
+        // (error, data) -- `data` é `{ merchant_account_id?, payer_costs: [...] }`
+        // (mercadopago/sdk-js, docs/card-form.md), NUNCA um array solto. O
+        // bug relatado ("parcelas não aparecem") vinha deste handler
+        // ignorar completamente o parâmetro de erro -- quando a consulta de
         // parcelamento falhava, nada acontecia e o campo ficava vazio para
         // sempre, sem nenhuma mensagem. Agora todo erro é sanitizado antes
-        // de aparecer na tela (nunca o objeto/JSON bruto do SDK).
-        onInstallmentsReceived: (error, installments) => {
+        // de aparecer na tela (nunca o objeto/JSON bruto do SDK), e a
+        // ausência de opções (payer_costs vazio) é detectada corretamente.
+        onInstallmentsReceived: (error, data) => {
           if (error) {
             console.error("[MercadoPago] onInstallmentsReceived retornou erro:", sanitizarErroParaLog(error));
             definirEstadoParcelas("erro");
             return;
           }
-          if (!installments || (Array.isArray(installments) && installments.length === 0)) {
+          const opcoes = data && Array.isArray(data.payer_costs) ? data.payer_costs : [];
+          if (opcoes.length === 0) {
             definirEstadoParcelas("vazio");
             return;
           }
