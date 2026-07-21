@@ -146,6 +146,18 @@
     });
     if (pixPanel) pixPanel.hidden = forma !== "pix";
     if (cardPanel) cardPanel.hidden = forma !== "cartao";
+    // O rótulo do indicador de etapas (#checkoutSteps) refletia sempre
+    // "Pagamento Pix", mesmo com "Cartão de crédito" selecionado -- nunca
+    // mais mostra um método que o cliente não escolheu.
+    const stepLabel = document.getElementById("checkoutStepPagamentoLabel");
+    if (stepLabel) stepLabel.textContent = forma === "cartao" ? "Pagamento cartão" : "Pagamento Pix";
+    // Nunca deixa uma mensagem de resultado de uma tentativa anterior
+    // (ex.: "Pagamento aprovado! Pedido #32...") visível ao reabrir o
+    // formulário de cartão para um pedido diferente/novo -- sem isso, o
+    // texto ficava preso na tela mesmo com o formulário limpo, dando a
+    // falsa impressão de que o pagamento atual já foi concluído.
+    setCardStatus("");
+    window.misticaEnderecoCobranca?.atualizarVisibilidade?.();
     if (forma === "cartao") montarFormularioCartao().catch(err => setCardStatus(err.message, "erro"));
   }
 
@@ -198,6 +210,10 @@
       setCardStatus(err.message || "Não foi possível preparar o pagamento agora.", "erro");
       return;
     }
+    // O valor só é conhecido depois que o pedido existe -- atualiza o texto
+    // do botão ("Pagar R$ XX,XX com cartão") assim que totalFinal chega,
+    // nunca antes (nunca mostra um valor calculado no navegador).
+    recalcularBotaoCartao();
 
     if (cardFormMontadoParaPedido === pedido.id && cardForm) return; // já montado para este pedido/total
 
@@ -310,9 +326,18 @@
     // ficar habilitado se a modalidade de recebimento continuar válida —
     // window.misticaEntrega.podeProsseguir() é a única fonte dessa checagem.
     const prontoEntrega = typeof window.misticaEntrega?.podeProsseguir !== "function" || window.misticaEntrega.podeProsseguir();
-    botao.disabled = carregando || !prontoEntrega;
+    // Endereço de cobrança (novo): retirada com cartão sempre exige os
+    // campos explícitos; entrega libera assim que "usar o mesmo endereço"
+    // está marcado — window.misticaEnderecoCobranca é a única fonte dessa
+    // checagem (checkout-billing-address.js).
+    const prontoCobranca = typeof window.misticaEnderecoCobranca?.enderecoCobrancaValido !== "function" || window.misticaEnderecoCobranca.enderecoCobrancaValido();
+    botao.disabled = carregando || !prontoEntrega || !prontoCobranca;
     botao.setAttribute("aria-disabled", String(botao.disabled));
-    botao.textContent = carregando ? "Processando pagamento..." : "Pagar com cartão";
+    // O valor cobrado é sempre pedidos.total_final (nunca calculado no
+    // navegador) -- só aparece no botão depois que o pedido já existe
+    // (pedidoAtual criado em garantirPedidoAtual/montarFormularioCartao).
+    const valorTexto = pedidoAtual?.totalFinal != null ? ` ${currency(pedidoAtual.totalFinal)}` : "";
+    botao.textContent = carregando ? "Processando pagamento..." : `Pagar${valorTexto} com cartão`;
   }
 
   // Reavalia o botão de cartão quando a modalidade/endereço mudam (chamado
@@ -325,6 +350,9 @@
 
   async function enviarPagamentoCartao() {
     if (!cardForm || !pedidoAtual) return setCardStatus("Formulário de pagamento não está pronto.", "erro");
+    if (typeof window.misticaEnderecoCobranca?.enderecoCobrancaValido === "function" && !window.misticaEnderecoCobranca.enderecoCobrancaValido()) {
+      return setCardStatus("Preencha o endereço de cobrança do cartão para continuar.", "erro");
+    }
     definirCarregando(true);
     setCardStatus("Processando pagamento com segurança pelo Mercado Pago...", "info");
 
@@ -353,6 +381,7 @@
         email: dados.cardholderEmail,
         documento_tipo: dados.identificationType || "CPF",
         documento_numero: dados.identificationNumber,
+        endereco_cobranca: window.misticaEnderecoCobranca?.obterEnderecoCobranca?.(),
       },
     };
 

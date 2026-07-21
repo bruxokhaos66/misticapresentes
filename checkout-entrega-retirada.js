@@ -162,9 +162,11 @@
 
   function atualizarResumo() {
     if (!resumoBox) return;
+    const totalBox = document.querySelector(".total-box");
     const forma = formaAtual();
     if (!forma) {
       resumoBox.hidden = true;
+      if (totalBox) totalBox.hidden = false;
       return;
     }
     const subtotal = typeof window.misticaCartTotal === "function" ? window.misticaCartTotal() : Number(document.getElementById("cartTotal")?.dataset.raw || 0);
@@ -177,13 +179,28 @@
     const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
     resumoBox.hidden = false;
-    resumoBox.innerHTML = `
+    // Uma única fonte de total em destaque: assim que o resumo com
+    // subtotal/frete/total aparece, o total genérico do carrinho
+    // (.total-box, etapa anterior) some -- nunca dois totais concorrentes
+    // na tela ao mesmo tempo (ver checkout-modern.css).
+    if (totalBox) totalBox.hidden = true;
+    const linhas = `
       <div class="resumo-entrega-linha"><span>Subtotal</span><strong>${currency.format(subtotalNumerico)}</strong></div>
       <div class="resumo-entrega-linha"><span>Desconto</span><strong>-${currency.format(desconto)}</strong></div>
       <div class="resumo-entrega-linha"><span>Frete</span><strong>${forma === "retirada" ? "Retirada grátis" : currency.format(frete)}</strong></div>
       <div class="resumo-entrega-linha resumo-entrega-total"><span>Total estimado</span><strong>${currency.format(total)}</strong></div>
       ${forma === "entrega" ? `<p class="resumo-entrega-prazo">Prazo estimado: ${PRAZO_ENTREGA} após a confirmação do pagamento.</p>` : ""}
       <p class="resumo-entrega-nota">O valor final do frete é sempre confirmado pelo servidor ao gerar o pagamento.</p>
+    `;
+    // <details> nativo: no celular vira um resumo recolhível ("Ver resumo
+    // do pedido"), sem depender de JS extra para abrir/fechar (ver
+    // checkout-modern.css, seção 5). Em telas maiores o CSS ignora o
+    // colapso e mostra tudo sempre aberto.
+    resumoBox.innerHTML = `
+      <details class="resumo-entrega-collapse" open>
+        <summary>Resumo do pedido <strong>${currency.format(total)}</strong></summary>
+        <div class="resumo-entrega-body">${linhas}</div>
+      </details>
     `;
   }
 

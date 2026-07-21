@@ -14,14 +14,15 @@ from __future__ import annotations
 import hashlib
 import os
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from backend.audit import registrar_auditoria
 from backend.database import conectar
+from backend.frete import UF_BRASIL, normalizar_uf
 from backend.idempotency import (
     concluir_chave_idempotente,
     liberar_chave_idempotente,
@@ -45,7 +46,13 @@ from backend.payment_routes import (
     tentar_transicao_status_pagamento,
 )
 from backend.payment_webhook_routes import STATUS_PROVEDOR_EM_ANALISE, STATUS_PROVEDOR_PARA_INTERNO
-from backend.pedido_comercial import rotulo_forma_pagamento, rotulo_parcelas, sanitizar_status_detail
+from backend.pedido_comercial import (
+    STATUS_DETAIL_ALTO_RISCO,
+    mensagem_amigavel_pagamento,
+    rotulo_forma_pagamento,
+    rotulo_parcelas,
+    sanitizar_status_detail,
+)
 from backend.rate_limit import limitar_requisicoes
 
 logger = get_logger(__name__)
@@ -74,10 +81,47 @@ def _chave_interna() -> str:
     return chave
 
 
+class EnderecoCobrancaIn(BaseModel):
+    """Endereço de cobrança do cartão -- só enriquece o sinal de risco do
+    Mercado Pago (additional_info.payer.address); nunca é persistido (ver
+    _resolver_endereco_cobranca), nunca bloqueia a cobrança se ausente
+    (compatibilidade com integrações/testes que não enviam este campo)."""
+
+    usar_mesmo_da_entrega: bool = True
+    cep: Optional[str] = Field(default=None, max_length=12)
+    rua: Optional[str] = Field(default=None, max_length=200)
+    numero: Optional[str] = Field(default=None, max_length=20)
+    complemento: Optional[str] = Field(default=None, max_length=120)
+    bairro: Optional[str] = Field(default=None, max_length=120)
+    cidade: Optional[str] = Field(default=None, max_length=120)
+    uf: Optional[str] = Field(default=None, max_length=8)
+
+    @field_validator("uf")
+    @classmethod
+    def _validar_uf(cls, valor):
+        if valor is None or not str(valor).strip():
+            return None
+        uf = normalizar_uf(valor)
+        if uf not in UF_BRASIL:
+            raise ValueError("UF inválida.")
+        return uf
+
+    @field_validator("cep")
+    @classmethod
+    def _validar_cep(cls, valor):
+        if valor is None or not str(valor).strip():
+            return None
+        digitos = "".join(ch for ch in str(valor) if ch.isdigit())
+        if len(digitos) != 8:
+            raise ValueError("CEP inválido: informe 8 dígitos.")
+        return digitos
+
+
 class PayerIn(BaseModel):
     email: EmailStr
     documento_tipo: Optional[str] = Field(default="CPF", max_length=10)
     documento_numero: Optional[str] = Field(default=None, max_length=20)
+    endereco_cobranca: Optional[EnderecoCobrancaIn] = None
 
 
 class CartaoPagamentoIn(BaseModel):
@@ -116,18 +160,70 @@ def _payload_idempotencia_cartao(payload: CartaoPagamentoIn) -> dict:
     }
 
 
-def _mensagem_amigavel(status: str, status_detail: str) -> str:
-    """Mensagem neutra para o cliente -- nunca expõe status_detail bruto do
-    Mercado Pago (código interno do provedor)."""
-    if status == "approved":
-        return "Pagamento aprovado."
-    if status in STATUS_PROVEDOR_EM_ANALISE:
-        return "Pagamento em análise. Você será avisado assim que for confirmado."
-    if status == "rejected":
-        return "Não foi possível aprovar o pagamento com este cartão. Revise os dados, tente outro cartão ou escolha Pix."
-    if status == "cancelled":
-        return "Pagamento cancelado."
-    return "Não foi possível concluir o pagamento agora. Tente novamente ou escolha Pix."
+# Intervalo mínimo antes de aceitar uma nova tentativa de cartão para o
+# mesmo pedido depois de uma recusa de alto risco (ver
+# backend/pedido_comercial.py::STATUS_DETAIL_ALTO_RISCO) -- nunca tentamos
+# contornar o antifraude do provedor; só evitamos martelar novas tentativas
+# em sequência contra o mesmo sinal de risco. Não é um bloqueio permanente:
+# outro cartão ou o Pix continuam disponíveis a qualquer momento.
+COOLDOWN_ALTO_RISCO_SEGUNDOS = 120
+
+
+def _cooldown_alto_risco_restante(conn, pedido_id: int, agora: str) -> int:
+    """Segundos restantes de cooldown, ou 0 se nenhuma recusa de alto risco
+    recente existir para este pedido. Consulta só a última tentativa
+    (nenhuma tabela nova, nenhum dado persistido além do que
+    tentativas_pagamento já grava)."""
+    ultima = conn.execute(
+        """
+        SELECT status_interno, motivo_recusa, atualizado_em FROM tentativas_pagamento
+         WHERE pedido_id=? AND provedor='mercadopago' ORDER BY id DESC LIMIT 1
+        """,
+        (pedido_id,),
+    ).fetchone()
+    if not ultima or ultima["status_interno"] != "recusado":
+        return 0
+    motivo = str(ultima["motivo_recusa"] or "").strip().lower()
+    if motivo not in STATUS_DETAIL_ALTO_RISCO:
+        return 0
+    try:
+        decorrido = (datetime.fromisoformat(agora) - datetime.fromisoformat(ultima["atualizado_em"])).total_seconds()
+    except ValueError:
+        return 0
+    restante = COOLDOWN_ALTO_RISCO_SEGUNDOS - int(decorrido)
+    return max(0, restante)
+
+
+def _resolver_endereco_cobranca(pedido, endereco: Optional[EnderecoCobrancaIn]) -> Optional[dict]:
+    """Monta additional_info.payer.address -- ÚNICOS campos documentados pela
+    API do Mercado Pago para endereço do pagador (zip_code/street_name/
+    street_number/neighborhood/city/federal_unit; ver payer.address na
+    referência oficial de POST /v1/payments), nunca inventa propriedade nova
+    nem duplica o mesmo dado em payer.address e additional_info ao mesmo
+    tempo. 'Usar o mesmo endereço da entrega' só é aceito quando o pedido é
+    de fato de entrega e já tem endereço gravado (pedidos.endereco_*, Fase 3
+    -- PR #386); do contrário, exige os campos explícitos desta requisição.
+    Nunca persiste o endereço de cobrança em nenhuma tabela -- ele só existe
+    na memória do processo pelo tempo desta requisição."""
+    if endereco is None:
+        return None
+    forma_recebimento = str(pedido["forma_recebimento"] or "")
+    if endereco.usar_mesmo_da_entrega and forma_recebimento == "entrega":
+        cep, rua, numero = pedido["endereco_cep"], pedido["endereco_rua"], pedido["endereco_numero"]
+        bairro, cidade, uf = pedido["endereco_bairro"], pedido["endereco_cidade"], pedido["endereco_uf"]
+    else:
+        cep, rua, numero = endereco.cep, endereco.rua, endereco.numero
+        bairro, cidade, uf = endereco.bairro, endereco.cidade, endereco.uf
+    if not (cep and rua and numero and cidade and uf):
+        return None
+    return {
+        "zip_code": cep,
+        "street_name": rua,
+        "street_number": numero,
+        "neighborhood": bairro or "",
+        "city": cidade,
+        "federal_unit": uf,
+    }
 
 
 @router.post("/card", dependencies=[Depends(limitar_pagamento_cartao)])
@@ -148,7 +244,13 @@ def pagar_com_cartao(payload: CartaoPagamentoIn, idempotency_key: str | None = H
         with conectar() as conn:
             expirar_pedidos_pendentes(conn, agora)
             pedido = conn.execute(
-                "SELECT id, total_final, status, pix_txid FROM pedidos WHERE id=?", (payload.pedido_id,)
+                """
+                SELECT id, total_final, status, pix_txid, forma_recebimento,
+                       endereco_cep, endereco_rua, endereco_numero, endereco_bairro,
+                       endereco_cidade, endereco_uf
+                  FROM pedidos WHERE id=?
+                """,
+                (payload.pedido_id,),
             ).fetchone()
             if not pedido:
                 raise HTTPException(status_code=404, detail="Pedido não encontrado.")
@@ -166,6 +268,14 @@ def pagar_com_cartao(payload: CartaoPagamentoIn, idempotency_key: str | None = H
             if total_final <= 0:
                 raise HTTPException(status_code=409, detail="Pedido sem valor válido para cobrança.")
 
+            cooldown_restante = _cooldown_alto_risco_restante(conn, payload.pedido_id, agora)
+            if cooldown_restante > 0:
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Por segurança, aguarde {cooldown_restante}s antes de tentar novamente com cartão, tente outro cartão ou escolha Pix.",
+                )
+
+            endereco_cobranca = _resolver_endereco_cobranca(pedido, payload.payer.endereco_cobranca)
             doc_numero = _sanitizar_doc(payload.payer.documento_numero)
             cur = conn.execute(
                 """
@@ -197,6 +307,7 @@ def pagar_com_cartao(payload: CartaoPagamentoIn, idempotency_key: str | None = H
             payer_doc_number=doc_numero,
             external_reference=str(payload.pedido_id),
             description=f"Pedido #{payload.pedido_id} - Mística Presentes",
+            billing_address=endereco_cobranca,
         )
     except MercadoPagoIndisponivel:
         agora_erro = datetime.now().isoformat(timespec="seconds")
@@ -335,7 +446,7 @@ def pagar_com_cartao(payload: CartaoPagamentoIn, idempotency_key: str | None = H
         "tentativa_id": tentativa_id,
         "status": status_interno_tentativa,
         "aprovado": status_interno_tentativa == "aprovado",
-        "mensagem": _mensagem_amigavel(status_provedor_efetivo, resultado.status_detail),
+        "mensagem": mensagem_amigavel_pagamento(status_provedor_efetivo, resultado.status_detail),
         "parcelas": payload.installments,
         "valor": total_final,
     }

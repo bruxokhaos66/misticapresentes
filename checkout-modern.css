@@ -1,0 +1,310 @@
+/* Reformulação visual e operacional do checkout (Pix + cartão, Mercado
+   Pago). Este arquivo carrega POR ÚLTIMO entre os estilos do checkout
+   (ver index.html) e só sobrescreve o necessário para resolver os
+   problemas identificados no diagnóstico em vídeo: duas colunas estreitas
+   com Pix e cartão disputando atenção, títulos desproporcionais ao
+   conteúdo, total repetido/distante do botão de pagar, pouca hierarquia
+   entre as etapas. Nunca remove nem duplica a lógica de
+   v2-mercadopago-checkout.js/checkout-entrega-retirada.js/app.js -- só
+   estilo, alguns atributos ARIA e pequenos textos estáticos.
+
+   Tokens reutilizáveis (espaçamento, raio, sombra, largura de formulário,
+   tamanhos de título, estados de mensagem) ficam centralizados no escopo
+   #checkout abaixo -- qualquer ajuste futuro de identidade visual do
+   checkout parte daqui, nunca de valores soltos espalhados pelo arquivo. */
+
+#checkout {
+  --checkout-space-1: 6px;
+  --checkout-space-2: 10px;
+  --checkout-space-3: 16px;
+  --checkout-space-4: 24px;
+  --checkout-space-5: 36px;
+  --checkout-space-6: 52px;
+  --checkout-radius-sm: 12px;
+  --checkout-radius-md: 18px;
+  --checkout-radius-lg: 26px;
+  --checkout-border: 1px solid rgba(242, 201, 109, 0.16);
+  --checkout-border-strong: 1px solid rgba(242, 201, 109, 0.34);
+  --checkout-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+  --checkout-shadow-elevated: 0 26px 70px rgba(0, 0, 0, 0.38);
+  --checkout-form-max-width: 620px;
+  --checkout-title-size: clamp(1.3rem, 2.1vw, 1.7rem);
+  --checkout-title-lh: 1.2;
+  --checkout-error-bg: rgba(255, 90, 90, 0.12);
+  --checkout-error-border: rgba(255, 130, 130, 0.5);
+  --checkout-error-text: #ffdada;
+  --checkout-success-bg: rgba(189, 209, 122, 0.12);
+  --checkout-success-border: rgba(189, 209, 122, 0.45);
+  --checkout-success-text: #eaf6cf;
+}
+
+/* -------------------------------------------------------------------
+   1. Layout geral: uma sequência única (carrinho → recebimento →
+   pagamento), nunca duas colunas de largura igual disputando atenção.
+   O container fica mais estreito que o site (max-width do formulário),
+   centralizado, para nunca esticar campos/linhas de texto além do
+   confortável -- a causa raiz de "campos do cartão comprimidos" era o
+   grid 1fr/1fr forçando os dois blocos a dividir a mesma largura restrita
+   de um container de site inteiro; sem a segunda coluna competindo, o
+   mesmo espaço agora forma um único bloco confortável. ------------------- */
+#checkout .checkout-grid {
+  display: block;
+  max-width: var(--checkout-form-max-width);
+  margin: 0 auto;
+}
+
+#checkout .checkout-grid > .form-panel,
+#checkout .checkout-grid > .payment-method-panels {
+  width: 100%;
+}
+
+#checkout .checkout-grid > .form-panel + .payment-method-panels {
+  margin-top: var(--checkout-space-5);
+}
+
+#checkout .form-panel {
+  border-radius: var(--checkout-radius-lg);
+  box-shadow: var(--checkout-shadow);
+}
+
+/* -------------------------------------------------------------------
+   2. Títulos proporcionais ao conteúdo. A regra de v2.css
+   (.section-title h2, .form-panel h2 { font-size: clamp(2rem, 4vw,
+   3.45rem) }) foi desenhada para títulos de seção do site inteiro (hero,
+   contato) -- aplicada também às etapas do checkout, produzia um título
+   de vitrine acima de um formulário compacto, a causa direta de "títulos
+   muito grandes em relação ao conteúdo" apontada no vídeo. ------------- */
+#checkout .form-panel h2,
+#checkout .pix-panel h2,
+#checkout .card-panel h2 {
+  font-size: var(--checkout-title-size);
+  line-height: var(--checkout-title-lh);
+  margin: var(--checkout-space-1) 0 var(--checkout-space-3);
+}
+
+#checkout .form-panel > .eyebrow,
+#checkout .pix-panel > .eyebrow,
+#checkout .card-panel > .eyebrow {
+  margin-bottom: var(--checkout-space-2);
+}
+
+/* -------------------------------------------------------------------
+   3. Seleção de forma de pagamento -- "Como você prefere pagar?" com
+   dois cards de igual destaque, só um ativo por vez (o toggle já existia
+   em v2-mercadopago-checkout.js/index.html; aqui só o estado visual fica
+   inequívoco: contorno dourado sólido, marca de seleção, sem depender só
+   de cor para diferenciar o ativo do inativo -- WCAG 1.4.1). ----------- */
+#checkout .payment-method-heading {
+  margin: 0 0 var(--checkout-space-1);
+  color: #fff8e8;
+  font-family: Cinzel, serif;
+  font-size: var(--checkout-title-size);
+}
+
+#checkout .payment-method-subtext {
+  margin: 0 0 var(--checkout-space-3);
+  color: var(--muted, #d7c8ad);
+  font-size: 0.94rem;
+}
+
+#checkout .payment-method-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--checkout-space-2);
+  margin-bottom: var(--checkout-space-4);
+}
+
+#checkout .payment-method-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+  padding: 14px 16px 14px 40px;
+  border-radius: var(--checkout-radius-md);
+  border: var(--checkout-border-strong);
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--cream, #fff6dd);
+  text-align: left;
+  font-weight: 750;
+  font: inherit;
+  cursor: pointer;
+}
+
+#checkout .payment-method-btn::before {
+  content: "";
+  position: absolute;
+  left: 14px;
+  top: 16px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(242, 201, 109, 0.55);
+  background: transparent;
+}
+
+#checkout .payment-method-btn .payment-method-btn-desc {
+  font-weight: 500;
+  font-size: 0.82rem;
+  color: var(--muted, #d7c8ad);
+}
+
+#checkout .payment-method-btn.is-active {
+  border-color: #f2c96d;
+  background: linear-gradient(180deg, rgba(242, 201, 109, 0.16), rgba(242, 201, 109, 0.05));
+  box-shadow: 0 0 0 1px rgba(242, 201, 109, 0.35) inset;
+}
+
+#checkout .payment-method-btn.is-active::before {
+  border-color: #f2c96d;
+  background: radial-gradient(circle, #f2c96d 0 45%, transparent 50%);
+}
+
+#checkout .payment-method-btn:focus-visible {
+  outline: 2px solid #f2c96d;
+  outline-offset: 2px;
+}
+
+/* -------------------------------------------------------------------
+   4. Total: uma única fonte de verdade em destaque. O resumo de
+   recebimento (#resumoEntregaBox) já traz subtotal/desconto/frete/total
+   assim que a modalidade é escolhida -- a partir daí ele substitui
+   visualmente o total ainda genérico do carrinho (.total-box), em vez de
+   mostrar os dois ao mesmo tempo (a causa de "resumo e total repetidos").
+   JS (checkout-entrega-retirada.js) já expõe isso via [data-tem-resumo]
+   no container -- ver alternarPainel(). --------------------------------- */
+#checkout .total-box {
+  border-radius: var(--checkout-radius-md);
+  padding: var(--checkout-space-3) var(--checkout-space-4);
+  border: var(--checkout-border);
+  background: rgba(0, 0, 0, 0.16);
+}
+
+#resumoEntregaBox {
+  border-radius: var(--checkout-radius-md);
+  padding: var(--checkout-space-4);
+  border: var(--checkout-border-strong);
+  background: linear-gradient(180deg, rgba(242, 201, 109, 0.08), rgba(0, 0, 0, 0.22));
+  box-shadow: var(--checkout-shadow);
+}
+
+.resumo-entrega-collapse summary { list-style: none; cursor: default; pointer-events: none; }
+.resumo-entrega-collapse summary::-webkit-details-marker { display: none; }
+.resumo-entrega-collapse > summary { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-weight: 800; color: #fff8e8; }
+.resumo-entrega-collapse > summary strong { color: var(--gold-2, #f2c96d); font-size: 1.15rem; }
+/* Em telas ≥721px o resumo nunca colapsa (ver JS: sempre criado com
+   `open`) -- o toggle só faz sentido no celular (abaixo), onde
+   pointer-events volta a ficar habilitado. */
+.resumo-entrega-linha { display: flex; justify-content: space-between; padding: 5px 0; color: var(--muted, #d7c8ad); font-size: 0.92rem; }
+.resumo-entrega-total { border-top: var(--checkout-border-strong); margin-top: 6px; padding-top: 12px; }
+.resumo-entrega-total span { color: #fff8e8; font-weight: 800; font-size: 1rem; }
+.resumo-entrega-total strong { color: var(--gold-2, #f2c96d); font-size: 1.6rem; }
+.resumo-entrega-prazo, .resumo-entrega-nota { margin: 8px 0 0; font-size: 0.82rem; color: var(--muted, #d7c8ad); }
+
+/* -------------------------------------------------------------------
+   5. Resumo recolhível no celular -- <details> nativo: some sem depender
+   de JS extra, nunca ocupa metade da tela, mantém o total sempre visível
+   no <summary> mesmo fechado. Em telas maiores o resumo permanece sempre
+   expandido (details aberto e sem o controle de colapso). --------------- */
+@media (max-width: 720px) {
+  #resumoEntregaBox { padding: 0; background: none; border: none; box-shadow: none; }
+  #resumoEntregaBox > .resumo-entrega-collapse { display: block; border-radius: var(--checkout-radius-md); border: var(--checkout-border-strong); background: linear-gradient(180deg, rgba(242, 201, 109, 0.08), rgba(0, 0, 0, 0.22)); box-shadow: var(--checkout-shadow); overflow: hidden; }
+  #resumoEntregaBox > .resumo-entrega-collapse > summary { display: flex; justify-content: space-between; align-items: center; gap: 10px; list-style: none; cursor: pointer; pointer-events: auto; padding: var(--checkout-space-3) var(--checkout-space-4); font-weight: 800; color: #fff8e8; }
+  #resumoEntregaBox > .resumo-entrega-collapse > summary::-webkit-details-marker { display: none; }
+  #resumoEntregaBox > .resumo-entrega-collapse > summary::after { content: "Ver resumo do pedido ▾"; font-size: 0.78rem; font-weight: 700; color: var(--gold-2, #f2c96d); }
+  #resumoEntregaBox > .resumo-entrega-collapse[open] > summary::after { content: "Ocultar resumo ▴"; }
+  #resumoEntregaBox > .resumo-entrega-collapse > .resumo-entrega-body { padding: 0 var(--checkout-space-4) var(--checkout-space-4); }
+}
+
+/* -------------------------------------------------------------------
+   6. Endereço de cobrança (novo). Reaproveita os mesmos tokens/inputs do
+   endereço de entrega -- nunca um estilo paralelo. ---------------------- */
+#billingAddressBlock {
+  margin-top: var(--checkout-space-3);
+  padding-top: var(--checkout-space-3);
+  border-top: var(--checkout-border);
+}
+
+.billing-reuse-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--checkout-radius-sm);
+  border: var(--checkout-border);
+  background: rgba(0, 0, 0, 0.16);
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--cream, #fff6dd);
+}
+
+.billing-reuse-toggle input { width: 18px; height: 18px; margin-top: 2px; accent-color: #f2c96d; }
+
+#billingAddressFields {
+  margin-top: var(--checkout-space-3);
+  display: grid;
+  gap: var(--checkout-space-3);
+}
+
+#billingAddressFields .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--checkout-space-3); }
+
+/* -------------------------------------------------------------------
+   7. Estados de mensagem consistentes (erro/sucesso), sempre próximos do
+   campo/ação a que se referem, nunca só um bloco solto no fim do
+   formulário -- tokens reutilizados por Pix e cartão. ------------------- */
+#checkout [data-tone="erro"], #checkout .checkout-message-erro {
+  display: block;
+  margin: 14px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--checkout-error-border);
+  border-left: 3px solid var(--checkout-error-border);
+  border-radius: var(--checkout-radius-sm);
+  background: var(--checkout-error-bg);
+  color: var(--checkout-error-text);
+  font-weight: 700;
+}
+
+#checkout [data-tone="sucesso"], #checkout .checkout-message-sucesso {
+  display: block;
+  margin: 14px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--checkout-success-border);
+  border-radius: var(--checkout-radius-sm);
+  background: var(--checkout-success-bg);
+  color: var(--checkout-success-text);
+  font-weight: 700;
+}
+
+/* -------------------------------------------------------------------
+   8. Botão de pagar sempre dentro do painel do método selecionado, nunca
+   um botão genérico distante do formulário -- já é a estrutura existente
+   (#mpCardSubmit dentro de #mpCardForm dentro de #cardPaymentPanel); aqui
+   só reforça o destaque visual e o estado de carregamento. ------------- */
+#checkout .card-panel .btn-full,
+#checkout .pix-panel .btn-full {
+  margin-top: var(--checkout-space-3);
+  font-size: 1rem;
+  padding: 15px 18px;
+}
+
+#mpCardSubmit[aria-busy="true"],
+#checkout .btn-full[aria-busy="true"] {
+  opacity: 0.85;
+}
+
+/* -------------------------------------------------------------------
+   9. Responsivo: nunca uma coluna estreita como a do vídeo. Abaixo de
+   720px o container do site já reduz padding; aqui garantimos que o
+   formulário nunca fique espremido e que validade/CVV só ficam lado a
+   lado quando há espaço confortável (ver .mp-card-row, herdado). ------- */
+@media (max-width: 720px) {
+  #checkout .checkout-grid { max-width: 100%; }
+  #checkout .form-panel { padding: 20px; border-radius: var(--checkout-radius-md); }
+  #checkout .payment-method-toggle { grid-template-columns: 1fr; }
+  #billingAddressFields .form-row { grid-template-columns: 1fr; }
+}
+
+@media (min-width: 1200px) {
+  #checkout .checkout-grid { max-width: 680px; }
+}

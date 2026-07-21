@@ -88,12 +88,22 @@ def criar_pagamento_cartao(
     external_reference: str,
     description: str,
     notification_url: Optional[str] = None,
+    billing_address: Optional[dict] = None,
 ) -> ResultadoPagamentoMP:
     """Cria uma cobrança de cartão no Mercado Pago. `token` é o token de
     cartão gerado no navegador pelo SDK oficial (dados de cartão nunca
     passam por este servidor). X-Idempotency-Key garante que reenviar a
     mesma requisição (retry de rede, clique duplo) nunca gera uma segunda
-    cobrança no Mercado Pago."""
+    cobrança no Mercado Pago.
+
+    `billing_address`, quando informado, já vem pronto de
+    backend/mercadopago_routes.py::_resolver_endereco_cobranca com só os
+    campos documentados pela API (zip_code/street_name/street_number/
+    neighborhood/city/federal_unit) -- enviado em
+    additional_info.payer.address, o objeto que a documentação do Mercado
+    Pago associa à análise de risco do pagador (nunca payer.address, que a
+    API trata como endereço de FATURAMENTO de outros meios como boleto, para
+    não duplicar o mesmo dado em dois lugares do payload)."""
     corpo = {
         "transaction_amount": round(float(transaction_amount), 2),
         "token": token,
@@ -111,6 +121,8 @@ def criar_pagamento_cartao(
         corpo["payer"]["identification"] = {"type": payer_doc_type, "number": payer_doc_number}
     if notification_url:
         corpo["notification_url"] = notification_url
+    if billing_address:
+        corpo["additional_info"] = {"payer": {"address": billing_address}}
 
     try:
         with _cliente() as cliente:

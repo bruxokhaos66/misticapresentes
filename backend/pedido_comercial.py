@@ -98,3 +98,57 @@ def sanitizar_status_detail(status_detail: str | None, limite: int = 200) -> str
     texto = str(status_detail or "").strip()
     texto = "".join(ch for ch in texto if ch == " " or (ord(ch) >= 32 and ch != "\x7f"))
     return texto[:limite] or None
+
+
+# Mensagem amigável por status_detail (nunca o código técnico é mostrado ao
+# cliente, nunca culpa o cliente, nunca afirma "cartão sem limite" sem
+# confirmação do provedor). Cobre os cenários oficiais de sandbox já
+# documentados em docs/admin/MERCADO_PAGO.md (tabela de cartões de teste) mais
+# os pedidos explícitos de diagnóstico (CPF inválido, alto risco). Chave é
+# comparada em minúsculas contra o status_detail devolvido pelo Mercado Pago
+# OU contra a mensagem bruta de validação de uma rejeição na CRIAÇÃO do
+# pagamento (4xx, ver mercadopago_client.py::criar_pagamento_cartao) — as
+# duas fontes preenchem o mesmo campo ResultadoPagamentoMP.status_detail.
+_MENSAGENS_STATUS_DETAIL = {
+    "cc_rejected_bad_filled_security_code": "O código de segurança (CVV) informado está incorreto. Confira o código impresso no cartão e tente novamente.",
+    "cc_rejected_bad_filled_date": "A validade informada está incorreta. Confira o mês/ano impresso no cartão e tente novamente.",
+    "cc_rejected_bad_filled_other": "Alguns dados do cartão não foram reconhecidos. Revise o número, a validade e o código de segurança.",
+    "cc_rejected_bad_filled_card_number": "O número do cartão informado é inválido. Confira os dígitos e tente novamente.",
+    "cc_rejected_call_for_authorize": "O banco emissor pediu para você autorizar este pagamento diretamente com ele antes de tentar novamente.",
+    "cc_rejected_insufficient_amount": "O cartão não tem limite disponível para este valor. Tente outro cartão, outro número de parcelas ou o Pix.",
+    "cc_rejected_high_risk": "O pagamento não foi autorizado por critérios de segurança. Aguarde antes de tentar novamente, utilize outro cartão ou escolha Pix.",
+    "cc_rejected_blacklist": "O pagamento não foi autorizado por critérios de segurança. Utilize outro cartão ou escolha Pix.",
+    "cc_rejected_max_attempts": "Foram feitas várias tentativas com este cartão. Aguarde alguns minutos, tente outro cartão ou escolha Pix.",
+    "cc_rejected_duplicated_payment": "Já existe um pagamento recente com estes mesmos dados. Verifique se o pedido já foi pago antes de tentar de novo.",
+    "cc_rejected_card_disabled": "Este cartão está desabilitado para compras online. Entre em contato com o banco emissor ou tente outro cartão.",
+    "cc_rejected_card_error": "Não foi possível validar este cartão agora. Tente novamente em instantes ou escolha Pix.",
+    "cc_rejected_invalid_installments": "O número de parcelas escolhido não é aceito para este cartão. Selecione outra opção de parcelamento.",
+    "cc_rejected_other_reason": "Não foi possível aprovar o pagamento com este cartão. Revise os dados, tente outro cartão ou escolha Pix.",
+    "invalid user identification number": "Não foi possível validar o CPF informado. Revise o documento e tente novamente.",
+    "invalid_identification_number": "Não foi possível validar o CPF informado. Revise o documento e tente novamente.",
+}
+
+# status_detail cujo motivo é sinal de risco/antifraude — nunca tentamos
+# contornar automaticamente; a única ação segura é um intervalo mínimo antes
+# de aceitar uma nova tentativa de cartão para o mesmo pedido (ver
+# backend/mercadopago_routes.py::_cooldown_alto_risco_ativo).
+STATUS_DETAIL_ALTO_RISCO = {"cc_rejected_high_risk", "cc_rejected_blacklist", "cc_rejected_max_attempts"}
+
+
+def mensagem_amigavel_pagamento(status: str, status_detail: str | None) -> str:
+    """Mensagem neutra para o cliente sobre o resultado de uma tentativa de
+    cartão -- nunca expõe status/status_detail bruto do provedor. `status`
+    decide o caso geral (aprovado/pendente/recusado/cancelado); quando
+    recusado, `status_detail` refina a mensagem para os motivos conhecidos
+    (tabela acima); qualquer motivo não mapeado cai na mensagem genérica de
+    recusa, nunca um código técnico."""
+    if status == "approved":
+        return "Pagamento aprovado."
+    if status in {"pending", "in_process", "authorized", "in_mediation"}:
+        return "Pagamento em análise. Você será avisado assim que for confirmado."
+    if status == "cancelled":
+        return "Pagamento cancelado."
+    if status == "rejected":
+        chave = str(status_detail or "").strip().lower()
+        return _MENSAGENS_STATUS_DETAIL.get(chave, "Não foi possível aprovar o pagamento com este cartão. Revise os dados, tente outro cartão ou escolha Pix.")
+    return "Não foi possível concluir o pagamento agora. Tente novamente ou escolha Pix."
