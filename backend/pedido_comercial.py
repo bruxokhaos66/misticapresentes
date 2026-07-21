@@ -134,6 +134,32 @@ _MENSAGENS_STATUS_DETAIL = {
 # backend/mercadopago_routes.py::_cooldown_alto_risco_ativo).
 STATUS_DETAIL_ALTO_RISCO = {"cc_rejected_high_risk", "cc_rejected_blacklist", "cc_rejected_max_attempts"}
 
+# Código do provedor para "card_token_id inválido" na CRIAÇÃO do pagamento
+# (POST /v1/payments) -- nunca uma recusa de crédito/antifraude do emissor.
+# Confirmado pelo log de produção que motivou esta correção (pedido_id 39,
+# tentativa_id 19): o CardToken do SDK é descartável (uso único); reenviar o
+# mesmo token numa nova tentativa (ex.: clique duplo, retry sem nova
+# tokenização) é rejeitado pelo Mercado Pago com este código, nunca com um
+# status_detail cc_rejected_*. Nunca deve ser confundido com um cartão
+# recusado de verdade -- a única ação correta é gerar um token novo no
+# navegador, não repetir a mesma requisição.
+CODIGO_MP_CARD_TOKEN_INVALIDO = 3003
+
+MENSAGEM_CARD_TOKEN_INVALIDO = "Não foi possível validar os dados do cartão. Revise-os e tente novamente."
+
+
+def eh_card_token_invalido(status: str, status_detail: str | None, causa_codigos=()) -> bool:
+    """True quando a rejeição na criação do pagamento foi por token de
+    cartão inválido/já usado/expirado (nunca por recusa de crédito) -- ver
+    CODIGO_MP_CARD_TOKEN_INVALIDO. Nunca inspeciona nem expõe o token em si,
+    só o código/descrição genéricos já devolvidos pelo provedor."""
+    if status != "rejected":
+        return False
+    if causa_codigos and CODIGO_MP_CARD_TOKEN_INVALIDO in causa_codigos:
+        return True
+    texto = str(status_detail or "").lower()
+    return "card_token_id" in texto or "card_token" in texto
+
 
 def mensagem_amigavel_pagamento(status: str, status_detail: str | None) -> str:
     """Mensagem neutra para o cliente sobre o resultado de uma tentativa de

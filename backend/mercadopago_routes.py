@@ -18,6 +18,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from backend.audit import registrar_auditoria
@@ -47,7 +48,9 @@ from backend.payment_routes import (
 )
 from backend.payment_webhook_routes import STATUS_PROVEDOR_EM_ANALISE, STATUS_PROVEDOR_PARA_INTERNO
 from backend.pedido_comercial import (
+    MENSAGEM_CARD_TOKEN_INVALIDO,
     STATUS_DETAIL_ALTO_RISCO,
+    eh_card_token_invalido,
     mensagem_amigavel_pagamento,
     rotulo_forma_pagamento,
     rotulo_parcelas,
@@ -443,19 +446,32 @@ def pagar_com_cartao(payload: CartaoPagamentoIn, idempotency_key: str | None = H
                 )
             conn.commit()
 
+    # card_token_id inválido/já usado/expirado (código 3003, ver
+    # backend/pedido_comercial.py::eh_card_token_invalido) nunca é uma
+    # recusa de crédito -- é um erro de integração (o CardToken do SDK é
+    # descartável, de uso único) que o cliente resolve gerando um token novo
+    # no navegador. Sinalizado com HTTP 422 + "codigo" interno sanitizado
+    # (nunca o código/mensagem bruta do provedor) para o frontend nunca
+    # tratar isso como uma recusa comum de cartão.
+    token_invalido = eh_card_token_invalido(resultado.status, resultado.status_detail, resultado.causa_codigos)
+    mensagem = MENSAGEM_CARD_TOKEN_INVALIDO if token_invalido else mensagem_amigavel_pagamento(status_provedor_efetivo, resultado.status_detail)
+
     resposta = {
-        "ok": True,
+        "ok": not token_invalido,
         "pedido_id": payload.pedido_id,
         "tentativa_id": tentativa_id,
         "status": status_interno_tentativa,
         "aprovado": status_interno_tentativa == "aprovado",
-        "mensagem": mensagem_amigavel_pagamento(status_provedor_efetivo, resultado.status_detail),
+        "mensagem": mensagem,
+        "codigo": "cartao_token_invalido" if token_invalido else None,
         "parcelas": payload.installments,
         "valor": total_final,
     }
     with conectar() as conn:
         concluir_chave_idempotente(conn, "pagamento_cartao_mp", idempotency_key, resposta)
         conn.commit()
+    if token_invalido:
+        return JSONResponse(status_code=422, content=resposta)
     return resposta
 
 

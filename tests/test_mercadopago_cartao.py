@@ -75,7 +75,7 @@ def criar_pedido_publico_entrega(preco: float, quantidade: int = 1) -> dict:
     return resposta.json()
 
 
-def resultado_mp(pedido, *, status="approved", status_detail="accredited", payment_id=None, valor=None, installments=1, payment_method_id="visa", currency_id="BRL"):
+def resultado_mp(pedido, *, status="approved", status_detail="accredited", payment_id=None, valor=None, installments=1, payment_method_id="visa", currency_id="BRL", causa_codigos=()):
     from backend.mercadopago_client import ResultadoPagamentoMP
 
     # Cada pagamento no Mercado Pago tem um id único de verdade; nos testes,
@@ -94,6 +94,7 @@ def resultado_mp(pedido, *, status="approved", status_detail="accredited", payme
         external_reference=str(pedido["id"]),
         currency_id=currency_id,
         collector_id="1" if payment_id else None,
+        causa_codigos=causa_codigos,
     )
 
 
@@ -824,6 +825,73 @@ def test_mensagem_amigavel_cpf_invalido_na_criacao():
     resposta = pagar_cartao(pedido, recusado)
     assert resposta.status_code == 200
     assert "cpf" in resposta.json()["mensagem"].lower()
+
+
+# ---------------------------------------------------------------------------
+# card_token_id inválido/já usado (código 3003) -- causa raiz do bug de
+# produção que motivou esta correção (pedido_id 39, tentativa_id 19). O
+# CardToken do SDK é descartável (uso único, ver docs/card-form.md do
+# mercadopago/sdk-js); reenviar o mesmo token numa nova tentativa é
+# rejeitado pelo Mercado Pago com este código, nunca com um status_detail
+# cc_rejected_*. Nunca deve ser tratado como uma recusa comum de crédito.
+# ---------------------------------------------------------------------------
+
+
+def test_card_token_invalido_retorna_422_com_mensagem_amigavel_e_sem_vazar_dado_bruto():
+    pedido = criar_pedido_publico(45.0)
+    recusado = resultado_mp(pedido, status="rejected", status_detail="Invalid card_token_id", payment_id="", causa_codigos=(3003,))
+    resposta = pagar_cartao(pedido, recusado)
+    assert resposta.status_code == 422
+    corpo = resposta.json()
+    assert corpo["codigo"] == "cartao_token_invalido"
+    assert "revise" in corpo["mensagem"].lower()
+    # Nunca expõe o texto bruto do provedor nem o código numérico 3003.
+    assert "card_token_id" not in corpo["mensagem"].lower()
+    assert "3003" not in corpo["mensagem"]
+    detalhe = client.get(f"/api/pedidos/{pedido['id']}", headers=HEADERS).json()
+    assert detalhe["status"] == "Aguardando pagamento"  # nunca cancela, nunca confirma
+
+
+def test_card_token_invalido_detectado_so_pelo_codigo_de_causa_sem_texto_no_status_detail():
+    # Defesa em profundidade: mesmo se o texto do status_detail não contiver
+    # "card_token" (ex.: provedor muda a redação da mensagem), o código
+    # numérico 3003 sozinho já é suficiente para classificar corretamente.
+    pedido = criar_pedido_publico(45.0)
+    recusado = resultado_mp(pedido, status="rejected", status_detail="Bad Request", payment_id="", causa_codigos=(3003,))
+    resposta = pagar_cartao(pedido, recusado)
+    assert resposta.status_code == 422
+    assert resposta.json()["codigo"] == "cartao_token_invalido"
+
+
+def test_recusa_de_credito_comum_continua_200_nunca_vira_422():
+    # Regressão: uma recusa de crédito de verdade (ex.: saldo insuficiente)
+    # nunca deve ser confundida com token inválido -- continua HTTP 200,
+    # como sempre foi (o cliente pode tentar outro cartão no mesmo pedido).
+    pedido = criar_pedido_publico(45.0)
+    recusado = resultado_mp(pedido, status="rejected", status_detail="cc_rejected_insufficient_amount", payment_id="")
+    resposta = pagar_cartao(pedido, recusado)
+    assert resposta.status_code == 200
+    corpo = resposta.json()
+    assert corpo["status"] == "recusado"
+    assert corpo["codigo"] is None
+
+
+def test_nova_tentativa_com_token_novo_apos_token_invalido_nao_colide_na_idempotencia():
+    # O bug relatado tinha 19 tentativas para o mesmo pedido -- a correção
+    # também precisa garantir que uma nova tentativa (com token novo, nova
+    # Idempotency-Key -- é isso que o frontend corrigido faz, ver
+    # v2-mercadopago-checkout.js::enviarPagamentoCartao) nunca esbarra num
+    # 409 de "chave já usada com dados diferentes" por causa do token
+    # anterior ainda estar "preso" à mesma chave.
+    pedido = criar_pedido_publico(70.0)
+    token_invalido = resultado_mp(pedido, status="rejected", status_detail="Invalid card_token_id", payment_id="", causa_codigos=(3003,))
+    resposta1 = pagar_cartao(pedido, token_invalido, idempotency_key=str(uuid.uuid4()))
+    assert resposta1.status_code == 422
+
+    aprovado = resultado_mp(pedido, status="approved", payment_id="mp-retry-token-novo")
+    resposta2 = pagar_cartao(pedido, aprovado, idempotency_key=str(uuid.uuid4()))
+    assert resposta2.status_code == 200
+    assert resposta2.json()["status"] == "aprovado"
 
 
 def test_recusa_por_alto_risco_aplica_cooldown_na_proxima_tentativa():

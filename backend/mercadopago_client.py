@@ -46,6 +46,12 @@ class ResultadoPagamentoMP:
     external_reference: Optional[str]
     currency_id: Optional[str]
     collector_id: Optional[str]
+    # Códigos de erro do provedor (payload["cause"][*]["code"]) quando a
+    # criação é rejeitada por validação (4xx) -- ex.: 3003 = card_token_id
+    # inválido/já utilizado/expirado. Vazio em qualquer outro caso (inclusive
+    # sucesso). Nunca contém dado de cartão/pessoal, só o código numérico já
+    # logado hoje em mercadopago_pagamento_rejeitado_na_criacao.
+    causa_codigos: tuple = ()
 
 
 def _cliente() -> httpx.Client:
@@ -198,6 +204,7 @@ def criar_pagamento_cartao(
             external_reference=external_reference,
             currency_id=None,
             collector_id=None,
+            causa_codigos=tuple(c["code"] for c in causas if isinstance(c.get("code"), int)),
         )
 
     return _normalizar(payload)
