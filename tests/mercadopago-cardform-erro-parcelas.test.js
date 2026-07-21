@@ -198,6 +198,35 @@ test("normalizarMensagemErro: nunca deixa passar uma sequência de dígitos com 
   assert.doesNotMatch(mensagem, /4111111111111111/);
 });
 
+test("normalizarMensagemErro: nunca deixa passar um CPF de verdade (com ou sem pontuação)", () => {
+  const { checkout } = loadCheckout();
+  const comPontuacao = checkout.normalizarMensagemErro({ detail: "CPF 123.456.789-00 já usado em outro pedido" });
+  const semPontuacao = checkout.normalizarMensagemErro({ detail: "CPF 12345678900 já usado em outro pedido" });
+  assert.doesNotMatch(comPontuacao, /123\.456\.789-00/);
+  assert.doesNotMatch(semPontuacao, /12345678900/);
+});
+
+test("normalizarMensagemErro: nunca deixa passar um endereço com logradouro e número", () => {
+  const { checkout } = loadCheckout();
+  const mensagem = checkout.normalizarMensagemErro({ detail: "Endereço Rua das Flores, 123, Centro inválido" });
+  assert.doesNotMatch(mensagem, /Rua das Flores/);
+  assert.doesNotMatch(mensagem, /123/);
+});
+
+test("normalizarMensagemErro: nunca exibe HTML bruto (ex.: página de erro de proxy/gateway)", () => {
+  const { checkout } = loadCheckout();
+  const mensagem = checkout.normalizarMensagemErro("<html><body><h1>502 Bad Gateway</h1></body></html>");
+  assert.doesNotMatch(mensagem, /<html>|<body>|<h1>/);
+});
+
+test("normalizarMensagemErro: mensagens amigáveis genéricas do backend (sem dado sensível) continuam intactas", () => {
+  const { checkout } = loadCheckout();
+  // Nunca deve bloquear por conter as PALAVRAS "cartão"/"CPF"/"endereço" --
+  // só bloqueia quando há um DADO sensível de verdade (regex acima).
+  assert.equal(checkout.normalizarMensagemErro({ detail: "Preencha o endereço de cobrança do cartão para continuar." }), "Preencha o endereço de cobrança do cartão para continuar.");
+  assert.equal(checkout.normalizarMensagemErro({ detail: "CPF inválido. Confira o número informado." }), "CPF inválido. Confira o número informado.");
+});
+
 test("normalizarMensagemErro: erro técnico de rede (TypeError do fetch) não aparece em inglês", () => {
   const { checkout } = loadCheckout();
   const mensagem = checkout.normalizarMensagemErro(new TypeError("Failed to fetch"));

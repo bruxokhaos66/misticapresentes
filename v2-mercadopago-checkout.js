@@ -96,14 +96,20 @@
     "cc_rejected_other_reason": "O pagamento não foi autorizado. Tente outro cartão ou use o Pix.",
   };
 
-  // Nunca exibir algo que pareça token/segredo/número de cartão -- não
-  // proíbe palavras genéricas como "cartão"/"CPF"/"endereço" em mensagens
-  // amigáveis normais (isso o próprio backend já escreve em PT-BR), só
-  // bloqueia o formato de um DADO sensível de verdade (token longo, chave
-  // pública/Access Token do Mercado Pago, número com cara de cartão, header
-  // de autenticação).
+  // Nunca exibir algo que pareça token/segredo/número de cartão/CPF/endereço
+  // de verdade -- não proíbe palavras genéricas como "cartão"/"CPF"/
+  // "endereço" em mensagens amigáveis normais (isso o próprio backend já
+  // escreve em PT-BR), só bloqueia o formato de um DADO sensível de verdade:
+  // token longo, chave pública/Access Token do Mercado Pago, número com
+  // cara de cartão (13-19 dígitos) ou de CPF (11 dígitos, com ou sem
+  // pontuação), header de autenticação, ou um logradouro com número (ex.:
+  // "Rua das Flores, 123").
   const PADRAO_CONTEUDO_SENSIVEL =
-    /(access[_-]?token|authorization\s*:|bearer\s+\S+|APP_USR-\S+|TEST-\S{10,}|\b\d{13,19}\b)/i;
+    /(access[_-]?token|authorization\s*:|bearer\s+\S+|APP_USR-\S+|TEST-\S{10,}|\b\d{13,19}\b|\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b|\b(rua|av\.?|avenida|alameda|travessa|rodovia|estrada)\s+[^,\d]{2,40},?\s*(n[ºo°]?\.?\s*)?\d{1,6}\b)/i;
+
+  // Nunca exibir HTML bruto (corpo de erro de proxy/servidor devolvido como
+  // text/html em vez de JSON, por exemplo).
+  const PADRAO_HTML = /<\/?[a-z][\s\S]*>/i;
 
   // Erros crus de rede/JS (TypeError do fetch, "is not a function" etc.)
   // não são mensagens pensadas para o cliente final -- nunca exibir o texto
@@ -155,6 +161,7 @@
     if (MAPA_ERROS_TECNICOS[chave]) return MAPA_ERROS_TECNICOS[chave];
     if (PADRAO_CONTEUDO_SENSIVEL.test(semPrefixo)) return FALLBACK_ERRO_PAGAMENTO;
     if (PADRAO_ERRO_TECNICO_JS.test(semPrefixo)) return FALLBACK_ERRO_PAGAMENTO;
+    if (PADRAO_HTML.test(semPrefixo)) return FALLBACK_ERRO_PAGAMENTO; // parece HTML bruto
     if (/^\s*[[{]/.test(semPrefixo)) return FALLBACK_ERRO_PAGAMENTO; // parece JSON bruto
     if (semPrefixo.length > 220) return FALLBACK_ERRO_PAGAMENTO; // stack trace/corpo bruto grande demais
     if (semPrefixo === "[object Object]" || /^\[object /.test(semPrefixo)) return FALLBACK_ERRO_PAGAMENTO;
