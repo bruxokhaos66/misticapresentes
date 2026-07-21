@@ -125,6 +125,68 @@ de que Public Key e Access Token pertencem à mesma aplicação/ambiente só
 existe olhando o painel do Mercado Pago
 (https://www.mercadopago.com.br/developers/panel).
 
+## Endereço de cobrança (reformulação do checkout)
+
+`POST /api/payments/mercadopago/card` aceita `payer.endereco_cobranca`
+opcional (`backend/mercadopago_routes.py::EnderecoCobrancaIn`):
+`usar_mesmo_da_entrega` (bool) + `cep/rua/numero/complemento/bairro/cidade/uf`.
+
+- Quando `usar_mesmo_da_entrega=true` e o pedido é de entrega, reaproveita
+  `pedidos.endereco_*` (já gravado na criação do pedido, Fase 3 — PR #386) —
+  nunca duplicado, nunca reescrito.
+- Caso contrário (retirada, ou entrega com o campo desmarcado), usa os
+  campos explícitos desta requisição, com a mesma validação de CEP (8
+  dígitos)/UF (`backend/frete.py::UF_BRASIL`) já usada no endereço de
+  entrega.
+- Nunca é persistido em nenhuma tabela — existe só na memória do processo
+  pelo tempo da requisição (`_resolver_endereco_cobranca`).
+- Enviado ao Mercado Pago em **`payer.address`** (campos `zip_code`/
+  `street_name`/`street_number`/`neighborhood`/`city`/`federal_unit`) —
+  **nunca** em `additional_info.payer.address`, que nos SDKs oficiais é um
+  schema reduzido (só `zip_code`/`street_name`/`street_number`, sem
+  `neighborhood`/`city`/`federal_unit`) usado para dado comportamental do
+  pagador (par de `first_name`/`last_name`/`registration_date`), não para
+  endereço de cobrança completo.
+  - **Fonte primária** (revisão de homologação da PR #388 — a
+    documentação HTML oficial retornou 403 por bloqueio do proxy desta
+    sessão; confirmado por clone direto do GitHub dos dois SDKs oficiais do
+    próprio Mercado Pago): `mercadopago/sdk-nodejs`,
+    `src/clients/payment/create/types.ts` (`PayerRequest.address:
+    AddressRequest`, que estende `Address` com `neighborhood`/`city`/
+    `federal_unit`) e `src/clients/payment/commonTypes.ts`
+    (`PayerAdditionalInfo.address: Address`, sem esses três campos);
+    `mercadopago/sdk-dotnet`,
+    `src/MercadoPago/Client/Payment/PaymentPayerRequest.cs` (`Address:
+    PaymentPayerAddressRequest`) e
+    `PaymentAdditionalInfoPayerRequest.cs` (`Address: AddressRequest`,
+    base, sem os três campos extras).
+  - Uma versão anterior desta integração (primeiro commit da PR #388)
+    enviava para `additional_info.payer.address` — corrigido na revisão de
+    homologação após confirmação na fonte primária acima; ver
+    `tests/test_mercadopago_cartao.py::
+    test_billing_address_no_client_mercadopago_usa_payer_address`.
+- Ausente quando o cliente não informa endereço de cobrança —
+  comportamento idêntico ao existente antes desta mudança (compatibilidade
+  total).
+
+## Mensagens amigáveis por status_detail + cooldown de alto risco
+
+`backend/pedido_comercial.py::mensagem_amigavel_pagamento` mapeia
+`status_detail` do Mercado Pago (e a mensagem de validação bruta de uma
+rejeição na criação, ex. `"Invalid user identification number"`) para texto
+em português nunca técnico — ver a tabela `_MENSAGENS_STATUS_DETAIL` no
+próprio módulo. `status_detail` fora do mapa cai numa mensagem genérica de
+recusa, nunca um código exposto ao cliente.
+
+Recusas de sinal de risco/antifraude (`cc_rejected_high_risk`,
+`cc_rejected_blacklist`, `cc_rejected_max_attempts` —
+`STATUS_DETAIL_ALTO_RISCO`) aplicam um cooldown de
+`COOLDOWN_ALTO_RISCO_SEGUNDOS` (120s) antes de aceitar uma nova tentativa de
+cartão para o mesmo pedido (`backend/mercadopago_routes.py::
+_cooldown_alto_risco_restante`, HTTP 429 enquanto ativo) — nunca tenta
+contornar o antifraude do provedor; outro cartão ou o Pix continuam
+disponíveis a qualquer momento, sem cooldown algum.
+
 ## Cartões de teste (sandbox) — cenários oficiais
 
 Fonte: [Cartões de teste](https://www.mercadopago.com.br/developers/pt/docs/checkout-api/integration-test/test-cards)

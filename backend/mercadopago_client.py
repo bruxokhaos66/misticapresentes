@@ -88,12 +88,39 @@ def criar_pagamento_cartao(
     external_reference: str,
     description: str,
     notification_url: Optional[str] = None,
+    billing_address: Optional[dict] = None,
 ) -> ResultadoPagamentoMP:
     """Cria uma cobrança de cartão no Mercado Pago. `token` é o token de
     cartão gerado no navegador pelo SDK oficial (dados de cartão nunca
     passam por este servidor). X-Idempotency-Key garante que reenviar a
     mesma requisição (retry de rede, clique duplo) nunca gera uma segunda
-    cobrança no Mercado Pago."""
+    cobrança no Mercado Pago.
+
+    `billing_address`, quando informado, já vem pronto de
+    backend/mercadopago_routes.py::_resolver_endereco_cobranca com só os
+    campos documentados pela API (zip_code/street_name/street_number/
+    neighborhood/city/federal_unit) -- enviado em payer.address (NUNCA em
+    additional_info.payer.address).
+
+    Confirmado por revisão de homologação em duas fontes primárias
+    independentes -- os SDKs oficiais do próprio Mercado Pago (GitHub,
+    clonados diretamente nesta sessão porque a documentação HTML retornou
+    403 por bloqueio de proxy):
+      - mercadopago/sdk-nodejs, src/clients/payment/create/types.ts
+        (`PayerRequest.address: AddressRequest`, com `neighborhood`/`city`/
+        `federal_unit`) e src/clients/payment/commonTypes.ts
+        (`PayerAdditionalInfo.address: Address`, SEM esses três campos).
+      - mercadopago/sdk-dotnet, src/MercadoPago/Client/Payment/
+        PaymentPayerRequest.cs (`Address: PaymentPayerAddressRequest`,
+        subclasse de AddressRequest com os mesmos três campos extras) e
+        PaymentAdditionalInfoPayerRequest.cs (`Address: AddressRequest`,
+        base, sem eles).
+    Ou seja: additional_info.payer.address só aceita zip_code/street_name/
+    street_number (dado comportamental resumido, ao lado de first_name/
+    last_name/registration_date -- não é o conceito de endereço de
+    cobrança); o endereço COMPLETO com bairro/cidade/UF só existe em
+    payer.address. Versão anterior desta função enviava para
+    additional_info.payer.address -- corrigido nesta revisão."""
     corpo = {
         "transaction_amount": round(float(transaction_amount), 2),
         "token": token,
@@ -111,6 +138,8 @@ def criar_pagamento_cartao(
         corpo["payer"]["identification"] = {"type": payer_doc_type, "number": payer_doc_number}
     if notification_url:
         corpo["notification_url"] = notification_url
+    if billing_address:
+        corpo["payer"]["address"] = billing_address
 
     try:
         with _cliente() as cliente:
