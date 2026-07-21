@@ -19,7 +19,26 @@ const produtoApi = {
   selo: "",
 };
 
+// Mock mínimo do SDK do Mercado Pago -- sem isso, carregarSdk() (v2-
+// mercadopago-checkout.js) tenta buscar o script real em sdk.mercadopago.com,
+// que nesta suíte (sem acesso à internet real) nem resolve nem rejeita
+// rápido o bastante, atrasando/mascarando de forma não-determinística o
+// instante em que garantirPedidoAtual() (e portanto a criação do pedido) é
+// de fato chamado. Mesma técnica de mock usada em
+// tests/e2e/fixtures/mercadopago-cardform-fixture.html para os testes de
+// montagem do CardForm -- aqui só o suficiente para não travar em
+// carregarSdk(), sem simular o CardForm de verdade (fora do escopo destes
+// testes de seleção de método).
+async function mockarSdkMercadoPago(page) {
+  await page.addInitScript(() => {
+    window.MercadoPago = function MercadoPago() {
+      return { cardForm: () => ({ unmount() {} }) };
+    };
+  });
+}
+
 async function irParaCheckoutComCartaoHabilitado(page) {
+  await mockarSdkMercadoPago(page);
   await page.route("**/api/produtos?**", route => route.fulfill({
     status: 200, contentType: "application/json", body: JSON.stringify([produtoApi]),
   }));
@@ -66,12 +85,30 @@ test.describe("Seleção de forma de pagamento", () => {
     await expect(pix).toHaveAttribute("aria-selected", "false");
   });
 
-  test("4) trocar de método (sem clicar em Gerar Pix/Pagar) nunca chama a API de criação de pedido", async ({ page }) => {
+  test("4) trocar para cartão sempre reaproveita a MESMA Idempotency-Key de checkout, nunca cria um segundo pedido", async ({ page }) => {
+    // NOTA de homologação: selecionar "Cartão de crédito" DE FATO chama
+    // POST /api/checkout/pedidos (window.misticaCriarPedido, ver
+    // v2-mercadopago-checkout.js::garantirPedidoAtual) -- comportamento
+    // intencional e pré-existente a esta PR (já documentado no próprio
+    // código: "Reaproveita exatamente a mesma criação de pedido usada pelo
+    // Pix... nunca cria um segundo pedido só porque o cliente escolheu
+    // cartão"), necessário porque o CardForm do Mercado Pago exige o valor
+    // total (pedidos.total_final, sempre calculado no servidor) para
+    // inicializar. A garantia real contra duplicidade não é "zero
+    // chamadas" -- é a MESMA Idempotency-Key de checkout em toda chamada
+    // para o mesmo carrinho, que o servidor usa para nunca criar um
+    // segundo pedido (ver backend/site_stock_routes.py). Este teste
+    // substitui uma asserção anterior incorreta ("nunca chama a API"),
+    // corrigida após o CI revelar a suposição errada nesta revisão de
+    // homologação.
     await irParaCheckoutComCartaoHabilitado(page);
-    let chamadasPedido = 0;
+    const idempotencyKeys = [];
     await page.route("**/api/checkout/pedidos", async route => {
-      chamadasPedido += 1;
-      await route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
+      idempotencyKeys.push(route.request().headers()["idempotency-key"] || null);
+      await route.fulfill({
+        status: 200, contentType: "application/json",
+        body: JSON.stringify({ id: 4242, pix_txid: "TX-4242", pix_copia_cola: "00020101", total_final: 60.0, expira_em: new Date(Date.now() + 900000).toISOString() }),
+      });
     });
 
     await page.locator('[data-recebimento-radio][value="retirada"]').check();
@@ -81,7 +118,9 @@ test.describe("Seleção de forma de pagamento", () => {
     await page.click('[data-payment-method="pix"]');
     await page.waitForTimeout(300);
 
-    expect(chamadasPedido).toBe(0);
+    expect(idempotencyKeys.length).toBeGreaterThan(0);
+    const unicas = new Set(idempotencyKeys.filter(Boolean));
+    expect(unicas.size).toBe(1);
   });
 
   test("5) trocar de método nunca chama a rota de cobrança do cartão", async ({ page }) => {
