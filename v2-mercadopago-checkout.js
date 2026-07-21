@@ -19,6 +19,15 @@
   const config = window.misticaSiteConfig || {};
   const API_BASE = String(config.apiBaseUrl || "https://api.misticaesotericos.com.br").replace(/\/$/, "");
   const SDK_URL = "https://sdk.mercadopago.com/js/v2";
+  // Script OFICIAL de Device ID (antifraude), ver docs/admin/CSP.md e
+  // obterDeviceId() abaixo. Carregado dinamicamente (mesmo padrão de
+  // carregarSdk() logo abaixo) só quando o cliente abre "Cartão de
+  // crédito" -- nunca no carregamento da página inteira. Isso evita uma
+  // requisição/telemetria de antifraude desnecessária para quem nunca usa
+  // cartão (a maioria acessa só para ver produtos ou paga via Pix), e evita
+  // que uma página fria (sem checkout aberto) dependa de um script de
+  // terceiro que não tem papel nenhum ali.
+  const DEVICE_ID_SCRIPT_URL = "https://www.mercadopago.com/v2/security.js";
   const ATTEMPT_KEY_STORAGE_PREFIX = "mistica_mp_tentativa_";
 
   // Estilo dos Secure Fields (número, validade, CVV) -- iframes do próprio
@@ -83,9 +92,11 @@
   }
 
   // ---------------------------------------------------------------------
-  // Device ID (antifraude) -- mecanismo OFICIAL do Mercado Pago, script
-  // carregado em index.html: <script src="https://www.mercadopago.com/v2/
-  // security.js" view="checkout">. Esse script cria a variável global
+  // Device ID (antifraude) -- mecanismo OFICIAL do Mercado Pago
+  // (https://www.mercadopago.com/v2/security.js), carregado dinamicamente
+  // (nunca em toda página, só quando "Cartão de crédito" é aberto -- ver
+  // carregarScriptDeviceId(), chamado por montarFormularioCartao() junto
+  // com o SDK do CardForm). Esse script cria a variável global
   // window.MP_DEVICE_SESSION_ID de forma assíncrona (tempo de coleta não é
   // determinístico); nunca geramos um identificador próprio nem usamos
   // fingerprinting externo -- só lemos essa variável, com um timeout curto
@@ -97,6 +108,30 @@
   // ---------------------------------------------------------------------
   const DEVICE_ID_TIMEOUT_MS = 1500;
   const DEVICE_ID_POLL_MS = 100;
+  let deviceIdScriptLoadPromise = null;
+
+  function carregarScriptDeviceId() {
+    if (window.MP_DEVICE_SESSION_ID) return Promise.resolve();
+    if (deviceIdScriptLoadPromise) return deviceIdScriptLoadPromise;
+    deviceIdScriptLoadPromise = new Promise((resolve) => {
+      // Nunca trava a montagem do CardForm por causa disso (nem em erro
+      // síncrono nem assíncrono) -- sucesso ou falha do script só afetam
+      // se obterDeviceId() encontra um valor ou expira pelo próprio
+      // timeout dela.
+      try {
+        const script = document.createElement("script");
+        script.src = DEVICE_ID_SCRIPT_URL;
+        script.setAttribute("view", "checkout");
+        script.async = true;
+        script.onload = () => resolve();
+        script.onerror = () => resolve();
+        document.head.appendChild(script);
+      } catch {
+        resolve();
+      }
+    });
+    return deviceIdScriptLoadPromise;
+  }
 
   function obterDeviceId() {
     return new Promise((resolve) => {
@@ -462,6 +497,12 @@
   async function montarFormularioCartao() {
     const cfg = await obterConfigPublica();
     if (!cfg.enabled || !cfg.public_key) return;
+    // Disparado em paralelo, nunca aguardado aqui -- carregar o script de
+    // Device ID nunca deve atrasar/bloquear a montagem do CardForm; o
+    // tempo extra que ele ganha até o submit (preenchimento do cartão
+    // pelo cliente) só aumenta a chance de obterDeviceId() encontrar o
+    // valor pronto na hora de pagar.
+    carregarScriptDeviceId();
     await carregarSdk();
     // trackingDisabled: true -- opção oficial do SDK (mercadopago/sdk-js,
     // README "API": "Enable/disable tracking of generic usage metrics",
@@ -941,5 +982,6 @@
     normalizarMensagemErro,
     definirEstadoParcelas,
     obterDeviceId,
+    carregarScriptDeviceId,
   };
 })();
