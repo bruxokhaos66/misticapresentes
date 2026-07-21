@@ -477,6 +477,19 @@ Nenhuma migration desta mudança remove ou renomeia dados existentes — só
 adiciona as tabelas `notification_outbox` e `whatsapp_status_eventos`
 (`CREATE TABLE IF NOT EXISTS`, idempotente).
 
+### Crescimento da tabela e retenção
+
+`notification_outbox` cresce indefinidamente com o tempo (uma ou mais
+linhas por evento administrativo, por destinatário) — **esta PR não
+implementa nenhuma retenção/expurgo automático** das linhas já concluídas
+(`sent`/`delivered`/`read`/`cancelled`/`permanently_failed`). Impacto
+estimado é baixo no volume esperado desta loja (poucas notificações por
+pedido, não por visita/request), mas é um crescimento não limitado que uma
+operação de longo prazo deve monitorar. Nenhuma exclusão foi implementada
+sem autorização explícita — se necessário no futuro, deve ser uma decisão
+operacional separada (ex.: um job de expurgo por idade, mantendo sempre um
+período mínimo para auditoria), não parte desta fundação.
+
 ---
 
 ## 14. Rotação de token
@@ -520,6 +533,17 @@ lido da variável de ambiente do processo em tempo real.
   Nunca `exactly once` de ponta a ponta.
 - **Sem UI de painel.** Só a API REST administrativa existe nesta PR — ver
   seção 17 ("Fora do escopo").
+- **Sem detector proativo de drift.** `FALHA_DE_RECONCILIACAO` só dispara
+  quando uma falha real e persistente já ocorreu no processamento de um
+  webhook validado (ver tabela de eventos, seção 2) — não existe, nesta
+  PR, nenhuma varredura periódica que compare o estado local dos pedidos
+  contra o estado real no Mercado Pago para detectar divergência
+  silenciosa ao longo do tempo (ex.: um pagamento aprovado no provedor que
+  nunca chegou a refletir localmente por um motivo não coberto pelos
+  caminhos de erro já tratados). Implementar esse detector é trabalho
+  futuro deliberadamente fora do escopo desta fundação.
+- **Sem retenção automática de `notification_outbox`.** Ver "Crescimento
+  da tabela e retenção", seção 13.
 
 ---
 
