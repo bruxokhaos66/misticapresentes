@@ -97,6 +97,8 @@ def criar_pagamento_cartao(
     billing_address: Optional[dict] = None,
     additional_info_items: Optional[list] = None,
     device_id: Optional[str] = None,
+    payer_first_name: Optional[str] = None,
+    payer_last_name: Optional[str] = None,
 ) -> ResultadoPagamentoMP:
     """Cria uma cobrança de cartão no Mercado Pago. `token` é o token de
     cartão gerado no navegador pelo SDK oficial (dados de cartão nunca
@@ -136,6 +138,16 @@ def criar_pagamento_cartao(
     ver commonTypes.ts do mercadopago/sdk-nodejs) -- produto/quantidade/
     valor sempre calculados pelo backend, nunca confiados ao cliente.
 
+    `payer_first_name`/`payer_last_name`, quando informados, vão em
+    payer.first_name/payer.last_name -- campos oficiais e opcionais de
+    PayerRequest (mercadopago/sdk-nodejs, src/clients/payment/create/
+    types.ts). Vêm SEMPRE de um campo explícito preenchido pelo comprador no
+    checkout (nunca de cardholderName/"Nome impresso no cartão", que é o
+    titular do cartão -- pode ser outra pessoa -- e nunca é dividido
+    automaticamente em nome/sobrenome). `payer_last_name` é opcional: um
+    comprador com nome civil de uma única palavra nunca tem um sobrenome
+    inventado só para preencher o campo.
+
     `device_id`, quando informado, é o Device ID coletado no navegador pelo
     script oficial do Mercado Pago (https://www.mercadopago.com/v2/
     security.js) -- encaminhado SEMPRE no header X-meli-session-id (nunca
@@ -157,6 +169,10 @@ def criar_pagamento_cartao(
         corpo["issuer_id"] = issuer_id
     if payer_doc_type and payer_doc_number:
         corpo["payer"]["identification"] = {"type": payer_doc_type, "number": payer_doc_number}
+    if payer_first_name:
+        corpo["payer"]["first_name"] = payer_first_name
+    if payer_last_name:
+        corpo["payer"]["last_name"] = payer_last_name
     if notification_url:
         corpo["notification_url"] = notification_url
     if billing_address:

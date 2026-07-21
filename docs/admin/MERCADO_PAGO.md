@@ -169,6 +169,30 @@ opcional (`backend/mercadopago_routes.py::EnderecoCobrancaIn`):
   comportamento idêntico ao existente antes desta mudança (compatibilidade
   total).
 
+## Nome e sobrenome do comprador (`payer.first_name`/`last_name`)
+
+`POST /api/payments/mercadopago/card` exige `payer.nome` (obrigatório) e
+aceita `payer.sobrenome` (opcional) — campos próprios do checkout
+(`#mpBuyerFirstName`/`#mpBuyerLastName` em `index.html`), **distintos** de
+"Nome impresso no cartão" (`cardholderName`, o titular do cartão gerido
+pelo CardForm — pode ser uma pessoa diferente do comprador). Nunca
+derivados automaticamente de um nome completo nem de `cardholderName`.
+
+- Enviados em **`payer.first_name`/`payer.last_name`**
+  (`backend/mercadopago_client.py::criar_pagamento_cartao`) — campos
+  oficiais e opcionais de `PayerRequest` (`mercadopago/sdk-nodejs`,
+  `src/clients/payment/create/types.ts`).
+- `nome` é obrigatório (mínimo real do comprador); `sobrenome` é opcional —
+  um comprador com nome civil de uma única palavra nunca é bloqueado nem
+  tem um sobrenome inventado.
+- Validação backend (`backend/mercadopago_routes.py::PayerIn`): aceita
+  apenas letras (com acentos, qualquer script Unicode), espaço, apóstrofo e
+  hífen — cobre nomes compostos, partículas ("de", "da") e nomes de uma
+  única palavra, rejeita dígitos/HTML/caracteres de controle. Espaços
+  excessivos são normalizados (nunca altera a grafia legítima).
+- Nunca persistidos além do fluxo da requisição, nunca logados, nunca
+  enviados a analytics.
+
 ## Mensagens amigáveis por status_detail + cooldown de alto risco
 
 `backend/pedido_comercial.py::mensagem_amigavel_pagamento` mapeia

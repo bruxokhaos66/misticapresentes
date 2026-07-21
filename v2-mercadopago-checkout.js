@@ -92,6 +92,24 @@
   }
 
   // ---------------------------------------------------------------------
+  // Nome/sobrenome do COMPRADOR (payer.first_name/last_name da Payments
+  // API) -- coletados por campos próprios do checkout (#mpBuyerFirstName/
+  // #mpBuyerLastName), nunca a partir de cardholderName ("Nome impresso no
+  // cartão", o titular do cartão -- pode ser outra pessoa). Aceita letras
+  // Unicode (com acentos, qualquer script), espaço, apóstrofo e hífen --
+  // cobre nomes compostos, partículas ("de", "da") e nomes civis de uma
+  // única palavra, sem admitir dígitos, HTML ou caracteres de controle.
+  const NOME_COMPRADOR_PADRAO = /^[\p{L}\p{M} '-]{1,60}$/u;
+
+  function normalizarNomeComprador(valor) {
+    return String(valor || "").replace(/\s+/g, " ").trim();
+  }
+
+  function nomeCompradorValido(valor) {
+    return NOME_COMPRADOR_PADRAO.test(valor);
+  }
+
+  // ---------------------------------------------------------------------
   // Device ID (antifraude) -- mecanismo OFICIAL do Mercado Pago
   // (https://www.mercadopago.com/v2/security.js), carregado dinamicamente
   // (nunca em toda página, só quando "Cartão de crédito" é aberto -- ver
@@ -796,6 +814,20 @@
     if (typeof window.misticaEnderecoCobranca?.enderecoCobrancaValido === "function" && !window.misticaEnderecoCobranca.enderecoCobrancaValido()) {
       return setCardStatus("Preencha o endereço de cobrança do cartão para continuar.", "erro");
     }
+
+    // Nome/sobrenome do COMPRADOR (payer.first_name/last_name) -- campos
+    // próprios, distintos de "Nome impresso no cartão" (cardholderName, o
+    // titular do cartão, que pode ser outra pessoa). Nunca dividimos um nome
+    // completo automaticamente nem reaproveitamos cardholderName aqui.
+    const nomeComprador = normalizarNomeComprador(document.getElementById("mpBuyerFirstName")?.value);
+    const sobrenomeComprador = normalizarNomeComprador(document.getElementById("mpBuyerLastName")?.value);
+    if (!nomeComprador || !nomeCompradorValido(nomeComprador)) {
+      return setCardStatus("Informe seu nome (sem números ou símbolos) para continuar.", "erro");
+    }
+    if (sobrenomeComprador && !nomeCompradorValido(sobrenomeComprador)) {
+      return setCardStatus("Sobrenome inválido -- use apenas letras, espaços, hífen ou apóstrofo.", "erro");
+    }
+
     definirCarregando(true);
     setCardStatus("Processando pagamento com segurança pelo Mercado Pago...", "info");
 
@@ -851,6 +883,8 @@
       device_id: deviceId || undefined,
       payer: {
         email: dadosFormulario.cardholderEmail,
+        nome: nomeComprador,
+        sobrenome: sobrenomeComprador || undefined,
         documento_tipo: dadosFormulario.identificationType || "CPF",
         documento_numero: dadosFormulario.identificationNumber,
         endereco_cobranca: window.misticaEnderecoCobranca?.obterEnderecoCobranca?.(),
@@ -983,5 +1017,7 @@
     definirEstadoParcelas,
     obterDeviceId,
     carregarScriptDeviceId,
+    normalizarNomeComprador,
+    nomeCompradorValido,
   };
 })();

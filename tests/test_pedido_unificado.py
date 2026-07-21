@@ -89,7 +89,7 @@ def pagar_cartao(pedido, resultado, idempotency_key=None, installments=1, **over
         "token": "card_token_" + uuid.uuid4().hex,
         "payment_method_id": resultado.payment_method_id,
         "installments": installments,
-        "payer": {"email": "cliente-unif@example.com", "documento_numero": "12345678900"},
+        "payer": {"email": "cliente-unif@example.com", "nome": "Maria", "documento_numero": "12345678900"},
     }
     body.update(overrides)
     headers = {"Idempotency-Key": idempotency_key or str(uuid.uuid4()), "X-Forwarded-For": ip_unico()}

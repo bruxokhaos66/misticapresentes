@@ -123,11 +123,53 @@ class EnderecoCobrancaIn(BaseModel):
         return digitos
 
 
+def _nome_comprador_valido(texto: str) -> bool:
+    """Aceita apenas letras (com acentos, qualquer script Unicode), espaço,
+    apóstrofo e hífen -- cobre nomes compostos, partículas ("de", "da") e
+    nomes de uma única palavra, sem admitir dígitos, HTML ou caracteres de
+    controle. Nunca usado para inferir/derivar nome a partir de outro
+    campo -- só valida o que o comprador digitou explicitamente."""
+    return bool(texto) and all(ch.isalpha() or ch in " '-" for ch in texto)
+
+
+def _normalizar_espacos(texto: str) -> str:
+    return re.sub(r"\s+", " ", str(texto or "")).strip()
+
+
 class PayerIn(BaseModel):
     email: EmailStr
+    # Nome/sobrenome do COMPRADOR (payer.first_name/last_name da Payments
+    # API) -- coletados por campos explícitos do checkout, nunca derivados de
+    # "Nome impresso no cartão" (cardholderName, titular do cartão, pode ser
+    # uma pessoa diferente) nem divididos automaticamente de um nome
+    # completo. `nome` é obrigatório (é o dado mínimo real do comprador);
+    # `sobrenome` é opcional -- nomes civis legítimos de uma única palavra
+    # nunca são bloqueados nem preenchidos com valor inventado.
+    nome: str = Field(min_length=1, max_length=60)
+    sobrenome: Optional[str] = Field(default=None, max_length=60)
     documento_tipo: Optional[str] = Field(default="CPF", max_length=10)
     documento_numero: Optional[str] = Field(default=None, max_length=20)
     endereco_cobranca: Optional[EnderecoCobrancaIn] = None
+
+    @field_validator("nome")
+    @classmethod
+    def _validar_nome(cls, valor):
+        limpo = _normalizar_espacos(valor)
+        if not limpo or not _nome_comprador_valido(limpo):
+            raise ValueError("Nome inválido: use apenas letras, espaços, hífen ou apóstrofo.")
+        return limpo[:60]
+
+    @field_validator("sobrenome")
+    @classmethod
+    def _validar_sobrenome(cls, valor):
+        if valor is None:
+            return None
+        limpo = _normalizar_espacos(valor)
+        if not limpo:
+            return None
+        if not _nome_comprador_valido(limpo):
+            raise ValueError("Sobrenome inválido: use apenas letras, espaços, hífen ou apóstrofo.")
+        return limpo[:60]
 
 
 _DEVICE_ID_PADRAO = re.compile(r"^[A-Za-z0-9._-]{8,160}$")
@@ -384,6 +426,8 @@ def pagar_com_cartao(payload: CartaoPagamentoIn, idempotency_key: str | None = H
             billing_address=endereco_cobranca,
             additional_info_items=itens_additional_info,
             device_id=payload.device_id,
+            payer_first_name=payload.payer.nome,
+            payer_last_name=payload.payer.sobrenome,
         )
     except MercadoPagoIndisponivel:
         agora_erro = datetime.now().isoformat(timespec="seconds")
