@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import secrets
 from datetime import datetime, timedelta
 from typing import Optional
@@ -129,6 +130,9 @@ class PayerIn(BaseModel):
     endereco_cobranca: Optional[EnderecoCobrancaIn] = None
 
 
+_DEVICE_ID_PADRAO = re.compile(r"^[A-Za-z0-9._-]{8,160}$")
+
+
 class CartaoPagamentoIn(BaseModel):
     pedido_id: int = Field(gt=0)
     # Identificador seguro do próprio pedido (mesmo pix_txid devolvido na
@@ -139,7 +143,35 @@ class CartaoPagamentoIn(BaseModel):
     payment_method_id: str = Field(min_length=1, max_length=40)
     installments: int = Field(default=1, ge=1, le=24)
     issuer_id: Optional[str] = Field(default=None, max_length=40)
+    # Device ID coletado pelo script oficial do Mercado Pago no navegador
+    # (https://www.mercadopago.com/v2/security.js), encaminhado ao provedor
+    # no header X-meli-session-id (ver criar_pagamento_cartao) -- NUNCA
+    # persistido, NUNCA logado, NUNCA usado como Idempotency-Key. Opcional:
+    # a ausência (script bloqueado/timeout no navegador) nunca impede o
+    # pagamento, só reduz um sinal adicional de antifraude do provedor.
+    # max_length generoso (nunca o formato final aceito) -- rejeitar a
+    # requisição inteira por um Device ID grande demais bloquearia o
+    # pagamento; o validator abaixo descarta silenciosamente qualquer valor
+    # fora do formato esperado (incluindo tamanho) sem levantar erro.
+    device_id: Optional[str] = Field(default=None, max_length=1000)
     payer: PayerIn
+
+    @field_validator("device_id")
+    @classmethod
+    def _validar_device_id(cls, valor):
+        if valor is None:
+            return None
+        valor = valor.strip()
+        if not valor:
+            return None
+        # Formato conservador (alfanumérico + . _ -, sem espaços/CRLF que
+        # poderiam corromper o header HTTP encaminhado ao provedor) -- valor
+        # fora desse formato (incluindo tamanho fora de 8-160) é descartado
+        # silenciosamente, nunca rejeita a tentativa de pagamento por causa
+        # disso.
+        if not _DEVICE_ID_PADRAO.match(valor):
+            return None
+        return valor
 
 
 def _sanitizar_doc(numero: Optional[str]) -> Optional[str]:
@@ -197,6 +229,41 @@ def _cooldown_alto_risco_restante(conn, pedido_id: int, agora: str) -> int:
         return 0
     restante = COOLDOWN_ALTO_RISCO_SEGUNDOS - int(decorrido)
     return max(0, restante)
+
+
+def _itens_additional_info(conn, pedido_id: int) -> Optional[list]:
+    """Monta additional_info.items a partir de pedidos_itens (produto,
+    quantidade e valor unitário JÁ calculados pelo backend na criação do
+    pedido -- nunca confia em preço/quantidade vindos do cliente). Só os
+    campos documentados pelo schema oficial (id/title/quantity/unit_price;
+    ver commonTypes.ts do mercadopago/sdk-nodejs) -- sem category_id/
+    description/picture_url/warranty inventados, porque este catálogo não
+    tem esses dados estruturados hoje. Retorna None se o pedido não tiver
+    itens ou se algum item não tiver quantidade/preço válidos (nunca envia
+    um item com dado incoerente)."""
+    linhas = conn.execute(
+        "SELECT codigo_p, nome_p, quantidade, valor_unitario FROM pedidos_itens WHERE pedido_id=? ORDER BY id",
+        (pedido_id,),
+    ).fetchall()
+    if not linhas:
+        return None
+    itens = []
+    for linha in linhas:
+        codigo = str(linha["codigo_p"] or "").strip()
+        titulo = str(linha["nome_p"] or "").strip()
+        quantidade = int(linha["quantidade"] or 0)
+        valor_unitario = float(linha["valor_unitario"] or 0)
+        if not codigo or not titulo or quantidade <= 0 or valor_unitario <= 0:
+            return None
+        itens.append(
+            {
+                "id": codigo[:60],
+                "title": titulo[:256],
+                "quantity": quantidade,
+                "unit_price": round(valor_unitario, 2),
+            }
+        )
+    return itens or None
 
 
 def _resolver_endereco_cobranca(pedido, endereco: Optional[EnderecoCobrancaIn]) -> Optional[dict]:
@@ -282,6 +349,7 @@ def pagar_com_cartao(payload: CartaoPagamentoIn, idempotency_key: str | None = H
                 )
 
             endereco_cobranca = _resolver_endereco_cobranca(pedido, payload.payer.endereco_cobranca)
+            itens_additional_info = _itens_additional_info(conn, payload.pedido_id)
             doc_numero = _sanitizar_doc(payload.payer.documento_numero)
             cur = conn.execute(
                 """
@@ -314,6 +382,8 @@ def pagar_com_cartao(payload: CartaoPagamentoIn, idempotency_key: str | None = H
             external_reference=str(payload.pedido_id),
             description=f"Pedido #{payload.pedido_id} - Mística Presentes",
             billing_address=endereco_cobranca,
+            additional_info_items=itens_additional_info,
+            device_id=payload.device_id,
         )
     except MercadoPagoIndisponivel:
         agora_erro = datetime.now().isoformat(timespec="seconds")

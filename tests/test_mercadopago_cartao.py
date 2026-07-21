@@ -806,6 +806,277 @@ def test_billing_address_no_client_mercadopago_usa_payer_address():
 
 
 # ---------------------------------------------------------------------------
+# Device ID (antifraude) -- coletado no navegador pelo script oficial do
+# Mercado Pago (v2/security.js), encaminhado ao provedor no header
+# X-meli-session-id (nunca como campo do corpo JSON, nunca persistido, nunca
+# logado, nunca usado como Idempotency-Key).
+# ---------------------------------------------------------------------------
+
+
+def test_device_id_valido_e_encaminhado_para_criar_pagamento():
+    pedido = criar_pedido_publico(30.0)
+    aprovado = resultado_mp(pedido, status="approved")
+    mocks = []
+    resposta = pagar_cartao(pedido, aprovado, device_id="abc123DEVICE-id_9", capturar_mock=mocks)
+    assert resposta.status_code == 200, resposta.text
+    _, kwargs = mocks[0].call_args
+    assert kwargs["device_id"] == "abc123DEVICE-id_9"
+
+
+def test_device_id_ausente_nao_bloqueia_pagamento():
+    pedido = criar_pedido_publico(30.0)
+    aprovado = resultado_mp(pedido, status="approved")
+    mocks = []
+    resposta = pagar_cartao(pedido, aprovado, capturar_mock=mocks)
+    assert resposta.status_code == 200, resposta.text
+    _, kwargs = mocks[0].call_args
+    assert kwargs["device_id"] is None
+
+
+def test_device_id_com_formato_invalido_e_descartado_sem_bloquear_pagamento():
+    """Espaço/CRLF/tamanho fora do padrão nunca chegam a criar_pagamento_cartao
+    -- validação conservadora descarta silenciosamente (o pagamento nunca é
+    bloqueado por causa de um Device ID malformado, só perde esse sinal
+    adicional de antifraude)."""
+    pedido = criar_pedido_publico(30.0)
+    aprovado = resultado_mp(pedido, status="approved")
+    mocks = []
+    resposta = pagar_cartao(pedido, aprovado, device_id="valor com espaco e\r\ninjeção", capturar_mock=mocks)
+    assert resposta.status_code == 200, resposta.text
+    _, kwargs = mocks[0].call_args
+    assert kwargs["device_id"] is None
+
+
+def test_device_id_grande_demais_e_descartado_sem_rejeitar_a_requisicao():
+    """Um Device ID absurdamente grande nunca derruba a requisição inteira
+    (HTTP 422 bloquearia o pagamento) -- é só descartado, o pagamento segue
+    normalmente sem esse sinal."""
+    pedido = criar_pedido_publico(30.0)
+    aprovado = resultado_mp(pedido, status="approved")
+    mocks = []
+    resposta = pagar_cartao(pedido, aprovado, device_id="a" * 500, capturar_mock=mocks)
+    assert resposta.status_code == 200, resposta.text
+    _, kwargs = mocks[0].call_args
+    assert kwargs["device_id"] is None
+
+
+def test_device_id_curto_demais_e_descartado():
+    pedido = criar_pedido_publico(30.0)
+    aprovado = resultado_mp(pedido, status="approved")
+    mocks = []
+    resposta = pagar_cartao(pedido, aprovado, device_id="curto", capturar_mock=mocks)
+    assert resposta.status_code == 200, resposta.text
+    _, kwargs = mocks[0].call_args
+    assert kwargs["device_id"] is None
+
+
+def test_device_id_nunca_persistido_em_tentativas_pagamento_nem_auditoria():
+    pedido = criar_pedido_publico(30.0)
+    aprovado = resultado_mp(pedido, status="approved")
+    device_id_teste = "device-id-nunca-persistido-xyz"
+    resposta = pagar_cartao(pedido, aprovado, device_id=device_id_teste)
+    assert resposta.status_code == 200, resposta.text
+    from backend.database import conectar as _conectar
+
+    with _conectar() as conn:
+        linhas_tentativa = conn.execute("SELECT * FROM tentativas_pagamento WHERE pedido_id=?", (pedido["id"],)).fetchall()
+        for linha in linhas_tentativa:
+            assert device_id_teste not in str(dict(linha))
+        linhas_auditoria = conn.execute(
+            "SELECT * FROM audit_log WHERE entidade='tentativa_pagamento' ORDER BY id DESC LIMIT 5"
+        ).fetchall()
+        for linha in linhas_auditoria:
+            assert device_id_teste not in str(dict(linha))
+
+
+def test_device_id_nao_e_usado_como_idempotency_key():
+    """Duas tentativas com o MESMO device_id mas Idempotency-Key diferentes
+    (ex.: dois compradores no mesmo dispositivo compartilhado) nunca
+    colidem -- confirma que device_id não participa do payload de
+    idempotência."""
+    pedido1 = criar_pedido_publico(30.0)
+    pedido2 = criar_pedido_publico(40.0)
+    aprovado1 = resultado_mp(pedido1, status="approved")
+    aprovado2 = resultado_mp(pedido2, status="approved")
+    mesmo_device_id = "device-compartilhado-0001"
+    r1 = pagar_cartao(pedido1, aprovado1, device_id=mesmo_device_id)
+    r2 = pagar_cartao(pedido2, aprovado2, device_id=mesmo_device_id)
+    assert r1.status_code == 200 and r2.status_code == 200
+    assert r1.json()["pedido_id"] != r2.json()["pedido_id"]
+
+
+def test_client_mercadopago_encaminha_device_id_no_header_x_meli_session_id():
+    """Único ponto que realmente conversa com o Mercado Pago
+    (mercadopago_client.criar_pagamento_cartao) -- confirma que o Device ID
+    vai no header X-meli-session-id (nome documentado publicamente pelo
+    Mercado Pago) e NUNCA como campo do corpo JSON."""
+    import httpx
+
+    from backend.mercadopago_client import criar_pagamento_cartao
+
+    capturado = {}
+
+    class FakeResponse:
+        status_code = 201
+
+        def json(self):
+            return {"id": "mp-device-1", "status": "approved", "status_detail": "accredited", "transaction_amount": 10.0, "currency_id": "BRL"}
+
+    def fake_post(self, url, json=None, headers=None):
+        capturado["json"] = json
+        capturado["headers"] = headers
+        return FakeResponse()
+
+    with patch.object(httpx.Client, "post", fake_post):
+        criar_pagamento_cartao(
+            idempotency_key="k-device", transaction_amount=10.0, token="tok", installments=1,
+            payment_method_id="visa", issuer_id=None, payer_email="c@example.com",
+            payer_doc_type="CPF", payer_doc_number="12345678900",
+            external_reference="1", description="Pedido #1",
+            device_id="device-session-real-123",
+        )
+    assert capturado["headers"]["X-meli-session-id"] == "device-session-real-123"
+    assert "device_id" not in capturado["json"]
+    assert "device" not in str(capturado["json"]).lower()
+
+
+def test_client_mercadopago_sem_device_id_nao_envia_header():
+    import httpx
+
+    from backend.mercadopago_client import criar_pagamento_cartao
+
+    capturado = {}
+
+    class FakeResponse:
+        status_code = 201
+
+        def json(self):
+            return {"id": "mp-device-2", "status": "approved", "status_detail": "accredited", "transaction_amount": 10.0, "currency_id": "BRL"}
+
+    def fake_post(self, url, json=None, headers=None):
+        capturado["headers"] = headers
+        return FakeResponse()
+
+    with patch.object(httpx.Client, "post", fake_post):
+        criar_pagamento_cartao(
+            idempotency_key="k-sem-device", transaction_amount=10.0, token="tok", installments=1,
+            payment_method_id="visa", issuer_id=None, payer_email="c@example.com",
+            payer_doc_type="CPF", payer_doc_number="12345678900",
+            external_reference="1", description="Pedido #1",
+        )
+    assert "X-meli-session-id" not in capturado["headers"]
+
+
+# ---------------------------------------------------------------------------
+# additional_info.items -- produto/quantidade/valor SEMPRE calculados pelo
+# backend (pedidos_itens), nunca confiados ao cliente; só os campos
+# documentados pelo schema oficial (id/title/quantity/unit_price).
+# ---------------------------------------------------------------------------
+
+
+def test_additional_info_items_montado_a_partir_dos_itens_reais_do_pedido():
+    pedido = criar_pedido_publico(25.0, quantidade=3)
+    aprovado = resultado_mp(pedido, status="approved", valor=75.0)
+    mocks = []
+    resposta = pagar_cartao(pedido, aprovado, capturar_mock=mocks)
+    assert resposta.status_code == 200, resposta.text
+    _, kwargs = mocks[0].call_args
+    itens = kwargs["additional_info_items"]
+    assert itens is not None and len(itens) == 1
+    item = itens[0]
+    assert set(item.keys()) == {"id", "title", "quantity", "unit_price"}
+    assert item["quantity"] == 3
+    assert item["unit_price"] == 25.0
+    assert item["title"] == "Produto MP Teste"
+
+
+def test_additional_info_items_soma_coerente_com_total_final():
+    pedido = criar_pedido_publico(19.90, quantidade=2)
+    aprovado = resultado_mp(pedido, status="approved")
+    mocks = []
+    resposta = pagar_cartao(pedido, aprovado, capturar_mock=mocks)
+    assert resposta.status_code == 200, resposta.text
+    _, kwargs = mocks[0].call_args
+    itens = kwargs["additional_info_items"]
+    soma = sum(i["quantity"] * i["unit_price"] for i in itens)
+    assert round(soma, 2) == round(pedido["total_final"], 2)
+
+
+def test_additional_info_items_nunca_inclui_campo_nao_documentado():
+    """Nenhum category_id/description/picture_url/warranty inventado -- só os
+    quatro campos que este catálogo de fato tem dado real e validado."""
+    pedido = criar_pedido_publico(10.0)
+    aprovado = resultado_mp(pedido, status="approved")
+    mocks = []
+    pagar_cartao(pedido, aprovado, capturar_mock=mocks)
+    _, kwargs = mocks[0].call_args
+    for item in kwargs["additional_info_items"]:
+        assert "category_id" not in item
+        assert "description" not in item
+        assert "picture_url" not in item
+        assert "warranty" not in item
+
+
+def test_client_mercadopago_envia_additional_info_items_no_corpo_json():
+    """additional_info.items É esperado dentro do corpo JSON (ao contrário do
+    Device ID) -- é dado descritivo do pedido, não um sinal de sessão do
+    dispositivo."""
+    import httpx
+
+    from backend.mercadopago_client import criar_pagamento_cartao
+
+    capturado = {}
+
+    class FakeResponse:
+        status_code = 201
+
+        def json(self):
+            return {"id": "mp-items-1", "status": "approved", "status_detail": "accredited", "transaction_amount": 10.0, "currency_id": "BRL"}
+
+    def fake_post(self, url, json=None, headers=None):
+        capturado["json"] = json
+        return FakeResponse()
+
+    itens = [{"id": "SKU-1", "title": "Cristal Ametista", "quantity": 2, "unit_price": 25.0}]
+    with patch.object(httpx.Client, "post", fake_post):
+        criar_pagamento_cartao(
+            idempotency_key="k-items", transaction_amount=50.0, token="tok", installments=1,
+            payment_method_id="visa", issuer_id=None, payer_email="c@example.com",
+            payer_doc_type="CPF", payer_doc_number="12345678900",
+            external_reference="1", description="Pedido #1",
+            additional_info_items=itens,
+        )
+    assert capturado["json"]["additional_info"] == {"items": itens}
+
+
+def test_client_mercadopago_sem_itens_nunca_envia_additional_info_vazio():
+    import httpx
+
+    from backend.mercadopago_client import criar_pagamento_cartao
+
+    capturado = {}
+
+    class FakeResponse:
+        status_code = 201
+
+        def json(self):
+            return {"id": "mp-items-2", "status": "approved", "status_detail": "accredited", "transaction_amount": 10.0, "currency_id": "BRL"}
+
+    def fake_post(self, url, json=None, headers=None):
+        capturado["json"] = json
+        return FakeResponse()
+
+    with patch.object(httpx.Client, "post", fake_post):
+        criar_pagamento_cartao(
+            idempotency_key="k-sem-items", transaction_amount=10.0, token="tok", installments=1,
+            payment_method_id="visa", issuer_id=None, payer_email="c@example.com",
+            payer_doc_type="CPF", payer_doc_number="12345678900",
+            external_reference="1", description="Pedido #1",
+        )
+    assert "additional_info" not in capturado["json"]
+
+
+# ---------------------------------------------------------------------------
 # Mensagens amigáveis por status_detail + cooldown de recusa por alto risco.
 # ---------------------------------------------------------------------------
 

@@ -39,7 +39,7 @@ default-src 'self';
 base-uri 'self';
 object-src 'none';
 form-action 'self';
-script-src 'self' https://sdk.mercadopago.com https://www.googletagmanager.com https://connect.facebook.net;
+script-src 'self' https://sdk.mercadopago.com https://www.mercadopago.com https://www.googletagmanager.com https://connect.facebook.net;
 style-src 'self' https://fonts.googleapis.com;
 style-src-attr 'unsafe-inline';
 img-src 'self' data: blob: https:;
@@ -59,6 +59,7 @@ upgrade-insecure-requests
 | Origem | Diretiva | Motivo |
 |---|---|---|
 | `sdk.mercadopago.com` | script-src, connect-src | Carrega o SDK oficial `MercadoPago.js v2`, usado para tokenizar o cartão (CardForm) sem que os dados passem pelo nosso servidor. Único host do Mercado Pago mantido **exato** (sem curinga) em `script-src`, por ser a diretiva de maior risco. |
+| `www.mercadopago.com` | script-src | Script oficial de Device ID (antifraude): `<script src="https://www.mercadopago.com/v2/security.js" view="checkout">`, carregado em `index.html`. Cria a variável global `window.MP_DEVICE_SESSION_ID`, lida por `v2-mercadopago-checkout.js::obterDeviceId()` só no instante do submit do cartão e encaminhada pelo backend ao Mercado Pago no header `X-meli-session-id` (nunca no corpo JSON, nunca persistida, nunca logada). Host exato, sem curinga -- mesmo padrão de `sdk.mercadopago.com`. |
 | `*.mercadopago.com`, `*.mercadopago.com.br` | connect-src, frame-src | O próprio SDK, rodando no navegador, monta os campos seguros do CardForm (número, validade, CVV) como iframes do Mercado Pago e chama a API dele diretamente para tokenizar o cartão, consultar bandeira/emissor e calcular parcelas — nunca é o nosso backend fazendo isso pelo cliente. Ver "Correção do CardForm sem foco/parcelas" abaixo sobre por que virou curinga de subdomínio em vez de hosts exatos. |
 | `api.misticaesotericos.com.br` | connect-src, media-src | Nossa própria API (catálogo, carrinho, pedidos, pagamentos, vídeos de curso). |
 | `www.googletagmanager.com` | script-src, connect-src | Google Analytics (`gtag.js`), carregado só depois de consentimento explícito (LGPD, ver `consent.js`) e só se `gaMeasurementId` estiver configurado em `site-config.js` (hoje vazio = inativo). |

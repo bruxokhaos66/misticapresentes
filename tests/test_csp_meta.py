@@ -178,8 +178,14 @@ def test_csp_autoriza_apenas_origens_conhecidas_do_mercado_pago(pagina):
     restrito ao próprio provedor de pagamento, não um curinga global."""
     csp = _csp_de(pagina)
     script_src = re.search(r"script-src ([^;]+);", csp).group(1)
+    # sdk.mercadopago.com carrega o SDK MercadoPago.js v2 (tokenização/
+    # CardForm); www.mercadopago.com é o host EXATO e oficialmente
+    # documentado do script de Device ID (v2/security.js) -- nenhum outro
+    # host do Mercado Pago é aceito em script-src.
     for host in re.findall(r"https://([a-zA-Z0-9.-]*mercadopago[a-zA-Z0-9.-]*)", script_src):
-        assert host == "sdk.mercadopago.com", f"{pagina}: script-src com host inesperado do Mercado Pago: {host}"
+        assert host in {"sdk.mercadopago.com", "www.mercadopago.com"}, (
+            f"{pagina}: script-src com host inesperado do Mercado Pago: {host}"
+        )
     for diretiva in ("connect-src", "frame-src"):
         m = re.search(rf"{diretiva} ([^;]+);", csp)
         if not m:
@@ -195,6 +201,16 @@ def test_index_permite_sdk_mercadopago_para_tokenizacao():
     assert "https://sdk.mercadopago.com" in csp  # script-src: carrega o SDK
     connect_src = re.search(r"connect-src ([^;]+);", csp).group(1)
     assert "https://*.mercadopago.com" in connect_src  # tokenização/parcelas/emissor
+
+
+def test_index_carrega_script_oficial_de_device_id():
+    """Device ID (antifraude, ver docs oficiais "Integrate the Device ID") --
+    script oficial carregado com o atributo view="checkout" documentado,
+    liberado em script-src (host exato, sem curinga)."""
+    csp = _csp_de("index.html")
+    assert "https://www.mercadopago.com" in csp
+    conteudo = _ler("index.html")
+    assert '<script defer src="https://www.mercadopago.com/v2/security.js" view="checkout"></script>' in conteudo
 
 
 def test_frontend_nunca_referencia_endpoint_privado_de_criacao_de_pagamento_mercadopago():

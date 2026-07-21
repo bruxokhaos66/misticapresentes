@@ -83,6 +83,45 @@
   }
 
   // ---------------------------------------------------------------------
+  // Device ID (antifraude) -- mecanismo OFICIAL do Mercado Pago, script
+  // carregado em index.html: <script src="https://www.mercadopago.com/v2/
+  // security.js" view="checkout">. Esse script cria a variável global
+  // window.MP_DEVICE_SESSION_ID de forma assíncrona (tempo de coleta não é
+  // determinístico); nunca geramos um identificador próprio nem usamos
+  // fingerprinting externo -- só lemos essa variável, com um timeout curto
+  // para nunca travar o checkout caso o script não carregue (bloqueado por
+  // adblock, rede lenta, CSP de terceiros etc.). Nunca logado no console,
+  // nunca gravado em localStorage/sessionStorage -- só existe como valor
+  // local desta função, enviado apenas junto da tentativa de pagamento com
+  // cartão (nunca no Pix, que não precisa dele).
+  // ---------------------------------------------------------------------
+  const DEVICE_ID_TIMEOUT_MS = 1500;
+  const DEVICE_ID_POLL_MS = 100;
+
+  function obterDeviceId() {
+    return new Promise((resolve) => {
+      const decorridoMax = DEVICE_ID_TIMEOUT_MS;
+      const inicio = Date.now();
+      (function tentar() {
+        const valor = window.MP_DEVICE_SESSION_ID;
+        if (typeof valor === "string" && valor.trim()) {
+          resolve(valor.trim());
+          return;
+        }
+        if (Date.now() - inicio >= decorridoMax) {
+          // Indisponibilidade sanitizada, sem detalhe técnico ao cliente --
+          // o pagamento segue sem o Device ID (o backend nunca bloqueia por
+          // ausência dele; é um sinal adicional de antifraude, não um
+          // requisito para processar o cartão).
+          resolve(null);
+          return;
+        }
+        window.setTimeout(tentar, DEVICE_ID_POLL_MS);
+      })();
+    });
+  }
+
+  // ---------------------------------------------------------------------
   // Normalização de mensagens de erro exibidas ao cliente.
   //
   // Bug corrigido: em vários pontos deste arquivo (principalmente na
@@ -719,6 +758,11 @@
     definirCarregando(true);
     setCardStatus("Processando pagamento com segurança pelo Mercado Pago...", "info");
 
+    // Iniciado em paralelo com a tokenização (nunca depois) -- só um valor
+    // de leitura local, nunca atrasa o pagamento além do próprio timeout
+    // curto de obterDeviceId().
+    const deviceIdPromise = obterDeviceId();
+
     // Cada tentativa gera um CardToken NOVO pelo SDK -- nunca reaproveita
     // getCardFormData().token isolado (pode refletir uma tokenização
     // anterior já consumida). dadosFormulario só fornece o que não é o
@@ -752,6 +796,8 @@
       return setCardStatus("Complete os dados do cartão para consultar as parcelas.", "erro");
     }
 
+    const deviceId = await deviceIdPromise;
+
     const pedidoId = pedidoAtual.id;
     const idempotencyKey = obterChaveTentativa(pedidoId);
     const corpo = {
@@ -761,6 +807,7 @@
       payment_method_id: dadosFormulario.paymentMethodId,
       installments: installmentsSelecionadas,
       issuer_id: dadosFormulario.issuerId || null,
+      device_id: deviceId || undefined,
       payer: {
         email: dadosFormulario.cardholderEmail,
         documento_tipo: dadosFormulario.identificationType || "CPF",
@@ -893,5 +940,6 @@
     // cartão/credenciais.
     normalizarMensagemErro,
     definirEstadoParcelas,
+    obterDeviceId,
   };
 })();
