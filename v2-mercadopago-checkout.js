@@ -50,6 +50,195 @@
     return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(valor || 0);
   }
 
+  // ---------------------------------------------------------------------
+  // Normalização de mensagens de erro exibidas ao cliente.
+  //
+  // Bug corrigido: em vários pontos deste arquivo (principalmente na
+  // resposta não-2xx de POST /api/payments/mercadopago/card) o código fazia
+  // `new Error(resposta.detail || resposta.message || "...")`. Quando o
+  // backend responde com um erro de validação do FastAPI/Pydantic (HTTP
+  // 422), `detail` NÃO é uma string -- é um array de objetos
+  // `{loc, msg, type, input}`. `new Error(arrayDeObjetos).message` vira a
+  // string "[object Object]" (via Array.prototype.toString ->
+  // Object.prototype.toString em cada item), que então era exibida
+  // diretamente ao cliente. O mesmo padrão (objeto/array jogado direto na
+  // tela) podia se repetir em qualquer outro ponto que exibisse um erro sem
+  // normalizar primeiro.
+  //
+  // normalizarMensagemErro() é o único ponto que decide o que aparece na
+  // tela para qualquer erro (string, Error, objeto, array ou corpo de
+  // resposta HTTP já parseado como JSON): extrai a primeira mensagem
+  // amigável disponível, nunca devolve "[object Object]"/JSON bruto, nunca
+  // deixa passar algo que pareça token/credencial/dado de cartão, e cai no
+  // fallback genérico quando nada aproveitável é encontrado.
+  // ---------------------------------------------------------------------
+
+  const FALLBACK_ERRO_PAGAMENTO =
+    "Não foi possível processar o pagamento. Revise os dados e tente novamente ou escolha Pix.";
+
+  // Só os poucos casos em que vale a pena traduzir um código técnico
+  // conhecido que eventualmente chegue em inglês/bruto até aqui -- a
+  // tradução principal de status_detail já acontece no backend
+  // (mensagem_amigavel_pagamento, backend/pedido_comercial.py), que é
+  // sempre a fonte preferida (ver ordem de campos em extrairMensagemAmigavel).
+  const MAPA_ERROS_TECNICOS = {
+    "invalid user identification number": "CPF inválido. Confira o número informado.",
+    "cc_rejected_bad_filled_card_number": "Número do cartão inválido. Confira e tente novamente.",
+    "cc_rejected_bad_filled_date": "Validade do cartão inválida.",
+    "cc_rejected_bad_filled_security_code": "Código de segurança (CVV) inválido.",
+    "cc_rejected_bad_filled_other": "Revise os dados do cartão e tente novamente.",
+    "cc_rejected_insufficient_amount": "Saldo ou limite insuficiente no cartão.",
+    "cc_rejected_high_risk": "Pagamento não autorizado por critérios de segurança.",
+    "cc_rejected_call_for_authorize": "Cartão requer autorização do emissor para este valor.",
+    "cc_rejected_card_disabled": "Cartão desabilitado. Fale com o emissor ou use outro cartão.",
+    "cc_rejected_duplicated_payment": "Pagamento duplicado detectado para este pedido.",
+    "cc_rejected_max_attempts": "Número máximo de tentativas excedido para este cartão.",
+    "cc_rejected_other_reason": "O pagamento não foi autorizado. Tente outro cartão ou use o Pix.",
+  };
+
+  // Nunca exibir algo que pareça token/segredo/número de cartão -- não
+  // proíbe palavras genéricas como "cartão"/"CPF"/"endereço" em mensagens
+  // amigáveis normais (isso o próprio backend já escreve em PT-BR), só
+  // bloqueia o formato de um DADO sensível de verdade (token longo, chave
+  // pública/Access Token do Mercado Pago, número com cara de cartão, header
+  // de autenticação).
+  const PADRAO_CONTEUDO_SENSIVEL =
+    /(access[_-]?token|authorization\s*:|bearer\s+\S+|APP_USR-\S+|TEST-\S{10,}|\b\d{13,19}\b)/i;
+
+  // Erros crus de rede/JS (TypeError do fetch, "is not a function" etc.)
+  // não são mensagens pensadas para o cliente final -- nunca exibir o texto
+  // técnico em inglês, sempre cair no fallback correspondente.
+  const PADRAO_ERRO_TECNICO_JS =
+    /(failed to fetch|networkerror|network request failed|is not a function|is not defined|cannot read propert|unexpected token|typeerror|syntaxerror)/i;
+
+  function extrairMensagemAmigavel(valor, profundidade) {
+    if (valor == null || profundidade > 4) return null;
+    if (typeof valor === "string") {
+      const texto = valor.trim();
+      return texto || null;
+    }
+    if (typeof valor !== "object") return null; // number/boolean/function não viram mensagem
+    if (Array.isArray(valor)) {
+      for (const item of valor) {
+        const msg = extrairMensagemAmigavel(item, profundidade + 1);
+        if (msg) return msg;
+      }
+      return null;
+    }
+    if (valor instanceof Error) {
+      if (valor.message && !PADRAO_ERRO_TECNICO_JS.test(valor.message)) {
+        const direta = extrairMensagemAmigavel(valor.message, profundidade + 1);
+        if (direta) return direta;
+      }
+      return extrairMensagemAmigavel(valor.cause, profundidade + 1);
+    }
+    // Ordem pedida: message; mensagem; detail; error; error_description;
+    // cause; status_detail -- mais "msg", formato dos erros de validação
+    // do FastAPI/Pydantic ([{msg: "..."}]).
+    const CAMPOS = ["message", "mensagem", "detail", "error", "error_description", "cause", "status_detail", "msg"];
+    for (const campo of CAMPOS) {
+      if (campo in valor) {
+        const msg = extrairMensagemAmigavel(valor[campo], profundidade + 1);
+        if (msg) return msg;
+      }
+    }
+    return null;
+  }
+
+  function sanitizarMensagemFinal(mensagem) {
+    // Pydantic v2 prefixa erros de ValueError com "Value error, " -- os
+    // validators deste projeto (ex.: EnderecoCobrancaIn) já escrevem a
+    // mensagem em PT-BR, só sobra remover o prefixo técnico em inglês.
+    const semPrefixo = mensagem.replace(/^value error,\s*/i, "").trim();
+    if (!semPrefixo) return FALLBACK_ERRO_PAGAMENTO;
+    const chave = semPrefixo.toLowerCase();
+    if (MAPA_ERROS_TECNICOS[chave]) return MAPA_ERROS_TECNICOS[chave];
+    if (PADRAO_CONTEUDO_SENSIVEL.test(semPrefixo)) return FALLBACK_ERRO_PAGAMENTO;
+    if (PADRAO_ERRO_TECNICO_JS.test(semPrefixo)) return FALLBACK_ERRO_PAGAMENTO;
+    if (/^\s*[[{]/.test(semPrefixo)) return FALLBACK_ERRO_PAGAMENTO; // parece JSON bruto
+    if (semPrefixo.length > 220) return FALLBACK_ERRO_PAGAMENTO; // stack trace/corpo bruto grande demais
+    if (semPrefixo === "[object Object]" || /^\[object /.test(semPrefixo)) return FALLBACK_ERRO_PAGAMENTO;
+    return semPrefixo;
+  }
+
+  function normalizarMensagemErro(erro, fallbackPersonalizado) {
+    const extraida = extrairMensagemAmigavel(erro, 0);
+    if (!extraida) return fallbackPersonalizado || FALLBACK_ERRO_PAGAMENTO;
+    const sanitizada = sanitizarMensagemFinal(extraida);
+    return sanitizada === FALLBACK_ERRO_PAGAMENTO && fallbackPersonalizado ? fallbackPersonalizado : sanitizada;
+  }
+
+  // ---------------------------------------------------------------------
+  // Estado do seletor de parcelas (#mpInstallments).
+  //
+  // Bug corrigido: o <select id="mpInstallments" required> do HTML nunca
+  // tinha nenhum estado próprio -- nascia vazio (sem <option>, sem
+  // "disabled", sem texto) e só ficava utilizável se e quando o SDK do
+  // Mercado Pago conseguisse identificar o cartão e preencher as opções
+  // sozinho. `onInstallmentsReceived` ignorava por completo o primeiro
+  // argumento (erro) da callback oficial do SDK -- então, sempre que a
+  // consulta de parcelas falhava (BIN não reconhecido, bandeira sem
+  // parcelamento configurado, resposta de erro da API do Mercado Pago,
+  // rede lenta), o campo ficava vazio para sempre, sem nenhum aviso: para
+  // quem está comprando, um <select> sem nenhuma opção e sem rótulo visível
+  // é indistinguível de "o campo não existe".
+  //
+  // As funções abaixo controlam o texto/estado disabled do campo em cada
+  // fase (antes do cartão ser identificado, consultando, com opções,
+  // sem opções, com erro) -- nunca inventam as próprias opções de
+  // parcelamento: quem preenche os <option> reais é sempre o SDK oficial
+  // (fluxo oficial do CardForm, com `installments: { id: "mpInstallments" }`
+  // na config), esta função só cuida do placeholder/estado ao redor disso.
+  // ---------------------------------------------------------------------
+
+  const PARCELAS_MSG = {
+    inicial: "Informe o cartão para ver as parcelas",
+    carregando: "Consultando parcelas…",
+    erro: "Não foi possível consultar as opções de parcelamento. Verifique os dados do cartão ou tente novamente.",
+    vazio: "Este cartão não possui opções de parcelamento disponíveis para esta compra.",
+    opcoes: "Parcelamento sujeito a juros conforme exibido no seletor acima.",
+  };
+
+  let parcelasProntas = false; // true só quando o select tem opção(ões) real(is) selecionável(is)
+
+  function elementoParcelas() {
+    return document.getElementById("mpInstallments");
+  }
+
+  function limparOpcoesPlaceholder(select) {
+    // Remove só as opções marcadas como placeholder por esta função --
+    // nunca mexe em <option> reais inseridas pelo SDK (fluxo oficial).
+    Array.from(select.querySelectorAll('option[data-placeholder="true"]')).forEach(op => op.remove());
+  }
+
+  function definirEstadoParcelas(estado) {
+    const select = elementoParcelas();
+    const nota = document.getElementById("mpInstallmentsNote");
+    if (!select) return;
+    parcelasProntas = false;
+    if (estado === "opcoes") {
+      // Não recria as <option> (são do SDK) -- só remove um eventual
+      // placeholder deixado por um estado anterior e libera o campo.
+      limparOpcoesPlaceholder(select);
+      select.disabled = select.options.length === 0;
+      parcelasProntas = select.options.length > 0;
+    } else {
+      select.innerHTML = "";
+      const placeholder = document.createElement("option");
+      placeholder.setAttribute("data-placeholder", "true");
+      placeholder.value = "";
+      placeholder.textContent = PARCELAS_MSG[estado] || PARCELAS_MSG.inicial;
+      placeholder.disabled = true;
+      placeholder.selected = true;
+      select.appendChild(placeholder);
+      select.disabled = true;
+    }
+    select.setAttribute("aria-busy", estado === "carregando" ? "true" : "false");
+    select.setAttribute("aria-describedby", "mpInstallmentsNote");
+    if (nota) nota.textContent = PARCELAS_MSG[estado] || "";
+    recalcularBotaoCartao();
+  }
+
   function statusEl() {
     return document.getElementById("mpCardStatus");
   }
@@ -158,7 +347,7 @@
     // falsa impressão de que o pagamento atual já foi concluído.
     setCardStatus("");
     window.misticaEnderecoCobranca?.atualizarVisibilidade?.();
-    if (forma === "cartao") montarFormularioCartao().catch(err => setCardStatus(err.message, "erro"));
+    if (forma === "cartao") montarFormularioCartao().catch(err => setCardStatus(normalizarMensagemErro(err), "erro"));
   }
 
   async function garantirPedidoAtual() {
@@ -207,7 +396,7 @@
     try {
       pedido = await garantirPedidoAtual();
     } catch (err) {
-      setCardStatus(err.message || "Não foi possível preparar o pagamento agora.", "erro");
+      setCardStatus(normalizarMensagemErro(err, "Não foi possível preparar o pagamento agora."), "erro");
       return;
     }
     // O valor só é conhecido depois que o pedido existe -- atualiza o texto
@@ -239,6 +428,10 @@
     }
 
     cardFormMontadoParaPedido = pedido.id;
+    // Nunca deixa opções de parcelas de uma montagem anterior (outro
+    // pedido/cartão) visíveis enquanto o novo CardForm ainda não
+    // identificou o cartão atual.
+    definirEstadoParcelas("inicial");
 
     cardForm = mpInstance.cardForm({
       amount: String(pedido.totalFinal || 0),
@@ -280,9 +473,48 @@
             }
           }, 300);
         },
-        onInstallmentsReceived: () => {
-          const nota = document.getElementById("mpInstallmentsNote");
-          if (nota) nota.textContent = "Parcelamento sujeito a juros conforme exibido no seletor acima.";
+        // Dispara quando o SDK identifica (ou reidentifica) a bandeira a
+        // partir do BIN digitado -- é o sinal de "o número do cartão
+        // mudou" disponível nesta versão do CardForm (não existe um
+        // onCardNumberChange dedicado). Reseta o seletor de parcelas para
+        // "consultando" a cada identificação, para nunca reaproveitar a
+        // lista de parcelas de uma bandeira anterior enquanto a nova
+        // consulta de installments (que o próprio SDK dispara em seguida)
+        // ainda não respondeu.
+        onPaymentMethodsReceived: (error, paymentMethods) => {
+          if (error || !paymentMethods || !paymentMethods.length) {
+            definirEstadoParcelas("inicial");
+            return;
+          }
+          definirEstadoParcelas("carregando");
+        },
+        // Callback oficial do SDK: (error, installments). O bug relatado
+        // ("parcelas não aparecem") vinha de este handler ignorar
+        // completamente o parâmetro de erro -- quando a consulta de
+        // parcelamento falhava, nada acontecia e o campo ficava vazio para
+        // sempre, sem nenhuma mensagem. Agora todo erro é sanitizado antes
+        // de aparecer na tela (nunca o objeto/JSON bruto do SDK).
+        onInstallmentsReceived: (error, installments) => {
+          if (error) {
+            console.error("[MercadoPago] onInstallmentsReceived retornou erro:", sanitizarErroParaLog(error));
+            definirEstadoParcelas("erro");
+            return;
+          }
+          if (!installments || (Array.isArray(installments) && installments.length === 0)) {
+            definirEstadoParcelas("vazio");
+            return;
+          }
+          // As <option> reais já foram inseridas pelo próprio SDK no
+          // <select id="mpInstallments"> (fluxo oficial do CardForm) --
+          // aqui só removemos o placeholder e liberamos o campo.
+          definirEstadoParcelas("opcoes");
+        },
+        // Callback genérica de erro do CardForm (ex.: falha ao consultar
+        // métodos/emissores) -- sem handler, esses erros do SDK ficavam
+        // silenciosos ou podiam vazar como objeto bruto em outro ponto.
+        onError: (error) => {
+          console.error("[MercadoPago] CardForm onError:", sanitizarErroParaLog(error));
+          setCardStatus(normalizarMensagemErro(error), "erro");
         },
         onSubmit: (event) => {
           event.preventDefault();
@@ -331,13 +563,24 @@
     // está marcado — window.misticaEnderecoCobranca é a única fonte dessa
     // checagem (checkout-billing-address.js).
     const prontoCobranca = typeof window.misticaEnderecoCobranca?.enderecoCobrancaValido !== "function" || window.misticaEnderecoCobranca.enderecoCobrancaValido();
-    botao.disabled = carregando || !prontoEntrega || !prontoCobranca;
+    // Nunca permite enviar o pagamento enquanto o seletor de parcelas ainda
+    // não tem uma opção válida selecionável -- sem isso, um clique no botão
+    // durante a consulta de installments enviaria installments=1 (ou
+    // undefined) só porque o valor real ainda não chegou do SDK.
+    const parcelasOk = !cardForm || parcelasProntas;
+    botao.disabled = carregando || !prontoEntrega || !prontoCobranca || !parcelasOk;
     botao.setAttribute("aria-disabled", String(botao.disabled));
     // O valor cobrado é sempre pedidos.total_final (nunca calculado no
     // navegador) -- só aparece no botão depois que o pedido já existe
     // (pedidoAtual criado em garantirPedidoAtual/montarFormularioCartao).
     const valorTexto = pedidoAtual?.totalFinal != null ? ` ${currency(pedidoAtual.totalFinal)}` : "";
-    botao.textContent = carregando ? "Processando pagamento..." : `Pagar${valorTexto} com cartão`;
+    if (carregando) {
+      botao.textContent = "Processando pagamento...";
+    } else if (!parcelasOk) {
+      botao.textContent = "Carregando opções de parcelamento…";
+    } else {
+      botao.textContent = `Pagar${valorTexto} com cartão`;
+    }
   }
 
   // Reavalia o botão de cartão quando a modalidade/endereço mudam (chamado
@@ -367,6 +610,14 @@
       definirCarregando(false);
       return setCardStatus("Não foi possível gerar o token do cartão. Revise os dados e tente novamente.", "erro");
     }
+    // Nunca usa "installments = 1" como fallback silencioso para mascarar
+    // um valor ausente/inválido -- só é aceito 1 parcela quando o Mercado
+    // Pago de fato ofereceu (e o cliente confirmou) essa opção no seletor.
+    const installmentsSelecionadas = Number(dados.installments);
+    if (!Number.isInteger(installmentsSelecionadas) || installmentsSelecionadas <= 0) {
+      definirCarregando(false);
+      return setCardStatus("Complete os dados do cartão para consultar as parcelas.", "erro");
+    }
 
     const pedidoId = pedidoAtual.id;
     const idempotencyKey = obterChaveTentativa(pedidoId);
@@ -375,7 +626,7 @@
       txid: pedidoAtual.pixTxid,
       token: dados.token,
       payment_method_id: dados.paymentMethodId,
-      installments: Number(dados.installments || 1),
+      installments: installmentsSelecionadas,
       issuer_id: dados.issuerId || null,
       payer: {
         email: dados.cardholderEmail,
@@ -395,14 +646,21 @@
         body: JSON.stringify(corpo),
       });
       resposta = await requisicao.json().catch(() => ({}));
-      if (!requisicao.ok) throw new Error(resposta.detail || resposta.message || "Não foi possível processar o pagamento.");
+      if (!requisicao.ok) {
+        // resposta.detail pode ser uma STRING (HTTPException comum do
+        // backend) OU um ARRAY de objetos {loc,msg,type} quando o FastAPI
+        // rejeita o corpo por validação do Pydantic (HTTP 422) -- é esse
+        // segundo formato que, sem normalizar, virava "[object Object]" na
+        // tela do cliente (new Error(array).message == "[object Object]").
+        throw new Error(normalizarMensagemErro(resposta, "Não foi possível processar o pagamento."));
+      }
     } catch (erro) {
       definirCarregando(false);
       // Falha de rede/timeout: NÃO limpa a chave de tentativa -- uma nova
       // tentativa (novo clique, ou reload da página) reaproveita a mesma
       // Idempotency-Key, então o Mercado Pago nunca processa uma segunda
       // cobrança para o mesmo clique.
-      setCardStatus(erro.message || "Falha de conexão. Verifique sua internet e tente novamente.", "erro");
+      setCardStatus(normalizarMensagemErro(erro, "Falha de conexão. Verifique sua internet e tente novamente."), "erro");
       return;
     }
 
@@ -432,7 +690,7 @@
       pedidoAtual = null;
     } else if (resposta.status === "pendente") {
       setCardStatus(
-        (resposta.mensagem || "Pagamento em análise.") +
+        normalizarMensagemErro(resposta.mensagem, "Pagamento em análise.") +
         ` Pedido #${pedidoId} — a análise está em andamento, não é necessário pagar novamente agora. Você será avisado assim que for confirmado.`,
         "info",
       );
@@ -442,7 +700,10 @@
     } else {
       // Recusado/cancelado: nunca gera pedido novo -- o cliente pode tentar
       // outro cartão ou trocar para Pix no mesmo pedido.
-      setCardStatus(resposta.mensagem || "Não foi possível aprovar o pagamento. Tente outro cartão ou use o Pix.", "erro");
+      setCardStatus(
+        normalizarMensagemErro(resposta.mensagem, "Não foi possível aprovar o pagamento. Tente outro cartão ou use o Pix."),
+        "erro",
+      );
     }
   }
 
@@ -466,5 +727,13 @@
     iniciar();
   }
 
-  window.misticaMercadoPagoCheckout = { alternarFormaPagamento, obterConfigPublica };
+  window.misticaMercadoPagoCheckout = {
+    alternarFormaPagamento,
+    obterConfigPublica,
+    // Expostas só para os testes unitários (tests/mercadopago-cardform-*.test.js)
+    // -- são funções puras/estado de UI, nunca lidam com token/dados de
+    // cartão/credenciais.
+    normalizarMensagemErro,
+    definirEstadoParcelas,
+  };
 })();

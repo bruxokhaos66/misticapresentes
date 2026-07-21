@@ -61,12 +61,12 @@
     <label>Nome impresso no cartão<input id="mpCardholderName" type="text" required /></label>
     <div class="mp-card-row">
       <label>CPF do titular<input id="mpDocNumber" type="text" required /></label>
-      <label>Parcelas<select id="mpInstallments" required></select></label>
+      <label>Parcelas<select id="mpInstallments" required aria-describedby="mpInstallmentsNote"></select></label>
     </div>
     <label>E-mail para confirmação<input id="mpCardEmail" type="email" required /></label>
     <select id="mpIssuer" hidden></select>
     <select id="mpIdentificationType" hidden><option value="CPF" selected>CPF</option></select>
-    <p id="mpInstallmentsNote"></p>
+    <p id="mpInstallmentsNote" role="status" aria-live="polite"></p>
     <p id="mpCardStatus" aria-live="polite"></p>
     <button class="btn btn-full" type="submit" id="mpCardSubmit">Pagar com cartão</button>
   </form>
@@ -120,12 +120,22 @@
               el.appendChild(iframe);
             }
           });
+          if (config.callbacks && config.callbacks.onPaymentMethodsReceived) {
+            config.callbacks.onPaymentMethodsReceived(null, [{ id: "visa" }]);
+          }
           var installments = document.getElementById("mpInstallments");
-          if (installments && !installments.options.length) {
+          if (installments) {
+            // Réplica do comportamento real do SDK: ele mesmo limpa/preenche
+            // o <select> de parcelas (fluxo oficial do CardForm) antes de
+            // disparar onInstallmentsReceived.
+            installments.innerHTML = "";
             var opt = document.createElement("option");
             opt.value = "1";
             opt.textContent = "1x sem juros";
             installments.appendChild(opt);
+          }
+          if (config.callbacks && config.callbacks.onInstallmentsReceived) {
+            config.callbacks.onInstallmentsReceived(null, [{ installments: 1 }]);
           }
         }
         if (config.callbacks && config.callbacks.onFormMounted) config.callbacks.onFormMounted(null);

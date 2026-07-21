@@ -66,12 +66,19 @@ function instalarMockSdk() {
             el.appendChild(iframe);
           }
         });
+        if (config.callbacks && config.callbacks.onPaymentMethodsReceived) {
+          config.callbacks.onPaymentMethodsReceived(null, [{ id: "visa" }]);
+        }
         const installments = document.getElementById("mpInstallments");
-        if (installments && !installments.options.length) {
+        if (installments) {
+          installments.innerHTML = "";
           const opt = document.createElement("option");
           opt.value = "1";
           opt.textContent = "1x sem juros";
           installments.appendChild(opt);
+        }
+        if (config.callbacks && config.callbacks.onInstallmentsReceived) {
+          config.callbacks.onInstallmentsReceived(null, [{ installments: 1 }]);
         }
         if (config.callbacks && config.callbacks.onFormMounted) config.callbacks.onFormMounted(null);
       }, 20);
