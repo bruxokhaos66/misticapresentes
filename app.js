@@ -262,11 +262,20 @@ function updatePixPanelVisibility() {
   // Só a ausência de itens no carrinho decide o estado "idle" aqui; os
   // estados "busy" (requisição em curso) e "gerado" (Pix já emitido para
   // este pedido) são controlados por setGerarPixVisualState() e não podem
-  // ser reabertos só porque o carrinho foi re-renderizado.
-  if (generateBtn && gerarPixEstadoAtual === "idle") generateBtn.disabled = !cart.length;
+  // ser reabertos só porque o carrinho foi re-renderizado. Fase 3: também
+  // não reabre enquanto a modalidade de recebimento (retirada/entrega +
+  // endereço, quando aplicável) não estiver pronta — window.misticaEntrega
+  // é a ÚNICA fonte dessa checagem (checkout-entrega-retirada.js), nunca
+  // duplicada aqui.
+  if (generateBtn && gerarPixEstadoAtual === "idle") {
+    const prontoEntrega = typeof window.misticaEntrega?.podeProsseguir !== "function" || window.misticaEntrega.podeProsseguir();
+    generateBtn.disabled = !cart.length || !prontoEntrega;
+    generateBtn.setAttribute("aria-disabled", String(generateBtn.disabled));
+  }
   const whatsappBtn = document.querySelector("[data-send-sale-whatsapp]");
   if (whatsappBtn) whatsappBtn.disabled = !cart.length;
 }
+window.misticaAtualizarBotaoPix = updatePixPanelVisibility;
 function cartItemLineHtml(item) {
   const subtotal = item.price * item.qty;
   return `<div class="cart-item"><div class="cart-item-detail"><span class="cart-item-name">${escapeHtml(item.name)}</span><span class="cart-item-line"><span>${item.qty} × ${currency.format(item.price)}</span><span class="cart-item-subtotal">Subtotal: ${currency.format(subtotal)}</span></span>${cartItemIsEncomenda(item) ? `<span class="cart-encomenda-tag">${escapeHtml((window.misticaEncomenda && window.misticaEncomenda.BADGE) || "Sob encomenda")}</span>` : ""}</div><button class="cart-remove" type="button" aria-label="Remover ${escapeHtml(item.name)} do carrinho" data-remove-from-cart="${escapeHtml(item.id)}">Remover</button></div>`;
@@ -504,6 +513,14 @@ async function generatePix() {
   // está em andamento ou já existe um Pix gerado válido para este carrinho,
   // um novo clique não deve disparar outro pedido.
   if (gerarPixEstadoAtual === "busy" || gerarPixEstadoAtual === "gerado") return;
+  // Fase 3: nenhum pedido/tentativa de pagamento é criado sem modalidade de
+  // recebimento válida — o botão já fica desabilitado nesse caso
+  // (updatePixPanelVisibility), mas este guard cobre qualquer acionamento
+  // alternativo (ex.: tecla Enter, evento sintético) sem tocar o carrinho.
+  if (typeof window.misticaEntrega?.podeProsseguir === "function" && !window.misticaEntrega.podeProsseguir()) {
+    window.misticaEntrega.focarSecaoRecebimento?.();
+    return setStatus("Escolha retirada ou entrega para continuar.");
+  }
   const total = getTotal();
   if (!cart.length || total <= 0) return setStatus("Adicione pelo menos um produto ao carrinho antes de gerar o Pix.");
   if (!hasEnoughStockForCart()) return setStatus("Existe produto no carrinho acima do estoque disponível. Ajuste antes de gerar o Pix.");

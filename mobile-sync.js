@@ -346,6 +346,7 @@
     // frontend), mas falhar cedo aqui evita uma chamada de rede inútil.
     const dadosEntrega = window.misticaEntrega?.obterDadosParaPedido?.();
     if (!dadosEntrega || !dadosEntrega.forma_recebimento) {
+      window.misticaEntrega?.focarSecaoRecebimento?.();
       throw new Error("Escolha como deseja receber seu pedido: retirada na loja ou entrega no endereço.");
     }
 

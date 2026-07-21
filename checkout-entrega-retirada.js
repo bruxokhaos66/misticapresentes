@@ -34,8 +34,11 @@
   };
   const emailInput = document.getElementById("recebimentoEmail");
   const cepBuscarBtn = document.getElementById("buscarCepBtn");
+  const validacaoEl = document.getElementById("recebimentoValidacao");
 
   if (!radiosContainer) return; // página sem o checkout (ex.: outra rota estática)
+
+  const CAMPOS_ENDERECO_OBRIGATORIOS = ["cep", "rua", "numero", "bairro", "cidade", "uf"];
 
   function normalizarTexto(valor) {
     return String(valor || "")
@@ -59,8 +62,84 @@
     return marcado ? marcado.value : null;
   }
 
+  // Endereço válido = mesmos campos/regras exigidos pelo backend (CEP de 8
+  // dígitos, UF na lista de UFs do Brasil, demais campos não vazios) — ver
+  // backend/site_stock_routes.py::VendaSiteIn. Nunca duplicar essa lista em
+  // outro lugar do frontend.
+  function enderecoValido() {
+    const completos = CAMPOS_ENDERECO_OBRIGATORIOS.every((chave) => String(campo[chave]?.value || "").trim());
+    if (!completos) return false;
+    const digitosCep = String(campo.cep?.value || "").replace(/\D/g, "");
+    if (digitosCep.length !== 8) return false;
+    const uf = String(campo.uf?.value || "").trim().toUpperCase();
+    return UF_VALIDAS.has(uf);
+  }
+
+  // Única função reutilizável que decide se o cliente já pode prosseguir
+  // para o pagamento (Pix ou cartão): retirada libera sem endereço; entrega
+  // exige endereço completo e válido. Nenhum outro arquivo deve reimplementar
+  // esta regra — mobile-sync.js, app.js e v2-mercadopago-checkout.js sempre
+  // consultam window.misticaEntrega.podeProsseguir().
+  function podeProsseguir() {
+    const forma = formaAtual();
+    if (forma === "retirada") return true;
+    if (forma === "entrega") return enderecoValido();
+    return false;
+  }
+
+  function mensagemValidacaoAtual() {
+    const forma = formaAtual();
+    if (!forma) return "Escolha retirada ou entrega para continuar.";
+    if (forma === "entrega" && !enderecoValido()) return "Preencha o endereço completo para continuar.";
+    return "";
+  }
+
+  // Atualiza o estado habilitado/desabilitado de TODOS os controles que
+  // criam pedido ou tentativa de pagamento (Gerar Pix, Pagar com cartão, o
+  // próprio botão de trocar para a aba Cartão) e a mensagem de validação
+  // visível/anunciada — chamada sempre que a modalidade ou o endereço mudam.
+  function atualizarControlesPagamento() {
+    const mensagem = mensagemValidacaoAtual();
+    if (validacaoEl) {
+      validacaoEl.hidden = !mensagem;
+      if (mensagem) validacaoEl.textContent = mensagem;
+    }
+
+    // O botão "Gerar Pix" também depende do carrinho estar preenchido e do
+    // estado de carregamento/já-gerado (ver app.js::updatePixPanelVisibility,
+    // gerarPixEstadoAtual) — reaproveitamos aquela função em vez de
+    // duplicar a lógica de disabled aqui.
+    window.misticaAtualizarBotaoPix?.();
+    // Mesma ideia para o botão de cartão: v2-mercadopago-checkout.js já
+    // controla o estado de "processando"/duplo clique daquele botão.
+    window.misticaAtualizarBotaoCartao?.();
+
+    const toggleCartao = document.querySelector('[data-payment-method="cartao"]');
+    if (toggleCartao) {
+      const pronto = podeProsseguir();
+      toggleCartao.disabled = !pronto;
+      toggleCartao.setAttribute("aria-disabled", String(!pronto));
+    }
+  }
+
+  // Chamada quando alguém tenta prosseguir (Pix ou cartão) sem modalidade
+  // válida — nunca cria pedido nem tentativa de pagamento; só orienta o
+  // cliente de volta para a seção de recebimento.
+  function focarSecaoRecebimento() {
+    atualizarControlesPagamento();
+    if (validacaoEl) {
+      // Força o leitor de tela a anunciar de novo mesmo que a mensagem já
+      // estivesse visível (ex.: segunda tentativa sem escolher nada).
+      const mensagem = validacaoEl.textContent;
+      validacaoEl.textContent = "";
+      window.requestAnimationFrame(() => { validacaoEl.textContent = mensagem; });
+    }
+    radiosContainer.scrollIntoView({ behavior: "smooth", block: "center" });
+    radiosContainer.querySelector('[data-recebimento-radio]')?.focus();
+  }
+
   function definirObrigatoriedadeEndereco(obrigatorio) {
-    ["cep", "rua", "numero", "bairro", "cidade", "uf"].forEach((chave) => {
+    CAMPOS_ENDERECO_OBRIGATORIOS.forEach((chave) => {
       if (campo[chave]) campo[chave].required = obrigatorio;
     });
   }
@@ -78,6 +157,7 @@
       Object.values(campo).forEach((el) => { if (el) el.disabled = false; });
     }
     atualizarResumo();
+    atualizarControlesPagamento();
   }
 
   function atualizarResumo() {
@@ -131,6 +211,7 @@
       if (campo.uf) campo.uf.value = dados.uf || campo.uf.value;
       if (cepStatus) cepStatus.textContent = "Endereço localizado. Confira antes de confirmar.";
       atualizarResumo();
+      atualizarControlesPagamento();
     } catch {
       if (cepStatus) cepStatus.textContent = "Não foi possível consultar o CEP agora. Preencha o endereço manualmente.";
     } finally {
@@ -146,7 +227,7 @@
       email: emailInput?.value?.trim() || undefined,
     };
     if (forma === "entrega") {
-      const faltando = ["cep", "rua", "numero", "bairro", "cidade", "uf"].filter((chave) => !String(campo[chave]?.value || "").trim());
+      const faltando = CAMPOS_ENDERECO_OBRIGATORIOS.filter((chave) => !String(campo[chave]?.value || "").trim());
       if (faltando.length) {
         throw new Error("Preencha CEP, rua, número, bairro, cidade e UF para entrega.");
       }
@@ -187,14 +268,21 @@
   radiosContainer.querySelectorAll('[data-recebimento-radio]').forEach((radio) => {
     radio.addEventListener("change", alternarPainel);
   });
-  Object.values(campo).forEach((el) => el?.addEventListener("input", atualizarResumo));
+  Object.values(campo).forEach((el) => el?.addEventListener("input", () => {
+    atualizarResumo();
+    atualizarControlesPagamento();
+  }));
   cepBuscarBtn?.addEventListener("click", buscarCep);
 
   alternarPainel();
+  atualizarControlesPagamento();
 
   window.misticaEntrega = {
     obterDadosParaPedido,
     atualizarResumo,
     exibirConfirmacao,
+    podeProsseguir,
+    atualizarControlesPagamento,
+    focarSecaoRecebimento,
   };
 })();

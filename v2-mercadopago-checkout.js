@@ -150,6 +150,16 @@
   }
 
   async function garantirPedidoAtual() {
+    // Fase 3: mesma checagem única usada pelo Pix (window.misticaEntrega.
+    // podeProsseguir(), definida em checkout-entrega-retirada.js) — nenhum
+    // pedido/tentativa de pagamento com cartão é criado sem modalidade de
+    // recebimento válida. O botão de cartão e a aba "Cartão de crédito" já
+    // ficam desabilitados nesse caso; este guard cobre qualquer acionamento
+    // alternativo.
+    if (typeof window.misticaEntrega?.podeProsseguir === "function" && !window.misticaEntrega.podeProsseguir()) {
+      window.misticaEntrega.focarSecaoRecebimento?.();
+      throw new Error("Escolha retirada ou entrega para continuar.");
+    }
     // Reaproveita exatamente a mesma criação de pedido usada pelo Pix
     // (mesma Idempotency-Key de checkout, mesmo carrinho): nunca cria um
     // segundo pedido só porque o cliente escolheu cartão em vez de Pix.
@@ -290,12 +300,28 @@
     setCardStatus("Não foi possível carregar os campos seguros do cartão. Use o Pix ou tente novamente.", "erro");
   }
 
+  let cartaoProcessando = false;
+
   function definirCarregando(carregando) {
+    cartaoProcessando = carregando;
     const botao = document.getElementById("mpCardSubmit");
     if (!botao) return;
-    botao.disabled = carregando;
+    // Fase 3: mesmo depois de terminar o carregamento, o botão só volta a
+    // ficar habilitado se a modalidade de recebimento continuar válida —
+    // window.misticaEntrega.podeProsseguir() é a única fonte dessa checagem.
+    const prontoEntrega = typeof window.misticaEntrega?.podeProsseguir !== "function" || window.misticaEntrega.podeProsseguir();
+    botao.disabled = carregando || !prontoEntrega;
+    botao.setAttribute("aria-disabled", String(botao.disabled));
     botao.textContent = carregando ? "Processando pagamento..." : "Pagar com cartão";
   }
+
+  // Reavalia o botão de cartão quando a modalidade/endereço mudam (chamado
+  // por checkout-entrega-retirada.js), sem duplicar a lógica de "carregando"
+  // já controlada acima.
+  function recalcularBotaoCartao() {
+    definirCarregando(cartaoProcessando);
+  }
+  window.misticaAtualizarBotaoCartao = recalcularBotaoCartao;
 
   async function enviarPagamentoCartao() {
     if (!cardForm || !pedidoAtual) return setCardStatus("Formulário de pagamento não está pronto.", "erro");

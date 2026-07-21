@@ -44,6 +44,23 @@ function respostaPedido({ id = "PED-UX-1", expiraEmMs = 15 * 60_000 } = {}) {
   };
 }
 
+// Fase 3: a escolha de modalidade é obrigatória e o botão "Gerar Pix" começa
+// desabilitado até uma opção ser marcada. Estes testes de UX não avaliam
+// frete ou endereço, então usamos "Retirar na loja" (frete zero, sem campos
+// extras) para manter o foco no comportamento original.
+async function selecionarRetirada(page) {
+  // .evaluate() em vez de .check(): pode haver reflow logo após um
+  // reload (banners/imagens assentando), e .check() falha por
+  // "element is not stable" nesse instante — marcar o radio e
+  // disparar "change" direto no DOM é equivalente e não depende de
+  // estabilidade visual.
+  await page.locator('[data-recebimento-radio][value="retirada"]').evaluate((el) => {
+  el.checked = true;
+  el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect(page.locator("[data-generate-pix]")).toBeEnabled();
+}
+
 async function gerarPixComSucesso(page, opts) {
   await page.route("**/api/checkout/pedidos", async route => {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(respostaPedido(opts)) });
@@ -51,6 +68,7 @@ async function gerarPixComSucesso(page, opts) {
   await page.goto("/index.html");
   await expect.poll(() => page.evaluate(() => window.misticaCatalogState)).toBe("ready");
   await page.locator("[data-product-grid] button", { hasText: "Adicionar" }).click();
+  await selecionarRetirada(page);
   await page.locator("[data-generate-pix]").dispatchEvent("click");
   await expect(page.locator("#pixStatus")).toContainText("aguardando pagamento", { ignoreCase: true });
 }
@@ -141,6 +159,7 @@ test.describe("checkout: melhorias de UX do Pix", () => {
     await page.goto("/index.html");
     await expect.poll(() => page.evaluate(() => window.misticaCatalogState)).toBe("ready");
     await page.locator("[data-product-grid] button", { hasText: "Adicionar" }).click();
+    await selecionarRetirada(page);
 
     const gerarPix = page.locator("[data-generate-pix]");
     const copiarPix = page.locator("[data-copy-pix]");
@@ -228,6 +247,7 @@ test.describe("checkout: melhorias de UX do Pix", () => {
     await expect(steps.first()).toHaveAttribute("aria-current", "step");
 
     await page.locator("[data-product-grid] button", { hasText: "Adicionar" }).click();
+    await selecionarRetirada(page);
     await page.locator("[data-generate-pix]").dispatchEvent("click");
     await page.route("**/api/checkout/pedidos", async route => {
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(respostaPedido()) });

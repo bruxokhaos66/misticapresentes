@@ -42,6 +42,22 @@ const produtoApi = {
   selo: "",
 };
 
+// Fase 3: a escolha de modalidade é obrigatória e o botão "Gerar Pix" começa
+// desabilitado até uma opção ser marcada. Este teste não avalia frete ou
+// endereço, então usamos "Retirar na loja" (frete zero, sem campos extras).
+async function selecionarRetirada(page) {
+  // .evaluate() em vez de .check(): pode haver reflow logo após um
+  // reload (banners/imagens assentando), e .check() falha por
+  // "element is not stable" nesse instante — marcar o radio e
+  // disparar "change" direto no DOM é equivalente e não depende de
+  // estabilidade visual.
+  await page.locator('[data-recebimento-radio][value="retirada"]').evaluate((el) => {
+  el.checked = true;
+  el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect(page.locator("[data-generate-pix]")).toBeEnabled();
+}
+
 const FORBIDDEN_KEYS = [
   "misticaClients",
   "misticaSales",
@@ -245,6 +261,7 @@ test.describe("persistência segura do navegador", () => {
     await page.goto("/index.html");
     await expect.poll(() => page.evaluate(() => window.misticaCatalogState)).toBe("ready");
     await page.locator("[data-product-grid] button", { hasText: "Adicionar" }).click();
+    await selecionarRetirada(page);
     await page.locator("[data-generate-pix]").dispatchEvent("click");
     await expect(page.locator("#pixStatus")).toContainText("aguardando pagamento", { ignoreCase: true });
 

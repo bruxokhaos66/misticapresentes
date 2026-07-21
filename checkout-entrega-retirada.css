@@ -4,6 +4,10 @@
 .recebimento-fieldset { border: 0; padding: 0; margin: 10px 0; display: grid; gap: 10px; }
 .recebimento-option { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid var(--line, #443); border-radius: 10px; cursor: pointer; }
 .recebimento-option input { width: 18px; height: 18px; flex: none; }
+.recebimento-option input:focus-visible { outline: 3px solid #f2c96d; outline-offset: 2px; }
+.recebimento-validacao { display: flex; align-items: center; gap: 8px; margin: 4px 0 10px; padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(242, 201, 109, .55); background: rgba(242, 201, 109, .12); font-weight: 600; }
+.recebimento-validacao::before { content: "⚠"; }
+.recebimento-validacao[hidden] { display: none; }
 .recebimento-info { margin: 10px 0; padding: 12px 14px; border-radius: 10px; background: rgba(255, 248, 230, 0.08); }
 .recebimento-endereco { display: grid; gap: 10px; margin-top: 10px; }
 .recebimento-endereco .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
