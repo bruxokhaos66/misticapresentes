@@ -18,8 +18,15 @@ os.environ.setdefault("MISTICA_PIX_KEY", "49999999999")
 os.environ.setdefault("MERCADO_PAGO_ENABLED", "true")
 os.environ.setdefault("MERCADO_PAGO_ACCESS_TOKEN", "TEST-access-token")
 os.environ.setdefault("MERCADO_PAGO_PUBLIC_KEY", "TEST-public-key")
+# Nunca sobrescreve MERCADO_PAGO_WEBHOOK_SECRET globalmente aqui: outro
+# módulo de teste (tests/test_mercadopago_webhook.py) também assina
+# requisições com o SEU PRÓPRIO segredo capturado em uma constante de
+# módulo -- uma atribuição global e incondicional em dois arquivos para a
+# mesma variável de ambiente causaria uma corrida de importação (o último
+# módulo importado por vencer, quebrando a verificação de assinatura do
+# outro). Cada teste que precisa do webhook do Mercado Pago habilitado usa
+# monkeypatch.setenv (revertido automaticamente ao final do teste).
 WEBHOOK_SECRET = "webhook-secret-teste-" + uuid.uuid4().hex[:8]
-os.environ["MERCADO_PAGO_WEBHOOK_SECRET"] = WEBHOOK_SECRET
 
 from fastapi.testclient import TestClient
 
@@ -42,6 +49,7 @@ _TEMPLATE_ENV_VARS = [
 
 
 def _habilitar_whatsapp(monkeypatch):
+    monkeypatch.setenv("MERCADO_PAGO_WEBHOOK_SECRET", WEBHOOK_SECRET)
     monkeypatch.setenv("WHATSAPP_NOTIFICATIONS_ENABLED", "true")
     monkeypatch.setenv("WHATSAPP_PROVIDER", "meta_cloud")
     monkeypatch.setenv("WHATSAPP_PHONE_NUMBER_ID", "123456")
