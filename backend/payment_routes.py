@@ -28,6 +28,16 @@ from backend.order_status_routes import (
 )
 from backend.panel_sessions import exigir_sessao_ou_chave_api
 from backend.rate_limit import limitar_requisicoes
+from backend.whatsapp_events import (
+    EVENTO_CHARGEBACK_RECEBIDO,
+    EVENTO_PAGAMENTO_APROVADO,
+    EVENTO_PAGAMENTO_CANCELADO,
+    EVENTO_PAGAMENTO_RECUSADO,
+    EVENTO_PAGAMENTO_REEMBOLSADO,
+    ContextoEventoPedido,
+    entrega_legivel,
+)
+from backend.whatsapp_outbox import enfileirar_evento_whatsapp
 
 router = APIRouter(prefix="/api", tags=["pagamentos"])
 
@@ -85,12 +95,20 @@ class PagamentoIn(BaseModel):
     # (ver _mascarar_identificador), e não confundir com `comprovante`
     # (identificação do comprovante mostrada ao operador no painel).
     identificador_evento: Optional[str] = None
+    # Preenchido só pelo webhook do provedor (nunca pelo cliente/painel) para
+    # distinguir, quando status='Estornado', se a origem foi um chargeback
+    # (contestação, evento crítico) ou um reembolso comum -- ambos colapsam
+    # no mesmo status_interno 'Estornado' (ver STATUS_PROVEDOR_PARA_INTERNO
+    # em backend/payment_webhook_routes.py), mas geram notificações
+    # administrativas diferentes (ver backend/whatsapp_events.py).
+    origem_estorno: Optional[str] = None
 
 
 class PagamentoStatusIn(BaseModel):
     status: str = Field(min_length=1)
     observacao: Optional[str] = None
     usuario: str = "Admin"
+    origem_estorno: Optional[str] = None
 
 
 def validar_site_api_key(chave_recebida: str | None):
@@ -241,7 +259,7 @@ def tentar_transicao_status_pagamento(conn, venda_id: int, status_esperado: str,
     return _tentar_transicao_status(conn, venda_id, status_esperado, status_novo)
 
 
-def _aplicar_resultado_confirmacao(conn, venda_id: int, status_pedido_atual: str, conciliacao: str, motivo: Optional[str], usuario: str, agora: str, valor_recebido: float, valor_esperado: float) -> bool:
+def _aplicar_resultado_confirmacao(conn, venda_id: int, status_pedido_atual: str, conciliacao: str, motivo: Optional[str], usuario: str, agora: str, valor_recebido: float, valor_esperado: float, *, pagamento_id: Optional[int] = None, forma_pagamento: str = "") -> bool:
     """Aplica ao pedido o resultado da conciliação (já classificado por
     _classificar_conciliacao, que filtrou pedidos em status terminal
     incompatível para CONCILIACAO_TARDIO). Só confirma e baixa estoque
@@ -278,6 +296,20 @@ def _aplicar_resultado_confirmacao(conn, venda_id: int, status_pedido_atual: str
         estoque_baixado_agora = baixar_estoque_do_pedido(conn, venda_id, usuario, agora, "Baixa automática ao confirmar pagamento")
         registrar_log_status(conn, venda_id, status_final, usuario, observacao_status)
         _marcar_pedido_comercial_confirmado(conn, venda_id, usuario, agora)
+        if status_pedido_atual not in STATUS_PEDIDO_JA_CONFIRMADO:
+            # Só a transição REAL para pago (pedido ainda não confirmado
+            # antes desta chamada) gera PAGAMENTO_APROVADO. Uma
+            # reconfirmação idempotente do mesmo pedido já pago (mesmo
+            # valor, sem mudança de estado real) nunca gera uma segunda
+            # notificação -- mesmo usando um pagamento_id novo a cada
+            # chamada (cada POST grava uma linha em `pagamentos`, mas isso
+            # não é um evento financeiro novo do ponto de vista do cliente
+            # administrativo).
+            _emitir_notificacao_pagamento(
+                conn, venda_id=venda_id, evento=EVENTO_PAGAMENTO_APROVADO,
+                sufixo_idempotencia=str(pagamento_id or f"{venda_id}:{agora}"),
+                valor=valor_recebido, forma_pagamento=forma_pagamento, pagamento_id=pagamento_id,
+            )
         return estoque_baixado_agora
 
     observacao = (motivo or "Divergência de valor no pagamento.") + f" Recebido: R$ {valor_recebido:.2f} | Esperado: R$ {valor_esperado:.2f}."
@@ -295,6 +327,32 @@ def _aplicar_resultado_confirmacao(conn, venda_id: int, status_pedido_atual: str
     else:
         registrar_log_status(conn, venda_id, "Divergência de pagamento registrada", usuario, observacao)
     return False
+
+
+def _emitir_notificacao_pagamento(conn, *, venda_id: int, evento: str, sufixo_idempotencia: str, valor: float, forma_pagamento: str, pagamento_id: Optional[int] = None) -> None:
+    """Enfileira a notificação administrativa correspondente à transição de
+    status financeiro já CONFIRMADA no banco (nunca antes). Nunca deixa uma
+    falha de notificação interromper o pagamento/pedido -- qualquer exceção
+    aqui é apenas registrada, nunca propagada (ver backend/whatsapp_outbox.py
+    para o motivo dessa garantia)."""
+    try:
+        pedido_row = conn.execute("SELECT forma_recebimento FROM pedidos WHERE id=?", (venda_id,)).fetchone()
+        contexto = ContextoEventoPedido(
+            pedido_id=venda_id,
+            valor=valor,
+            forma_pagamento=forma_pagamento,
+            entrega=entrega_legivel(pedido_row["forma_recebimento"] if pedido_row else None),
+        )
+        enfileirar_evento_whatsapp(
+            conn,
+            evento=evento,
+            pedido_id=venda_id,
+            sufixo_idempotencia=sufixo_idempotencia,
+            contexto=contexto,
+            payment_id=pagamento_id,
+        )
+    except Exception:
+        pass
 
 
 def _payload_idempotencia_pagamento(payload: "PagamentoIn") -> dict:
@@ -386,6 +444,18 @@ def registrar_pagamento(
                 estoque_baixado_agora = _aplicar_resultado_confirmacao(
                     conn, payload.venda_id, str(venda["status"] or ""), conciliacao, motivo,
                     payload.usuario or "Admin", agora, valor_recebido_f, valor_esperado_f or 0.0,
+                    pagamento_id=pagamento_id, forma_pagamento=payload.forma or "",
+                )
+            elif status_informado in ("Recusado", "Cancelado", "Estornado"):
+                evento_map = {
+                    "Recusado": EVENTO_PAGAMENTO_RECUSADO,
+                    "Cancelado": EVENTO_PAGAMENTO_CANCELADO,
+                    "Estornado": EVENTO_CHARGEBACK_RECEBIDO if str(payload.origem_estorno or "").strip().lower() == "chargeback" else EVENTO_PAGAMENTO_REEMBOLSADO,
+                }
+                _emitir_notificacao_pagamento(
+                    conn, venda_id=payload.venda_id, evento=evento_map[status_informado],
+                    sufixo_idempotencia=str(pagamento_id), valor=valor_recebido_f,
+                    forma_pagamento=payload.forma or "", pagamento_id=pagamento_id,
                 )
 
             registrar_auditoria(
@@ -566,7 +636,7 @@ def atualizar_status_pagamento(pagamento_id: int, payload: PagamentoStatusIn, x_
 
     agora = datetime.now().isoformat(timespec="seconds")
     with conectar() as conn:
-        pagamento = conn.execute("SELECT id, venda_id, valor FROM pagamentos WHERE id=?", (pagamento_id,)).fetchone()
+        pagamento = conn.execute("SELECT id, venda_id, valor, forma FROM pagamentos WHERE id=?", (pagamento_id,)).fetchone()
         if not pagamento:
             raise HTTPException(status_code=404, detail="Pagamento não encontrado")
 
@@ -615,6 +685,18 @@ def atualizar_status_pagamento(pagamento_id: int, payload: PagamentoStatusIn, x_
             estoque_baixado_agora = _aplicar_resultado_confirmacao(
                 conn, pagamento["venda_id"], str(venda["status"] or ""), conciliacao, motivo,
                 payload.usuario or "Admin", agora, float(pagamento["valor"] or 0), valor_esperado_f or 0.0,
+                pagamento_id=pagamento_id, forma_pagamento=str(pagamento["forma"] or ""),
+            )
+        elif status in ("Recusado", "Cancelado", "Estornado"):
+            evento_map = {
+                "Recusado": EVENTO_PAGAMENTO_RECUSADO,
+                "Cancelado": EVENTO_PAGAMENTO_CANCELADO,
+                "Estornado": EVENTO_CHARGEBACK_RECEBIDO if str(payload.origem_estorno or "").strip().lower() == "chargeback" else EVENTO_PAGAMENTO_REEMBOLSADO,
+            }
+            _emitir_notificacao_pagamento(
+                conn, venda_id=pagamento["venda_id"], evento=evento_map[status],
+                sufixo_idempotencia=str(pagamento_id), valor=float(pagamento["valor"] or 0),
+                forma_pagamento=str(pagamento["forma"] or ""), pagamento_id=pagamento_id,
             )
         conn.commit()
     return {

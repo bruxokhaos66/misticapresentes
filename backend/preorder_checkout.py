@@ -23,6 +23,8 @@ from backend.site_stock_routes import (
     registrar_venda_site,
     validar_site_api_key,
 )
+from backend.whatsapp_events import EVENTO_PEDIDO_CRIADO, EVENTO_PIX_GERADO, ContextoEventoPedido, entrega_legivel
+from backend.whatsapp_outbox import enfileirar_evento_whatsapp
 
 
 def _centavos(valor) -> Decimal:
@@ -232,6 +234,17 @@ def registrar_checkout_publico(
                     "UPDATE pedidos SET pix_txid=?, pix_copia_cola=? WHERE id=?",
                     (pix["txid"], pix["copia_cola"], pedido_id),
                 )
+
+            try:
+                contexto_criacao = ContextoEventoPedido(
+                    pedido_id=pedido_id, valor=total_final, forma_pagamento="Pix site/celular",
+                    entrega=entrega_legivel(forma_recebimento),
+                )
+                enfileirar_evento_whatsapp(conn, evento=EVENTO_PEDIDO_CRIADO, pedido_id=pedido_id, sufixo_idempotencia="unico", contexto=contexto_criacao)
+                if pix:
+                    enfileirar_evento_whatsapp(conn, evento=EVENTO_PIX_GERADO, pedido_id=pedido_id, sufixo_idempotencia=pix["txid"], contexto=contexto_criacao)
+            except Exception:
+                pass
 
             resposta = {
                 "ok": True,

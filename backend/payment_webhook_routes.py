@@ -30,6 +30,8 @@ from backend.mercadopago_flags import mercado_pago_habilitado
 from backend.mercadopago_provider import MercadoPagoProvider
 from backend.payment_providers import PAYMENT_PROVIDERS
 from backend.rate_limit import limitar_requisicoes
+from backend.whatsapp_events import EVENTO_FALHA_DE_RECONCILIACAO, EVENTO_PAGAMENTO_PENDENTE, ContextoEventoPedido, entrega_legivel
+from backend.whatsapp_outbox import enfileirar_evento_whatsapp
 
 logger = get_logger(__name__)
 
@@ -68,6 +70,22 @@ STATUS_PROVEDOR_EM_ANALISE = {"pending", "in_process", "authorized", "in_mediati
 
 def _payload_hash(payload_bruto: bytes) -> str:
     return hashlib.sha256(payload_bruto).hexdigest()
+
+
+def _emitir_evento_pendente_whatsapp(conn, venda_id: int, valor: float) -> None:
+    """PAGAMENTO_PENDENTE: pagamento ainda em análise no provedor (webhook).
+    Nunca deixa uma falha aqui interromper a resposta ao webhook do
+    Mercado Pago -- ver mesma garantia em backend/payment_routes.py::
+    _emitir_notificacao_pagamento."""
+    try:
+        pedido_row = conn.execute("SELECT forma_recebimento FROM pedidos WHERE id=?", (venda_id,)).fetchone()
+        contexto = ContextoEventoPedido(pedido_id=venda_id, valor=valor, entrega=entrega_legivel(pedido_row["forma_recebimento"] if pedido_row else None))
+        enfileirar_evento_whatsapp(
+            conn, evento=EVENTO_PAGAMENTO_PENDENTE, pedido_id=venda_id,
+            sufixo_idempotencia="em_analise", contexto=contexto,
+        )
+    except Exception:
+        pass
 
 
 def _atualizar_tentativa_pagamento(conn, *, pedido_id: int, provedor: str, provider_payment_id: str, status_externo: str, status_interno: str, evento_id: str, pagamento_id: int | None, valor: float, agora: str, payment_type_id: str | None = None, payment_method_id: str | None = None, parcelas: int | None = None):
@@ -176,19 +194,41 @@ async def receber_webhook_pagamento(provedor: str, request: Request):
     # aprovado, por exemplo) e cada transição real precisa ser registrada.
     # Reenvio do MESMO status (replay do webhook) continua deduplicado
     # normalmente, pois cai na mesma chave com o mesmo payload.
-    resposta = registrar_pagamento(
-        PagamentoIn(
-            venda_id=evento.venda_id,
-            forma=forma_pagamento_texto,
-            valor=evento.valor_recebido,
-            status=status_interno_pagamento,
-            observacao=f"Confirmado automaticamente via webhook {evento.provedor} (status do provedor: {evento.status})",
-            usuario=f"Webhook {evento.provedor}",
-            identificador_evento=evento.provider_payment_id,
-        ),
-        x_mistica_api_key=chave_interna,
-        idempotency_key=f"webhook_{evento.provedor}:{evento.evento_id}",
-    )
+    try:
+        resposta = registrar_pagamento(
+            PagamentoIn(
+                venda_id=evento.venda_id,
+                forma=forma_pagamento_texto,
+                valor=evento.valor_recebido,
+                status=status_interno_pagamento,
+                observacao=f"Confirmado automaticamente via webhook {evento.provedor} (status do provedor: {evento.status})",
+                usuario=f"Webhook {evento.provedor}",
+                identificador_evento=evento.provider_payment_id,
+                origem_estorno="chargeback" if evento.status == "charged_back" else None,
+            ),
+            x_mistica_api_key=chave_interna,
+            idempotency_key=f"webhook_{evento.provedor}:{evento.evento_id}",
+        )
+    except Exception:
+        # O evento já foi gravado em webhook_eventos acima (idempotência
+        # garantida), mas a conciliação em si falhou de forma inesperada
+        # (não um erro de negócio normal, que registrar_pagamento já trata
+        # sem exceção) -- isso é uma FALHA_DE_RECONCILIACAO real e
+        # persistente, não uma tentativa transitória qualquer: fica visível
+        # para o administrador agir manualmente. Nunca silencia o erro --
+        # a exceção é sempre relançada, para o provedor reenviar a
+        # notificação depois (resposta não-2xx).
+        try:
+            with conectar() as conn:
+                enfileirar_evento_whatsapp(
+                    conn, evento=EVENTO_FALHA_DE_RECONCILIACAO, pedido_id=evento.venda_id,
+                    sufixo_idempotencia=evento.evento_id,
+                    contexto=ContextoEventoPedido(pedido_id=evento.venda_id),
+                )
+                conn.commit()
+        except Exception:
+            pass
+        raise
 
     if evento.status in STATUS_PROVEDOR_EM_ANALISE:
         # Pagamento ainda em análise no provedor: o pedido fica visível ao
@@ -196,6 +236,7 @@ async def receber_webhook_pagamento(provedor: str, request: Request):
         with conectar() as conn:
             for status_de_origem in ("Aguardando pagamento", "Pagamento divergente"):
                 if tentar_transicao_status_pagamento(conn, evento.venda_id, status_de_origem, "Pagamento em análise"):
+                    _emitir_evento_pendente_whatsapp(conn, evento.venda_id, evento.valor_recebido)
                     conn.commit()
                     break
                 conn.rollback()

@@ -55,6 +55,10 @@ from backend.user_sync_routes import router as user_sync_router
 from backend.site_stock_routes import router as site_stock_router
 from backend.system_status_routes import router as system_status_router
 from backend.admin_dashboard_routes import router as admin_dashboard_router
+from backend.whatsapp_admin_routes import router as whatsapp_admin_router
+from backend.whatsapp_flags import whatsapp_habilitado
+from backend.whatsapp_webhook_routes import router as whatsapp_webhook_router
+from backend.whatsapp_worker import iniciar_tarefa_periodica_worker
 from config import hash_password_pbkdf2
 from database.migrations import init_db
 from database.backup import backup_habilitado, scheduler_backup
@@ -133,6 +137,15 @@ async def lifespan(app: FastAPI):
     )
     tarefa_expiracao = asyncio.create_task(_expirar_pedidos_periodicamente())
     tarefa_backup = asyncio.create_task(scheduler_backup()) if backup_habilitado() else None
+    # Worker do outbox de notificações WhatsApp: só criado se as notificações
+    # estiverem efetivamente habilitadas e configuradas (ver
+    # backend/whatsapp_flags.py::whatsapp_habilitado) -- com a flag desligada
+    # (padrão em qualquer ambiente, inclusive produção, até ativação
+    # explícita), nenhuma tarefa extra roda e nenhuma chamada de rede é
+    # feita. Mesmo padrão de tarefa periódica em processo já usado por
+    # tarefa_expiracao acima -- ver docs/admin/WHATSAPP_NOTIFICACOES.md para
+    # a opção de rodar como processo/worker separado.
+    tarefa_whatsapp = iniciar_tarefa_periodica_worker() if whatsapp_habilitado() else None
     start_remote_uploads()
     try:
         yield
@@ -140,6 +153,8 @@ async def lifespan(app: FastAPI):
         tarefas = [tarefa_expiracao]
         if tarefa_backup is not None:
             tarefas.append(tarefa_backup)
+        if tarefa_whatsapp is not None:
+            tarefas.append(tarefa_whatsapp)
         for tarefa in tarefas:
             tarefa.cancel()
         for tarefa in tarefas:
@@ -299,6 +314,8 @@ app.include_router(mercadopago_router)
 app.include_router(upload_router)
 app.include_router(system_status_router)
 app.include_router(admin_dashboard_router)
+app.include_router(whatsapp_admin_router)
+app.include_router(whatsapp_webhook_router)
 app.include_router(backup_router)
 app.include_router(course_router)
 app.include_router(aluno_router)

@@ -119,6 +119,30 @@ services:
       # notificacoes do webhook (ver secao 6 do PR/relatorio de producao).
       - key: MERCADO_PAGO_WEBHOOK_SECRET
         sync: false
+      # Notificacoes administrativas por WhatsApp (backend/whatsapp_*.py,
+      # ver docs/admin/WHATSAPP_NOTIFICACOES.md). value: false aqui MANTEM
+      # o recurso desligado neste deploy ate a ativacao explicita e
+      # controlada descrita no documento citado -- nenhuma das demais
+      # variaveis WHATSAPP_* e sincronizada por este arquivo (cadastre
+      # manualmente no dashboard do Render quando for ativar).
+      - key: WHATSAPP_NOTIFICATIONS_ENABLED
+        value: false
+      - key: WHATSAPP_PROVIDER
+        value: meta_cloud
+      - key: WHATSAPP_GRAPH_API_VERSION
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_BUSINESS_ACCOUNT_ID
+        sync: false
+      - key: WHATSAPP_ACCESS_TOKEN
+        sync: false
+      - key: WHATSAPP_APP_SECRET
+        sync: false
+      - key: WHATSAPP_VERIFY_TOKEN
+        sync: false
+      - key: WHATSAPP_ADMIN_RECIPIENTS
+        sync: false
     disk:
       name: mistica-dados
       mountPath: /data

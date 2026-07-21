@@ -16,6 +16,8 @@ from backend.frete import PRAZO_ENTREGA_DIAS_UTEIS
 from backend.logging_config import get_logger
 from backend.panel_sessions import exigir_sessao_ou_chave_api, validar_sessao
 from backend.rate_limit import limitar_requisicoes
+from backend.whatsapp_events import EVENTO_PAGAMENTO_EXPIRADO, ContextoEventoPedido, entrega_legivel
+from backend.whatsapp_outbox import enfileirar_evento_whatsapp
 
 # Endereço oficial de retirada — nunca inventar rua, CEP ou complemento além
 # do que está definido aqui (Fase 3 — entrega ou retirada no checkout).
@@ -173,7 +175,7 @@ def expirar_pedidos_pendentes(conn, agora: str | None = None):
     agora = agora or datetime.now().isoformat(timespec="seconds")
     expirados = conn.execute(
         """
-        SELECT id FROM pedidos
+        SELECT id, total_final, forma_recebimento FROM pedidos
         WHERE COALESCE(status,'') IN ('Aguardando pagamento', 'Pagamento divergente')
           AND expira_em IS NOT NULL
           AND expira_em < ?
@@ -196,6 +198,16 @@ def expirar_pedidos_pendentes(conn, agora: str | None = None):
             """,
             (venda["id"], "Cancelado", "Sistema", "Expirado automaticamente: pagamento não confirmado a tempo", agora),
         )
+        try:
+            enfileirar_evento_whatsapp(
+                conn, evento=EVENTO_PAGAMENTO_EXPIRADO, pedido_id=venda["id"], sufixo_idempotencia="unico",
+                contexto=ContextoEventoPedido(
+                    pedido_id=venda["id"], valor=float(venda["total_final"] or 0),
+                    entrega=entrega_legivel(venda["forma_recebimento"]),
+                ),
+            )
+        except Exception:
+            pass
         total_expirados += 1
     if total_expirados:
         conn.commit()
