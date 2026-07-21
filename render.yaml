@@ -98,6 +98,27 @@ services:
       # nao reverte o lancamento financeiro do caixa original).
       - key: MISTICA_REST_ESTORNO_ENABLED
         value: false
+      # Mercado Pago -- pagamento com cartao de credito (backend/mercadopago_*.py).
+      # Nenhum valor e sincronizado deste arquivo: cadastre manualmente no
+      # dashboard do Render (Environment) as credenciais de PRODUCAO da
+      # aplicacao Mercado Pago apos confirmar Public Key e Access Token da
+      # MESMA aplicacao/modo no painel do Mercado Pago. Sem essas variaveis
+      # configuradas, o cartao de credito permanece indisponivel de forma
+      # segura (ver backend/mercadopago_flags.py::mercado_pago_habilitado) --
+      # nao ha fallback automatico para credencial de teste.
+      - key: MERCADO_PAGO_ENABLED
+        sync: false
+      # production ou sandbox -- use production neste servico.
+      - key: MERCADO_PAGO_ENVIRONMENT
+        sync: false
+      - key: MERCADO_PAGO_PUBLIC_KEY
+        sync: false
+      - key: MERCADO_PAGO_ACCESS_TOKEN
+        sync: false
+      # Chave secreta usada para validar a assinatura (x-signature) das
+      # notificacoes do webhook (ver secao 6 do PR/relatorio de producao).
+      - key: MERCADO_PAGO_WEBHOOK_SECRET
+        sync: false
     disk:
       name: mistica-dados
       mountPath: /data
