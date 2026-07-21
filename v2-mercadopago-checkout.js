@@ -46,6 +46,38 @@
   let pedidoAtual = null; // { id, pixTxid, totalFinal } -- o mesmo pedido usado pelo Pix
   let cardFormMontadoParaPedido = null;
 
+  // -----------------------------------------------------------------------
+  // Máquina de estado do CardToken (uso único, nunca reaproveitado).
+  //
+  // O CardToken gerado pelo SDK do Mercado Pago é descartável: só pode ser
+  // enviado em UMA tentativa de pagamento. Este arquivo NUNCA guarda o
+  // token numa variável de módulo entre tentativas -- ele só existe como
+  // variável local dentro de enviarPagamentoCartao(), do instante em que o
+  // SDK o cria (createCardToken(), método oficial documentado em
+  // mercadopago/sdk-js, docs/card-form.md) até o instante em que a
+  // requisição ao backend é iniciada, quando a referência local é
+  // descartada (setada como null) antes mesmo do fetch responder -- nunca
+  // depois. Isso vale igualmente para sucesso, recusa, HTTP 400/422/500,
+  // timeout, falha de rede ou resposta que não possa ser interpretada: em
+  // nenhum desses casos o mesmo token é reenviado. Uma nova tentativa
+  // (outro clique, outro cartão, voltar do Pix) sempre passa de novo por
+  // createCardToken(), nunca por getCardFormData() sozinho (que só relê o
+  // que já foi tokenizado, podendo devolver um token já consumido).
+  const TOKEN_ESTADO = {
+    SEM_TOKEN: "sem_token",
+    TOKENIZANDO: "tokenizando",
+    TOKEN_PRONTO: "token_pronto",
+    ENVIANDO: "enviando",
+    TOKEN_CONSUMIDO: "token_consumido",
+    AGUARDANDO_NOVA_TOKENIZACAO: "aguardando_nova_tokenizacao",
+  };
+  let tokenEstado = TOKEN_ESTADO.SEM_TOKEN;
+  // Callback pendente de createCardToken() em andamento (onCardTokenReceived
+  // é a única forma oficial de saber quando o SDK terminou) -- nunca mais
+  // de uma tokenização em voo por vez (ver trava síncrona em
+  // enviarPagamentoCartao/cartaoProcessando).
+  let resolverTokenPendente = null;
+
   function currency(valor) {
     return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(valor || 0);
   }
@@ -342,6 +374,13 @@
     });
     if (pixPanel) pixPanel.hidden = forma !== "pix";
     if (cardPanel) cardPanel.hidden = forma !== "cartao";
+    // Alternar entre Pix e cartão nunca reaproveita um token pendente --
+    // não há nenhuma tentativa de pagamento em andamento neste ponto
+    // (cartaoProcessando trava o clique de envio, não a troca de aba), mas
+    // o estado é sempre realinhado para "sem_token" por clareza: a próxima
+    // vez que "Cartão de crédito" for selecionado, um novo submit sempre
+    // passa de novo por createCardToken().
+    if (!cartaoProcessando) tokenEstado = TOKEN_ESTADO.SEM_TOKEN;
     // O rótulo do indicador de etapas (#checkoutSteps) refletia sempre
     // "Pagamento Pix", mesmo com "Cartão de crédito" selecionado -- nunca
     // mais mostra um método que o cliente não escolheu.
@@ -433,6 +472,11 @@
         /* instância antiga já pode ter sido descartada pelo próprio SDK */
       }
     }
+    // Uma instância nova do CardForm nunca herda token/callback pendente da
+    // anterior -- qualquer tokenização em voo da instância antiga (ex.:
+    // onCardTokenReceived que ainda não respondeu) é descartada aqui.
+    resolverTokenPendente = null;
+    tokenEstado = TOKEN_ESTADO.SEM_TOKEN;
 
     cardFormMontadoParaPedido = pedido.id;
     // Nunca deixa opções de parcelas de uma montagem anterior (outro
@@ -536,6 +580,20 @@
           console.error("[MercadoPago] CardForm onError:", sanitizarErroParaLog(error));
           setCardStatus(normalizarMensagemErro(error), "erro");
         },
+        // Callback OFICIAL de createCardToken() (mercadopago/sdk-js,
+        // docs/card-form.md: "createCardToken() ... Trigger onCardTokenReceived
+        // callback"). Nunca é chamado diretamente pelo cliente -- é o único
+        // jeito de saber quando o SDK terminou de gerar um token NOVO;
+        // getCardFormData() sozinho não garante isso (só relê o último
+        // estado interno do CardForm, que pode ser um token já consumido
+        // numa tentativa anterior).
+        onCardTokenReceived: (error, data) => {
+          if (!resolverTokenPendente) return; // callback tardio/sem tokenização em andamento -- ignora
+          const { resolve, reject } = resolverTokenPendente;
+          resolverTokenPendente = null;
+          if (error) reject(error);
+          else resolve(data && data.token);
+        },
         onSubmit: (event) => {
           event.preventDefault();
           enviarPagamentoCartao();
@@ -544,6 +602,43 @@
           return () => {};
         },
       },
+    });
+  }
+
+  // Solicita ao SDK um CardToken NOVO (nunca reaproveita o último token
+  // criado). createCardToken() é o método oficial documentado -- entrega o
+  // resultado via callback onCardTokenReceived (registrado acima); algumas
+  // versões do SDK também retornam uma Promise com o mesmo resultado, então
+  // honramos as duas formas com segurança (nunca resolve duas vezes).
+  function solicitarNovoToken() {
+    return new Promise((resolve, reject) => {
+      if (resolverTokenPendente) {
+        reject(new Error("Já existe uma tokenização em andamento."));
+        return;
+      }
+      resolverTokenPendente = { resolve, reject };
+      let talvezPromise;
+      try {
+        talvezPromise = cardForm.createCardToken();
+      } catch (erro) {
+        resolverTokenPendente = null;
+        reject(erro);
+        return;
+      }
+      if (talvezPromise && typeof talvezPromise.then === "function") {
+        talvezPromise.then(
+          (resultado) => {
+            if (!resolverTokenPendente) return; // já resolvido por onCardTokenReceived
+            resolverTokenPendente = null;
+            resolve(resultado && resultado.token);
+          },
+          (erro) => {
+            if (!resolverTokenPendente) return;
+            resolverTokenPendente = null;
+            reject(erro);
+          },
+        );
+      }
     });
   }
 
@@ -612,6 +707,11 @@
   window.misticaAtualizarBotaoCartao = recalcularBotaoCartao;
 
   async function enviarPagamentoCartao() {
+    // Trava síncrona ANTES de qualquer await: um segundo clique/Enter/evento
+    // de submit que chegue enquanto esta função ainda está em andamento
+    // (mesmo antes da primeira pausa assíncrona) é ignorado aqui -- nunca
+    // gera uma segunda tokenização nem um segundo POST para o mesmo clique.
+    if (cartaoProcessando) return;
     if (!cardForm || !pedidoAtual) return setCardStatus("Formulário de pagamento não está pronto.", "erro");
     if (typeof window.misticaEnderecoCobranca?.enderecoCobrancaValido === "function" && !window.misticaEnderecoCobranca.enderecoCobrancaValido()) {
       return setCardStatus("Preencha o endereço de cobrança do cartão para continuar.", "erro");
@@ -619,22 +719,35 @@
     definirCarregando(true);
     setCardStatus("Processando pagamento com segurança pelo Mercado Pago...", "info");
 
-    let dados;
+    // Cada tentativa gera um CardToken NOVO pelo SDK -- nunca reaproveita
+    // getCardFormData().token isolado (pode refletir uma tokenização
+    // anterior já consumida). dadosFormulario só fornece o que não é o
+    // token (parcelas, bandeira, emissor, CPF, e-mail); o token em si vem
+    // sempre de solicitarNovoToken() logo abaixo.
+    let token;
+    let dadosFormulario;
     try {
-      dados = cardForm.getCardFormData();
+      tokenEstado = TOKEN_ESTADO.TOKENIZANDO;
+      token = await solicitarNovoToken();
+      dadosFormulario = cardForm.getCardFormData();
     } catch {
-      definirCarregando(false);
-      return setCardStatus("Não foi possível ler os dados do cartão. Revise os campos e tente novamente.", "erro");
-    }
-    if (!dados || !dados.token) {
+      tokenEstado = TOKEN_ESTADO.SEM_TOKEN;
       definirCarregando(false);
       return setCardStatus("Não foi possível gerar o token do cartão. Revise os dados e tente novamente.", "erro");
     }
+    if (!token) {
+      tokenEstado = TOKEN_ESTADO.SEM_TOKEN;
+      definirCarregando(false);
+      return setCardStatus("Não foi possível gerar o token do cartão. Revise os dados e tente novamente.", "erro");
+    }
+    tokenEstado = TOKEN_ESTADO.TOKEN_PRONTO;
+
     // Nunca usa "installments = 1" como fallback silencioso para mascarar
     // um valor ausente/inválido -- só é aceito 1 parcela quando o Mercado
     // Pago de fato ofereceu (e o cliente confirmou) essa opção no seletor.
-    const installmentsSelecionadas = Number(dados.installments);
+    const installmentsSelecionadas = Number(dadosFormulario.installments);
     if (!Number.isInteger(installmentsSelecionadas) || installmentsSelecionadas <= 0) {
+      tokenEstado = TOKEN_ESTADO.SEM_TOKEN;
       definirCarregando(false);
       return setCardStatus("Complete os dados do cartão para consultar as parcelas.", "erro");
     }
@@ -644,17 +757,26 @@
     const corpo = {
       pedido_id: pedidoId,
       txid: pedidoAtual.pixTxid,
-      token: dados.token,
-      payment_method_id: dados.paymentMethodId,
+      token,
+      payment_method_id: dadosFormulario.paymentMethodId,
       installments: installmentsSelecionadas,
-      issuer_id: dados.issuerId || null,
+      issuer_id: dadosFormulario.issuerId || null,
       payer: {
-        email: dados.cardholderEmail,
-        documento_tipo: dados.identificationType || "CPF",
-        documento_numero: dados.identificationNumber,
+        email: dadosFormulario.cardholderEmail,
+        documento_tipo: dadosFormulario.identificationType || "CPF",
+        documento_numero: dadosFormulario.identificationNumber,
         endereco_cobranca: window.misticaEnderecoCobranca?.obterEnderecoCobranca?.(),
       },
     };
+
+    // A partir daqui o token é CONSUMIDO -- a referência local é descartada
+    // antes mesmo de a requisição terminar. Nenhum código depois deste
+    // ponto tem mais acesso ao valor do token (nem em caso de sucesso, nem
+    // de recusa, nem de erro de rede/timeout/parsing): uma nova tentativa
+    // sempre volta ao topo desta função e passa de novo por
+    // solicitarNovoToken().
+    token = null;
+    tokenEstado = TOKEN_ESTADO.ENVIANDO;
 
     let resposta;
     try {
@@ -666,20 +788,35 @@
         body: JSON.stringify(corpo),
       });
       resposta = await requisicao.json().catch(() => ({}));
+      tokenEstado = TOKEN_ESTADO.TOKEN_CONSUMIDO;
       if (!requisicao.ok) {
         // resposta.detail pode ser uma STRING (HTTPException comum do
         // backend) OU um ARRAY de objetos {loc,msg,type} quando o FastAPI
         // rejeita o corpo por validação do Pydantic (HTTP 422) -- é esse
         // segundo formato que, sem normalizar, virava "[object Object]" na
         // tela do cliente (new Error(array).message == "[object Object]").
+        //
+        // "codigo": "cartao_token_invalido" (HTTP 422, ver
+        // backend/mercadopago_routes.py) é uma resposta FINAL e definitiva
+        // do Mercado Pago -- nenhuma cobrança ocorreu, o token já enviado
+        // está consumido/inválido. Libera a Idempotency-Key aqui (e só
+        // aqui, dentre os casos não-2xx) para a próxima tentativa, com um
+        // token novo, não colidir com o hash da tentativa anterior.
+        if (resposta && resposta.codigo === "cartao_token_invalido") {
+          limparChaveTentativa(pedidoId);
+        }
         throw new Error(normalizarMensagemErro(resposta, "Não foi possível processar o pagamento."));
       }
     } catch (erro) {
+      tokenEstado = TOKEN_ESTADO.AGUARDANDO_NOVA_TOKENIZACAO;
       definirCarregando(false);
-      // Falha de rede/timeout: NÃO limpa a chave de tentativa -- uma nova
-      // tentativa (novo clique, ou reload da página) reaproveita a mesma
-      // Idempotency-Key, então o Mercado Pago nunca processa uma segunda
-      // cobrança para o mesmo clique.
+      // Falha de rede/timeout/parsing (ou qualquer outra rejeição que não
+      // seja "cartao_token_invalido", já tratada acima): NÃO limpa a chave
+      // de tentativa -- uma nova tentativa (novo clique, ou reload da
+      // página) reaproveita a mesma Idempotency-Key, então o Mercado Pago
+      // nunca processa uma segunda cobrança para o mesmo clique. Em nenhum
+      // caso o token consumido acima é reenviado -- a próxima tentativa
+      // sempre gera um token novo.
       setCardStatus(normalizarMensagemErro(erro, "Falha de conexão. Verifique sua internet e tente novamente."), "erro");
       return;
     }
@@ -688,6 +825,7 @@
     // terminou, uma nova tentativa (ex.: outro cartão) deve usar uma chave
     // nova.
     limparChaveTentativa(pedidoId);
+    tokenEstado = TOKEN_ESTADO.AGUARDANDO_NOVA_TOKENIZACAO;
     definirCarregando(false);
 
     if (resposta.status === "aprovado") {

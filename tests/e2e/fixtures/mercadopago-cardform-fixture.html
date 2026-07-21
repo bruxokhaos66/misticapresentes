@@ -154,9 +154,38 @@
           if (el) el.querySelectorAll("iframe").forEach(function (f) { f.remove(); });
         });
       },
+      // Método OFICIAL (mercadopago/sdk-js, docs/card-form.md) para gerar um
+      // CardToken NOVO -- nunca reaproveita um token anterior. Cada chamada
+      // consome uma entrada de window.__mpTokensParaEntregar (fila
+      // controlada pelo teste, ex.: ["TOKEN_TESTE_A", "TOKEN_TESTE_B"]); sem
+      // fila configurada, gera um token fictício sequencial
+      // ("mock-token-1", "mock-token-2", ...) -- nunca o mesmo valor duas
+      // vezes. Publica o resultado tanto via callback onCardTokenReceived
+      // quanto via Promise resolvida, replicando a ambiguidade documentada
+      // do SDK real (o código de produção honra as duas formas com
+      // segurança).
+      createCardToken: function () {
+        window.__mpTokensCriados = window.__mpTokensCriados || [];
+        var novoToken;
+        if (Array.isArray(window.__mpTokensParaEntregar) && window.__mpTokensParaEntregar.length > 0) {
+          novoToken = window.__mpTokensParaEntregar.shift();
+        } else {
+          window.__mpProximoTokenSequencial = (window.__mpProximoTokenSequencial || 0) + 1;
+          novoToken = "mock-token-" + window.__mpProximoTokenSequencial;
+        }
+        window.__mpTokensCriados.push(novoToken);
+        var resultado = { token: novoToken };
+        return new Promise(function (resolve) {
+          setTimeout(function () {
+            if (config.callbacks && config.callbacks.onCardTokenReceived) {
+              config.callbacks.onCardTokenReceived(null, resultado);
+            }
+            resolve(resultado);
+          }, 5);
+        });
+      },
       getCardFormData: function () {
         return {
-          token: "mock-token",
           paymentMethodId: "visa",
           installments: 1,
           issuerId: "1",
