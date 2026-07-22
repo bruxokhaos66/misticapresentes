@@ -99,6 +99,9 @@ def criar_pagamento_cartao(
     device_id: Optional[str] = None,
     payer_first_name: Optional[str] = None,
     payer_last_name: Optional[str] = None,
+    ip_address: Optional[str] = None,
+    statement_descriptor: Optional[str] = None,
+    metadata: Optional[dict] = None,
 ) -> ResultadoPagamentoMP:
     """Cria uma cobrança de cartão no Mercado Pago. `token` é o token de
     cartão gerado no navegador pelo SDK oficial (dados de cartão nunca
@@ -153,7 +156,19 @@ def criar_pagamento_cartao(
     security.js) -- encaminhado SEMPRE no header X-meli-session-id (nunca
     como campo do corpo JSON), conforme documentado publicamente (Mercado
     Pago, "Integrate the Device ID"/"How to improve payment approval":
-    X-meli-session-id: device_id). Nunca logado por esta função."""
+    X-meli-session-id: device_id). Nunca logado por esta função.
+
+    `ip_address`, quando informado, vai em additional_info.ip_address --
+    sinal adicional de antifraude documentado pela Payments API (mesma
+    seção additional_info dos itens); nunca bloqueia o pagamento se ausente.
+
+    `statement_descriptor`, quando informado, vai no campo de mesmo nome
+    (texto exibido na fatura do cartão do comprador) -- puramente
+    informativo, nunca afeta aprovação/recusa nem qualquer regra comercial.
+
+    `metadata`, quando informado, vai no campo de mesmo nome (objeto livre
+    para correlação/conciliação do lado do integrador, documentado pela
+    Payments API) -- nunca lido de volta por este cliente, só encaminhado."""
     corpo = {
         "transaction_amount": round(float(transaction_amount), 2),
         "token": token,
@@ -177,8 +192,17 @@ def criar_pagamento_cartao(
         corpo["notification_url"] = notification_url
     if billing_address:
         corpo["payer"]["address"] = billing_address
+    additional_info: dict = {}
     if additional_info_items:
-        corpo["additional_info"] = {"items": additional_info_items}
+        additional_info["items"] = additional_info_items
+    if ip_address:
+        additional_info["ip_address"] = ip_address
+    if additional_info:
+        corpo["additional_info"] = additional_info
+    if statement_descriptor:
+        corpo["statement_descriptor"] = statement_descriptor
+    if metadata:
+        corpo["metadata"] = metadata
 
     headers = {"X-Idempotency-Key": idempotency_key}
     if device_id:

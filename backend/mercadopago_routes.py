@@ -18,7 +18,7 @@ import secrets
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
@@ -37,6 +37,7 @@ from backend.mercadopago_flags import (
     diagnostico_credenciais_mercadopago,
     mercado_pago_habilitado,
     public_key_mercadopago,
+    statement_descriptor_mercadopago,
 )
 from backend.order_status_routes import expirar_pedidos_pendentes
 from backend.panel_sessions import exigir_sessao_ou_chave_api
@@ -218,6 +219,19 @@ class CartaoPagamentoIn(BaseModel):
         return valor
 
 
+def _ip_cliente(request: Request) -> Optional[str]:
+    """IP do comprador para additional_info.ip_address (sinal adicional de
+    antifraude do Mercado Pago, nunca usado para bloquear nada aqui). Mesmo
+    padrão de backend/rate_limit.py::_client_ip e backend/review_routes.py::
+    _ip_hash: prioriza X-Forwarded-For (proxy/CDN na frente do servidor),
+    cai para o IP da conexão TCP direta. Retorna None (nunca envia o campo)
+    quando nenhum dos dois está disponível -- nunca bloqueia o pagamento por
+    causa disso."""
+    encaminhado = request.headers.get("x-forwarded-for", "")
+    ip = encaminhado.split(",")[0].strip() or (request.client.host if request.client else "")
+    return ip or None
+
+
 def _sanitizar_doc(numero: Optional[str]) -> Optional[str]:
     if not numero:
         return None
@@ -344,7 +358,7 @@ def _resolver_endereco_cobranca(pedido, endereco: Optional[EnderecoCobrancaIn]) 
 
 
 @router.post("/card", dependencies=[Depends(limitar_pagamento_cartao)])
-def pagar_com_cartao(payload: CartaoPagamentoIn, idempotency_key: str | None = Header(default=None, alias="Idempotency-Key")):
+def pagar_com_cartao(payload: CartaoPagamentoIn, request: Request, idempotency_key: str | None = Header(default=None, alias="Idempotency-Key")):
     if not mercado_pago_habilitado():
         raise HTTPException(status_code=503, detail="Pagamento com cartão indisponível no momento. Utilize o Pix.")
     if not idempotency_key or len(idempotency_key.strip()) < 8:
@@ -430,6 +444,9 @@ def pagar_com_cartao(payload: CartaoPagamentoIn, idempotency_key: str | None = H
             device_id=payload.device_id,
             payer_first_name=payload.payer.nome,
             payer_last_name=payload.payer.sobrenome,
+            ip_address=_ip_cliente(request),
+            statement_descriptor=statement_descriptor_mercadopago() or None,
+            metadata={"pedido_id": str(payload.pedido_id)},
         )
     except MercadoPagoIndisponivel:
         agora_erro = datetime.now().isoformat(timespec="seconds")
