@@ -26,6 +26,8 @@ from backend.panel_sessions import exigir_sessao_ou_chave_api
 from backend.pedido_comercial import FORMAS_RECEBIMENTO
 from backend.pix import gerar_pix_do_pedido
 from backend.rate_limit import _client_ip, limitar_requisicoes
+from backend.whatsapp_events import EVENTO_PEDIDO_CRIADO, EVENTO_PIX_GERADO, ContextoEventoPedido, entrega_legivel
+from backend.whatsapp_outbox import enfileirar_evento_whatsapp
 from config import DB_PATH
 
 logger = get_logger(__name__)
@@ -558,6 +560,18 @@ def registrar_venda_site(
                         "UPDATE pedidos SET pix_txid=?, pix_copia_cola=? WHERE id=?",
                         (pix["txid"], pix["copia_cola"], venda_id),
                     )
+
+            if pedido_pendente:
+                try:
+                    contexto_criacao = ContextoEventoPedido(
+                        pedido_id=venda_id, valor=total_final, forma_pagamento=venda.forma_pagamento or "",
+                        entrega=entrega_legivel(forma_recebimento),
+                    )
+                    enfileirar_evento_whatsapp(conn, evento=EVENTO_PEDIDO_CRIADO, pedido_id=venda_id, sufixo_idempotencia="unico", contexto=contexto_criacao)
+                    if pix:
+                        enfileirar_evento_whatsapp(conn, evento=EVENTO_PIX_GERADO, pedido_id=venda_id, sufixo_idempotencia=pix["txid"], contexto=contexto_criacao)
+                except Exception:
+                    pass
 
             resposta = {
                 "ok": True,

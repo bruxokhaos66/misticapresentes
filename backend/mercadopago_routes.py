@@ -58,6 +58,8 @@ from backend.pedido_comercial import (
     sanitizar_status_detail,
 )
 from backend.rate_limit import limitar_requisicoes
+from backend.whatsapp_events import EVENTO_PAGAMENTO_PENDENTE, ContextoEventoPedido, entrega_legivel
+from backend.whatsapp_outbox import enfileirar_evento_whatsapp
 
 logger = get_logger(__name__)
 
@@ -514,6 +516,18 @@ def pagar_com_cartao(payload: CartaoPagamentoIn, idempotency_key: str | None = H
         with conectar() as conn:
             for status_de_origem in ("Aguardando pagamento", "Pagamento divergente"):
                 if tentar_transicao_status_pagamento(conn, payload.pedido_id, status_de_origem, "Pagamento em análise"):
+                    try:
+                        pedido_row = conn.execute("SELECT forma_recebimento FROM pedidos WHERE id=?", (payload.pedido_id,)).fetchone()
+                        enfileirar_evento_whatsapp(
+                            conn, evento=EVENTO_PAGAMENTO_PENDENTE, pedido_id=payload.pedido_id,
+                            sufixo_idempotencia="em_analise",
+                            contexto=ContextoEventoPedido(
+                                pedido_id=payload.pedido_id, valor=resultado.transaction_amount or total_final,
+                                entrega=entrega_legivel(pedido_row["forma_recebimento"] if pedido_row else None),
+                            ),
+                        )
+                    except Exception:
+                        pass
                     conn.commit()
                     break
                 conn.rollback()

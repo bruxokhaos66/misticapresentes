@@ -529,6 +529,7 @@ def init_db():
     _criar_tabelas_isis_content_studio()
     _criar_tabelas_mercadopago()
     _criar_pedido_comercial_unificado()
+    _criar_tabelas_whatsapp_notificacoes()
 
     _BANCOS_MIGRADOS.add(db_path_atual)
 
@@ -908,3 +909,86 @@ def _criar_pedido_comercial_unificado():
         "CHECK(origem IN ('sistema','webhook','administrador','cliente'))"
     )
     _exec_tolerante("CREATE INDEX IF NOT EXISTS idx_pedido_status_log_venda_tipo ON pedido_status_log(venda_id, tipo)")
+
+
+def _criar_tabelas_whatsapp_notificacoes():
+    """Notificações administrativas por WhatsApp (ver backend/whatsapp_*.py).
+
+    Padrão Outbox transacional: o evento é gravado NA MESMA transação da
+    mudança de estado que o originou (criação de pedido, confirmação de
+    pagamento etc. -- ver backend/whatsapp_outbox.py::enfileirar_evento_
+    whatsapp), nunca dependendo de o WhatsApp estar disponível. Um worker
+    separado (backend/whatsapp_worker.py) processa a fila depois do commit.
+
+    UNIQUE(idempotency_key) é a garantia central de "nenhuma mensagem
+    duplicada": webhook duplicado, reconsulta administrativa e retry do
+    worker sempre calculam a MESMA chave para o mesmo evento financeiro, e o
+    INSERT OR IGNORE correspondente nunca cria uma segunda linha.
+
+    Nenhuma coluna aqui guarda PII além do estritamente necessário para a
+    mensagem (nome do destinatário nunca é gravado -- apenas uma referência
+    mascarada); nenhuma credencial, token ou payload bruto do provedor é
+    persistido nesta tabela."""
+    query_db(
+        """
+        CREATE TABLE IF NOT EXISTS notification_outbox (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_type TEXT NOT NULL,
+            aggregate_type TEXT NOT NULL DEFAULT 'pedido',
+            aggregate_id INTEGER NOT NULL,
+            order_id INTEGER,
+            payment_id INTEGER,
+            channel TEXT NOT NULL DEFAULT 'whatsapp',
+            provider TEXT NOT NULL DEFAULT 'meta_cloud',
+            recipient_reference TEXT,
+            template_name TEXT,
+            template_language TEXT DEFAULT 'pt_BR',
+            payload_json TEXT NOT NULL DEFAULT '{}',
+            idempotency_key TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending'
+                CHECK(status IN ('pending','processing','sent','delivered','read','retry','permanently_failed','cancelled','skipped_disabled')),
+            attempts INTEGER NOT NULL DEFAULT 0,
+            next_attempt_at TEXT,
+            locked_at TEXT,
+            locked_by TEXT,
+            provider_message_id TEXT,
+            last_error_code TEXT,
+            last_error_summary TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT,
+            sent_at TEXT,
+            delivered_at TEXT,
+            read_at TEXT,
+            failed_at TEXT,
+            UNIQUE(idempotency_key)
+        )
+        """,
+        commit=True,
+    )
+    for sql_idx in [
+        "CREATE INDEX IF NOT EXISTS idx_notification_outbox_status_next ON notification_outbox(status, next_attempt_at)",
+        "CREATE INDEX IF NOT EXISTS idx_notification_outbox_order ON notification_outbox(order_id)",
+        "CREATE INDEX IF NOT EXISTS idx_notification_outbox_provider_msg ON notification_outbox(provider_message_id)",
+        "CREATE INDEX IF NOT EXISTS idx_notification_outbox_locked ON notification_outbox(locked_at)",
+    ]:
+        _exec_tolerante(sql_idx)
+
+    # Idempotência dos callbacks de status do WhatsApp (delivered/read/failed):
+    # o mesmo evento pode ser reenviado pela Meta (garantia "at-least-once" de
+    # qualquer webhook); (provider_message_id, status, timestamp_provedor)
+    # identifica o evento de forma determinística, nunca o corpo bruto.
+    query_db(
+        """
+        CREATE TABLE IF NOT EXISTS whatsapp_status_eventos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            provider_message_id TEXT NOT NULL,
+            status TEXT NOT NULL,
+            timestamp_provedor TEXT,
+            payload_hash TEXT,
+            recebido_em TEXT NOT NULL,
+            UNIQUE(provider_message_id, status, timestamp_provedor)
+        )
+        """,
+        commit=True,
+    )
+    _exec_tolerante("CREATE INDEX IF NOT EXISTS idx_whatsapp_status_eventos_msg ON whatsapp_status_eventos(provider_message_id)")
