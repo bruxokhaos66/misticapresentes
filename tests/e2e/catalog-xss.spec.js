@@ -48,11 +48,10 @@ test("dados do catálogo são exibidos como texto e não executam HTML", async (
 
   expect(await page.evaluate(() => window.__catalogInjectionExecuted)).toBe(0);
   expect(await page.locator(".product-card script").count()).toBe(0);
-  // O único <svg> legítimo no card é a setinha estática do botão "Ver
-  // descrição" (sem atributos de evento). O payload injetado via categoria
-  // (<svg onload=...>) não pode aparecer como elemento SVG de verdade.
+  // O card premium não usa mais nenhum <svg> decorativo (o "Ver detalhes"
+  // agora é texto simples, sem gaveta/chevron). Portanto o payload injetado
+  // via categoria (<svg onload=...>) não pode aparecer como elemento SVG
+  // de verdade em lugar nenhum do card.
   const svgs = page.locator(".product-card svg");
-  await expect(svgs).toHaveCount(1);
-  await expect(svgs.first()).toHaveClass(/product-desc-chevron/);
-  expect(await svgs.first().getAttribute("onload")).toBeNull();
+  await expect(svgs).toHaveCount(0);
 });
