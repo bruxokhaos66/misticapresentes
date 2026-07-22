@@ -134,7 +134,7 @@ def _backfill_tipo_item_pedidos_itens():
         )
 
 
-def init_db():
+def init_db(db_path: "str | os.PathLike[str] | None" = None) -> None:
     """Aplica todas as migrações (todas idempotentes: `CREATE TABLE IF NOT
     EXISTS` / `ALTER TABLE` tolerante a coluna já existente).
 
@@ -152,8 +152,47 @@ def init_db():
     disco efêmero (ver `tests/test_persistencia_banco.py`) pode fazer o
     arquivo desaparecer entre uma chamada e outra sem que `DB_PATH` mude;
     tratar só a string do caminho como chave de cache, sem checar o disco,
-    deixaria o schema sem ser recriado depois desse tipo de restart."""
-    db_path_atual = _connection.DB_PATH
+    deixaria o schema sem ser recriado depois desse tipo de restart.
+
+    `db_path`: caminho explícito do banco a inicializar. Quando omitido
+    (padrão, retrocompatível com todas as chamadas existentes sem
+    argumento), usa `database.connection.DB_PATH` -- o mesmo global lido
+    por `query_db`/`get_connection`, exatamente como antes deste parâmetro
+    existir.
+
+    Passar `db_path` explicitamente -- como `backend.database.conectar()`
+    faz -- garante que a migração rode contra o mesmo arquivo que o
+    chamador vai abrir em seguida, mesmo que `database.connection.DB_PATH`
+    tenha sido temporariamente sobrescrito por código concorrente no mesmo
+    processo (ex.: um teste que monkeypatcha esse global só para a duração
+    da própria função -- ver tests/test_persistencia_banco.py). Sem isso, uma
+    tarefa de fundo (`backend.main._expirar_pedidos_periodicamente`, viva
+    numa thread própria por um `TestClient` de outro módulo que nunca foi
+    fechado) podia enxergar o `DB_PATH` momentaneamente trocado por um
+    teste concorrente e tentar recriar o schema no arquivo temporário desse
+    teste exatamente enquanto ele era apagado/recriado -- causando o SIGBUS
+    (Fatal Python error: Bus error) confirmado no CI do commit 46e020a.
+
+    O `db_path` explícito é propagado às chamadas internas de `query_db`
+    (que continuam sem receber caminho por parâmetro -- mudar isso exigiria
+    tocar cada uma delas) através de `database.connection.usar_db_path`, um
+    override **thread-local**: só a thread que está migrando enxerga esse
+    caminho, então nenhuma outra thread lendo `query_db`/`get_connection`
+    ao mesmo tempo (ex.: uma requisição concorrente, ou outro teste) é
+    afetada -- ao contrário de reatribuir `database.connection.DB_PATH`
+    diretamente, que vazaria para todo o processo."""
+    alvo = os.fspath(db_path) if db_path is not None else os.fspath(_connection.DB_PATH)
+    with _connection.usar_db_path(alvo):
+        _aplicar_migracoes(alvo)
+
+
+def _aplicar_migracoes(db_path_atual: str) -> None:
+    """Corpo real das migrações -- inalterado desde antes deste parâmetro
+    existir, exceto por receber `db_path_atual` já resolvido e normalizado
+    de `init_db()` em vez de ler `_connection.DB_PATH` diretamente. Todas as
+    chamadas de `query_db`/`_exec_tolerante` abaixo continuam sem receber
+    caminho por parâmetro -- pegam o override thread-local ativado por
+    `init_db()` (ver `database.connection.usar_db_path`)."""
     if db_path_atual in _BANCOS_MIGRADOS and not os.path.exists(db_path_atual):
         _BANCOS_MIGRADOS.discard(db_path_atual)
     if db_path_atual in _BANCOS_MIGRADOS:
