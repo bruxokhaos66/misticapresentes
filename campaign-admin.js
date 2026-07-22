@@ -15,12 +15,45 @@
     frete_gratis: "Frete grátis",
   };
 
+  // Mapeia um status HTTP de falha para uma mensagem segura ao usuário, sem
+  // vazar detalhes internos (stack trace, corpo bruto da resposta etc.).
+  const mensagemErroHttp = (status, mensagemPadrao) => {
+    if (status === 401) return "Sessão expirada. Faça login novamente.";
+    if (status === 403) return "Você não tem permissão para realizar esta ação.";
+    if (status === 404) return "Campanha não encontrada. Ela pode já ter sido removida.";
+    return mensagemPadrao;
+  };
+
+  // Erros de fetch() que nunca chegam a uma resposta HTTP (rede fora do ar,
+  // CORS bloqueado, DNS etc.) chegam aqui como TypeError, sem `status`.
+  const mensagemErroRede = (error, mensagemPadrao) => {
+    if (error instanceof TypeError) return "Não foi possível conectar à API. Verifique sua conexão.";
+    return (error && error.message) || mensagemPadrao;
+  };
+
+  // Classifica o status visível da campanha combinando o campo `ativo` com
+  // as datas de vigência e o horário atual. Isso é só apresentação no
+  // painel administrativo -- não influencia em nada a regra usada pela rota
+  // pública /api/campanhas/ativas (essa continua só no backend).
+  const classificarStatus = (campanha, agora) => {
+    const inicio = campanha.data_inicio ? new Date(campanha.data_inicio) : null;
+    const fim = campanha.data_fim ? new Date(campanha.data_fim) : null;
+    if (!campanha.ativo) {
+      return campanha.data_fim ? { rotulo: "Encerrada", icone: "🔚" } : { rotulo: "Inativa", icone: "⏸️" };
+    }
+    if (inicio && !Number.isNaN(inicio.getTime()) && inicio > agora) return { rotulo: "Agendada", icone: "🕒" };
+    if (fim && !Number.isNaN(fim.getTime()) && fim < agora) return { rotulo: "Expirada", icone: "⌛" };
+    return { rotulo: "Ativa", icone: "📣" };
+  };
+
   ready(() => {
     const adminContent = document.getElementById("adminContent");
     if (!adminContent) return;
 
     let editingId = null;
     let campanhas = [];
+    let carregando = false;
+    const idsEmProcessamento = new Set();
 
     const panel = document.createElement("section");
     panel.className = "form-panel campaign-admin-panel";
@@ -109,32 +142,46 @@
         list.innerHTML = '<div class="history-item"><span>Nenhuma campanha cadastrada ainda.</span></div>';
         return;
       }
-      list.innerHTML = campanhas.map((campanha) => `
+      const agora = new Date();
+      list.innerHTML = campanhas.map((campanha) => {
+        const situacao = classificarStatus(campanha, agora);
+        const emProcessamento = idsEmProcessamento.has(String(campanha.id));
+        return `
         <article class="admin-product-item">
-          <div class="admin-product-thumb">${campanha.ativo ? "📣" : "⏸️"}</div>
+          <div class="admin-product-thumb">${situacao.icone}</div>
           <div>
             <strong>${esc(campanha.titulo)}</strong>
             <span>${esc(TIPOS[campanha.tipo] || campanha.tipo)}${campanha.valor ? ` • ${campanha.tipo === "desconto_fixo" ? money.format(campanha.valor) : `${campanha.valor}%`}` : ""}</span>
-            <span>${campanha.ativo ? "Ativa" : "Inativa"}${campanha.codigo_cupom ? ` • Cupom: ${esc(campanha.codigo_cupom)}` : ""}</span>
+            <span>${esc(situacao.rotulo)}${campanha.codigo_cupom ? ` • Cupom: ${esc(campanha.codigo_cupom)}` : ""}</span>
             <small>${esc(campanha.descricao || "Sem descrição.")}</small>
           </div>
           <div class="admin-product-actions">
             <button class="btn btn-ghost" type="button" data-edit-campaign="${campanha.id}">Editar</button>
-            <button class="btn btn-ghost" type="button" data-delete-campaign="${campanha.id}">Excluir</button>
+            ${campanha.ativo ? `<button class="btn btn-ghost" type="button" data-end-campaign="${campanha.id}" ${emProcessamento ? "disabled" : ""}>Encerrar campanha</button>` : ""}
+            <button class="btn btn-ghost" type="button" data-delete-campaign="${campanha.id}" ${emProcessamento ? "disabled" : ""}>Excluir</button>
           </div>
         </article>
-      `).join("");
+      `;
+      }).join("");
     };
 
     const loadCampanhas = async () => {
+      // Evita corridas: se já existe uma busca em andamento (ex.: o carregamento
+      // inicial e o evento de desbloqueio disparam quase juntos), a segunda
+      // chamada não dispara outra requisição -- só a primeira em voo importa,
+      // pois ambas buscam exatamente a mesma lista.
+      if (carregando) return;
+      carregando = true;
       try {
         const response = await fetch(`${API_BASE}/api/campanhas`, { credentials: "include" });
-        if (!response.ok) throw new Error("Não foi possível carregar as campanhas.");
+        if (!response.ok) throw new Error(mensagemErroHttp(response.status, "Não foi possível carregar as campanhas."));
         campanhas = await response.json();
         renderList();
         setStatus(`Campanhas atualizadas: ${campanhas.length} cadastrada(s).`, true);
       } catch (error) {
-        setStatus(error.message || "Falha ao carregar campanhas.");
+        setStatus(mensagemErroRede(error, "Não foi possível carregar as campanhas."));
+      } finally {
+        carregando = false;
       }
     };
 
@@ -157,13 +204,42 @@
 
     const deleteCampaign = async (id) => {
       if (!window.confirm("Excluir esta campanha?")) return;
+      const chave = String(id);
+      if (idsEmProcessamento.has(chave)) return;
+      idsEmProcessamento.add(chave);
+      renderList();
       try {
         const response = await fetch(`${API_BASE}/api/campanhas/${encodeURIComponent(id)}`, { method: "DELETE", credentials: "include" });
-        if (!response.ok) throw new Error("Não foi possível excluir a campanha.");
+        if (!response.ok) throw new Error(mensagemErroHttp(response.status, "Não foi possível excluir a campanha."));
         setStatus("Campanha excluída.", true);
         await loadCampanhas();
       } catch (error) {
-        setStatus(error.message || "Falha ao excluir campanha.");
+        setStatus(mensagemErroRede(error, "Não foi possível excluir a campanha."));
+      } finally {
+        idsEmProcessamento.delete(chave);
+        renderList();
+      }
+    };
+
+    const endCampaign = async (id) => {
+      if (!window.confirm("Tem certeza de que deseja encerrar esta campanha? Ela deixará de aparecer no site imediatamente.")) return;
+      const chave = String(id);
+      if (idsEmProcessamento.has(chave)) return;
+      idsEmProcessamento.add(chave);
+      renderList();
+      try {
+        const response = await fetch(`${API_BASE}/api/campanhas/${encodeURIComponent(id)}/encerrar`, {
+          method: "POST",
+          credentials: "include",
+        });
+        if (!response.ok) throw new Error(mensagemErroHttp(response.status, "Não foi possível encerrar a campanha."));
+        setStatus("Campanha encerrada.", true);
+        await loadCampanhas();
+      } catch (error) {
+        setStatus(mensagemErroRede(error, "Não foi possível encerrar a campanha."));
+      } finally {
+        idsEmProcessamento.delete(chave);
+        renderList();
       }
     };
 
@@ -180,12 +256,12 @@
           body: JSON.stringify(payload),
         });
         const data = await response.json().catch(() => ({}));
-        if (!response.ok || !data.ok) throw new Error(data.detail || "Falha ao salvar campanha.");
+        if (!response.ok || !data.ok) throw new Error(mensagemErroHttp(response.status, data.detail || "Falha ao salvar campanha."));
         setStatus(editingId ? "Campanha atualizada." : "Campanha criada.", true);
         clearForm();
         await loadCampanhas();
       } catch (error) {
-        setStatus(error.message || "Falha ao salvar campanha.");
+        setStatus(mensagemErroRede(error, "Falha ao salvar campanha."));
       }
     });
 
@@ -193,10 +269,26 @@
     list.addEventListener("click", (event) => {
       const editBtn = event.target.closest("[data-edit-campaign]");
       if (editBtn) return editCampaign(editBtn.dataset.editCampaign);
+      const endBtn = event.target.closest("[data-end-campaign]");
+      if (endBtn) return endCampaign(endBtn.dataset.endCampaign);
       const delBtn = event.target.closest("[data-delete-campaign]");
       if (delBtn) return deleteCampaign(delBtn.dataset.deleteCampaign);
     });
 
+    // Carga inicial: cobre o caso de a página já abrir com uma sessão válida
+    // (cookie de sessão persistido de um login anterior).
     loadCampanhas();
+
+    // Esse painel pode ser injetado (carregarPainelAdmin, em site-config.js)
+    // antes de a sessão existir -- a primeira loadCampanhas() acima roda sem
+    // cookie e recebe 401. site-config.js dispara "mistica:admin-unlocked"
+    // assim que o painel é autorizado e liberado (login novo ou sessão
+    // restaurada), então escutamos aqui para tentar de novo sem exigir F5.
+    // O guard em window evita empilhar um novo listener por instância caso
+    // este script seja injetado mais de uma vez na mesma página.
+    if (!window.__misticaCampaignAdminUnlockListenerInstalled) {
+      window.__misticaCampaignAdminUnlockListenerInstalled = true;
+      window.addEventListener("mistica:admin-unlocked", () => loadCampanhas());
+    }
   });
 })();

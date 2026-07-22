@@ -138,7 +138,7 @@ def listar_campanhas_admin(sessao: dict = Depends(exigir_sessao_ou_chave_api()))
 
 
 @router.post("/campanhas")
-def criar_campanha(campanha: CampanhaIn, sessao: dict = Depends(exigir_sessao_ou_chave_api())):
+def criar_campanha(campanha: CampanhaIn, sessao: dict = Depends(exigir_sessao_ou_chave_api("adm"))):
     tipo = _validar_tipo(campanha.tipo)
     agora = datetime.now().isoformat(timespec="seconds")
     with conectar() as conn:
@@ -170,7 +170,7 @@ def criar_campanha(campanha: CampanhaIn, sessao: dict = Depends(exigir_sessao_ou
 
 
 @router.put("/campanhas/{campanha_id}")
-def atualizar_campanha(campanha_id: int, campanha: CampanhaIn, sessao: dict = Depends(exigir_sessao_ou_chave_api())):
+def atualizar_campanha(campanha_id: int, campanha: CampanhaIn, sessao: dict = Depends(exigir_sessao_ou_chave_api("adm"))):
     tipo = _validar_tipo(campanha.tipo)
     existente = obter("SELECT id FROM campanhas WHERE id=?", (campanha_id,))
     if not existente:
@@ -204,7 +204,7 @@ def atualizar_campanha(campanha_id: int, campanha: CampanhaIn, sessao: dict = De
 
 
 @router.delete("/campanhas/{campanha_id}")
-def excluir_campanha(campanha_id: int, sessao: dict = Depends(exigir_sessao_ou_chave_api())):
+def excluir_campanha(campanha_id: int, sessao: dict = Depends(exigir_sessao_ou_chave_api("adm"))):
     existente = obter("SELECT id FROM campanhas WHERE id=?", (campanha_id,))
     if not existente:
         raise HTTPException(status_code=404, detail="Campanha não encontrada.")
@@ -213,3 +213,34 @@ def excluir_campanha(campanha_id: int, sessao: dict = Depends(exigir_sessao_ou_c
         registrar_auditoria(conn, "campanha", campanha_id, "excluir", "Admin")
         conn.commit()
     return {"ok": True}
+
+
+@router.post("/campanhas/{campanha_id}/encerrar")
+def encerrar_campanha(campanha_id: int, sessao: dict = Depends(exigir_sessao_ou_chave_api("adm"))):
+    """Encerra a campanha imediatamente (antes da data_fim original), sem
+    excluir o registro: marca ativo=0 e ajusta data_fim para agora, para que
+    ela pare de aparecer em /api/campanhas/ativas e em /api/cupons/validar
+    na próxima consulta. Idempotente: chamar de novo numa campanha já
+    inativa não altera data_fim/atualizado_em outra vez nem falha."""
+    existente = obter("SELECT * FROM campanhas WHERE id=?", (campanha_id,))
+    if not existente:
+        raise HTTPException(status_code=404, detail="Campanha não encontrada.")
+    if not existente["ativo"]:
+        return {"ok": True, "id": campanha_id, "ja_encerrada": True}
+    agora = datetime.now().isoformat(timespec="seconds")
+    with conectar() as conn:
+        conn.execute(
+            "UPDATE campanhas SET ativo=0, data_fim=?, atualizado_em=? WHERE id=?",
+            (agora, agora, campanha_id),
+        )
+        registrar_auditoria(
+            conn,
+            "campanha",
+            campanha_id,
+            "encerrar",
+            "Admin",
+            antes={"ativo": existente["ativo"], "data_fim": existente["data_fim"]},
+            depois={"ativo": 0, "data_fim": agora},
+        )
+        conn.commit()
+    return {"ok": True, "id": campanha_id, "ja_encerrada": False}
