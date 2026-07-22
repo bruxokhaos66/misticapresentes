@@ -20,6 +20,7 @@ import httpx
 
 from backend.logging_config import get_logger
 from backend.mercadopago_flags import access_token_mercadopago
+from backend.pedido_comercial import CODIGO_MP_CARD_TOKEN_INVALIDO
 
 logger = get_logger(__name__)
 
@@ -32,6 +33,25 @@ class MercadoPagoIndisponivel(Exception):
     erro de rede, 5xx). Nunca deve ser interpretado como pagamento recusado
     -- o chamador decide o que fazer (normalmente: não confirmar nada e
     orientar nova tentativa)."""
+
+
+class MercadoPagoErroIntegracao(Exception):
+    """A criação do pagamento NUNCA chegou a se efetivar no Mercado Pago --
+    resposta HTTP diferente de 200/201 (ex.: 400 payload inválido, 401
+    credencial inválida/expirada, 403 sem permissão, 422 dados rejeitados na
+    validação) OU um 200/201 sem `id` no corpo (formato inesperado). Em
+    ambos os casos não existe payment.id real: nenhuma cobrança foi criada
+    na conta do Mercado Pago, então isso NUNCA deve ser confundido com
+    `status="rejected"` (recusa de crédito/antifraude do emissor, que só
+    acontece quando o Mercado Pago efetivamente cria o pagamento). O
+    chamador deve tratar como falha de processamento -- nunca orientar
+    "tente outro cartão" -- e pode liberar a Idempotency-Key com segurança,
+    já que nada foi cobrado."""
+
+    def __init__(self, mensagem: str, *, status_code: int, causa_codigos: tuple = ()):
+        super().__init__(mensagem)
+        self.status_code = status_code
+        self.causa_codigos = causa_codigos
 
 
 @dataclass(frozen=True)
@@ -233,20 +253,36 @@ def criar_pagamento_cartao(
     except ValueError as exc:
         raise MercadoPagoIndisponivel("Resposta inválida do Mercado Pago.") from exc
 
-    if resposta.status_code not in (200, 201) or not payload.get("id"):
-        # Erro de validação (4xx): cartão/token inválido, dados incompletos
-        # etc. Não é indisponibilidade -- é uma recusa/erro de requisição,
-        # tratado pelo chamador como pagamento não realizado. `cause` é uma
-        # lista de códigos/descrições genéricos do provedor (ex.: {"code":
-        # 2006, "description": "Invalid card_number"}) -- nunca contém o
-        # número do cartão, token, CVV ou dado do pagador, só o nome do
-        # campo com problema, então é seguro logar para diagnóstico.
-        causas = [
-            {"code": c.get("code"), "description": c.get("description")}
-            for c in (payload.get("cause") or [])
-            if isinstance(c, dict)
-        ][:5]
-        detalhe = str(payload.get("message") or payload.get("error") or "erro_desconhecido")[:200]
+    if resposta.status_code in (200, 201) and payload.get("id"):
+        # Único caso em que o Mercado Pago efetivamente criou o pagamento:
+        # HTTP 200/201 com payment.id presente. status/status_detail
+        # (inclusive "rejected", quando o emissor/antifraude recusa a
+        # cobrança já criada) refletem fielmente o que o provedor decidiu.
+        return _normalizar(payload)
+
+    # A partir daqui: NENHUM pagamento foi criado no Mercado Pago -- seja
+    # porque o HTTP não foi 200/201 (erro de validação/credencial/permissão
+    # devolvido ANTES de criar o pagamento), seja porque veio 200/201 sem
+    # "id" (formato de resposta inesperado). `cause` é uma lista de
+    # códigos/descrições genéricos do provedor (ex.: {"code": 2006,
+    # "description": "Invalid card_number"}) -- nunca contém o número do
+    # cartão, token, CVV ou dado do pagador, só o nome do campo com
+    # problema, então é seguro logar para diagnóstico.
+    causas = [
+        {"code": c.get("code"), "description": c.get("description")}
+        for c in (payload.get("cause") or [])
+        if isinstance(c, dict)
+    ][:5]
+    causa_codigos = tuple(c["code"] for c in causas if isinstance(c.get("code"), int))
+    detalhe = str(payload.get("message") or payload.get("error") or "erro_desconhecido")[:200]
+
+    if resposta.status_code not in (200, 201) and CODIGO_MP_CARD_TOKEN_INVALIDO in causa_codigos:
+        # Caso já tratado especificamente por
+        # backend/pedido_comercial.py::eh_card_token_invalido: card_token_id
+        # inválido/já usado/expirado (código 3003) nunca é uma recusa de
+        # crédito -- é um erro de integração que o cliente resolve gerando
+        # um token novo no navegador. Preserva o comportamento existente
+        # (HTTP 422 + mensagem específica), sem alterar essa lógica.
         logger.info(
             "mercadopago_pagamento_rejeitado_na_criacao",
             extra={
@@ -267,10 +303,26 @@ def criar_pagamento_cartao(
             external_reference=external_reference,
             currency_id=None,
             collector_id=None,
-            causa_codigos=tuple(c["code"] for c in causas if isinstance(c.get("code"), int)),
+            causa_codigos=causa_codigos,
         )
 
-    return _normalizar(payload)
+    # Qualquer outro 4xx (400 payload inválido, 401 credencial
+    # inválida/expirada, 403 sem permissão, 422 dados rejeitados na
+    # validação) ou 200/201 sem "id": erro técnico/de integração real, nunca
+    # uma recusa de crédito -- não há payment.id porque nenhuma cobrança foi
+    # criada. O chamador NUNCA deve gravar isso como "recusado" nem exibir
+    # "tente outro cartão".
+    logger.warning(
+        "mercadopago_erro_tecnico_sem_pagamento",
+        extra={
+            "evento": "mp_criar_pagamento_erro_tecnico_sem_id",
+            "status_code": resposta.status_code,
+            "detalhe": detalhe,
+            "causas": causas,
+            "tinha_id": bool(payload.get("id")),
+        },
+    )
+    raise MercadoPagoErroIntegracao(detalhe, status_code=resposta.status_code, causa_codigos=causa_codigos)
 
 
 def consultar_pagamento(payment_id: str) -> ResultadoPagamentoMP:

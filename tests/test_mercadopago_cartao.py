@@ -1597,3 +1597,302 @@ def test_installments_de_debito_permanece_em_1_quando_e_isso_que_o_sdk_envia():
     resposta = pagar_cartao(pedido, aprovado_debito, installments=1)
     assert resposta.status_code == 200
     assert resposta.json()["parcelas"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Erro técnico/de integração (4xx sem payment.id, ou 200/201 sem payment.id)
+# NUNCA deve ser confundido com recusa de crédito/antifraude -- bug relatado
+# em auditoria: site informava "pagamento recusado" para tentativas que
+# nunca chegaram a ser criadas no Mercado Pago (nada aparecia na conta do
+# lojista). backend/mercadopago_client.py::criar_pagamento_cartao agora
+# levanta MercadoPagoErroIntegracao para esses casos, em vez de fabricar um
+# ResultadoPagamentoMP(status="rejected", id="").
+# ---------------------------------------------------------------------------
+
+
+class _FakeRespostaMP:
+    def __init__(self, status_code, corpo):
+        self.status_code = status_code
+        self._corpo = corpo
+
+    def json(self):
+        return self._corpo
+
+
+def _chamar_criar_pagamento_cartao(fake_post, **overrides):
+    import httpx
+
+    from backend.mercadopago_client import criar_pagamento_cartao
+
+    kwargs = dict(
+        idempotency_key="k-erro-tecnico", transaction_amount=10.0, token="tok", installments=1,
+        payment_method_id="visa", issuer_id=None, payer_email="c@example.com",
+        payer_doc_type="CPF", payer_doc_number="12345678900",
+        external_reference="1", description="Pedido #1",
+    )
+    kwargs.update(overrides)
+    with patch.object(httpx.Client, "post", fake_post):
+        return criar_pagamento_cartao(**kwargs)
+
+
+def test_client_http_200_com_id_e_status_rejected_preserva_recusa_real():
+    """HTTP 200/201 + payment.id presente + status=rejected: recusa
+    LEGÍTIMA do emissor/antifraude -- comportamento inalterado."""
+    def fake_post(self, url, json=None, headers=None):
+        return _FakeRespostaMP(201, {
+            "id": "mp-recusa-real-1", "status": "rejected", "status_detail": "cc_rejected_insufficient_amount",
+            "transaction_amount": 10.0, "currency_id": "BRL",
+        })
+
+    resultado = _chamar_criar_pagamento_cartao(fake_post)
+    assert resultado.id == "mp-recusa-real-1"
+    assert resultado.status == "rejected"
+    assert resultado.status_detail == "cc_rejected_insufficient_amount"
+
+
+def test_client_http_400_sem_payment_id_levanta_erro_de_integracao():
+    from backend.mercadopago_client import MercadoPagoErroIntegracao
+
+    def fake_post(self, url, json=None, headers=None):
+        return _FakeRespostaMP(400, {"message": "invalid payload", "cause": []})
+
+    try:
+        _chamar_criar_pagamento_cartao(fake_post)
+        assert False, "deveria ter levantado MercadoPagoErroIntegracao"
+    except MercadoPagoErroIntegracao as exc:
+        assert exc.status_code == 400
+
+
+def test_client_http_401_sem_payment_id_levanta_erro_de_integracao():
+    """401 (credencial/Access Token inválido ou expirado) nunca pode virar
+    'rejected' -- é erro de integração, não recusa do cartão do cliente."""
+    from backend.mercadopago_client import MercadoPagoErroIntegracao
+
+    def fake_post(self, url, json=None, headers=None):
+        return _FakeRespostaMP(401, {"message": "invalid access token", "cause": []})
+
+    try:
+        _chamar_criar_pagamento_cartao(fake_post)
+        assert False, "deveria ter levantado MercadoPagoErroIntegracao"
+    except MercadoPagoErroIntegracao as exc:
+        assert exc.status_code == 401
+
+
+def test_client_http_403_sem_payment_id_levanta_erro_de_integracao():
+    from backend.mercadopago_client import MercadoPagoErroIntegracao
+
+    def fake_post(self, url, json=None, headers=None):
+        return _FakeRespostaMP(403, {"message": "forbidden", "cause": []})
+
+    try:
+        _chamar_criar_pagamento_cartao(fake_post)
+        assert False, "deveria ter levantado MercadoPagoErroIntegracao"
+    except MercadoPagoErroIntegracao as exc:
+        assert exc.status_code == 403
+
+
+def test_client_http_422_sem_payment_id_levanta_erro_de_integracao():
+    from backend.mercadopago_client import MercadoPagoErroIntegracao
+
+    def fake_post(self, url, json=None, headers=None):
+        return _FakeRespostaMP(422, {"message": "unprocessable", "cause": []})
+
+    try:
+        _chamar_criar_pagamento_cartao(fake_post)
+        assert False, "deveria ter levantado MercadoPagoErroIntegracao"
+    except MercadoPagoErroIntegracao as exc:
+        assert exc.status_code == 422
+
+
+def test_client_http_200_sem_payment_id_e_tratado_como_erro_tecnico():
+    """200/201 sem 'id' no corpo é formato inesperado -- nunca uma recusa."""
+    from backend.mercadopago_client import MercadoPagoErroIntegracao
+
+    def fake_post(self, url, json=None, headers=None):
+        return _FakeRespostaMP(200, {"status": "approved", "status_detail": "accredited"})
+
+    try:
+        _chamar_criar_pagamento_cartao(fake_post)
+        assert False, "deveria ter levantado MercadoPagoErroIntegracao"
+    except MercadoPagoErroIntegracao as exc:
+        assert exc.status_code == 200
+
+
+def test_client_http_500_mantem_indisponibilidade_sem_regressao():
+    from backend.mercadopago_client import MercadoPagoIndisponivel
+
+    def fake_post(self, url, json=None, headers=None):
+        return _FakeRespostaMP(500, {"message": "internal error"})
+
+    try:
+        _chamar_criar_pagamento_cartao(fake_post)
+        assert False, "deveria ter levantado MercadoPagoIndisponivel"
+    except MercadoPagoIndisponivel:
+        pass
+
+
+def test_client_timeout_mantem_indisponibilidade_sem_regressao():
+    import httpx
+
+    from backend.mercadopago_client import MercadoPagoIndisponivel
+
+    def fake_post(self, url, json=None, headers=None):
+        raise httpx.TimeoutException("timeout")
+
+    try:
+        _chamar_criar_pagamento_cartao(fake_post)
+        assert False, "deveria ter levantado MercadoPagoIndisponivel"
+    except MercadoPagoIndisponivel:
+        pass
+
+
+def test_client_json_invalido_mantem_indisponibilidade_sem_regressao():
+    from backend.mercadopago_client import MercadoPagoIndisponivel
+
+    class FakeRespostaJsonInvalido:
+        status_code = 201
+
+        def json(self):
+            raise ValueError("invalid json")
+
+    def fake_post(self, url, json=None, headers=None):
+        return FakeRespostaJsonInvalido()
+
+    try:
+        _chamar_criar_pagamento_cartao(fake_post)
+        assert False, "deveria ter levantado MercadoPagoIndisponivel"
+    except MercadoPagoIndisponivel:
+        pass
+
+
+def test_client_card_token_invalido_3003_continua_tratado_como_antes():
+    """Regressão: código de causa 3003 (card_token_id inválido/já usado) é um
+    caso JÁ especificamente tratado por eh_card_token_invalido -- continua
+    voltando como ResultadoPagamentoMP(status="rejected", causa_codigos=
+    (3003,)), nunca como MercadoPagoErroIntegracao, para não quebrar o fluxo
+    de HTTP 422 + nova tokenização já existente."""
+    def fake_post(self, url, json=None, headers=None):
+        return _FakeRespostaMP(400, {
+            "message": "Invalid card_token_id", "cause": [{"code": 3003, "description": "invalid card_token_id"}],
+        })
+
+    resultado = _chamar_criar_pagamento_cartao(fake_post)
+    assert resultado.id == ""
+    assert resultado.status == "rejected"
+    assert resultado.causa_codigos == (3003,)
+
+
+# ---------------------------------------------------------------------------
+# Endpoint (backend/mercadopago_routes.py::pagar_com_cartao): erro técnico
+# nunca pode ser gravado como recusa comercial nem exibido como "tente outro
+# cartão".
+# ---------------------------------------------------------------------------
+
+
+def test_endpoint_erro_tecnico_retorna_502_com_mensagem_neutra():
+    from backend.mercadopago_client import MercadoPagoErroIntegracao
+
+    pedido = criar_pedido_publico(25.0)
+    with patch("backend.mercadopago_routes.criar_pagamento_cartao", side_effect=MercadoPagoErroIntegracao("invalid access token", status_code=401)):
+        resposta = client.post(
+            "/api/payments/mercadopago/card",
+            json={
+                "pedido_id": pedido["id"], "txid": pedido["pix_txid"], "token": "card_token_" + uuid.uuid4().hex,
+                "payment_method_id": "visa", "installments": 1,
+                "payer": {"email": "c@example.com", "nome": "Maria", "documento_numero": "12345678900"},
+            },
+            headers={"Idempotency-Key": str(uuid.uuid4()), "X-Forwarded-For": ip_unico()},
+        )
+    assert resposta.status_code == 502
+    detalhe = resposta.json()["detail"]
+    assert "tente novamente" in detalhe.lower()
+    # Nunca expõe o motivo técnico bruto (status_detail/mensagem do provedor,
+    # código HTTP, token de acesso) na resposta ao cliente.
+    assert "invalid access token" not in detalhe
+    assert "401" not in detalhe
+
+
+def test_endpoint_erro_tecnico_nao_grava_pedido_como_recusado_nem_payment_id_falso():
+    from backend.mercadopago_client import MercadoPagoErroIntegracao
+
+    pedido = criar_pedido_publico(35.0)
+    with patch("backend.mercadopago_routes.criar_pagamento_cartao", side_effect=MercadoPagoErroIntegracao("invalid payload", status_code=400)):
+        resposta = client.post(
+            "/api/payments/mercadopago/card",
+            json={
+                "pedido_id": pedido["id"], "txid": pedido["pix_txid"], "token": "card_token_" + uuid.uuid4().hex,
+                "payment_method_id": "visa", "installments": 1,
+                "payer": {"email": "c@example.com", "nome": "Maria", "documento_numero": "12345678900"},
+            },
+            headers={"Idempotency-Key": str(uuid.uuid4()), "X-Forwarded-For": ip_unico()},
+        )
+    assert resposta.status_code == 502
+
+    tentativas = client.get(f"/api/payments/mercadopago/tentativas/{pedido['id']}", headers=HEADERS).json()
+    assert len(tentativas) == 1
+    assert tentativas[0]["status_interno"] == "erro"
+    assert tentativas[0]["status_interno"] != "recusado"
+    assert not tentativas[0].get("provider_payment_id")
+
+    detalhe = client.get(f"/api/pedidos/{pedido['id']}", headers=HEADERS).json()
+    assert detalhe["status"] == "Aguardando pagamento"  # nunca cancela, nunca confirma por erro técnico
+
+
+def test_endpoint_erro_tecnico_libera_idempotency_key_para_nova_tentativa_segura():
+    """Como nenhuma cobrança foi criada no Mercado Pago, uma nova tentativa
+    (ex.: depois que o time de operações corrige a credencial) deve
+    funcionar normalmente, sem ficar bloqueada pela tentativa anterior."""
+    from backend.mercadopago_client import MercadoPagoErroIntegracao
+
+    pedido = criar_pedido_publico(45.0)
+    with patch("backend.mercadopago_routes.criar_pagamento_cartao", side_effect=MercadoPagoErroIntegracao("invalid access token", status_code=401)):
+        resposta1 = client.post(
+            "/api/payments/mercadopago/card",
+            json={
+                "pedido_id": pedido["id"], "txid": pedido["pix_txid"], "token": "card_token_" + uuid.uuid4().hex,
+                "payment_method_id": "visa", "installments": 1,
+                "payer": {"email": "c@example.com", "nome": "Maria", "documento_numero": "12345678900"},
+            },
+            headers={"Idempotency-Key": str(uuid.uuid4()), "X-Forwarded-For": ip_unico()},
+        )
+    assert resposta1.status_code == 502
+
+    aprovado = resultado_mp(pedido, status="approved", payment_id="mp-apos-correcao")
+    resposta2 = pagar_cartao(pedido, aprovado)
+    assert resposta2.status_code == 200
+    assert resposta2.json()["status"] == "aprovado"
+
+
+def test_endpoint_erro_tecnico_nunca_orienta_trocar_de_cartao():
+    """A mensagem ao comprador para erro técnico é sempre neutra (tente
+    novamente mais tarde) -- nunca sugere trocar de cartão, o que seria
+    enganoso (o problema não está no cartão do comprador)."""
+    from backend.mercadopago_client import MercadoPagoErroIntegracao
+
+    pedido = criar_pedido_publico(28.0)
+    with patch("backend.mercadopago_routes.criar_pagamento_cartao", side_effect=MercadoPagoErroIntegracao("forbidden", status_code=403)):
+        resposta = client.post(
+            "/api/payments/mercadopago/card",
+            json={
+                "pedido_id": pedido["id"], "txid": pedido["pix_txid"], "token": "card_token_" + uuid.uuid4().hex,
+                "payment_method_id": "visa", "installments": 1,
+                "payer": {"email": "c@example.com", "nome": "Maria", "documento_numero": "12345678900"},
+            },
+            headers={"Idempotency-Key": str(uuid.uuid4()), "X-Forwarded-For": ip_unico()},
+        )
+    assert resposta.status_code == 502
+    detalhe = resposta.json()["detail"].lower()
+    assert "outro cart" not in detalhe
+
+
+def test_recusa_real_continua_orientando_outro_meio_de_pagamento():
+    """Contraste com o teste acima: uma recusa REAL (HTTP 200/201 com
+    payment.id, status=rejected) continua orientando tentar outro cartão ou
+    Pix -- só o erro técnico teve a mensagem alterada."""
+    pedido = criar_pedido_publico(32.0)
+    recusado = resultado_mp(pedido, status="rejected", status_detail="cc_rejected_insufficient_amount", payment_id="mp-recusa-real-msg")
+    resposta = pagar_cartao(pedido, recusado)
+    assert resposta.status_code == 200
+    corpo = resposta.json()
+    assert corpo["status"] == "recusado"
+    assert "outro cart" in corpo["mensagem"].lower() or "pix" in corpo["mensagem"].lower()
