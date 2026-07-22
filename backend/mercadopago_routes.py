@@ -293,14 +293,23 @@ def _itens_additional_info(conn, pedido_id: int) -> Optional[list]:
     """Monta additional_info.items a partir de pedidos_itens (produto,
     quantidade e valor unitário JÁ calculados pelo backend na criação do
     pedido -- nunca confia em preço/quantidade vindos do cliente). Só os
-    campos documentados pelo schema oficial (id/title/quantity/unit_price;
-    ver commonTypes.ts do mercadopago/sdk-nodejs) -- sem category_id/
-    description/picture_url/warranty inventados, porque este catálogo não
-    tem esses dados estruturados hoje. Retorna None se o pedido não tiver
-    itens ou se algum item não tiver quantidade/preço válidos (nunca envia
-    um item com dado incoerente)."""
+    campos documentados pelo schema oficial (id/title/description/quantity/
+    unit_price; ver commonTypes.ts do mercadopago/sdk-nodejs) -- sem
+    category_id/picture_url/warranty inventados, porque este catálogo não
+    tem esses dados estruturados hoje. `description` vem de produtos.descricao
+    (LEFT JOIN por codigo_p) quando o produto tem esse campo preenchido no
+    catálogo -- nunca inventado; um produto sem descrição cadastrada
+    simplesmente não tem a chave `description` no item. Retorna None se o
+    pedido não tiver itens ou se algum item não tiver quantidade/preço
+    válidos (nunca envia um item com dado incoerente)."""
     linhas = conn.execute(
-        "SELECT codigo_p, nome_p, quantidade, valor_unitario FROM pedidos_itens WHERE pedido_id=? ORDER BY id",
+        """
+        SELECT pi.codigo_p, pi.nome_p, pi.quantidade, pi.valor_unitario, p.descricao
+          FROM pedidos_itens pi
+          LEFT JOIN produtos p ON p.codigo_p = pi.codigo_p
+         WHERE pi.pedido_id=?
+         ORDER BY pi.id
+        """,
         (pedido_id,),
     ).fetchall()
     if not linhas:
@@ -313,14 +322,16 @@ def _itens_additional_info(conn, pedido_id: int) -> Optional[list]:
         valor_unitario = float(linha["valor_unitario"] or 0)
         if not codigo or not titulo or quantidade <= 0 or valor_unitario <= 0:
             return None
-        itens.append(
-            {
-                "id": codigo[:60],
-                "title": titulo[:256],
-                "quantity": quantidade,
-                "unit_price": round(valor_unitario, 2),
-            }
-        )
+        item = {
+            "id": codigo[:60],
+            "title": titulo[:256],
+            "quantity": quantidade,
+            "unit_price": round(valor_unitario, 2),
+        }
+        descricao = str(linha["descricao"] or "").strip()
+        if descricao:
+            item["description"] = descricao[:256]
+        itens.append(item)
     return itens or None
 
 

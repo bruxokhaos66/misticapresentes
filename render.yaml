@@ -119,6 +119,14 @@ services:
       # notificacoes do webhook (ver secao 6 do PR/relatorio de producao).
       - key: MERCADO_PAGO_WEBHOOK_SECRET
         sync: false
+      # Texto exibido na fatura do cartao do comprador (opcional, puramente
+      # informativo -- ver backend/mercadopago_flags.py::
+      # statement_descriptor_mercadopago). Sem esta variavel configurada, o
+      # campo statement_descriptor nunca e enviado ao Mercado Pago (o painel
+      # de Qualidade da integracao mostra isso como pendente ate aqui ser
+      # preenchido no dashboard do Render).
+      - key: MERCADO_PAGO_STATEMENT_DESCRIPTOR
+        sync: false
       # Notificacoes administrativas por WhatsApp (backend/whatsapp_*.py,
       # ver docs/admin/WHATSAPP_NOTIFICACOES.md). value: false aqui MANTEM
       # o recurso desligado neste deploy ate a ativacao explicita e
