@@ -326,6 +326,13 @@ window.misticaSiteConfig = {
       adminContent.hidden = false;
       adminContent.removeAttribute("hidden");
       adminContent.style.display = "block";
+      // Painéis injetados (campaign-admin.js, v2-admin-products.js etc.) podem
+      // ter carregado seus dados antes da sessão existir, quando a página
+      // acabou de abrir (restaurarSessao ainda não confirmou, ou é o
+      // primeiro login). Esse evento avisa que a sessão está autorizada e
+      // visível agora, para que cada painel possa recarregar seus dados sem
+      // exigir F5 do admin.
+      window.dispatchEvent(new CustomEvent("mistica:admin-unlocked"));
     }
     try { sessionStorage.setItem("misticaAdminUnlocked", "true"); } catch {}
   }
