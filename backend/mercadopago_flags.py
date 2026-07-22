@@ -40,6 +40,17 @@ def webhook_secret_mercadopago() -> str:
     return os.environ.get("MERCADO_PAGO_WEBHOOK_SECRET", "").strip()
 
 
+def statement_descriptor_mercadopago() -> str:
+    """Texto exibido na fatura do cartão do comprador (campo
+    `statement_descriptor` da Payments API) -- puramente informativo, opcional
+    e desligado por padrão (string vazia = nunca enviado). Configurar não
+    altera nenhuma regra comercial nem o fluxo de checkout; só ajuda o
+    comprador a reconhecer a cobrança na fatura. Truncado ao limite prático
+    de 13 caracteres recomendado pelo Mercado Pago (compatibilidade com
+    bandeiras que cortam o texto exibido)."""
+    return os.environ.get("MERCADO_PAGO_STATEMENT_DESCRIPTOR", "").strip()[:13]
+
+
 def ambiente_mercadopago() -> str:
     valor = os.environ.get("MERCADO_PAGO_ENVIRONMENT", "production").strip().lower()
     return valor if valor in {"production", "sandbox"} else "production"
