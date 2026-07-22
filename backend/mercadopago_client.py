@@ -137,9 +137,11 @@ def criar_pagamento_cartao(
 
     `additional_info_items`, quando informado, já vem pronto de
     backend/mercadopago_routes.py::_itens_additional_info só com os campos
-    documentados em additional_info.items (id/title/quantity/unit_price;
-    ver commonTypes.ts do mercadopago/sdk-nodejs) -- produto/quantidade/
-    valor sempre calculados pelo backend, nunca confiados ao cliente.
+    documentados em additional_info.items (id/title/description/quantity/
+    unit_price; ver commonTypes.ts do mercadopago/sdk-nodejs) -- produto/
+    quantidade/valor sempre calculados pelo backend, nunca confiados ao
+    cliente; description só aparece quando o produto tem descrição
+    cadastrada no catálogo, nunca inventada.
 
     `payer_first_name`/`payer_last_name`, quando informados, vão em
     payer.first_name/payer.last_name -- campos oficiais e opcionais de

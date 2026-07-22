@@ -1009,8 +1009,10 @@ def test_additional_info_items_soma_coerente_com_total_final():
 
 
 def test_additional_info_items_nunca_inclui_campo_nao_documentado():
-    """Nenhum category_id/description/picture_url/warranty inventado -- só os
-    quatro campos que este catálogo de fato tem dado real e validado."""
+    """Nenhum category_id/picture_url/warranty inventado -- este catálogo não
+    tem esses dados estruturados hoje. `description` é permitido (ver teste
+    abaixo), mas só aparece quando o produto tem descrição cadastrada --
+    aqui o produto não tem, então a chave nem aparece."""
     pedido = criar_pedido_publico(10.0)
     aprovado = resultado_mp(pedido, status="approved")
     mocks = []
@@ -1021,6 +1023,38 @@ def test_additional_info_items_nunca_inclui_campo_nao_documentado():
         assert "description" not in item
         assert "picture_url" not in item
         assert "warranty" not in item
+
+
+def test_additional_info_items_inclui_description_quando_produto_tem_descricao():
+    """Painel de Qualidade da integração aponta additional_info.items.
+    description como recomendado -- quando o produto do catálogo tem
+    `descricao` preenchida, ela deve ir para o item (nunca inventada para
+    produtos sem descrição, ver teste acima)."""
+    resposta_produto = client.post(
+        "/api/produtos",
+        json={
+            "nome": "Produto MP Com Descricao", "codigo_p": codigo_unico("MPCD"), "preco": 10.0,
+            "quantidade": 20, "categoria": "Testes", "descricao": "Vela aromática de lavanda, 100g.",
+        },
+        headers=HEADERS,
+    )
+    assert resposta_produto.status_code == 200, resposta_produto.text
+    produto = resposta_produto.json()
+    resposta_pedido = client.post(
+        "/api/checkout/pedidos",
+        json={"cliente": "Cliente MP", "telefone": "5599999999999", "forma_recebimento": "retirada", "itens": [{"produto_id": produto["id"], "quantidade": 1}]},
+        headers={"X-Forwarded-For": ip_unico()},
+    )
+    assert resposta_pedido.status_code == 200, resposta_pedido.text
+    pedido = resposta_pedido.json()
+    aprovado = resultado_mp(pedido, status="approved")
+    mocks = []
+    resposta = pagar_cartao(pedido, aprovado, capturar_mock=mocks)
+    assert resposta.status_code == 200, resposta.text
+    _, kwargs = mocks[0].call_args
+    itens = kwargs["additional_info_items"]
+    assert itens is not None and len(itens) == 1
+    assert itens[0]["description"] == "Vela aromática de lavanda, 100g."
 
 
 def test_client_mercadopago_envia_additional_info_items_no_corpo_json():
