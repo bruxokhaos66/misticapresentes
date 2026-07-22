@@ -31,7 +31,7 @@ from backend.idempotency import (
     reivindicar_chave_idempotente,
 )
 from backend.logging_config import get_logger
-from backend.mercadopago_client import MercadoPagoIndisponivel, criar_pagamento_cartao, consultar_pagamento
+from backend.mercadopago_client import MercadoPagoIndisponivel, MercadoPagoErroIntegracao, criar_pagamento_cartao, consultar_pagamento
 from backend.mercadopago_flags import (
     ambiente_mercadopago,
     diagnostico_credenciais_mercadopago,
@@ -469,6 +469,33 @@ def pagar_com_cartao(payload: CartaoPagamentoIn, request: Request, idempotency_k
             conn.commit()
         liberar_chave_idempotente(conectar, "pagamento_cartao_mp", idempotency_key)
         raise HTTPException(status_code=503, detail="Não foi possível processar o pagamento agora. Tente novamente em instantes ou utilize o Pix.")
+    except MercadoPagoErroIntegracao as exc:
+        # A criação NUNCA chegou a se efetivar no Mercado Pago (4xx técnico
+        # sem payment.id, ou 200/201 fora do formato esperado) -- nunca é
+        # uma recusa de crédito/antifraude, então nunca é gravada como
+        # 'recusado' nem exibida como "tente outro cartão". Mesmo
+        # tratamento de segurança do bloco acima: como nenhuma cobrança foi
+        # criada, a Idempotency-Key pode ser liberada para uma nova
+        # tentativa não ficar bloqueada por um erro técnico transitório.
+        agora_erro = datetime.now().isoformat(timespec="seconds")
+        with conectar() as conn:
+            conn.execute(
+                "UPDATE tentativas_pagamento SET status_interno='erro', atualizado_em=? WHERE id=?",
+                (agora_erro, tentativa_id),
+            )
+            conn.commit()
+        logger.warning(
+            "mercadopago_cartao_erro_tecnico",
+            extra={
+                "evento": "mp_cartao_erro_tecnico_sem_pagamento",
+                "pedido_id": payload.pedido_id,
+                "tentativa_id": tentativa_id,
+                "status_code_provedor": exc.status_code,
+                "payment_id_presente": False,
+            },
+        )
+        liberar_chave_idempotente(conectar, "pagamento_cartao_mp", idempotency_key)
+        raise HTTPException(status_code=502, detail="Não foi possível processar o pagamento neste momento. Tente novamente em alguns minutos.")
 
     # A partir daqui a Idempotency-Key NUNCA é liberada em caso de erro: o
     # Mercado Pago já pode ter processado a cobrança (resultado.id
