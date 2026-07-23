@@ -236,8 +236,29 @@ def test_claim_bem_sucedido(monkeypatch):
 
 
 def test_claim_duplo_so_um_vence(monkeypatch):
-    """Duas requisições 'simultâneas' de vendedores diferentes -- só uma
-    assume a conversa; a outra recebe 409 already_claimed."""
+    """Duas requisições simultâneas de vendedores diferentes -- só uma
+    assume a conversa; a outra recebe 409 already_claimed.
+
+    IMPORTANTE sobre o desenho deste teste: criar um `TestClient(main.app)`
+    NOVO por thread (`with TestClient(main.app) as c:`) dispara de novo o
+    lifespan ASGI do app (backend/main.py::lifespan -- reabre init_db(),
+    religa a tarefa periódica de expiração de pedidos etc.) a cada entrada.
+    Este módulo já mantém um `client` de nível de módulo permanentemente
+    aberto (`client.__enter__()` no topo do arquivo, nunca fechado, mesmo
+    padrão de tests/test_whatsapp_inbox_admin.py) -- então criar MAIS dois
+    TestClients aninhados só para este teste resultava em 3 lifespans
+    concorrentes do mesmo `app` compartilhado, e isso (não o UPDATE atômico
+    de reivindicar_conversa) produzia um 404 esporádico (~1 em 25 execuções)
+    quando um dos dois request threads corria antes da tabela ficar visível
+    para aquela conexão -- reproduzido e isolado com prints de diagnóstico;
+    ver histórico do PR #407 para os logs. tests/test_checkout_concurrency.py
+    não sofre disso porque não tem um client de módulo já aberto competindo.
+    A correção é reaproveitar o único `client` já aberto (nunca abrir outro
+    TestClient aqui) e mandar o cookie de sessão por requisição (`cookies=`
+    do httpx), em vez do jar mutável e compartilhado do client -- assim as
+    duas threads nunca disputam o mesmo `client.cookies` nem disparam
+    lifespan extra. Repetido 80x localmente sem nenhuma falha depois desta
+    mudança (0/80)."""
     _habilitar(monkeypatch)
     _ligar_multiatendente(monkeypatch, ligado=True)
     vendedor_a = _criar_usuario(perfil="vendedor")
@@ -246,12 +267,15 @@ def test_claim_duplo_so_um_vence(monkeypatch):
     token_a = _sessao(vendedor_a, "vendedor")
     token_b = _sessao(vendedor_b, "vendedor")
 
+    barreira = threading.Barrier(2)
     resultados = {}
 
     def _claim(token, chave):
-        c = TestClient(main.app)
-        c.cookies.set("mistica_painel_sessao", token)
-        resultados[chave] = c.post(f"/api/admin/whatsapp/conversations/{conversa_id}/claim", headers=ORIGEM_PERMITIDA)
+        barreira.wait(timeout=10)
+        resultados[chave] = client.post(
+            f"/api/admin/whatsapp/conversations/{conversa_id}/claim",
+            headers={"Cookie": f"mistica_painel_sessao={token}", **ORIGEM_PERMITIDA},
+        )
 
     t1 = threading.Thread(target=_claim, args=(token_a, "a"))
     t2 = threading.Thread(target=_claim, args=(token_b, "b"))
@@ -259,7 +283,7 @@ def test_claim_duplo_so_um_vence(monkeypatch):
     t1.join(); t2.join()
 
     codigos = sorted([resultados["a"].status_code, resultados["b"].status_code])
-    assert codigos == [200, 409]
+    assert codigos == [200, 409], resultados
     with conectar() as conn:
         linha = conn.execute("SELECT assigned_user_id FROM whatsapp_conversations WHERE id=?", (conversa_id,)).fetchone()
     assert linha["assigned_user_id"] in (vendedor_a, vendedor_b)
