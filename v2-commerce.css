@@ -1,25 +1,29 @@
 @import url("v2-header-banner.css");
 
+/* Toolbar simplificada: menos "caixa dentro de caixa" -- sem painel
+   flutuante com borda/sombra pesada e blur próprios; busca e ordenação
+   ficam lado a lado, chips de filtro abaixo em linha compacta. */
 .v2-product-toolbar {
-  margin: -18px auto 26px;
+  margin: -8px auto 22px;
   display: grid;
   grid-template-columns: minmax(220px, 1fr) minmax(160px, auto) auto;
-  gap: 16px;
+  gap: 12px;
   align-items: end;
-  padding: 18px;
-  border: 1px solid rgba(242,201,109,.24);
-  border-radius: 28px;
-  background: radial-gradient(circle at 10% 0%, rgba(242,201,109,.10), transparent 28rem), linear-gradient(180deg, rgba(255,248,230,.08), rgba(255,248,230,.04)), rgba(6,6,9,.72);
-  box-shadow: 0 22px 70px rgba(0,0,0,.28);
-  backdrop-filter: blur(16px);
+  padding: 0 0 14px;
+  border: none;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .v2-search-label { color: #d7c8ad; font-weight: 850; gap: 8px; }
-.v2-search-label input { min-height: 52px; border-radius: 18px; background: rgba(0,0,0,.34); }
+.v2-search-label input { min-height: 44px; border-radius: 14px; background: rgba(0,0,0,.24); border-color: rgba(255,255,255,.12); }
 .v2-filter-chips { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; grid-column: 1 / -1; }
-.v2-chip { border: 1px solid rgba(242,201,109,.34); border-radius: 999px; padding: 10px 13px; color: #fff2cf; background: rgba(255,255,255,.07); font-size: .84rem; font-weight: 900; cursor: pointer; }
+.v2-chip { border: 1px solid rgba(255,255,255,.14); border-radius: 999px; padding: 8px 12px; color: #efe4cc; background: rgba(255,255,255,.04); font-size: .82rem; font-weight: 800; cursor: pointer; }
 .v2-chip.active, .v2-chip:hover { color: #1b1204; background: linear-gradient(135deg, #fff0b6, #e3b64f 62%, #fff0bd); border-color: rgba(242,201,109,.68); }
-.v2-product-count { grid-column: 1 / -1; margin: 0; color: #bdd17a; font-size: .88rem; font-weight: 850; }
+.v2-product-count { grid-column: 1 / -1; margin: 0; color: #bdd17a; font-size: .86rem; font-weight: 800; }
 .product-card[hidden] { display: none !important; }
 .v2-checkout-note { margin: 8px auto 0; max-width: 740px; color: #d7c8ad; font-weight: 700; }
 .isis-message.user { border-color: rgba(189,209,122,.26); background: rgba(189,209,122,.08); }
@@ -149,7 +153,7 @@
 }
 
 @media (max-width: 680px) {
-  .v2-product-toolbar { margin-top: -8px; padding: 14px; }
+  .v2-product-toolbar { margin-top: -4px; padding-bottom: 12px; }
   .v2-chip { flex: 1 1 auto; text-align: center; }
 }
 
@@ -160,19 +164,18 @@
    resolve os cards gigantes de antes, onde a descrição inteira sempre
    aparecia aberta.
    --------------------------------------------------------------------- */
+/* Máximo de 4 colunas em qualquer largura de tela -- nunca 5, para os
+   cards não ficarem apertados demais em monitores largos. */
 .product-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
-@media (min-width: 1601px) {
-  .product-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-}
-@media (max-width: 1180px) {
+@media (max-width: 1199px) {
   .product-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
-@media (max-width: 860px) {
+@media (max-width: 899px) {
   .product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-@media (max-width: 560px) {
+@media (max-width: 639px) {
   .product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 }
 @media (max-width: 400px) {
@@ -181,6 +184,35 @@
 
 .product-card { overflow: hidden; cursor: default; }
 .product-card-body { display: flex; flex-direction: column; flex: 1; }
+
+/* Card: menos dourado/caixa própria que o resto do site -- borda quase
+   invisível e sombra leve; o dourado fica reservado para preço e botão
+   principal (ver .product-price / .product-add-btn abaixo). */
+.product-card {
+  border-color: rgba(255, 255, 255, .08);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, .22);
+}
+.product-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(242, 201, 109, .28);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, .28);
+}
+
+/* Categoria do card: texto discreto acima do nome, sem pílula/borda --
+   a pílula genérica de .eyebrow (v2.css) é usada em vários outros
+   contextos (seções, kits), mas repetida em cada card do grid vira
+   ruído visual. Só sobrescreve a aparência; data-category no <article>
+   continua intacto para filtros/JS. */
+.product-card .eyebrow {
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0 0 2px;
+  color: var(--muted);
+  font-size: .7rem;
+  font-weight: 750;
+  letter-spacing: .06em;
+}
 
 .product-media-wrap { position: relative; }
 .product-media-frame {
@@ -241,18 +273,46 @@
   letter-spacing: .01em;
   box-shadow: 0 14px 34px rgba(242,201,109,.16);
 }
+/* Ações secundárias: hierarquia clara em vez de dois botões iguais.
+   "Ver detalhes" é um link discreto (texto sublinhado, sem caixa);
+   o WhatsApp vira um ícone pequeno com aria-label completo. Isso reduz
+   duas caixas de botão repetidas em cada card do grid. */
 .product-card-secondary {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
   margin-top: 8px;
 }
-.product-card-secondary .btn-small {
-  min-height: 40px;
-  padding: 0 10px;
+.product-detail-link {
+  border: none;
+  background: none;
+  padding: 6px 0;
+  color: var(--muted);
   font-size: .82rem;
-  letter-spacing: 0;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
 }
+.product-detail-link:hover { color: var(--gold-2); }
+.product-whatsapp-icon {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .03);
+  color: var(--sage);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color .18s ease, background .18s ease;
+}
+.product-whatsapp-icon:hover { border-color: rgba(189, 209, 122, .5); background: rgba(189, 209, 122, .08); }
 
 .product-desc-toggle {
   display: flex;
