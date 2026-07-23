@@ -243,4 +243,39 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .form-vincular { display: flex; gap: 0.4rem; margin-bottom: 0.6rem; }
 .form-vincular input { width: 90px; padding: 0.4rem; border-radius: var(--raio); border: 1px solid var(--cor-borda); background: var(--cor-painel-alt); color: var(--cor-texto); }
 
-.midia-link { display: inline-block; margin-top: 0.3rem; color: inherit; text-decoration: underline; }
+.midia-link { display: inline-block; margin-top: 0.3rem; color: inherit; text-decoration: underline; background: none; border: none; padding: 0; cursor: pointer; font: inherit; }
+.midia-link:disabled { opacity: 0.6; cursor: wait; }
+
+.modal-midia {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 1000;
+}
+.modal-midia[hidden] { display: none; }
+.modal-midia-conteudo {
+  background: var(--cor-painel);
+  color: var(--cor-texto);
+  border-radius: var(--raio);
+  max-width: min(90vw, 640px);
+  max-height: 90vh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.modal-midia-cabecalho { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1rem; border-bottom: 1px solid var(--cor-borda); }
+.modal-midia-cabecalho h2 { margin: 0; font-size: 1rem; }
+.modal-midia-corpo { padding: 1rem; overflow: auto; display: flex; align-items: center; justify-content: center; min-height: 120px; }
+.modal-midia-corpo img { max-width: 100%; max-height: 70vh; display: block; }
+.modal-midia-corpo audio, .modal-midia-corpo video { max-width: 100%; }
+.modal-midia-rodape { padding: 0.75rem 1rem; border-top: 1px solid var(--cor-borda); display: flex; justify-content: flex-end; }
+.modal-midia-rodape a[hidden] { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-midia { transition: none; }
+}

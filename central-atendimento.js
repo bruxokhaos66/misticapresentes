@@ -295,19 +295,153 @@
     bolha.append(elemento("span", "", corpo));
 
     if (mensagem.media_id) {
-      const link = document.createElement("a");
-      link.className = "midia-link";
-      link.href = `${API_BASE}/api/admin/whatsapp/media/${mensagem.id}`;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      link.textContent = "Abrir mídia";
-      bolha.append(document.createElement("br"), link);
+      const botao = document.createElement("button");
+      botao.type = "button";
+      botao.className = "midia-link";
+      botao.textContent = "Abrir mídia";
+      botao.addEventListener("click", () => abrirMidia(mensagem.id, botao));
+      bolha.append(document.createElement("br"), botao);
     }
 
     const rotuloStatus = { queued: "enviando…", sent: "enviado", delivered: "entregue", read: "lido", failed: "falhou", received: "recebido" }[mensagem.status] || mensagem.status;
     const meta = elemento("small", "meta", `${formatarData(mensagem.created_at)} · ${rotuloStatus}`);
     bolha.append(meta);
     return bolha;
+  }
+
+  // ---------------------------------------------------------------------
+  // Mídia recebida: preview seguro em modal + download com extensão correta
+  //
+  // Nunca usa <a target="_blank"> direto para a API: sempre passa por
+  // fetch() autenticado, confere response.ok e Content-Type ANTES de criar
+  // qualquer Blob (uma resposta de erro em JSON nunca vira "imagem"), e
+  // revoga o Object URL assim que o modal fecha ou uma nova mídia é aberta.
+  // ---------------------------------------------------------------------
+  const modalMidia = document.getElementById("modalMidia");
+  const modalMidiaCorpo = document.getElementById("modalMidiaCorpo");
+  const btnFecharModalMidia = document.getElementById("btnFecharModalMidia");
+  const linkBaixarMidia = document.getElementById("linkBaixarMidia");
+  let objectUrlAtual = null;
+  let elementoComFocoAntesDoModal = null;
+
+  const EXTENSOES_POR_MIME = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "application/pdf": "pdf",
+    "audio/ogg": "ogg",
+    "audio/mpeg": "mp3",
+    "video/mp4": "mp4",
+    "audio/mp4": "m4a",
+    "video/3gpp": "3gp",
+  };
+
+  function revogarObjectUrlAtual() {
+    if (objectUrlAtual) {
+      URL.revokeObjectURL(objectUrlAtual);
+      objectUrlAtual = null;
+    }
+  }
+
+  function fecharModalMidia() {
+    modalMidia.hidden = true;
+    modalMidiaCorpo.textContent = "";
+    linkBaixarMidia.hidden = true;
+    linkBaixarMidia.removeAttribute("href");
+    revogarObjectUrlAtual();
+    if (elementoComFocoAntesDoModal) {
+      elementoComFocoAntesDoModal.focus();
+      elementoComFocoAntesDoModal = null;
+    }
+  }
+
+  btnFecharModalMidia.addEventListener("click", fecharModalMidia);
+  modalMidia.addEventListener("click", (event) => {
+    if (event.target === modalMidia) fecharModalMidia();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !modalMidia.hidden) fecharModalMidia();
+  });
+
+  function abrirModalComConteudo(nodo) {
+    modalMidiaCorpo.textContent = "";
+    modalMidiaCorpo.append(nodo);
+    elementoComFocoAntesDoModal = document.activeElement;
+    modalMidia.hidden = false;
+    btnFecharModalMidia.focus();
+  }
+
+  async function abrirMidia(messageId, botaoOrigem) {
+    const rotuloOriginal = botaoOrigem.textContent;
+    botaoOrigem.disabled = true;
+    botaoOrigem.textContent = "Carregando…";
+    try {
+      const resposta = await fetch(`${API_BASE}/api/admin/whatsapp/media/${messageId}`, {
+        credentials: "include",
+        cache: "no-store",
+      });
+
+      if (resposta.status === 401 || resposta.status === 403) {
+        pararPolling();
+        mostrarLogin();
+        return;
+      }
+
+      const tipoConteudo = (resposta.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+
+      if (!resposta.ok) {
+        // Uma falha (404/409/502) nunca é tratada como mídia -- lê a
+        // mensagem de erro (se houver) e mostra em texto simples, nunca
+        // cria um Blob/objectURL a partir do corpo de erro.
+        let detalhe = "Não foi possível carregar esta mídia.";
+        if (tipoConteudo === "application/json") {
+          const corpoErro = await resposta.json().catch(() => null);
+          if (corpoErro && corpoErro.detail) detalhe = corpoErro.detail;
+        }
+        abrirModalComConteudo(elemento("p", "hint", detalhe));
+        return;
+      }
+
+      if (!tipoConteudo || tipoConteudo === "application/json" || tipoConteudo === "text/html") {
+        abrirModalComConteudo(elemento("p", "hint", "Tipo de arquivo não suportado para preview."));
+        return;
+      }
+
+      const blob = await resposta.blob();
+      revogarObjectUrlAtual();
+      objectUrlAtual = URL.createObjectURL(blob);
+
+      const extensao = EXTENSOES_POR_MIME[tipoConteudo] || "bin";
+      linkBaixarMidia.href = objectUrlAtual;
+      linkBaixarMidia.download = `midia-${messageId}.${extensao}`;
+      linkBaixarMidia.hidden = false;
+
+      if (tipoConteudo.startsWith("image/")) {
+        const img = document.createElement("img");
+        img.src = objectUrlAtual;
+        img.alt = "Imagem recebida do cliente";
+        abrirModalComConteudo(img);
+      } else if (tipoConteudo === "application/pdf") {
+        abrirModalComConteudo(elemento("p", "hint", "PDF pronto -- use o botão \"Baixar arquivo\" para abrir."));
+      } else if (tipoConteudo.startsWith("audio/")) {
+        const audio = document.createElement("audio");
+        audio.controls = true;
+        audio.src = objectUrlAtual;
+        abrirModalComConteudo(audio);
+      } else if (tipoConteudo.startsWith("video/")) {
+        const video = document.createElement("video");
+        video.controls = true;
+        video.src = objectUrlAtual;
+        abrirModalComConteudo(video);
+      } else {
+        abrirModalComConteudo(elemento("p", "hint", "Tipo de arquivo não suportado para preview -- use o botão \"Baixar arquivo\"."));
+      }
+    } catch {
+      abrirModalComConteudo(elemento("p", "hint", "Falha ao carregar a mídia."));
+    } finally {
+      botaoOrigem.disabled = false;
+      botaoOrigem.textContent = rotuloOriginal;
+    }
   }
 
   async function carregarMensagens() {
