@@ -36,7 +36,14 @@
 
     <main class="layout">
       <nav class="col-conversas" aria-label="Lista de conversas">
-        <div class="busca-filtros">
+        <div class="abas-atendimento" role="tablist" aria-label="Modo de listagem">
+          <button type="button" class="aba-btn is-active" data-aba="fila" role="tab" aria-selected="true">Fila</button>
+          <button type="button" class="aba-btn" data-aba="minhas" role="tab" aria-selected="false">Minhas conversas</button>
+          <button type="button" class="aba-btn" data-aba="todas" role="tab" aria-selected="false" id="abaTodas" hidden>Todas</button>
+          <button type="button" class="aba-btn" data-aba="vendedores" role="tab" aria-selected="false" id="abaVendedores" hidden>Vendedores</button>
+        </div>
+        <p id="contadorAtivas" class="hint" role="status" aria-live="polite"></p>
+        <div class="busca-filtros" id="blocoBuscaFiltros">
           <label for="buscaConversas" class="visually-hidden">Buscar conversas</label>
           <input id="buscaConversas" type="search" placeholder="Buscar por nome ou telefone">
           <div class="filtros-status" role="group" aria-label="Filtrar por status">
@@ -51,7 +58,7 @@
         <p id="statusListaConversas" class="hint" role="status" aria-live="polite"></p>
       </nav>
 
-      <section class="col-mensagens" aria-label="Mensagens da conversa">
+      <section class="col-mensagens" aria-label="Mensagens da conversa" id="secaoMensagens">
         <div id="semConversa" class="sem-conversa">
           <p>Selecione uma conversa para visualizar as mensagens.</p>
         </div>
@@ -60,9 +67,13 @@
             <div>
               <h2 id="conversaNome">—</h2>
               <p id="conversaTelefone" class="hint">—</p>
+              <p class="hint">
+                <span id="badgeFila" class="badge-fila">—</span>
+                <span id="badgeAtendente" class="badge-atendente" hidden>—</span>
+              </p>
             </div>
             <div class="conversa-acoes">
-              <label for="selectStatusConversa" class="visually-hidden">Status da conversa</label>
+              <label for="selectStatusConversa" class="visually-hidden">Status da conversa (legado)</label>
               <select id="selectStatusConversa">
                 <option value="open">Aberta</option>
                 <option value="pending">Pendente</option>
@@ -71,6 +82,15 @@
               </select>
             </div>
           </header>
+
+          <div class="fila-acoes" id="filaAcoes">
+            <button type="button" class="btn-secondary" id="btnAssumir" hidden>Assumir</button>
+            <button type="button" class="btn-secondary" id="btnLiberar" hidden>Liberar</button>
+            <button type="button" class="btn-secondary" id="btnTransferir" hidden>Transferir</button>
+            <button type="button" class="btn-secondary" id="btnFinalizar" hidden>Finalizar</button>
+            <button type="button" class="btn-secondary" id="btnReabrir" hidden>Reabrir</button>
+            <p id="statusFilaAcao" class="hint" role="status" aria-live="polite"></p>
+          </div>
 
           <div id="listaMensagens" class="lista-mensagens" role="log" aria-live="polite" aria-label="Histórico de mensagens" tabindex="0"></div>
 
@@ -104,7 +124,31 @@
         </form>
         <p id="statusVinculo" class="hint" role="status" aria-live="polite"></p>
       </aside>
+
+      <section class="col-vendedores" id="secaoVendedores" aria-label="Gestão de vendedores" hidden>
+        <h2>Vendedores</h2>
+        <p class="hint">Habilite atendimento, ajuste o limite de conversas ou suspenda um atendente.</p>
+        <div id="listaAgentes" class="lista-agentes"></div>
+        <p id="statusAgentes" class="hint" role="status" aria-live="polite"></p>
+      </section>
     </main>
+  </div>
+
+  <div id="modalTransferir" class="modal-midia" hidden role="dialog" aria-modal="true" aria-labelledby="modalTransferirTitulo">
+    <div class="modal-midia-conteudo">
+      <div class="modal-midia-cabecalho">
+        <h2 id="modalTransferirTitulo">Transferir conversa</h2>
+        <button type="button" id="btnFecharModalTransferir" class="btn-secondary" aria-label="Fechar">Fechar</button>
+      </div>
+      <form id="formTransferir" class="modal-midia-corpo form-transferir">
+        <label for="selectVendedorDestino">Atendente de destino</label>
+        <select id="selectVendedorDestino" required></select>
+        <label for="campoMotivoTransferencia">Motivo (opcional)</label>
+        <textarea id="campoMotivoTransferencia" rows="2" maxlength="300"></textarea>
+        <p id="statusTransferencia" class="hint" role="status" aria-live="polite"></p>
+        <button class="btn" type="submit">Confirmar transferência</button>
+      </form>
+    </div>
   </div>
 
   <div id="modalMidia" class="modal-midia" hidden role="dialog" aria-modal="true" aria-labelledby="modalMidiaTitulo">

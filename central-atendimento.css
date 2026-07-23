@@ -279,3 +279,93 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 @media (prefers-reduced-motion: reduce) {
   .modal-midia { transition: none; }
 }
+
+/* -------------------------------------------------------------------
+ * Central Multiatendente: abas, ações de fila, badges, gestão de
+ * vendedores e modal de transferência.
+ * ------------------------------------------------------------------- */
+
+.abas-atendimento { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.5rem; }
+
+.aba-btn {
+  border: 1px solid var(--cor-borda);
+  background: var(--cor-painel-alt);
+  color: var(--cor-texto);
+  border-radius: var(--raio);
+  padding: 0.4rem 0.7rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  min-height: 36px;
+}
+
+.aba-btn.is-active { background: var(--cor-acento); color: #fff; border-color: var(--cor-acento); }
+
+.badge-fila, .badge-atendente {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.72rem;
+  margin-right: 0.3rem;
+  border: 1px solid var(--cor-borda);
+}
+
+.badge-fila.waiting { color: var(--cor-alerta); border-color: var(--cor-alerta); }
+.badge-fila.assigned { color: var(--cor-acento); border-color: var(--cor-acento); }
+.badge-fila.resolved { color: var(--cor-sucesso); border-color: var(--cor-sucesso); }
+
+.badge-atendente { color: var(--cor-texto-fraco); }
+
+.fila-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+.fila-acoes button { min-height: 40px; }
+.fila-acoes button[hidden] { display: none; }
+
+.badge-vinculo.badge-limite { color: var(--cor-erro); }
+
+#contadorAtivas { padding: 0 0.1rem; }
+
+.col-vendedores {
+  border-right: 1px solid var(--cor-borda);
+  padding: 0.75rem;
+  overflow-y: auto;
+  background: var(--cor-painel);
+  grid-column: 1 / -1;
+}
+
+.lista-agentes { display: flex; flex-direction: column; gap: 0.6rem; }
+
+.cartao-agente {
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+  padding: 0.6rem 0.75rem;
+  background: var(--cor-painel-alt);
+}
+
+.cartao-agente .linha-topo { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.4rem; }
+.cartao-agente .linha-topo strong { font-size: 0.95rem; }
+.cartao-agente .campos-agente { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.5rem; align-items: center; }
+.cartao-agente label { font-size: 0.78rem; color: var(--cor-texto-fraco); display: flex; align-items: center; gap: 0.3rem; }
+.cartao-agente input[type="number"] { width: 70px; padding: 0.3rem; border-radius: var(--raio); border: 1px solid var(--cor-borda); background: var(--cor-painel); color: var(--cor-texto); }
+.cartao-agente select { padding: 0.3rem; border-radius: var(--raio); border: 1px solid var(--cor-borda); background: var(--cor-painel); color: var(--cor-texto); }
+
+.form-transferir { display: flex; flex-direction: column; gap: 0.5rem; text-align: left; width: 100%; }
+.form-transferir select, .form-transferir textarea {
+  width: 100%;
+  padding: 0.5rem;
+  border-radius: var(--raio);
+  border: 1px solid var(--cor-borda);
+  background: var(--cor-painel-alt);
+  color: var(--cor-texto);
+}
+
+@media (max-width: 900px) {
+  .fila-acoes button, .aba-btn { flex: 1 1 auto; }
+  .modal-midia-conteudo { max-width: 95vw; }
+}

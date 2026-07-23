@@ -21,11 +21,23 @@
   const filtrosStatusBtns = Array.from(document.querySelectorAll(".filtro-btn[data-status], .filtro-btn[data-unread]"));
   const listaConversas = document.getElementById("listaConversas");
   const statusListaConversas = document.getElementById("statusListaConversas");
+  const blocoBuscaFiltros = document.getElementById("blocoBuscaFiltros");
+  const contadorAtivas = document.getElementById("contadorAtivas");
+
+  const abasBtns = Array.from(document.querySelectorAll(".aba-btn"));
+  const abaTodas = document.getElementById("abaTodas");
+  const abaVendedores = document.getElementById("abaVendedores");
+  const secaoVendedores = document.getElementById("secaoVendedores");
+  const secaoMensagens = document.getElementById("secaoMensagens");
+  const listaAgentes = document.getElementById("listaAgentes");
+  const statusAgentes = document.getElementById("statusAgentes");
 
   const semConversa = document.getElementById("semConversa");
   const painelConversa = document.getElementById("painelConversa");
   const conversaNome = document.getElementById("conversaNome");
   const conversaTelefone = document.getElementById("conversaTelefone");
+  const badgeFila = document.getElementById("badgeFila");
+  const badgeAtendente = document.getElementById("badgeAtendente");
   const selectStatusConversa = document.getElementById("selectStatusConversa");
   const listaMensagens = document.getElementById("listaMensagens");
   const formEnviarMensagem = document.getElementById("formEnviarMensagem");
@@ -33,6 +45,20 @@
   const campoTexto = document.getElementById("campoTexto");
   const btnEnviarMensagem = document.getElementById("btnEnviarMensagem");
   const statusEnvio = document.getElementById("statusEnvio");
+
+  const btnAssumir = document.getElementById("btnAssumir");
+  const btnLiberar = document.getElementById("btnLiberar");
+  const btnTransferir = document.getElementById("btnTransferir");
+  const btnFinalizar = document.getElementById("btnFinalizar");
+  const btnReabrir = document.getElementById("btnReabrir");
+  const statusFilaAcao = document.getElementById("statusFilaAcao");
+
+  const modalTransferir = document.getElementById("modalTransferir");
+  const btnFecharModalTransferir = document.getElementById("btnFecharModalTransferir");
+  const formTransferir = document.getElementById("formTransferir");
+  const selectVendedorDestino = document.getElementById("selectVendedorDestino");
+  const campoMotivoTransferencia = document.getElementById("campoMotivoTransferencia");
+  const statusTransferencia = document.getElementById("statusTransferencia");
 
   const colLateral = document.getElementById("colLateral");
   const clienteInfo = document.getElementById("clienteInfo");
@@ -50,6 +76,11 @@
   let notificacaoSonoraHabilitada = true;
   let pollListaTimer = null;
   let pollMensagensTimer = null;
+
+  let sessaoUsuario = { id: null, perfil: null };
+  let abaAtual = "fila";
+  let conversaAtual = null; // detalhe completo (com queue_status/assigned_user_id/assignment_version)
+  const ROTULO_FILA = { waiting: "Na fila", assigned: "Em atendimento", resolved: "Encerrada" };
 
   function elemento(tag, classe, texto) {
     const node = document.createElement(tag);
@@ -150,6 +181,14 @@
   // Status
   // ---------------------------------------------------------------------
   async function atualizarStatus() {
+    // /status é restrito a adm/supervisor_atendimento -- vendedor nunca vê
+    // este diagnóstico (nem precisa dele para atender), então simplesmente
+    // não exibimos a pill de erro para esse perfil em vez de mostrar um
+    // "falha" enganoso a cada consulta.
+    if (sessaoUsuario.perfil === "vendedor") {
+      statusPill.hidden = true;
+      return;
+    }
     try {
       const dados = await apiFetch("/api/admin/whatsapp/status");
       notificacaoSonoraHabilitada = dados.notification_sound_enabled !== false;
@@ -160,15 +199,42 @@
         statusPill.textContent = "Central de Atendimento desativada/não configurada";
         statusPill.className = "pill erro";
       }
-    } catch {
+    } catch (erro) {
+      if (erro.status === 403) { statusPill.hidden = true; return; }
       statusPill.textContent = "Falha ao consultar status";
       statusPill.className = "pill erro";
     }
   }
 
   // ---------------------------------------------------------------------
-  // Lista de conversas
+  // Abas (Fila / Minhas conversas / Todas / Vendedores)
   // ---------------------------------------------------------------------
+  abasBtns.forEach((botao) => {
+    botao.addEventListener("click", () => selecionarAba(botao.dataset.aba));
+  });
+
+  function selecionarAba(aba) {
+    abaAtual = aba;
+    abasBtns.forEach((b) => {
+      const ativa = b.dataset.aba === aba;
+      b.classList.toggle("is-active", ativa);
+      b.setAttribute("aria-selected", ativa ? "true" : "false");
+    });
+    const ehTodas = aba === "todas";
+    const ehVendedores = aba === "vendedores";
+    blocoBuscaFiltros.hidden = !ehTodas;
+    listaConversas.hidden = ehVendedores;
+    statusListaConversas.hidden = ehVendedores;
+    secaoVendedores.hidden = !ehVendedores;
+    secaoMensagens.hidden = ehVendedores;
+    colLateral.hidden = ehVendedores || !conversaSelecionadaId;
+    if (ehVendedores) {
+      carregarAgentes();
+    } else {
+      carregarConversas();
+    }
+  }
+
   filtrosStatusBtns.forEach((botao) => {
     botao.addEventListener("click", () => {
       filtrosStatusBtns.forEach((b) => b.classList.remove("is-active"));
@@ -207,6 +273,10 @@
     if (conversa.unread_count > 0) linha2.append(elemento("span", "badge-nao-lida", String(conversa.unread_count)));
     botao.append(linha2);
 
+    if (conversa.queue_status) {
+      botao.append(elemento("span", `badge-fila ${conversa.queue_status}`, ROTULO_FILA[conversa.queue_status] || conversa.queue_status));
+    }
+
     if (conversa.order_id || conversa.customer_id) {
       const vinculo = elemento("span", "badge-vinculo", conversa.order_id ? `Pedido #${conversa.order_id}` : `Cliente #${conversa.customer_id}`);
       botao.append(vinculo);
@@ -217,15 +287,23 @@
     return item;
   }
 
+  function endpointDaAba() {
+    if (abaAtual === "fila") return "/api/admin/whatsapp/queue";
+    if (abaAtual === "minhas") return "/api/admin/whatsapp/my-conversations";
+    return "/api/admin/whatsapp/conversations";
+  }
+
   async function carregarConversas() {
     try {
       const params = new URLSearchParams();
-      if (filtroStatusAtual) params.set("status", filtroStatusAtual);
-      if (apenasNaoLidas) params.set("unread_only", "true");
-      if (buscaConversas.value.trim()) params.set("q", buscaConversas.value.trim());
+      if (abaAtual === "todas") {
+        if (filtroStatusAtual) params.set("status", filtroStatusAtual);
+        if (apenasNaoLidas) params.set("unread_only", "true");
+        if (buscaConversas.value.trim()) params.set("q", buscaConversas.value.trim());
+      }
       params.set("page_size", "50");
 
-      const dados = await apiFetch(`/api/admin/whatsapp/conversations?${params.toString()}`);
+      const dados = await apiFetch(`${endpointDaAba()}?${params.toString()}`);
       listaConversas.textContent = "";
       const idsAtuais = new Set(dados.conversations.map((c) => c.id));
       for (const conversa of dados.conversations) {
@@ -256,12 +334,18 @@
 
     try {
       const detalhe = await apiFetch(`/api/admin/whatsapp/conversations/${id}`);
-      preencherCabecalhoConversa(detalhe.conversation);
+      conversaAtual = detalhe.conversation;
+      preencherCabecalhoConversa(conversaAtual);
+      atualizarBotoesFila(conversaAtual);
       await carregarMensagens();
       await apiFetch(`/api/admin/whatsapp/conversations/${id}/read`, { method: "POST" });
       carregarConversas();
-    } catch {
-      statusEnvio.textContent = "Falha ao abrir a conversa.";
+    } catch (erro) {
+      if (erro.status === 403) {
+        statusEnvio.textContent = "Você não tem acesso a esta conversa.";
+      } else {
+        statusEnvio.textContent = "Falha ao abrir a conversa.";
+      }
     }
 
     reiniciarPollMensagens();
@@ -271,6 +355,18 @@
     conversaNome.textContent = (conversa.contact && conversa.contact.profile_name) || "Contato sem nome";
     conversaTelefone.textContent = `•••${(conversa.contact && conversa.contact.phone_last4) || "----"}`;
     selectStatusConversa.value = conversa.status || "open";
+
+    const fila = conversa.queue_status || "waiting";
+    badgeFila.textContent = ROTULO_FILA[fila] || fila;
+    badgeFila.className = `badge-fila ${fila}`;
+
+    if (conversa.assigned_user_id) {
+      const nomeAgente = nomeDoAgente(conversa.assigned_user_id);
+      badgeAtendente.textContent = conversa.assigned_user_id === sessaoUsuario.id ? "Você" : (nomeAgente || `Atendente #${conversa.assigned_user_id}`);
+      badgeAtendente.hidden = false;
+    } else {
+      badgeAtendente.hidden = true;
+    }
 
     clienteInfo.textContent = "";
     if (conversa.customer_id) {
@@ -284,6 +380,211 @@
       clienteInfo.append(dl);
     } else {
       clienteInfo.append(elemento("p", "hint", "Nenhum cliente vinculado a esta conversa."));
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Fila multiatendente: assumir / liberar / transferir / finalizar / reabrir
+  // ---------------------------------------------------------------------
+  const ehGestao = () => sessaoUsuario.perfil === "adm" || sessaoUsuario.perfil === "supervisor_atendimento";
+  const ehDono = (conversa) => conversa.assigned_user_id != null && conversa.assigned_user_id === sessaoUsuario.id;
+
+  function atualizarBotoesFila(conversa) {
+    const fila = conversa.queue_status || "waiting";
+    const dono = ehDono(conversa);
+    const gestao = ehGestao();
+
+    btnAssumir.hidden = !(fila === "waiting");
+    btnLiberar.hidden = !(fila === "assigned" && (dono || gestao));
+    btnTransferir.hidden = !(fila === "assigned" && (dono || gestao));
+    btnFinalizar.hidden = !(fila === "assigned" && (dono || gestao));
+    btnReabrir.hidden = !(fila === "resolved" && gestao);
+    statusFilaAcao.textContent = "";
+  }
+
+  async function executarAcaoFila(caminho, opcoes, mensagemSucesso) {
+    if (!conversaSelecionadaId) return;
+    statusFilaAcao.textContent = "Processando…";
+    try {
+      const resposta = await apiFetch(`/api/admin/whatsapp/conversations/${conversaSelecionadaId}${caminho}`, opcoes);
+      conversaAtual = resposta.conversation || conversaAtual;
+      preencherCabecalhoConversa(conversaAtual);
+      atualizarBotoesFila(conversaAtual);
+      statusFilaAcao.textContent = mensagemSucesso;
+      carregarConversas();
+    } catch (erro) {
+      if (erro.status === 409) {
+        statusFilaAcao.textContent = erro.message || "Esta conversa foi alterada por outra ação; recarregando…";
+        // 409/412 de corrida de claim ou assignment_version desatualizada:
+        // recarrega o estado real da conversa em vez de deixar o painel
+        // mostrando um estado que não existe mais no servidor.
+        try {
+          const atualizado = await apiFetch(`/api/admin/whatsapp/conversations/${conversaSelecionadaId}`);
+          conversaAtual = atualizado.conversation;
+          preencherCabecalhoConversa(conversaAtual);
+          atualizarBotoesFila(conversaAtual);
+        } catch { /* mantém a mensagem de erro acima */ }
+      } else if (erro.status === 403) {
+        statusFilaAcao.textContent = erro.message || "Você não tem permissão para esta ação.";
+      } else {
+        statusFilaAcao.textContent = erro.message || "Falha ao executar esta ação.";
+      }
+    }
+  }
+
+  btnAssumir.addEventListener("click", () => executarAcaoFila("/claim", { method: "POST", body: "{}" }, "Conversa assumida."));
+  btnLiberar.addEventListener("click", () => executarAcaoFila("/release", { method: "POST", body: JSON.stringify({}) }, "Conversa liberada."));
+  btnFinalizar.addEventListener("click", () => executarAcaoFila("/resolve", { method: "POST", body: JSON.stringify({ assignment_version: conversaAtual ? conversaAtual.assignment_version : null }) }, "Conversa finalizada."));
+  btnReabrir.addEventListener("click", () => executarAcaoFila("/reopen", { method: "POST", body: "{}" }, "Conversa reaberta."));
+
+  // Transferência: abre modal, carrega lista de agentes elegíveis.
+  let agentesCache = [];
+
+  function nomeDoAgente(id) {
+    const agente = agentesCache.find((a) => a.id === id);
+    return agente ? (agente.nome || agente.login) : null;
+  }
+
+  async function carregarAgentesParaTransferencia() {
+    try {
+      const dados = await apiFetch("/api/admin/whatsapp/agents");
+      agentesCache = dados.agents || [];
+    } catch {
+      agentesCache = [];
+    }
+    selectVendedorDestino.textContent = "";
+    for (const agente of agentesCache) {
+      if (agente.id === sessaoUsuario.id) continue;
+      if (!agente.atendimento_enabled) continue;
+      const opcao = elemento("option", "", `${agente.nome || agente.login} (${agente.perfil}) — ${agente.active_conversations || 0} ativa(s)`);
+      opcao.value = String(agente.id);
+      selectVendedorDestino.append(opcao);
+    }
+  }
+
+  btnTransferir.addEventListener("click", async () => {
+    if (!conversaSelecionadaId) return;
+    campoMotivoTransferencia.value = "";
+    statusTransferencia.textContent = "";
+    await carregarAgentesParaTransferencia();
+    modalTransferir.hidden = false;
+    selectVendedorDestino.focus();
+  });
+
+  btnFecharModalTransferir.addEventListener("click", () => { modalTransferir.hidden = true; });
+  modalTransferir.addEventListener("click", (event) => { if (event.target === modalTransferir) modalTransferir.hidden = true; });
+
+  formTransferir.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!conversaSelecionadaId || !selectVendedorDestino.value) return;
+    statusTransferencia.textContent = "Transferindo…";
+    try {
+      const resposta = await apiFetch(`/api/admin/whatsapp/conversations/${conversaSelecionadaId}/transfer`, {
+        method: "POST",
+        body: JSON.stringify({
+          target_user_id: Number(selectVendedorDestino.value),
+          reason: campoMotivoTransferencia.value.trim() || undefined,
+          assignment_version: conversaAtual ? conversaAtual.assignment_version : undefined,
+        }),
+      });
+      conversaAtual = resposta.conversation || conversaAtual;
+      preencherCabecalhoConversa(conversaAtual);
+      atualizarBotoesFila(conversaAtual);
+      modalTransferir.hidden = true;
+      carregarConversas();
+    } catch (erro) {
+      statusTransferencia.textContent = erro.message || "Falha ao transferir.";
+    }
+  });
+
+  // ---------------------------------------------------------------------
+  // Gestão de vendedores (aba Vendedores -- só adm/supervisor)
+  // ---------------------------------------------------------------------
+  function montarCartaoAgente(agente) {
+    const cartao = elemento("div", "cartao-agente");
+    const topo = elemento("div", "linha-topo");
+    topo.append(elemento("strong", "", `${agente.nome || agente.login} (${agente.perfil})`));
+    topo.append(elemento("span", "hint", `${agente.active_conversations || 0} conversa(s) ativa(s)`));
+    cartao.append(topo);
+
+    const campos = elemento("div", "campos-agente");
+
+    const labelHabilitado = elemento("label");
+    const chkHabilitado = document.createElement("input");
+    chkHabilitado.type = "checkbox";
+    chkHabilitado.checked = !!agente.atendimento_enabled;
+    labelHabilitado.append(chkHabilitado, document.createTextNode(" Atendimento habilitado"));
+    campos.append(labelHabilitado);
+
+    const labelSuspenso = elemento("label");
+    const chkSuspenso = document.createElement("input");
+    chkSuspenso.type = "checkbox";
+    chkSuspenso.checked = !!agente.atendimento_suspended_at;
+    labelSuspenso.append(chkSuspenso, document.createTextNode(" Suspenso"));
+    campos.append(labelSuspenso);
+
+    const labelLimite = elemento("label");
+    const campoLimite = document.createElement("input");
+    campoLimite.type = "number";
+    campoLimite.min = "1";
+    campoLimite.max = "1000";
+    campoLimite.placeholder = "padrão";
+    if (agente.atendimento_max_active_conversations) campoLimite.value = String(agente.atendimento_max_active_conversations);
+    labelLimite.append(document.createTextNode("Limite:"), campoLimite);
+    campos.append(labelLimite);
+
+    let selectPerfil = null;
+    if (agente.perfil !== "adm") {
+      const labelPerfil = elemento("label");
+      selectPerfil = document.createElement("select");
+      for (const valor of ["vendedor", "supervisor_atendimento"]) {
+        const opcao = elemento("option", "", valor);
+        opcao.value = valor;
+        if (agente.perfil === valor) opcao.selected = true;
+        selectPerfil.append(opcao);
+      }
+      labelPerfil.append(document.createTextNode("Perfil:"), selectPerfil);
+      campos.append(labelPerfil);
+    }
+
+    const btnSalvar = document.createElement("button");
+    btnSalvar.type = "button";
+    btnSalvar.className = "btn-secondary";
+    btnSalvar.textContent = "Salvar";
+    btnSalvar.addEventListener("click", async () => {
+      btnSalvar.disabled = true;
+      try {
+        const corpo = {
+          atendimento_enabled: chkHabilitado.checked,
+          suspender: chkSuspenso.checked,
+          atendimento_max_active_conversations: campoLimite.value ? Number(campoLimite.value) : null,
+        };
+        if (selectPerfil) corpo.perfil = selectPerfil.value;
+        await apiFetch(`/api/admin/whatsapp/agents/${agente.id}`, { method: "PATCH", body: JSON.stringify(corpo) });
+        statusAgentes.textContent = "Alterações salvas.";
+        carregarAgentes();
+      } catch (erro) {
+        statusAgentes.textContent = erro.message || "Falha ao salvar alterações.";
+      } finally {
+        btnSalvar.disabled = false;
+      }
+    });
+    campos.append(btnSalvar);
+    cartao.append(campos);
+    return cartao;
+  }
+
+  async function carregarAgentes() {
+    try {
+      const dados = await apiFetch("/api/admin/whatsapp/agents");
+      agentesCache = dados.agents || [];
+      listaAgentes.textContent = "";
+      for (const agente of agentesCache) {
+        listaAgentes.append(montarCartaoAgente(agente));
+      }
+      statusAgentes.textContent = agentesCache.length ? "" : "Nenhum atendente cadastrado.";
+    } catch (erro) {
+      statusAgentes.textContent = erro.message || "Falha ao carregar vendedores.";
     }
   }
 
@@ -492,6 +793,7 @@
     statusEnvio.textContent = "Enviando…";
     try {
       const corpo = template ? { template_name: template } : { text: texto };
+      if (conversaAtual && conversaAtual.assignment_version != null) corpo.assignment_version = conversaAtual.assignment_version;
       await apiFetch(`/api/admin/whatsapp/conversations/${conversaSelecionadaId}/messages`, {
         method: "POST",
         headers: { "Idempotency-Key": crypto.randomUUID() },
@@ -501,7 +803,14 @@
       statusEnvio.textContent = "";
       await carregarMensagens();
     } catch (erro) {
-      statusEnvio.textContent = erro.message || "Falha ao enviar mensagem.";
+      if (erro.status === 403) {
+        statusEnvio.textContent = erro.message || "Assuma esta conversa antes de responder.";
+      } else if (erro.status === 409) {
+        statusEnvio.textContent = "Esta conversa foi alterada por outra ação; recarregando…";
+        await abrirConversa(conversaSelecionadaId);
+      } else {
+        statusEnvio.textContent = erro.message || "Falha ao enviar mensagem.";
+      }
     } finally {
       btnEnviarMensagem.disabled = false;
     }
@@ -564,16 +873,24 @@
   }
 
   function iniciar() {
+    const gestao = ehGestao();
+    abaTodas.hidden = !gestao;
+    abaVendedores.hidden = !gestao;
+    selecionarAba("fila");
     atualizarStatus();
-    carregarConversas();
     carregarTemplates();
     pollListaTimer = setInterval(() => {
       atualizarStatus();
-      carregarConversas();
+      if (abaAtual !== "vendedores") carregarConversas();
     }, POLL_LISTA_MS);
   }
 
   apiFetch("/api/auth/me")
-    .then(() => { mostrarApp(); iniciar(); })
+    .then((dados) => {
+      const usuario = dados.usuario || {};
+      sessaoUsuario = { id: usuario.id != null ? Number(usuario.id) : null, perfil: usuario.perfil || null };
+      mostrarApp();
+      iniciar();
+    })
     .catch(() => mostrarLogin());
 })();
