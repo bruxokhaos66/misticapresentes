@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://api.misticaesotericos.com.br; frame-src 'none'; worker-src 'self'; manifest-src 'self'; media-src 'self' blob: https://api.misticaesotericos.com.br; upgrade-insecure-requests" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://api.misticaesotericos.com.br; frame-src 'none'; worker-src 'self'; manifest-src 'self'; media-src 'self' blob: https://api.misticaesotericos.com.br; upgrade-insecure-requests" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
@@ -89,6 +89,7 @@
             <button type="button" class="btn-secondary" id="btnTransferir" hidden>Transferir</button>
             <button type="button" class="btn-secondary" id="btnFinalizar" hidden>Finalizar</button>
             <button type="button" class="btn-secondary" id="btnReabrir" hidden>Reabrir</button>
+            <button type="button" class="btn-secondary" id="btnAbrirProdutos" hidden>Produtos</button>
             <p id="statusFilaAcao" class="hint" role="status" aria-live="polite"></p>
           </div>
 
@@ -160,6 +161,47 @@
       <div id="modalMidiaCorpo" class="modal-midia-corpo"></div>
       <div class="modal-midia-rodape">
         <a id="linkBaixarMidia" class="btn-secondary" download>Baixar arquivo</a>
+      </div>
+    </div>
+  </div>
+
+  <div id="modalProdutos" class="modal-midia modal-produtos" hidden role="dialog" aria-modal="true" aria-labelledby="modalProdutosTitulo">
+    <div class="modal-midia-conteudo modal-produtos-conteudo">
+      <div class="modal-midia-cabecalho">
+        <h2 id="modalProdutosTitulo">Produtos</h2>
+        <button type="button" id="btnFecharModalProdutos" class="btn-secondary" aria-label="Fechar">Fechar</button>
+      </div>
+      <div class="modal-midia-corpo produtos-corpo">
+        <form id="formBuscaProdutos" class="produtos-busca" role="search">
+          <label for="campoBuscaProduto" class="visually-hidden">Pesquisar produto</label>
+          <input id="campoBuscaProduto" type="search" placeholder="Nome, SKU, categoria, marca…" maxlength="160">
+          <label for="campoFiltroCategoria" class="visually-hidden">Categoria</label>
+          <input id="campoFiltroCategoria" type="text" placeholder="Categoria" maxlength="100">
+          <label for="chkSomenteEstoque">
+            <input type="checkbox" id="chkSomenteEstoque"> Somente em estoque
+          </label>
+          <button class="btn-secondary" type="submit">Pesquisar</button>
+        </form>
+
+        <p id="statusProdutos" class="hint" role="status" aria-live="polite"></p>
+
+        <div id="secaoRecentesProdutos" class="produtos-recentes" hidden>
+          <h3>Recentes</h3>
+          <ul id="listaProdutosRecentes" class="lista-produtos lista-produtos-recentes" aria-label="Produtos enviados recentemente"></ul>
+        </div>
+
+        <ul id="listaProdutosCatalogo" class="lista-produtos" aria-label="Resultado da pesquisa"></ul>
+
+        <div class="produtos-paginacao">
+          <button type="button" class="btn-secondary" id="btnProdutosPaginaAnterior">Anterior</button>
+          <span id="produtosPaginaAtual" class="hint"></span>
+          <button type="button" class="btn-secondary" id="btnProdutosProximaPagina">Próxima</button>
+        </div>
+      </div>
+      <div class="modal-midia-rodape produtos-rodape">
+        <span id="contadorSelecionados" class="hint" role="status" aria-live="polite">Nenhum produto selecionado</span>
+        <button type="button" class="btn-secondary" id="btnLimparSelecaoProdutos">Limpar seleção</button>
+        <button type="button" class="btn" id="btnEnviarProdutosSelecionados" disabled>Enviar selecionados</button>
       </div>
     </div>
   </div>

@@ -409,6 +409,7 @@
     btnTransferir.hidden = !(fila === "assigned" && (dono || gestao));
     btnFinalizar.hidden = !(fila === "assigned" && (dono || gestao));
     btnReabrir.hidden = !(fila === "resolved" && gestao);
+    btnAbrirProdutos.hidden = !catalogoHabilitado;
     statusFilaAcao.textContent = "";
   }
 
@@ -757,6 +758,285 @@
     }
   }
 
+  // ---------------------------------------------------------------------
+  // Catálogo Comercial: painel Produtos -- busca, seleção múltipla, envio
+  // (único e em lote) e recentes. Some inteiramente da tela quando
+  // ATENDIMENTO_CATALOG_ENABLED estiver desligada no backend (nunca decide
+  // isso sozinho: sempre a partir da resposta real do endpoint).
+  // ---------------------------------------------------------------------
+  const btnAbrirProdutos = document.getElementById("btnAbrirProdutos");
+  const modalProdutos = document.getElementById("modalProdutos");
+  const btnFecharModalProdutos = document.getElementById("btnFecharModalProdutos");
+  const formBuscaProdutos = document.getElementById("formBuscaProdutos");
+  const campoBuscaProduto = document.getElementById("campoBuscaProduto");
+  const campoFiltroCategoria = document.getElementById("campoFiltroCategoria");
+  const chkSomenteEstoque = document.getElementById("chkSomenteEstoque");
+  const statusProdutos = document.getElementById("statusProdutos");
+  const secaoRecentesProdutos = document.getElementById("secaoRecentesProdutos");
+  const listaProdutosRecentes = document.getElementById("listaProdutosRecentes");
+  const listaProdutosCatalogo = document.getElementById("listaProdutosCatalogo");
+  const btnProdutosPaginaAnterior = document.getElementById("btnProdutosPaginaAnterior");
+  const btnProdutosProximaPagina = document.getElementById("btnProdutosProximaPagina");
+  const produtosPaginaAtual = document.getElementById("produtosPaginaAtual");
+  const contadorSelecionados = document.getElementById("contadorSelecionados");
+  const btnLimparSelecaoProdutos = document.getElementById("btnLimparSelecaoProdutos");
+  const btnEnviarProdutosSelecionados = document.getElementById("btnEnviarProdutosSelecionados");
+
+  let catalogoHabilitado = false;
+  let elementoComFocoAntesDoModalProdutos = null;
+  let paginaProdutosAtual = 1;
+  let totalProdutosAtual = 0;
+  const PRODUTOS_PAGE_SIZE = 12;
+  const produtosSelecionados = new Map(); // id -> produto
+
+  const ROTULO_ESTOQUE = { available: "Disponível", low_stock: "Estoque baixo", unavailable: "Indisponível" };
+
+  function formatarPrecoBRL(valor) {
+    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(valor) || 0);
+  }
+
+  function montarCartaoProduto(produto, { compacto = false } = {}) {
+    const cartao = elemento("div", "cartao-produto");
+    if (produtosSelecionados.has(produto.id)) cartao.classList.add("is-selecionado");
+
+    const imagemBox = elemento("div", "cartao-produto-imagem");
+    if (produto.imagem_url) {
+      const img = document.createElement("img");
+      img.src = produto.imagem_url;
+      img.alt = produto.nome || "Produto";
+      img.loading = "lazy";
+      img.addEventListener("error", () => {
+        imagemBox.textContent = "";
+        imagemBox.append(elemento("span", "sem-imagem", "Sem imagem"));
+      });
+      imagemBox.append(img);
+    } else {
+      imagemBox.append(elemento("span", "sem-imagem", "Sem imagem"));
+    }
+    cartao.append(imagemBox);
+
+    cartao.append(elemento("div", "cartao-produto-nome", produto.nome));
+
+    const preco = elemento("div", "cartao-produto-preco");
+    if (produto.preco_promocional != null && produto.preco_promocional < produto.preco) {
+      preco.append(elemento("span", "preco-original", formatarPrecoBRL(produto.preco)));
+      preco.append(elemento("span", "preco-promocional", formatarPrecoBRL(produto.preco_promocional)));
+    } else {
+      preco.append(document.createTextNode(formatarPrecoBRL(produto.preco)));
+    }
+    cartao.append(preco);
+
+    cartao.append(elemento("span", `badge-estoque ${produto.estoque_status}`, ROTULO_ESTOQUE[produto.estoque_status] || produto.estoque_status));
+
+    const acoes = elemento("div", "cartao-produto-acoes");
+
+    if (produto.url_publica) {
+      const link = document.createElement("a");
+      link.href = produto.url_publica;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.className = "btn-secondary";
+      link.textContent = "Ver no site";
+      acoes.append(link);
+    }
+
+    const labelSelecionar = elemento("label");
+    const chk = document.createElement("input");
+    chk.type = "checkbox";
+    chk.checked = produtosSelecionados.has(produto.id);
+    chk.disabled = !produto.disponivel;
+    chk.setAttribute("aria-label", `Selecionar ${produto.nome}`);
+    chk.addEventListener("change", () => {
+      if (chk.checked) {
+        produtosSelecionados.set(produto.id, produto);
+      } else {
+        produtosSelecionados.delete(produto.id);
+      }
+      cartao.classList.toggle("is-selecionado", chk.checked);
+      atualizarContadorSelecionados();
+    });
+    labelSelecionar.append(chk, document.createTextNode(" Selecionar"));
+    acoes.append(labelSelecionar);
+
+    if (compacto) {
+      const btnReenviar = document.createElement("button");
+      btnReenviar.type = "button";
+      btnReenviar.className = "btn-secondary";
+      btnReenviar.textContent = "Reenviar";
+      btnReenviar.disabled = !produto.disponivel;
+      btnReenviar.addEventListener("click", () => enviarProdutoUnico(produto, btnReenviar));
+      acoes.append(btnReenviar);
+    }
+
+    cartao.append(acoes);
+    return cartao;
+  }
+
+  function atualizarContadorSelecionados() {
+    const total = produtosSelecionados.size;
+    contadorSelecionados.textContent = total === 0 ? "Nenhum produto selecionado" : `${total} produto(s) selecionado(s)`;
+    btnEnviarProdutosSelecionados.disabled = total === 0;
+  }
+
+  btnLimparSelecaoProdutos.addEventListener("click", () => {
+    produtosSelecionados.clear();
+    atualizarContadorSelecionados();
+    listaProdutosCatalogo.querySelectorAll(".cartao-produto.is-selecionado").forEach((el) => el.classList.remove("is-selecionado"));
+    listaProdutosCatalogo.querySelectorAll('input[type="checkbox"]').forEach((el) => { el.checked = false; });
+  });
+
+  async function pesquisarProdutos(pagina = 1) {
+    if (!conversaSelecionadaId) return;
+    statusProdutos.textContent = "Pesquisando…";
+    try {
+      const parametros = new URLSearchParams();
+      if (campoBuscaProduto.value.trim()) parametros.set("q", campoBuscaProduto.value.trim());
+      if (campoFiltroCategoria.value.trim()) parametros.set("categoria", campoFiltroCategoria.value.trim());
+      if (chkSomenteEstoque.checked) parametros.set("em_estoque", "true");
+      parametros.set("page", String(pagina));
+      parametros.set("page_size", String(PRODUTOS_PAGE_SIZE));
+
+      const dados = await apiFetch(`/api/admin/whatsapp/catalog/products?${parametros.toString()}`);
+      paginaProdutosAtual = dados.page;
+      totalProdutosAtual = dados.total;
+      listaProdutosCatalogo.textContent = "";
+      for (const produto of dados.products) {
+        const li = document.createElement("li");
+        li.append(montarCartaoProduto(produto));
+        listaProdutosCatalogo.append(li);
+      }
+      const totalPaginas = Math.max(1, Math.ceil(totalProdutosAtual / PRODUTOS_PAGE_SIZE));
+      produtosPaginaAtual.textContent = `Página ${paginaProdutosAtual} de ${totalPaginas}`;
+      btnProdutosPaginaAnterior.disabled = paginaProdutosAtual <= 1;
+      btnProdutosProximaPagina.disabled = paginaProdutosAtual >= totalPaginas;
+      statusProdutos.textContent = dados.products.length ? "" : "Nenhum produto encontrado.";
+    } catch (erro) {
+      if (erro.status === 403) {
+        statusProdutos.textContent = erro.message || "Você não tem acesso ao catálogo.";
+      } else {
+        statusProdutos.textContent = erro.message || "Falha ao pesquisar produtos.";
+      }
+    }
+  }
+
+  async function carregarProdutosRecentes() {
+    try {
+      const dados = await apiFetch("/api/admin/whatsapp/catalog/recent-products?limit=10");
+      listaProdutosRecentes.textContent = "";
+      for (const produto of dados.products || []) {
+        const li = document.createElement("li");
+        li.append(montarCartaoProduto(produto, { compacto: true }));
+        listaProdutosRecentes.append(li);
+      }
+      secaoRecentesProdutos.hidden = !(dados.products || []).length;
+    } catch {
+      secaoRecentesProdutos.hidden = true;
+    }
+  }
+
+  async function enviarProdutoUnico(produto, botao) {
+    if (!conversaSelecionadaId) return;
+    const rotuloOriginal = botao.textContent;
+    botao.disabled = true;
+    botao.textContent = "Enviando…";
+    try {
+      const corpo = { product_id: produto.id };
+      if (conversaAtual && conversaAtual.assignment_version != null) corpo.assignment_version = conversaAtual.assignment_version;
+      await apiFetch(`/api/admin/whatsapp/conversations/${conversaSelecionadaId}/send-product`, {
+        method: "POST",
+        headers: { "Idempotency-Key": crypto.randomUUID() },
+        body: JSON.stringify(corpo),
+      });
+      statusProdutos.textContent = "Produto enviado.";
+      await carregarMensagens();
+    } catch (erro) {
+      statusProdutos.textContent = erro.message || "Falha ao enviar produto.";
+    } finally {
+      botao.disabled = false;
+      botao.textContent = rotuloOriginal;
+    }
+  }
+
+  btnEnviarProdutosSelecionados.addEventListener("click", async () => {
+    if (!conversaSelecionadaId || produtosSelecionados.size === 0) return;
+    btnEnviarProdutosSelecionados.disabled = true;
+    statusProdutos.textContent = "Enviando…";
+    try {
+      const ids = Array.from(produtosSelecionados.keys());
+      const corpo = { product_ids: ids };
+      if (conversaAtual && conversaAtual.assignment_version != null) corpo.assignment_version = conversaAtual.assignment_version;
+      await apiFetch(`/api/admin/whatsapp/conversations/${conversaSelecionadaId}/send-products`, {
+        method: "POST",
+        headers: { "Idempotency-Key": crypto.randomUUID() },
+        body: JSON.stringify(corpo),
+      });
+      statusProdutos.textContent = "Produtos enviados.";
+      produtosSelecionados.clear();
+      atualizarContadorSelecionados();
+      listaProdutosCatalogo.querySelectorAll(".cartao-produto.is-selecionado").forEach((el) => el.classList.remove("is-selecionado"));
+      listaProdutosCatalogo.querySelectorAll('input[type="checkbox"]').forEach((el) => { el.checked = false; });
+      await carregarMensagens();
+      await carregarProdutosRecentes();
+    } catch (erro) {
+      if (erro.status === 409) {
+        statusProdutos.textContent = "Esta conversa foi alterada por outra ação; recarregue e tente novamente.";
+      } else if (erro.status === 422) {
+        statusProdutos.textContent = erro.message || "Lote inválido -- nenhum produto foi enviado.";
+      } else {
+        statusProdutos.textContent = erro.message || "Falha ao enviar produtos.";
+      }
+    } finally {
+      btnEnviarProdutosSelecionados.disabled = produtosSelecionados.size === 0;
+    }
+  });
+
+  btnProdutosPaginaAnterior.addEventListener("click", () => pesquisarProdutos(Math.max(1, paginaProdutosAtual - 1)));
+  btnProdutosProximaPagina.addEventListener("click", () => pesquisarProdutos(paginaProdutosAtual + 1));
+
+  formBuscaProdutos.addEventListener("submit", (event) => {
+    event.preventDefault();
+    pesquisarProdutos(1);
+  });
+
+  function fecharModalProdutos() {
+    modalProdutos.hidden = true;
+    if (elementoComFocoAntesDoModalProdutos) {
+      elementoComFocoAntesDoModalProdutos.focus();
+      elementoComFocoAntesDoModalProdutos = null;
+    }
+  }
+
+  btnFecharModalProdutos.addEventListener("click", fecharModalProdutos);
+  modalProdutos.addEventListener("click", (event) => { if (event.target === modalProdutos) fecharModalProdutos(); });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !modalProdutos.hidden) fecharModalProdutos();
+  });
+
+  btnAbrirProdutos.addEventListener("click", async () => {
+    if (!conversaSelecionadaId) return;
+    elementoComFocoAntesDoModalProdutos = document.activeElement;
+    modalProdutos.hidden = false;
+    campoBuscaProduto.value = "";
+    campoFiltroCategoria.value = "";
+    chkSomenteEstoque.checked = false;
+    statusProdutos.textContent = "";
+    campoBuscaProduto.focus();
+    await carregarProdutosRecentes();
+    await pesquisarProdutos(1);
+  });
+
+  async function verificarCatalogoHabilitado() {
+    try {
+      await apiFetch("/api/admin/whatsapp/catalog/products?page_size=1");
+      catalogoHabilitado = true;
+    } catch {
+      // 503 (flag desligada), 403 (sem acesso) ou qualquer outra falha:
+      // o botão Produtos simplesmente não aparece -- nunca decide isso
+      // sozinho no frontend, só reflete a resposta real do backend.
+      catalogoHabilitado = false;
+    }
+  }
+
   async function carregarMensagens() {
     if (!conversaSelecionadaId) return;
     try {
@@ -891,6 +1171,9 @@
     selecionarAba("fila");
     atualizarStatus();
     carregarTemplates();
+    verificarCatalogoHabilitado().then(() => {
+      if (conversaAtual) atualizarBotoesFila(conversaAtual);
+    });
     pollListaTimer = setInterval(() => {
       atualizarStatus();
       if (abaAtual !== "vendedores") carregarConversas();
