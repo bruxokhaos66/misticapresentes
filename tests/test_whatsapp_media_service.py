@@ -3,7 +3,20 @@ Nunca chama a Graph API real -- só exercita a função pura de identificação 
 tipo, que é o que decide se um arquivo é aceito ou rejeitado."""
 from __future__ import annotations
 
+from pathlib import Path
+
 from backend.whatsapp_media_service import _identificar_por_magic_bytes
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def test_frontend_nunca_usa_innerhtml():
+    """Defesa em profundidade contra XSS armazenado: nome de perfil e texto
+    de mensagem vêm de um cliente do WhatsApp (nunca confiável) e são
+    renderizados no painel só via textContent -- innerHTML nunca deve
+    aparecer em central-atendimento.js. Guarda de regressão estática."""
+    conteudo = (REPO_ROOT / "central-atendimento.js").read_text(encoding="utf-8")
+    assert "innerHTML" not in conteudo
 
 
 def test_jpeg_reconhecido():

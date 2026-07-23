@@ -230,3 +230,26 @@ def test_webhook_status_e_mensagens_no_mesmo_payload(monkeypatch):
     assert resp.status_code == 200
     corpo_resposta = resp.json()
     assert corpo_resposta["mensagens"]["processadas"] == 1
+
+
+def test_webhook_texto_e_nome_com_script_nunca_e_executado_e_volta_so_como_json(monkeypatch):
+    """Defesa em profundidade contra XSS: um payload malicioso (texto e nome
+    de perfil com <script>) nunca quebra o processamento, é persistido como
+    dado inerte e só pode voltar ao painel como valor de string dentro de uma
+    resposta JSON (nunca como HTML executável) -- o frontend consome esse
+    campo só via textContent (ver central-atendimento.js), nunca innerHTML."""
+    _habilitar_inbox(monkeypatch)
+    wa_id = "5511" + str(uuid.uuid4().int)[:9]
+    msg_id = f"wamid.{uuid.uuid4().hex}"
+    payload_malicioso = "<script>alert(document.cookie)</script>"
+    corpo = _payload_texto(wa_id, msg_id, payload_malicioso, profile_name=payload_malicioso)
+    resp = client.post("/api/webhooks/whatsapp", content=corpo, headers={"X-Hub-Signature-256": _assinar(corpo)})
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("application/json")
+    with conectar() as conn:
+        mensagem = conn.execute("SELECT * FROM whatsapp_messages WHERE meta_message_id=?", (msg_id,)).fetchone()
+        contato = conn.execute("SELECT * FROM whatsapp_contacts WHERE wa_id=?", (wa_id,)).fetchone()
+    # Persistido como texto inerte -- nenhuma tag é executada/interpretada no
+    # backend (não há template engine HTML nem eval nesta camada).
+    assert mensagem["text_body"] == payload_malicioso
+    assert contato["profile_name"] == payload_malicioso
