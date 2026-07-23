@@ -102,11 +102,16 @@ def test_status_com_sessao_admin(monkeypatch):
 
 def test_listar_e_obter_conversa(monkeypatch):
     _habilitar(monkeypatch)
-    conversa_id = _criar_conversa_com_inbound()
+    wa_id = "5511" + str(uuid.uuid4().int)[:9]
+    conversa_id = _criar_conversa_com_inbound(wa_id)
     token = _sessao_admin()
     client.cookies.set("mistica_painel_sessao", token)
     try:
-        resp = client.get("/api/admin/whatsapp/conversations", params={"page_size": 5})
+        # Filtra pelos últimos dígitos deste contato -- o banco de teste é
+        # compartilhado entre execuções locais repetidas (não é recriado a
+        # cada rodada), então uma paginação sem filtro poderia não conter
+        # esta conversa se muitas outras já existirem com data mais recente.
+        resp = client.get("/api/admin/whatsapp/conversations", params={"page_size": 5, "q": wa_id[-4:]})
         assert resp.status_code == 200
         assert any(c["id"] == conversa_id for c in resp.json()["conversations"])
 
