@@ -611,3 +611,81 @@ def test_planilha_modelo_e_baixavel_e_sem_formulas_executaveis():
 def test_planilha_modelo_exige_autenticacao():
     r = client.get("/api/produtos/importacao/modelo")
     assert r.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Comportamento quando a imagem falha DEPOIS do commit da transação
+# ---------------------------------------------------------------------------
+
+
+def test_falha_ao_promover_imagem_nao_reverte_produto_ja_commitado(monkeypatch):
+    img = _jpeg_bytes()
+    zip_bytes = _zip_com({"foto-falha.jpg": img})
+    r = _validar(_csv(["sku,nome,imagem", "PI-IMGFALHA,Produto Com Imagem,foto-falha.jpg"]), zip_bytes=zip_bytes)
+    assert r.status_code == 200, r.text
+    assert r.json()["resumo"]["com_imagem"] == 1
+    token = r.json()["token"]
+
+    from backend.product_image_storage import ProductImageStorageError
+
+    def _upload_falha(*args, **kwargs):
+        raise ProductImageStorageError("falha simulada de storage")
+
+    monkeypatch.setattr(product_import.imagem_storage, "upload", _upload_falha)
+
+    resposta = _confirmar(token)
+    assert resposta.status_code == 200, resposta.text
+    resultado = resposta.json()
+    assert resultado["criados"] == 1
+    assert resultado["sem_imagem"] == 1
+    assert resultado["status"] == "concluido_com_avisos"
+
+    produto = client.get(
+        "/api/produtos/admin", headers=HEADERS, params={"busca": "PI-IMGFALHA", "incluir_rascunhos": "true"}
+    ).json()[0]
+    assert produto["nome"] == "Produto Com Imagem"
+    assert not produto["imagem_url"]
+
+    historico = client.get("/api/produtos/importacao/historico", headers=HEADERS).json()["itens"][0]
+    assert historico["status"] == "concluido_com_avisos"
+    assert historico["sem_imagem"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Rascunhos nunca aparecem publicamente
+# ---------------------------------------------------------------------------
+
+
+def test_produto_rascunho_nao_aparece_no_catalogo_publico():
+    r = _validar(_csv(["sku,nome", "PI-PUBRASC,Produto Publico Rascunho"]), modo="novos_rascunho")
+    _confirmar(r.json()["token"])
+
+    publico = client.get("/api/produtos", params={"busca": "PI-PUBRASC"}).json()
+    assert publico == []
+
+    admin_padrao = client.get("/api/produtos/admin", headers=HEADERS, params={"busca": "PI-PUBRASC"}).json()
+    assert admin_padrao == []
+
+    admin_com_rascunho = client.get(
+        "/api/produtos/admin", headers=HEADERS, params={"busca": "PI-PUBRASC", "incluir_rascunhos": "true"}
+    ).json()
+    assert len(admin_com_rascunho) == 1
+    assert admin_com_rascunho[0]["ativo"] == 0
+
+
+def test_produto_duplicado_como_rascunho_nao_aparece_publicamente():
+    produto_id = _criar_produto_basico(codigo="DUP-PUB")
+    r = client.post(f"/api/produtos/{produto_id}/duplicar", headers=HEADERS, json={"copiar_imagem": False})
+    assert r.status_code == 200
+    publico = client.get("/api/produtos", params={"busca": "Cópia"}).json()
+    assert publico == []
+
+
+def test_publico_incluir_rascunhos_nao_e_aceito_no_endpoint_publico():
+    # /api/produtos (publico) nao expoe o parametro incluir_rascunhos: mesmo
+    # que alguem tente passa-lo na query string, o filtro ativo=1 continua
+    # valendo porque a rota publica nunca repassa esse argumento.
+    r = _validar(_csv(["sku,nome", "PI-PUBFORCE,Produto"]), modo="novos_rascunho")
+    _confirmar(r.json()["token"])
+    publico = client.get("/api/produtos", params={"busca": "PI-PUBFORCE", "incluir_rascunhos": "true"}).json()
+    assert publico == []
