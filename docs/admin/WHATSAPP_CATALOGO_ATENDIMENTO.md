@@ -114,6 +114,54 @@ administrativo. Estoque é normalizado em `available` / `low_stock` /
   sem duplicar armazenamento (reaproveita a mesma URL pública já usada pelo
   site).
 
+### 6.1. Allowlist de host da imagem comercial
+
+`produtos.imagem_url` aceita qualquer URL HTTPS válida desde o cadastro do
+produto (inclusive hosts externos legados, ex.: Google Drive) — por isso o
+Catálogo Comercial nunca confia apenas no esquema `https://`: toda imagem
+exposta pelo painel Produtos ou enviada pelo WhatsApp passa por
+`backend/whatsapp_catalog_repository.py::validar_url_imagem_catalogo`,
+**função única e centralizada**, usada por `produto_linha_publica` (e, por
+consequência, por busca, recentes, envio único e em lote — nenhuma outra
+função duplica essa regra).
+
+Regras aplicadas, nesta ordem: esquema `https` obrigatório; sem
+usuário/senha embutidos na URL; hostname presente (rejeita `localhost`,
+qualquer host literal de IP — cobre `127.0.0.0/8`, `::1`, IPs
+privados/link-local/reservados de uma vez, já que nenhum host real da
+allowlist é um IP); porta padrão (443) ou ausente; e o host precisa estar
+na allowlist — comparação **sempre** por host exato ou por sufixo com
+fronteira de ponto explícita (nunca um `endswith` sem fronteira, que
+aceitaria `evilmisticaesotericos.com.br` para o sufixo
+`misticaesotericos.com.br`).
+
+Allowlist padrão (hosts que o próprio projeto já conhece, sem depender de
+configuração externa nem confiar no `Host` da requisição):
+`misticaesotericos.com.br`, `www.misticaesotericos.com.br`,
+`api.misticaesotericos.com.br`, `drive.google.com`, mais o host de
+`PRODUCT_IMAGES_PUBLIC_BASE_URL` quando configurado (lido do ambiente do
+servidor).
+
+`ATENDIMENTO_CATALOG_ALLOWED_IMAGE_HOSTS` soma hosts extras (nunca
+substitui os padrão): lista separada por vírgula, aceitando host exato
+(`cdn.exemplo.com`) ou subdomínio explícito com o prefixo `*.`
+(`*.cdn.exemplo.com`). Nunca use `*` nem `*.com` sozinhos — essas entradas
+são ignoradas silenciosamente. **Revise manualmente** cada host antes de
+adicioná-lo (é um CDN que a loja realmente controla?).
+
+**Fallback, nunca bloqueio:** produto com imagem cadastrada fora da
+allowlist nunca tem o envio bloqueado — `imagem_url` volta vazia
+(`imagem_bloqueada_por_host: true` no card) e o envio cai automaticamente
+no texto comercial puro, exatamente como um produto sem imagem. A
+auditoria (`enviar_produto`/`enviar_produtos_lote`) registra esse booleano,
+nunca a URL completa.
+
+**CSP:** `central-atendimento.html` lista explicitamente os hosts oficiais
+de imagem no `img-src` (nunca `https:` irrestrito). Ao adicionar um host
+novo em `ATENDIMENTO_CATALOG_ALLOWED_IMAGE_HOSTS`, adicione o mesmo host
+também nesse `<meta>` — a CSP é defesa em profundidade, a barreira
+principal é a allowlist do backend.
+
 ## 7. Envio único
 
 `POST /api/admin/whatsapp/conversations/{id}/send-product`

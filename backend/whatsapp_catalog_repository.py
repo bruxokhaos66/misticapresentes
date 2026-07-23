@@ -8,16 +8,21 @@ Nenhuma função aqui abre sua própria conexão (mesmo padrão de
 backend/atendimento_repository.py): todo caller controla a transação."""
 from __future__ import annotations
 
+import ipaddress
 import json
 import re
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from typing import Any
+from urllib.parse import urlsplit
 
 from backend.isis_chat_catalog import produto_url as _produto_url_base
 from backend.product_commercial_rules import garantir_colunas_comerciais
-from backend.whatsapp_catalog_flags import atendimento_catalog_limite_estoque_baixo
+from backend.whatsapp_catalog_flags import (
+    atendimento_catalog_allowed_image_hosts,
+    atendimento_catalog_limite_estoque_baixo,
+)
 
 PAGE_SIZE_PADRAO = 20
 PAGE_SIZE_MAXIMO = 60
@@ -58,6 +63,81 @@ def estoque_status(*, quantidade: int, sob_encomenda: bool, ativo: bool) -> str:
     return "available"
 
 
+_PORTAS_HTTPS_PERMITIDAS = {None, 443}
+
+
+def _host_permitido(host: str, *, hosts_exatos: frozenset[str], sufixos_wildcard: frozenset[str]) -> bool:
+    """Comparação sempre por host exato ou por sufixo com fronteira de ponto
+    explícita -- nunca `endswith` sem fronteira (isso aceitaria
+    'evilmisticaesotericos.com.br' para o sufixo
+    'misticaesotericos.com.br') e nunca um wildcard global."""
+    if host in hosts_exatos:
+        return True
+    for sufixo in sufixos_wildcard:
+        if host == sufixo or host.endswith("." + sufixo):
+            return True
+    return False
+
+
+def validar_url_imagem_catalogo(url: str | None) -> str | None:
+    """Função central e única de validação de URL de imagem comercial do
+    Catálogo (item 2/3 da correção de segurança) -- usada por
+    `produto_linha_publica` (e, por consequência, por toda rota que exibe
+    ou envia imagem de produto: busca, recentes, envio único e em lote).
+    Nunca duplicar esta regra em outro arquivo.
+
+    Devolve a própria URL quando ela é seguramente utilizável (esquema
+    https, sem credenciais embutidas, hostname presente e não literal de
+    IP/localhost, porta padrão, host dentro da allowlist) ou `None` quando
+    não -- o chamador deve tratar `None` como "sem imagem" (fallback de
+    texto), nunca como erro."""
+    texto = str(url or "").strip()
+    if not texto:
+        return None
+    if any(ord(ch) < 32 for ch in texto):
+        return None
+
+    try:
+        partes = urlsplit(texto)
+    except ValueError:
+        return None
+
+    if partes.scheme.lower() != "https":
+        return None
+    if partes.username is not None or partes.password is not None:
+        return None
+
+    host = partes.hostname
+    if not host:
+        return None
+    host = host.lower().rstrip(".")
+    if host == "localhost":
+        return None
+
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        pass
+    else:
+        # Nunca aceita host literal de IP (cobre 127.0.0.0/8, ::1, IPs
+        # privados/link-local/reservados de uma vez -- nenhum host real da
+        # allowlist é um endereço IP).
+        return None
+
+    try:
+        porta = partes.port
+    except ValueError:
+        return None
+    if porta not in _PORTAS_HTTPS_PERMITIDAS:
+        return None
+
+    hosts_exatos, sufixos_wildcard = atendimento_catalog_allowed_image_hosts()
+    if not _host_permitido(host, hosts_exatos=hosts_exatos, sufixos_wildcard=sufixos_wildcard):
+        return None
+
+    return texto
+
+
 def _produto_url_segura(produto_row: dict, *, base_url: str) -> str:
     """URL pública do produto -- sempre gerada pelo backend a partir do
     padrão real do site (produto.html?id=... ou link_externo já cadastrado),
@@ -78,7 +158,13 @@ def produto_linha_publica(row: dict, *, base_url: str) -> dict:
     ativo = bool(row.get("ativo") if row.get("ativo") is not None else 1)
     quantidade = int(row.get("quantidade") or 0)
     sob_encomenda = bool(row.get("sob_encomenda"))
-    imagem = row.get("imagem_url") or (imagens[0] if imagens else "") or ""
+    imagem_bruta = row.get("imagem_url") or (imagens[0] if imagens else "") or ""
+    imagem_validada = validar_url_imagem_catalogo(imagem_bruta)
+    # Produto com imagem cadastrada mas host fora da allowlist: nunca
+    # bloqueia o produto, só faz o card/mensagem cair no fallback de texto
+    # (imagem_url vazia) -- ver rota de envio, que decide "com/sem imagem"
+    # só olhando este campo, nunca reimplementando a checagem de host.
+    imagem_bloqueada_por_host = bool(imagem_bruta) and imagem_validada is None
     produto_para_url = {"id": row["id"], "link_externo": row.get("link_externo") or ""}
     return {
         "id": row["id"],
@@ -94,7 +180,8 @@ def produto_linha_publica(row: dict, *, base_url: str) -> dict:
         ),
         "moeda": "BRL",
         "estoque_status": estoque_status(quantidade=quantidade, sob_encomenda=sob_encomenda, ativo=ativo),
-        "imagem_url": imagem if imagem.startswith("https://") else "",
+        "imagem_url": imagem_validada or "",
+        "imagem_bloqueada_por_host": imagem_bloqueada_por_host,
         "url_publica": _produto_url_segura(produto_para_url, base_url=base_url),
         "ativo": ativo,
         "disponivel": estoque_status(quantidade=quantidade, sob_encomenda=sob_encomenda, ativo=ativo) != "unavailable",

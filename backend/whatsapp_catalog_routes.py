@@ -325,7 +325,19 @@ def rota_enviar_produto(
                     idempotency_key_hash=_hash_chave(idempotency_key),
                 ),
             )
-            registrar_auditoria(conn, "whatsapp_conversation", conversation_id, "enviar_produto", usuario_nome, depois={"product_id": produto["id"], "preco": produto["preco"]})
+            registrar_auditoria(
+                conn, "whatsapp_conversation", conversation_id, "enviar_produto", usuario_nome,
+                depois={
+                    "product_id": produto["id"],
+                    "preco": produto["preco"],
+                    # Nunca a URL completa (item 4) -- só o booleano indicando
+                    # que o produto tinha imagem cadastrada mas o host não
+                    # estava na allowlist, então o envio caiu no fallback de
+                    # texto (backend/whatsapp_catalog_repository.py::
+                    # validar_url_imagem_catalogo).
+                    "imagem_bloqueada_por_host": produto.get("imagem_bloqueada_por_host", False),
+                },
+            )
             conn.execute(
                 "UPDATE whatsapp_conversations SET last_agent_activity_at=? WHERE id=?",
                 (datetime.now().isoformat(timespec="seconds"), conversation_id),
@@ -426,7 +438,14 @@ def rota_enviar_produtos(
 
             registrar_auditoria(
                 conn, "whatsapp_conversation", conversation_id, "enviar_produtos_lote", usuario_nome,
-                depois={"product_ids": [p["id"] for p in produtos]},
+                depois={
+                    "product_ids": [p["id"] for p in produtos],
+                    # Só os IDs cuja imagem caiu no fallback de texto por
+                    # host fora da allowlist -- nunca a URL (item 4).
+                    "products_with_image_blocked": [
+                        p["id"] for p in produtos if p.get("imagem_bloqueada_por_host")
+                    ],
+                },
             )
             conn.execute(
                 "UPDATE whatsapp_conversations SET last_agent_activity_at=? WHERE id=?",

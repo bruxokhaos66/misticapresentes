@@ -51,3 +51,63 @@ def atendimento_catalog_limite_estoque_baixo() -> int:
     como 'low_stock' em vez de 'available' (nunca expõe a quantidade exata
     ao atendente por padrão -- ver backend/whatsapp_catalog_repository.py)."""
     return _int_env("ATENDIMENTO_CATALOG_LOW_STOCK_THRESHOLD", 3, minimo=0, maximo=1000)
+
+
+# Hosts seguros que o próprio projeto já conhece sem depender de nenhuma
+# configuração externa -- domínio oficial do site/API (mesmo trio de
+# backend/api_security.py::ORIGENS_PERMITIDAS, aqui só o hostname, sem
+# esquema/porta) e o host de download já usado como fallback legado de
+# imagem de produto (backend/drive_storage.py). Nunca inclui um wildcard
+# global (`*`, `*.com`) nem confia em nada vindo da requisição.
+_HOSTS_OFICIAIS_PADRAO = (
+    "misticaesotericos.com.br",
+    "www.misticaesotericos.com.br",
+    "api.misticaesotericos.com.br",
+    "drive.google.com",
+)
+
+
+def atendimento_catalog_allowed_image_hosts() -> tuple[frozenset[str], frozenset[str]]:
+    """Allowlist de hosts permitidos para imagem comercial do Catálogo
+    (item 6 do envio de produto). Devolve (hosts_exatos, sufixos_wildcard):
+
+    - hosts_exatos: comparação exata (host == entrada).
+    - sufixos_wildcard: comparação por sufixo com fronteira de ponto
+      (host == sufixo OU host termina em "." + sufixo) -- só quando a
+      entrada de configuração começar explicitamente com "*." (nunca um
+      `endswith` sem fronteira, que aceitaria "evilmisticaesotericos.com.br"
+      para o sufixo "misticaesotericos.com.br").
+
+    Sempre inclui os hosts oficiais (_HOSTS_OFICIAIS_PADRAO) e o host de
+    PRODUCT_IMAGES_PUBLIC_BASE_URL quando configurado (lido do ambiente do
+    servidor, nunca do request) -- nunca um wildcard global, nunca
+    correspondência insegura por substring. ATENDIMENTO_CATALOG_ALLOWED_IMAGE_HOSTS
+    (lista separada por vírgula) soma hosts extras (ex.: uma CDN legítima
+    nova), nunca substitui os hosts oficiais."""
+    from urllib.parse import urlsplit
+
+    exatos: set[str] = set(_HOSTS_OFICIAIS_PADRAO)
+    wildcards: set[str] = set()
+
+    base_imagens = os.environ.get("PRODUCT_IMAGES_PUBLIC_BASE_URL", "").strip()
+    if base_imagens:
+        try:
+            host_base = urlsplit(base_imagens).hostname
+        except ValueError:
+            host_base = None
+        if host_base:
+            exatos.add(host_base.lower().rstrip("."))
+
+    bruto = os.environ.get("ATENDIMENTO_CATALOG_ALLOWED_IMAGE_HOSTS", "").strip()
+    for pedaco in bruto.split(","):
+        entrada = pedaco.strip().lower().rstrip(".")
+        if not entrada or entrada == "*":
+            continue
+        if entrada.startswith("*."):
+            sufixo = entrada[2:].strip(".")
+            if sufixo:
+                wildcards.add(sufixo)
+        else:
+            exatos.add(entrada)
+
+    return frozenset(exatos), frozenset(wildcards)

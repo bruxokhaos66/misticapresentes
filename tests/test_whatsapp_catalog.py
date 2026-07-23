@@ -918,3 +918,243 @@ def test_link_malicioso_nunca_e_aceito_do_frontend(monkeypatch):
             assert "javascript:" not in linha["text_body"]
     finally:
         client.cookies.delete("mistica_painel_sessao")
+
+
+# ---------------------------------------------------------------------------
+# Allowlist de host da imagem comercial (validar_url_imagem_catalogo)
+# ---------------------------------------------------------------------------
+
+from backend.whatsapp_catalog_repository import validar_url_imagem_catalogo  # noqa: E402
+
+
+def test_host_oficial_permitido():
+    assert validar_url_imagem_catalogo("https://misticaesotericos.com.br/produtos/vela.jpg") is not None
+    assert validar_url_imagem_catalogo("https://api.misticaesotericos.com.br/produtos/vela.jpg") is not None
+    assert validar_url_imagem_catalogo("https://drive.google.com/uc?export=download&id=abc") is not None
+
+
+def test_cdn_legitima_permitida_via_configuracao(monkeypatch):
+    monkeypatch.setenv("ATENDIMENTO_CATALOG_ALLOWED_IMAGE_HOSTS", "cdn.legitima.com.br")
+    assert validar_url_imagem_catalogo("https://cdn.legitima.com.br/x.jpg") is not None
+
+
+def test_dominio_externo_nao_permitido_e_bloqueado():
+    assert validar_url_imagem_catalogo("https://exemplo-legado.com/foto.jpg") is None
+
+
+def test_dominio_parecido_malicioso_e_bloqueado():
+    # "evilmisticaesotericos.com.br" NAO pode casar com o sufixo
+    # "misticaesotericos.com.br" -- a comparacao exige fronteira de ponto.
+    assert validar_url_imagem_catalogo("https://evilmisticaesotericos.com.br/x.jpg") is None
+    assert validar_url_imagem_catalogo("https://misticaesotericos.com.br.evil.com/x.jpg") is None
+
+
+def test_subdominio_permitido_quando_configurado_com_wildcard(monkeypatch):
+    monkeypatch.setenv("ATENDIMENTO_CATALOG_ALLOWED_IMAGE_HOSTS", "*.cdn-parceira.com.br")
+    assert validar_url_imagem_catalogo("https://fotos.cdn-parceira.com.br/x.jpg") is not None
+    assert validar_url_imagem_catalogo("https://cdn-parceira.com.br/x.jpg") is not None
+
+
+def test_subdominio_nao_permitido_sem_wildcard_e_bloqueado(monkeypatch):
+    monkeypatch.setenv("ATENDIMENTO_CATALOG_ALLOWED_IMAGE_HOSTS", "cdn-parceira.com.br")
+    # Sem o prefixo "*.", so o host exato e aceito -- um subdominio nao
+    # configurado explicitamente continua bloqueado.
+    assert validar_url_imagem_catalogo("https://fotos.cdn-parceira.com.br/x.jpg") is None
+
+
+def test_http_bloqueado():
+    assert validar_url_imagem_catalogo("http://misticaesotericos.com.br/x.jpg") is None
+
+
+def test_javascript_bloqueado():
+    assert validar_url_imagem_catalogo("javascript:alert(1)") is None
+
+
+def test_data_bloqueado():
+    assert validar_url_imagem_catalogo("data:image/png;base64,AAAA") is None
+
+
+def test_file_e_ftp_bloqueados():
+    assert validar_url_imagem_catalogo("file:///etc/passwd") is None
+    assert validar_url_imagem_catalogo("ftp://misticaesotericos.com.br/x.jpg") is None
+
+
+def test_url_protocol_relative_bloqueada():
+    assert validar_url_imagem_catalogo("//misticaesotericos.com.br/x.jpg") is None
+
+
+def test_url_com_usuario_senha_bloqueada():
+    assert validar_url_imagem_catalogo("https://user:pass@misticaesotericos.com.br/x.jpg") is None
+
+
+def test_localhost_bloqueado():
+    assert validar_url_imagem_catalogo("https://localhost/x.jpg") is None
+    assert validar_url_imagem_catalogo("https://LOCALHOST/x.jpg") is None
+
+
+def test_ipv4_privado_e_loopback_bloqueados():
+    assert validar_url_imagem_catalogo("https://127.0.0.1/x.jpg") is None
+    assert validar_url_imagem_catalogo("https://10.0.0.5/x.jpg") is None
+    assert validar_url_imagem_catalogo("https://192.168.1.10/x.jpg") is None
+    assert validar_url_imagem_catalogo("https://169.254.1.1/x.jpg") is None
+
+
+def test_ipv6_loopback_bloqueado():
+    assert validar_url_imagem_catalogo("https://[::1]/x.jpg") is None
+
+
+def test_url_sem_hostname_e_bloqueada():
+    assert validar_url_imagem_catalogo("https:///caminho-sem-host.jpg") is None
+    assert validar_url_imagem_catalogo("") is None
+    assert validar_url_imagem_catalogo(None) is None
+
+
+def test_porta_inesperada_bloqueada():
+    assert validar_url_imagem_catalogo("https://misticaesotericos.com.br:8443/x.jpg") is None
+    # Porta 443 explicita e equivalente a nao informar porta.
+    assert validar_url_imagem_catalogo("https://misticaesotericos.com.br:443/x.jpg") is not None
+
+
+def test_caracteres_de_controle_bloqueados():
+    assert validar_url_imagem_catalogo("https://misticaesotericos.com.br/x\x00.jpg") is None
+
+
+# ---------------------------------------------------------------------------
+# Fallback de imagem bloqueada (fim a fim: busca, envio único, lote, auditoria)
+# ---------------------------------------------------------------------------
+
+def test_busca_nunca_devolve_imagem_de_host_nao_permitido(monkeypatch):
+    _habilitar(monkeypatch)
+    nome_unico = f"ImagemBloqueada{uuid.uuid4().hex[:8]}"
+    _criar_produto(nome=nome_unico, imagem_url="https://cdn-nao-confiavel.exemplo.com/x.jpg")
+    token = _login_admin()
+    client.cookies.set("mistica_painel_sessao", token)
+    try:
+        resp = client.get("/api/admin/whatsapp/catalog/products", params={"q": nome_unico})
+        produto = next(p for p in resp.json()["products"] if p["nome"] == nome_unico)
+        # O frontend nunca recebe a URL de um host fora da allowlist --
+        # o campo vem vazio, exatamente como "sem imagem".
+        assert produto["imagem_url"] == ""
+        assert produto["imagem_bloqueada_por_host"] is True
+    finally:
+        client.cookies.delete("mistica_painel_sessao")
+
+
+def test_envio_unico_com_imagem_bloqueada_cai_para_texto_sem_bloquear_produto(monkeypatch):
+    _habilitar(monkeypatch)
+    provider_falso = _ProviderFalso()
+    monkeypatch.setattr(catalog_routes, "construir_provider", lambda nome: provider_falso)
+    token = _login_admin()
+    conversa_id, _ = _criar_conversa_com_inbound()
+    produto_id = _criar_produto(imagem_url="https://cdn-nao-confiavel.exemplo.com/x.jpg")
+    client.cookies.set("mistica_painel_sessao", token)
+    try:
+        resp = client.post(
+            f"/api/admin/whatsapp/conversations/{conversa_id}/send-product",
+            json={"product_id": produto_id},
+            headers={"Idempotency-Key": f"idem-{uuid.uuid4().hex}", **ORIGEM_PERMITIDA},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["ok"] is True
+        # A URL maliciosa/nao permitida nunca chega ao provider -- nem
+        # sequer uma chamada de imagem eh feita, so a de texto.
+        assert provider_falso.chamadas_imagem == []
+        assert len(provider_falso.chamadas_texto) == 1
+        assert "cdn-nao-confiavel" not in provider_falso.chamadas_texto[0]["texto"]
+
+        with conectar() as conn:
+            linha = conn.execute(
+                "SELECT dados_depois FROM audit_log WHERE entidade='whatsapp_conversation' AND acao='enviar_produto' AND entidade_id=?",
+                (conversa_id,),
+            ).fetchone()
+            assert linha is not None
+            assert '"imagem_bloqueada_por_host": true' in linha["dados_depois"]
+            # Nunca a URL completa na auditoria.
+            assert "cdn-nao-confiavel" not in linha["dados_depois"]
+    finally:
+        client.cookies.delete("mistica_painel_sessao")
+
+
+def test_lote_com_uma_imagem_nao_permitida_continua_enviando_texto_sem_duplicar(monkeypatch):
+    _habilitar(monkeypatch)
+    provider_falso = _ProviderFalso()
+    monkeypatch.setattr(catalog_routes, "construir_provider", lambda nome: provider_falso)
+    token = _login_admin()
+    conversa_id, _ = _criar_conversa_com_inbound()
+    produto_com_imagem_ok = _criar_produto()
+    produto_com_imagem_bloqueada = _criar_produto(imagem_url="https://cdn-nao-confiavel.exemplo.com/x.jpg")
+    ids = [produto_com_imagem_ok, produto_com_imagem_bloqueada]
+    client.cookies.set("mistica_painel_sessao", token)
+    try:
+        resp = client.post(
+            f"/api/admin/whatsapp/conversations/{conversa_id}/send-products",
+            json={"product_ids": ids},
+            headers={"Idempotency-Key": f"idem-{uuid.uuid4().hex}", **ORIGEM_PERMITIDA},
+        )
+        assert resp.status_code == 200
+        corpo = resp.json()
+        assert corpo["ok"] is True
+        assert len(corpo["results"]) == 2
+        # Um envio por produto -- nenhuma duplicação por causa do fallback.
+        with conectar() as conn:
+            total = conn.execute(
+                "SELECT COUNT(*) AS n FROM whatsapp_messages WHERE conversation_id=? AND message_type='product'",
+                (conversa_id,),
+            ).fetchone()
+            assert total["n"] == 2
+            linha = conn.execute(
+                "SELECT dados_depois FROM audit_log WHERE entidade='whatsapp_conversation' AND acao='enviar_produtos_lote' AND entidade_id=?",
+                (conversa_id,),
+            ).fetchone()
+            assert str(produto_com_imagem_bloqueada) in linha["dados_depois"]
+            assert "cdn-nao-confiavel" not in linha["dados_depois"]
+    finally:
+        client.cookies.delete("mistica_painel_sessao")
+
+
+def test_url_maliciosa_nao_chega_ao_provider_mesmo_com_imagens_json(monkeypatch):
+    """Mesmo quando a imagem vem de imagens_json (fallback de imagem
+    principal ausente), a mesma validação de allowlist se aplica -- nao ha
+    um segundo caminho sem checagem de host."""
+    _habilitar(monkeypatch)
+    provider_falso = _ProviderFalso()
+    monkeypatch.setattr(catalog_routes, "construir_provider", lambda nome: provider_falso)
+    token = _login_admin()
+    conversa_id, _ = _criar_conversa_com_inbound()
+    with conectar() as conn:
+        from backend.product_commercial_rules import garantir_colunas_comerciais
+        import json as json_mod
+
+        garantir_colunas_comerciais(conn)
+        cur = conn.execute(
+            "INSERT INTO produtos (codigo_p, nome, preco, quantidade, categoria, ativo, imagem_url, imagens_json) "
+            "VALUES (?,?,?,?,?,?,?,?)",
+            (
+                f"SKU-{uuid.uuid4().hex[:8].upper()}", "Produto Imagens JSON", 20.0, 5, "Velas", 1, None,
+                json_mod.dumps(["https://cdn-nao-confiavel.exemplo.com/y.jpg"]),
+            ),
+        )
+        conn.commit()
+        produto_id = int(cur.lastrowid)
+    client.cookies.set("mistica_painel_sessao", token)
+    try:
+        resp = client.post(
+            f"/api/admin/whatsapp/conversations/{conversa_id}/send-product",
+            json={"product_id": produto_id},
+            headers={"Idempotency-Key": f"idem-{uuid.uuid4().hex}", **ORIGEM_PERMITIDA},
+        )
+        assert resp.status_code == 200
+        assert provider_falso.chamadas_imagem == []
+    finally:
+        client.cookies.delete("mistica_painel_sessao")
+
+
+def test_csp_nao_permite_qualquer_host_https_indiscriminadamente():
+    html = open("central-atendimento.html", encoding="utf-8").read()
+    inicio = html.index("Content-Security-Policy")
+    trecho_csp = html[inicio:inicio + 900]
+    img_src_inicio = trecho_csp.index("img-src")
+    img_src = trecho_csp[img_src_inicio:trecho_csp.index(";", img_src_inicio)]
+    assert "https:" not in img_src.replace("https://", "")
+    assert "https://misticaesotericos.com.br" in img_src
+    assert "https://drive.google.com" in img_src
