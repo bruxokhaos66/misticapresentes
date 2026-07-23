@@ -1,0 +1,157 @@
+"""Download seguro de mídia recebida via WhatsApp Cloud API, sob demanda
+(nunca automático no recebimento do webhook -- só quando um administrador
+autenticado abre a mídia no painel, ver backend/whatsapp_inbox_routes.py).
+
+Regras (Fase 6 da Central de Atendimento):
+- o token de acesso (WHATSAPP_ACCESS_TOKEN) nunca é exposto ao navegador --
+  toda chamada à Graph API/CDN de mídia acontece aqui, no backend;
+- timeout explícito, sem seguir redirect para fora do domínio da Meta;
+- limite de tamanho aplicado ENQUANTO baixa (streaming), nunca só depois;
+- validação por magic bytes -- o mime_type informado pela Meta nunca é
+  aceito sozinho;
+- allowlist fechada de tipos (imagens JPEG/PNG/WebP, PDF, áudio e vídeo
+  compatíveis com WhatsApp) -- SVG, HTML, JavaScript e executáveis são
+  sempre rejeitados;
+- nome de arquivo sempre gerado pelo servidor (uuid4 + extensão derivada do
+  mime validado) -- nunca o nome/extensão informado pela Meta ou pelo
+  cliente, o que também elimina path traversal e extensão dupla maliciosa.
+"""
+from __future__ import annotations
+
+import os
+import uuid
+from pathlib import Path
+
+import httpx
+
+from backend.logging_config import get_logger
+from backend.whatsapp_flags import (
+    whatsapp_access_token,
+    whatsapp_graph_api_version,
+    whatsapp_media_max_bytes,
+    whatsapp_media_storage_dir,
+    whatsapp_request_timeout_seconds,
+)
+
+logger = get_logger(__name__)
+
+
+class WhatsAppMediaError(Exception):
+    def __init__(self, mensagem: str, *, codigo: str = "media_error"):
+        super().__init__(mensagem)
+        self.codigo = codigo
+
+
+# (assinatura de magic bytes, extensão, mime canônico) -- checada nesta
+# ordem; a primeira que bater com o início do arquivo define o tipo real,
+# independentemente do mime_type declarado pela Meta.
+_ASSINATURAS: list[tuple[bytes, str, str]] = [
+    (b"\xff\xd8\xff", "jpg", "image/jpeg"),
+    (b"\x89PNG\r\n\x1a\n", "png", "image/png"),
+    (b"RIFF", "webp", "image/webp"),  # confirmado abaixo pelos bytes 8-12 == 'WEBP'
+    (b"%PDF-", "pdf", "application/pdf"),
+    (b"OggS", "ogg", "audio/ogg"),
+    (b"ID3", "mp3", "audio/mpeg"),
+    (b"\xff\xfb", "mp3", "audio/mpeg"),
+]
+
+_MIME_FTYP = {
+    b"ftypmp42": ("mp4", "video/mp4"),
+    b"ftypisom": ("mp4", "video/mp4"),
+    b"ftypM4A ": ("m4a", "audio/mp4"),
+    b"ftyp3gp5": ("3gp", "video/3gpp"),
+}
+
+
+def _identificar_por_magic_bytes(cabecalho: bytes) -> tuple[str, str] | None:
+    if cabecalho[:4] == b"RIFF" and cabecalho[8:12] == b"WEBP":
+        return "webp", "image/webp"
+    for assinatura, extensao, mime in _ASSINATURAS:
+        if assinatura != b"RIFF" and cabecalho.startswith(assinatura):
+            return extensao, mime
+    if len(cabecalho) >= 12:
+        caixa = cabecalho[4:12]
+        if caixa in _MIME_FTYP:
+            return _MIME_FTYP[caixa]
+    return None
+
+
+def _diretorio_destino() -> Path:
+    caminho = Path(whatsapp_media_storage_dir())
+    caminho.mkdir(parents=True, exist_ok=True)
+    return caminho
+
+
+def _cliente_http() -> httpx.Client:
+    token = whatsapp_access_token()
+    if not token:
+        raise WhatsAppMediaError("WhatsApp Cloud API sem token configurado.", codigo="missing_configuration")
+    return httpx.Client(
+        timeout=whatsapp_request_timeout_seconds(),
+        headers={"Authorization": f"Bearer {token}", "User-Agent": "MisticaPresentes-WhatsAppInbox/1.0"},
+        follow_redirects=False,
+    )
+
+
+def baixar_midia(media_id: str) -> tuple[bytes, str, str]:
+    """Baixa a mídia identificada por `media_id` da Meta. Retorna
+    (conteudo, extensao, mime_canonico). Levanta WhatsAppMediaError em
+    qualquer falha (configuração ausente, tipo não permitido, tamanho
+    excedido, resposta inesperada) -- nunca retorna dado parcial."""
+    if not media_id:
+        raise WhatsAppMediaError("media_id ausente.", codigo="missing_media_id")
+
+    limite = whatsapp_media_max_bytes()
+    versao = whatsapp_graph_api_version()
+
+    with _cliente_http() as cliente:
+        try:
+            meta_resposta = cliente.get(f"https://graph.facebook.com/{versao}/{media_id}")
+        except httpx.HTTPError as exc:
+            raise WhatsAppMediaError(f"Falha ao consultar metadados da mídia: {type(exc).__name__}", codigo="metadata_request_failed") from exc
+        if meta_resposta.status_code != 200:
+            raise WhatsAppMediaError(f"Metadados da mídia indisponíveis (http {meta_resposta.status_code}).", codigo="metadata_unavailable")
+
+        dados_meta = meta_resposta.json()
+        url_arquivo = str(dados_meta.get("url") or "")
+        tamanho_informado = int(dados_meta.get("file_size") or 0)
+        if not url_arquivo.lower().startswith("https://"):
+            raise WhatsAppMediaError("URL de mídia inválida (não-HTTPS).", codigo="invalid_media_url")
+        if tamanho_informado and tamanho_informado > limite:
+            raise WhatsAppMediaError("Mídia excede o tamanho máximo permitido.", codigo="media_too_large")
+
+        try:
+            with cliente.stream("GET", url_arquivo) as resposta_arquivo:
+                if resposta_arquivo.status_code != 200:
+                    raise WhatsAppMediaError(f"Download da mídia falhou (http {resposta_arquivo.status_code}).", codigo="download_failed")
+                pedacos = bytearray()
+                for pedaco in resposta_arquivo.iter_bytes():
+                    pedacos.extend(pedaco)
+                    if len(pedacos) > limite:
+                        raise WhatsAppMediaError("Mídia excede o tamanho máximo permitido durante o download.", codigo="media_too_large")
+        except httpx.HTTPError as exc:
+            raise WhatsAppMediaError(f"Falha de rede ao baixar mídia: {type(exc).__name__}", codigo="download_network_error") from exc
+
+    conteudo = bytes(pedacos)
+    identificado = _identificar_por_magic_bytes(conteudo[:64])
+    if not identificado:
+        raise WhatsAppMediaError("Tipo de arquivo não reconhecido/permitido (magic bytes).", codigo="unsupported_media_type")
+    extensao, mime_canonico = identificado
+    return conteudo, extensao, mime_canonico
+
+
+def salvar_midia_local(conteudo: bytes, extensao: str) -> str:
+    """Grava o conteúdo com um nome gerado pelo servidor (uuid4 -- nunca
+    derivado de entrada do cliente/Meta) e retorna o caminho absoluto
+    resultante, sempre dentro do diretório configurado (sem possibilidade de
+    path traversal, já que nem diretório nem nome vêm de fora)."""
+    destino = _diretorio_destino()
+    nome_arquivo = f"{uuid.uuid4().hex}.{extensao}"
+    caminho = destino / nome_arquivo
+    with open(caminho, "wb") as arquivo:
+        arquivo.write(conteudo)
+    try:
+        os.chmod(caminho, 0o600)
+    except OSError:
+        pass
+    return str(caminho)

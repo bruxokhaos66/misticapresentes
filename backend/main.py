@@ -58,6 +58,7 @@ from backend.system_status_routes import router as system_status_router
 from backend.admin_dashboard_routes import router as admin_dashboard_router
 from backend.whatsapp_admin_routes import router as whatsapp_admin_router
 from backend.whatsapp_flags import whatsapp_habilitado
+from backend.whatsapp_inbox_routes import router as whatsapp_inbox_router
 from backend.whatsapp_webhook_routes import router as whatsapp_webhook_router
 from backend.whatsapp_worker import iniciar_tarefa_periodica_worker
 from config import hash_password_pbkdf2
@@ -317,6 +318,7 @@ app.include_router(upload_router)
 app.include_router(system_status_router)
 app.include_router(admin_dashboard_router)
 app.include_router(whatsapp_admin_router)
+app.include_router(whatsapp_inbox_router)
 app.include_router(whatsapp_webhook_router)
 app.include_router(backup_router)
 app.include_router(course_router)

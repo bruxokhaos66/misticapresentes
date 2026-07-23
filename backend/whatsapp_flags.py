@@ -119,8 +119,17 @@ def whatsapp_app_secret() -> str:
 
 def whatsapp_verify_token() -> str:
     """Usado só na verificação do endpoint de webhook (GET /api/webhooks/
-    whatsapp, hub.verify_token). Nunca exposto em resposta HTTP nem log."""
-    return os.environ.get("WHATSAPP_VERIFY_TOKEN", "").strip()
+    whatsapp, hub.verify_token) -- o mesmo endpoint GET serve tanto os
+    callbacks de status (notificações administrativas) quanto as mensagens
+    recebidas da Central de Atendimento, então há um único verify token.
+    WHATSAPP_VERIFY_TOKEN é o nome histórico desta variável;
+    WHATSAPP_WEBHOOK_VERIFY_TOKEN é aceito como alias (mesmo significado)
+    para quem configurar seguindo a nomenclatura da Central de Atendimento.
+    Nunca exposto em resposta HTTP nem log."""
+    return (
+        os.environ.get("WHATSAPP_VERIFY_TOKEN", "").strip()
+        or os.environ.get("WHATSAPP_WEBHOOK_VERIFY_TOKEN", "").strip()
+    )
 
 
 def whatsapp_template_language() -> str:
@@ -273,6 +282,94 @@ def whatsapp_habilitado() -> bool:
     if whatsapp_provider_nome() != "meta_cloud":
         return False
     return validar_configuracao_whatsapp().valido
+
+
+def whatsapp_cloud_inbox_habilitado_por_flag() -> bool:
+    """WHATSAPP_CLOUD_ENABLED -- interruptor dedicado da Central de
+    Atendimento (mensagens RECEBIDAS de clientes, conversas, respostas pelo
+    painel). Completamente independente de WHATSAPP_NOTIFICATIONS_ENABLED
+    (que só cobre o envio de notificações administrativas de pedido/
+    pagamento): é possível ter uma flag ligada e a outra desligada.
+    Nasce desligada em qualquer ambiente sem configuração explícita."""
+    return _flag_env("WHATSAPP_CLOUD_ENABLED")
+
+
+def whatsapp_webhook_max_body_bytes() -> int:
+    return _int_env("WHATSAPP_WEBHOOK_MAX_BODY_BYTES", 1_048_576, minimo=1024, maximo=20_000_000)
+
+
+def whatsapp_media_max_bytes() -> int:
+    return _int_env("WHATSAPP_MEDIA_MAX_BYTES", 10_485_760, minimo=1024, maximo=100_000_000)
+
+
+def whatsapp_media_storage_dir() -> str:
+    return os.environ.get("WHATSAPP_MEDIA_STORAGE_DIR", "").strip() or "/data/uploads/whatsapp"
+
+
+def whatsapp_media_retention_days() -> int:
+    return _int_env("WHATSAPP_MEDIA_RETENTION_DAYS", 90, minimo=1, maximo=3650)
+
+
+def whatsapp_webhook_event_retention_days() -> int:
+    return _int_env("WHATSAPP_WEBHOOK_EVENT_RETENTION_DAYS", 30, minimo=1, maximo=3650)
+
+
+def whatsapp_notification_sound_enabled() -> bool:
+    return _flag_env("WHATSAPP_NOTIFICATION_SOUND_ENABLED", "true")
+
+
+@dataclass
+class ResultadoValidacaoConfiguracaoCloudInbox:
+    valido: bool
+    erros: list[str] = field(default_factory=list)
+
+
+def validar_configuracao_whatsapp_cloud_inbox() -> ResultadoValidacaoConfiguracaoCloudInbox:
+    """Valida a configuração da Central de Atendimento (mensagens recebidas)
+    -- nunca falha a inicialização do FastAPI (chamada só sob demanda, pelo
+    endpoint /status e antes de qualquer envio/download). Com
+    WHATSAPP_CLOUD_ENABLED=false o site continua funcionando normalmente
+    mesmo sem nenhuma dessas variáveis definidas."""
+    erros: list[str] = []
+    if not whatsapp_cloud_inbox_habilitado_por_flag():
+        return ResultadoValidacaoConfiguracaoCloudInbox(valido=True, erros=[])
+    if not whatsapp_phone_number_id():
+        erros.append("WHATSAPP_PHONE_NUMBER_ID não configurado.")
+    if not whatsapp_access_token():
+        erros.append("WHATSAPP_ACCESS_TOKEN não configurado.")
+    if not whatsapp_app_secret():
+        erros.append("WHATSAPP_APP_SECRET não configurado (necessário para validar assinatura do webhook).")
+    if not whatsapp_verify_token():
+        erros.append("WHATSAPP_WEBHOOK_VERIFY_TOKEN/WHATSAPP_VERIFY_TOKEN não configurado.")
+    if whatsapp_webhook_max_body_bytes() <= 0:
+        erros.append("WHATSAPP_WEBHOOK_MAX_BODY_BYTES inválido.")
+    if whatsapp_media_max_bytes() <= 0:
+        erros.append("WHATSAPP_MEDIA_MAX_BYTES inválido.")
+    return ResultadoValidacaoConfiguracaoCloudInbox(valido=not erros, erros=erros)
+
+
+def whatsapp_cloud_inbox_habilitado() -> bool:
+    """Estado efetivo da Central de Atendimento: precisa da flag ligada E da
+    configuração válida (fail-closed -- nunca funciona parcialmente)."""
+    if not whatsapp_cloud_inbox_habilitado_por_flag():
+        return False
+    return validar_configuracao_whatsapp_cloud_inbox().valido
+
+
+def diagnostico_configuracao_whatsapp_cloud_inbox() -> dict:
+    """Diagnóstico NÃO sensível para GET /api/admin/whatsapp/status -- nunca
+    inclui token, app secret ou verify token."""
+    resultado = validar_configuracao_whatsapp_cloud_inbox()
+    return {
+        "enabled": whatsapp_cloud_inbox_habilitado_por_flag(),
+        "configuration_complete": resultado.valido,
+        "configuration_errors": resultado.erros if not resultado.valido else [],
+        "webhook_ready": whatsapp_cloud_inbox_habilitado(),
+        "graph_api_version": whatsapp_graph_api_version(),
+        "media_retention_days": whatsapp_media_retention_days(),
+        "webhook_event_retention_days": whatsapp_webhook_event_retention_days(),
+        "notification_sound_enabled": whatsapp_notification_sound_enabled(),
+    }
 
 
 def diagnostico_configuracao_whatsapp() -> dict:

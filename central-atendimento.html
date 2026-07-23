@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://api.misticaesotericos.com.br; frame-src 'none'; worker-src 'self'; manifest-src 'self'; media-src 'self' blob: https://api.misticaesotericos.com.br; upgrade-insecure-requests" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta name="robots" content="noindex,nofollow" />
+  <title>Central de Atendimento WhatsApp — Mística Presentes</title>
+  <link rel="stylesheet" href="central-atendimento.css">
+</head>
+<body>
+  <section class="login-box" id="loginPanelCentral">
+    <h1>Central de Atendimento WhatsApp</h1>
+    <p class="hint">Faça login com sua conta administrativa para continuar.</p>
+    <form id="loginFormCentral" autocomplete="off">
+      <label for="loginUserCentral">Usuário</label>
+      <input id="loginUserCentral" name="login" autocomplete="username" required>
+      <label for="loginSenhaCentral">Senha</label>
+      <input id="loginSenhaCentral" name="senha" type="password" autocomplete="current-password" required>
+      <button class="btn" type="submit">Entrar</button>
+      <p id="loginStatusCentral" class="hint" hidden></p>
+    </form>
+  </section>
+
+  <div class="app" id="appCentral" hidden>
+    <header class="app-header">
+      <h1>Central de Atendimento WhatsApp</h1>
+      <div class="header-actions">
+        <span id="statusPill" class="pill" role="status" aria-live="polite">Verificando…</span>
+        <button type="button" id="btnAtivarNotificacoes" class="btn-secondary">Ativar notificações</button>
+        <button type="button" id="btnSair" class="btn-secondary">Sair</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <nav class="col-conversas" aria-label="Lista de conversas">
+        <div class="busca-filtros">
+          <label for="buscaConversas" class="visually-hidden">Buscar conversas</label>
+          <input id="buscaConversas" type="search" placeholder="Buscar por nome ou telefone">
+          <div class="filtros-status" role="group" aria-label="Filtrar por status">
+            <button type="button" class="filtro-btn is-active" data-status="">Todas</button>
+            <button type="button" class="filtro-btn" data-status="open">Abertas</button>
+            <button type="button" class="filtro-btn" data-status="pending">Pendentes</button>
+            <button type="button" class="filtro-btn" data-status="resolved">Resolvidas</button>
+            <button type="button" class="filtro-btn" data-unread="1">Não lidas</button>
+          </div>
+        </div>
+        <ul id="listaConversas" class="lista-conversas" aria-label="Conversas"></ul>
+        <p id="statusListaConversas" class="hint" role="status" aria-live="polite"></p>
+      </nav>
+
+      <section class="col-mensagens" aria-label="Mensagens da conversa">
+        <div id="semConversa" class="sem-conversa">
+          <p>Selecione uma conversa para visualizar as mensagens.</p>
+        </div>
+        <div id="painelConversa" class="painel-conversa" hidden>
+          <header class="conversa-header">
+            <div>
+              <h2 id="conversaNome">—</h2>
+              <p id="conversaTelefone" class="hint">—</p>
+            </div>
+            <div class="conversa-acoes">
+              <label for="selectStatusConversa" class="visually-hidden">Status da conversa</label>
+              <select id="selectStatusConversa">
+                <option value="open">Aberta</option>
+                <option value="pending">Pendente</option>
+                <option value="resolved">Resolvida</option>
+                <option value="archived">Arquivada</option>
+              </select>
+            </div>
+          </header>
+
+          <div id="listaMensagens" class="lista-mensagens" role="log" aria-live="polite" aria-label="Histórico de mensagens" tabindex="0"></div>
+
+          <form id="formEnviarMensagem" class="form-enviar">
+            <label for="selectTemplate" class="visually-hidden">Template aprovado</label>
+            <select id="selectTemplate">
+              <option value="">Texto livre (só dentro da janela de 24h)</option>
+            </select>
+            <label for="campoTexto" class="visually-hidden">Mensagem</label>
+            <textarea id="campoTexto" rows="2" maxlength="4096" placeholder="Escreva uma resposta…"></textarea>
+            <button class="btn" type="submit" id="btnEnviarMensagem">Enviar</button>
+            <p id="statusEnvio" class="hint" role="status" aria-live="polite"></p>
+          </form>
+        </div>
+      </section>
+
+      <aside class="col-lateral" aria-label="Informações do cliente" id="colLateral" hidden>
+        <h2>Cliente</h2>
+        <div id="clienteInfo" class="cliente-info">
+          <p class="hint">Nenhum cliente vinculado a esta conversa.</p>
+        </div>
+        <form id="formVincularCliente" class="form-vincular">
+          <label for="campoClienteId">Vincular cliente (ID)</label>
+          <input id="campoClienteId" type="number" min="1" inputmode="numeric">
+          <button class="btn-secondary" type="submit">Vincular</button>
+        </form>
+        <form id="formVincularPedido" class="form-vincular">
+          <label for="campoPedidoId">Vincular pedido (ID)</label>
+          <input id="campoPedidoId" type="number" min="1" inputmode="numeric">
+          <button class="btn-secondary" type="submit">Vincular</button>
+        </form>
+        <p id="statusVinculo" class="hint" role="status" aria-live="polite"></p>
+      </aside>
+    </main>
+  </div>
+
+  <script src="site-config.js"></script>
+  <script src="central-atendimento.js"></script>
+</body>
+</html>
