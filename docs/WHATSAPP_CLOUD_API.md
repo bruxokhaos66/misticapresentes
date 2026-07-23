@@ -65,6 +65,93 @@ só é baixado sob demanda, quando um administrador abre a mídia no painel
 (`GET /api/admin/whatsapp/media/{message_id}`), nunca automaticamente —
 minimização de dados e menor superfície de risco.
 
+#### Correção: "imagem/arquivo baixado aparece em branco"
+
+Fluxo completo de uma mídia recebida, do clique no painel até o arquivo no
+disco do administrador:
+
+```
+central-atendimento.js: botão "Abrir mídia"
+        │  fetch(GET /api/admin/whatsapp/media/{message_id}, credentials: include)
+        ▼
+backend/whatsapp_inbox_routes.py::rota_obter_midia
+        │  reivindica a linha (whatsapp_messages.media_status: pending -> downloading)
+        │  se media_path já existe, serve direto do disco
+        ▼
+backend/whatsapp_media_service.py::baixar_midia(media_id)
+        │  1) GET https://graph.facebook.com/{versao}/{media_id}  (Authorization: Bearer)
+        │     -> JSON só com metadados (url temporária, file_size)
+        │  2) valida domínio da URL (fbcdn.net/fbsbx.com/facebook.com/whatsapp.net)
+        │  3) GET <url temporária>  (Authorization: Bearer, streaming, limite de bytes)
+        │  4) magic bytes decidem o tipo real -- mime_type da Meta nunca é
+        │     aceito sozinho; HTML/JSON/SVG/executável são rejeitados aqui
+        ▼
+backend/whatsapp_media_service.py::salvar_midia_local
+        │  grava em arquivo temporário no mesmo diretório, fsync, rename
+        │  atômico -- nome sempre uuid4 (nunca vindo da Meta/cliente)
+        ▼
+rota_obter_midia: Response(content=bytes, media_type=<mime real>,
+                            Content-Disposition: attachment; filename="midia-{id}.<ext>")
+        ▼
+central-atendimento.js: fetch().blob() -> preview em <img>/<audio>/<video>
+                         no modal, ou download com nome+extensão corretos
+```
+
+**Causa raiz identificada:** os bytes baixados e gravados sempre estavam
+corretos (o pipeline de download por `media_id` -> URL temporária ->
+`Authorization: Bearer` -> streaming -> magic bytes já seguia as práticas
+recomendadas). O problema estava em dois pontos depois disso:
+
+1. **`Content-Disposition` sem extensão de arquivo.** O endpoint devolvia
+   `filename="midia-{message_id}"`, sem `.jpg`/`.png`/etc. Vários
+   visualizadores de imagem e exploradores de arquivo do sistema operacional
+   decidem como abrir um arquivo pela extensão, não pelo `Content-Type` da
+   resposta HTTP original (que se perde ao salvar em disco) — um JPEG válido
+   salvo sem extensão abre em branco/"formato não reconhecido" em boa parte
+   dos visualizadores, mesmo com os bytes corretos. Corrigido: a extensão é
+   derivada do mime canônico (validado por magic bytes) e incluída no nome
+   do arquivo, tanto no `Content-Disposition` do backend quanto no atributo
+   `download` do link gerado pelo frontend.
+2. **Frontend abria a URL da API diretamente numa nova aba** (`<a
+   target="_blank">`), sem checar `response.ok`/`Content-Type` antes de
+   tratar a resposta como mídia. Qualquer erro (401/404/502, mídia
+   expirada) virava um "download" de um corpo JSON de erro, que abre como
+   arquivo inválido. Corrigido: o botão "Abrir mídia" agora faz um `fetch`
+   autenticado, confere status e `Content-Type` **antes** de criar o
+   `Blob`, mostra a mensagem de erro em texto quando a resposta não é
+   mídia, e só cria o `Object URL` quando o `Content-Type` bate com um tipo
+   suportado — nunca a partir de um corpo de erro.
+
+Reforços adicionais desta correção (não eram a causa do sintoma relatado,
+mas fecham lacunas do mesmo pipeline):
+
+- gravação em disco agora é atômica (arquivo temporário + `fsync` +
+  `os.replace`), evitando que um leitor concorrente veja um arquivo
+  parcialmente escrito;
+- a URL temporária devolvida pelos metadados só é seguida se o host for um
+  domínio oficial da Meta (`fbcdn.net`, `fbsbx.com`, `facebook.com`,
+  `whatsapp.net`); um redirect para fora dessa lista é rejeitado;
+- duas requisições concorrentes ao mesmo `message_id` nunca baixam a mídia
+  duas vezes da Meta (reivindicação atômica via
+  `whatsapp_messages.media_status`, migração aditiva);
+- corpo vazio, MIME divergente ou tipo não reconhecido por magic bytes
+  continuam sendo rejeitados como antes.
+
+**Roteiro de validação manual** (ver também os testes automatizados em
+`tests/test_whatsapp_media_service.py` e `tests/test_whatsapp_inbox_admin.py`):
+
+1. peça para um número de teste enviar um JPEG real pelo WhatsApp;
+2. no painel, a mensagem aparece com o botão "Abrir mídia";
+3. clique no botão — a imagem original abre em preview dentro do modal da
+   Central (nunca uma página em branco);
+4. clique em "Baixar arquivo" — o arquivo salvo abre normalmente em
+   qualquer visualizador de imagens do sistema operacional;
+5. confira nas ferramentas de desenvolvedor que a resposta teve
+   `Content-Type: image/jpeg` e `Content-Disposition` com `.jpg`;
+6. nenhuma etapa produziu um arquivo em branco/corrompido;
+7. a mídia continua privada — o endpoint exige sessão administrativa e
+   `Cache-Control: private, no-store`.
+
 ### Separação do webhook de notificações administrativas
 
 `POST /api/webhooks/whatsapp` é o **mesmo endpoint** usado pelos callbacks de
