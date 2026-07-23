@@ -344,11 +344,12 @@ class mock_httpx_client:
         httpx.Client = self._original
 
 
-def test_endpoint_media_serve_bytes_identicos_e_extensao_correta(monkeypatch):
+def test_endpoint_media_serve_bytes_identicos_e_extensao_correta(monkeypatch, tmp_path):
     """Ponta a ponta: mensagem inbound com media_id -> endpoint autenticado
     -> bytes servidos idênticos à fixture -> Content-Disposition com
     extensão correta (o bug original: nome de arquivo sem extensão fazia o
     download 'parecer' inválido mesmo com bytes corretos)."""
+    monkeypatch.setenv("WHATSAPP_MEDIA_STORAGE_DIR", str(tmp_path))
     _habilitar(monkeypatch)
     message_id = _criar_mensagem_midia()
 
