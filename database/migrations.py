@@ -591,6 +591,7 @@ def _aplicar_migracoes(db_path_atual: str) -> None:
     _criar_tabelas_whatsapp_notificacoes()
     _criar_tabelas_whatsapp_central_atendimento()
     _criar_estrutura_atendimento_multiatendente()
+    _criar_estrutura_catalogo_atendimento()
     _criar_tabela_importacoes_produtos()
 
     _BANCOS_MIGRADOS.add(db_path_atual)
@@ -1329,3 +1330,42 @@ def _criar_estrutura_atendimento_multiatendente():
         "CREATE INDEX IF NOT EXISTS idx_atendimento_history_conversation "
         "ON atendimento_assignment_history(conversation_id, id)"
     )
+
+
+def _criar_estrutura_catalogo_atendimento():
+    """Catálogo Comercial na Central de Atendimento (PR #408) -- busca,
+    seleção e envio de produtos reais do WhatsApp. Ver
+    backend/whatsapp_catalog_repository.py e
+    backend/whatsapp_catalog_routes.py.
+
+    100% aditivo: reaproveita a tabela `produtos` já existente (nenhuma
+    segunda tabela de catálogo é criada) e `whatsapp_conversations`/
+    `usuarios`. Nasce com ATENDIMENTO_CATALOG_ENABLED=false (ver
+    backend/whatsapp_catalog_flags.py): enquanto desligada, nenhuma rota
+    nova responde e a Central permanece idêntica à versão sem catálogo."""
+    query_db(
+        """
+        CREATE TABLE IF NOT EXISTS whatsapp_catalog_sends (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            conversation_id INTEGER NOT NULL,
+            product_id INTEGER NOT NULL,
+            message_id INTEGER,
+            performed_by_user_id INTEGER,
+            action TEXT NOT NULL
+                CHECK(action IN ('product_sent','product_batch_sent','product_send_failed','unavailable_product_blocked')),
+            price_at_send REAL,
+            status TEXT,
+            idempotency_key_hash TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (conversation_id) REFERENCES whatsapp_conversations(id),
+            FOREIGN KEY (product_id) REFERENCES produtos(id)
+        )
+        """,
+        commit=True,
+    )
+    for sql_idx in [
+        "CREATE INDEX IF NOT EXISTS idx_whatsapp_catalog_sends_conversation ON whatsapp_catalog_sends(conversation_id, id)",
+        "CREATE INDEX IF NOT EXISTS idx_whatsapp_catalog_sends_product ON whatsapp_catalog_sends(product_id)",
+        "CREATE INDEX IF NOT EXISTS idx_whatsapp_catalog_sends_user ON whatsapp_catalog_sends(performed_by_user_id, created_at)",
+    ]:
+        _exec_tolerante(sql_idx)
