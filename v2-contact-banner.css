@@ -4,27 +4,39 @@
    min-height de até 820px que colaborava com o excesso de área vazia do
    site). A imagem agora é só decorativa (recorte à esquerda, sem o texto
    embutido) e todo o conteúdo relevante é HTML real ao lado. */
+/* Ajuste de proporções (fase de correção visual): a seção ficou alta e
+   espalhada demais depois da modernização — imagem e card com alturas
+   descasadas, faixa de benefícios parecendo botões e faixa de pagamento
+   colada ao card. Esta fase reequilibra a composição sem tocar em
+   HTML semântico, acessibilidade, responsividade ou nas correções de
+   segurança/overflow já existentes. */
+.institutional-section {
+  padding: clamp(32px, 4.2vw, 56px) 0;
+}
 .institutional-grid {
+  max-width: 1040px;
+  margin: 0 auto;
   display: grid;
-  grid-template-columns: minmax(260px, .8fr) minmax(0, 1.1fr);
-  gap: clamp(24px, 4vw, 48px);
-  align-items: stretch;
+  grid-template-columns: minmax(220px, .72fr) minmax(0, 1fr);
+  gap: clamp(20px, 3.4vw, 36px);
+  align-items: center;
 }
 .institutional-visual {
-  min-height: clamp(320px, 34vw, 440px);
-  border-radius: var(--radius);
-  border: 1px solid rgba(242, 201, 109, .28);
-  box-shadow: var(--shadow);
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1914 / 822;
+  object-fit: cover;
+  object-position: center;
+  border-radius: calc(var(--radius) - 6px);
+  border: 1px solid rgba(242, 201, 109, .18);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .28);
   background-color: #030407;
-  background-image: url("contact-banner-hd.webp?v=20260722-institucional-html");
-  background-repeat: no-repeat;
-  background-size: auto 100%;
-  background-position: 4% 38%;
 }
 .institutional-panel {
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: clamp(24px, 3vw, 38px);
+  padding: clamp(20px, 2.4vw, 30px) clamp(22px, 2.6vw, 32px);
   background: linear-gradient(180deg, rgba(255, 248, 230, .09), rgba(255, 248, 230, .045)), rgba(6, 6, 9, .58);
   backdrop-filter: blur(14px);
   box-shadow: var(--shadow);
@@ -32,46 +44,68 @@
   flex-direction: column;
   gap: 4px;
 }
-.institutional-panel > p:not(.eyebrow) { color: var(--muted); margin: 0 0 8px; }
-.institutional-contacts { list-style: none; margin: 10px 0 20px; padding: 0; display: grid; gap: 12px; }
+.institutional-panel h2 {
+  font-size: clamp(1.4rem, 2.1vw, 1.9rem);
+  margin: 4px 0 8px;
+}
+.institutional-panel > p:not(.eyebrow) { color: var(--muted); margin: 0 0 14px; line-height: 1.55; }
+.institutional-contacts { list-style: none; margin: 0 0 18px; padding: 0; display: grid; gap: 10px; }
 .institutional-contacts li { display: flex; align-items: flex-start; gap: 12px; color: var(--muted); line-height: 1.5; min-width: 0; }
 .institutional-contacts li > span:last-child,
 .institutional-contacts li > a { min-width: 0; overflow-wrap: break-word; }
 .institutional-contacts a { color: var(--gold-2); font-weight: 750; }
-.institutional-contacts a:hover { text-decoration: underline; }
-.institutional-icon { flex: 0 0 auto; font-size: 1.15rem; line-height: 1.4; }
-.institutional-badges { margin-top: auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-.institutional-badges article { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid rgba(242, 201, 109, .2); border-radius: 16px; background: rgba(255, 255, 255, .035); }
-.institutional-badges span { font-size: 1.2rem; }
-.institutional-badges strong { color: var(--cream); font-size: .88rem; font-weight: 750; }
+.institutional-contacts a:hover, .institutional-contacts a:focus-visible { text-decoration: underline; }
+.institutional-icon { flex: 0 0 auto; font-size: 1.1rem; line-height: 1.4; }
+.institutional-badges {
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(242, 201, 109, .14);
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 14px;
+}
+.institutional-badges article {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 4px 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+.institutional-badges span { font-size: 1.05rem; }
+.institutional-badges strong { color: var(--muted); font-size: .82rem; font-weight: 650; }
 
 @media (max-width: 860px) {
-  .institutional-grid { grid-template-columns: minmax(0, 1fr); }
-  .institutional-visual { min-height: 260px; }
+  .institutional-grid { grid-template-columns: minmax(0, 1fr); align-items: stretch; }
+  .institutional-visual { aspect-ratio: 16 / 9; }
 }
 @media (max-width: 520px) {
   .institutional-badges { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* Etapa 8: faixa premium e compacta de pagamento, substitui o espaço que
-   antes ficava vazio abaixo do banner institucional. */
-.payment-strip-section { padding: clamp(28px, 3vw, 40px) 0; }
+/* Etapa 8: faixa premium e compacta de pagamento, separada do bloco
+   institucional para não parecer um painel administrativo colado ao
+   card de atendimento. */
+.payment-strip-section { padding: clamp(20px, 2.6vw, 32px) 0 clamp(40px, 4.2vw, 56px); margin-top: clamp(8px, 1.6vw, 16px); }
 .payment-strip {
+  max-width: 1040px;
+  margin: 0 auto;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 16px 28px;
-  padding: 20px 26px;
-  border: 1px solid var(--line);
+  gap: 14px 24px;
+  padding: 16px 24px;
+  border: 1px solid rgba(242, 201, 109, .14);
   border-radius: 999px;
-  background: linear-gradient(180deg, rgba(255, 248, 230, .07), rgba(255, 248, 230, .03)), rgba(6, 6, 9, .5);
-  box-shadow: var(--shadow);
+  background: rgba(255, 248, 230, .035);
+  box-shadow: none;
 }
-.payment-strip-methods, .payment-strip-trust { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; }
-.payment-chip { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border: 1px solid rgba(242, 201, 109, .3); border-radius: 999px; color: var(--gold-2); font-weight: 800; font-size: .88rem; background: rgba(242, 201, 109, .06); }
-.payment-strip-trust span { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: .86rem; font-weight: 650; }
-.payment-strip-trust span span[aria-hidden] { font-size: 1rem; }
+.payment-strip-methods, .payment-strip-trust { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+.payment-chip { display: inline-flex; align-items: center; gap: 8px; padding: 7px 13px; border: 1px solid rgba(242, 201, 109, .24); border-radius: 999px; color: var(--gold-2); font-weight: 750; font-size: .84rem; background: transparent; }
+.payment-strip-trust span { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: .84rem; font-weight: 600; }
+.payment-strip-trust span span[aria-hidden] { font-size: .98rem; }
 @media (max-width: 680px) {
   .payment-strip { border-radius: 28px; justify-content: center; text-align: center; }
   .payment-strip-methods, .payment-strip-trust { justify-content: center; }

@@ -175,8 +175,15 @@ label { display: grid; gap: 7px; color: var(--muted); font-weight: 750; }
 .cart-qty-btn:active { transform: scale(.92); }
 .cart-qty-value { min-width: 22px; text-align: center; color: var(--cream); font-weight: 800; font-variant-numeric: tabular-nums; }
 /* Carrinho flutuante com contador */
-.floating-cart { position: fixed; right: 16px; bottom: calc(140px + env(safe-area-inset-bottom, 0px)); z-index: 90; display: inline-flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 999px; background: linear-gradient(135deg, var(--gold), var(--gold-2)); color: #1a1206; box-shadow: 0 12px 30px rgba(0,0,0,.35); text-decoration: none; transition: transform .2s ease, box-shadow .2s ease; }
-.floating-cart:hover { transform: scale(1.06); box-shadow: 0 16px 38px rgba(0,0,0,.4); }
+.floating-cart { position: fixed; right: 16px; bottom: calc(140px + env(safe-area-inset-bottom, 0px)); z-index: 90; display: inline-flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 999px; background: linear-gradient(135deg, var(--gold), var(--gold-2)); color: #1a1206; box-shadow: 0 10px 24px rgba(0,0,0,.3); text-decoration: none; transition: transform .2s ease, box-shadow .2s ease; }
+.floating-cart:hover { transform: scale(1.06); box-shadow: 0 14px 30px rgba(0,0,0,.36); }
+/* Fase de ajuste de proporções: no desktop os botões flutuantes ficam mais
+   discretos (menos sombra e um pouco menores) para não competir com o
+   conteúdo da página; no mobile o tamanho de toque original é preservado. */
+@media (min-width: 981px) {
+  .floating-cart { width: 50px; height: 50px; box-shadow: 0 8px 18px rgba(0,0,0,.24); }
+  .floating-cart:hover { box-shadow: 0 10px 22px rgba(0,0,0,.28); }
+}
 .floating-cart-icon { font-size: 1.35rem; }
 .floating-cart-count { display: none; position: absolute; top: -4px; right: -4px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: #7a1f1f; color: #fff; font: 800 12px/22px Inter, Arial, sans-serif; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,.3); }
 .floating-cart.has-items .floating-cart-count { display: inline-block; }
@@ -239,8 +246,12 @@ label { display: grid; gap: 7px; color: var(--muted); font-weight: 750; }
 @media (max-width: 560px) {
   .footer-grid { grid-template-columns: minmax(0, 1fr); gap: 24px; }
 }
-.floating-whatsapp { position: fixed; right: 18px; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 80; border-radius: 999px; padding: 14px 18px; color: #10150e; background: linear-gradient(135deg, #dcf9b9, #9bc969); font-weight: 950; box-shadow: 0 20px 60px rgba(0,0,0,.42); transition: transform .2s ease, box-shadow .2s ease; }
-.floating-whatsapp:hover { transform: translateY(-2px) scale(1.03); box-shadow: 0 24px 66px rgba(0,0,0,.46); }
+.floating-whatsapp { position: fixed; right: 18px; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); z-index: 80; border-radius: 999px; padding: 14px 18px; color: #10150e; background: linear-gradient(135deg, #dcf9b9, #9bc969); font-weight: 950; box-shadow: 0 14px 36px rgba(0,0,0,.32); transition: transform .2s ease, box-shadow .2s ease; }
+.floating-whatsapp:hover { transform: translateY(-2px) scale(1.03); box-shadow: 0 18px 42px rgba(0,0,0,.36); }
+@media (min-width: 981px) {
+  .floating-whatsapp { padding: 11px 16px; font-size: .92rem; box-shadow: 0 10px 26px rgba(0,0,0,.24); }
+  .floating-whatsapp:hover { box-shadow: 0 14px 30px rgba(0,0,0,.28); }
+}
 [hidden] { display: none !important; }
 @media (max-width: 980px) {
   .ribbon-grid { grid-template-columns: 1fr; text-align: center; }
