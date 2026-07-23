@@ -13,6 +13,7 @@ import hashlib
 import json
 from datetime import datetime, timedelta
 
+from backend.atendimento_repository import reabrir_automaticamente_se_resolvida
 from backend.logging_config import get_logger
 from backend.whatsapp_flags import whatsapp_webhook_event_retention_days
 from backend.whatsapp_inbox_repository import (
@@ -153,6 +154,12 @@ def processar_webhook_mensagens(conn, payload: dict) -> dict:
                         timestamp_meta=timestamp_meta,
                     )
                     if inserida:
+                        # Item 10 da especificação da Central Multiatendente:
+                        # mensagem nova do cliente numa conversa já encerrada
+                        # reabre para 'waiting' (fila), SEM atribuir
+                        # automaticamente a nenhum atendente -- histórico
+                        # preservado, evento registrado (ação 'auto_reopen').
+                        reabrir_automaticamente_se_resolvida(conn, conversa["id"])
                         atualizar_conversa_apos_inbound(conn, conversation_id=conversa["id"])
                         processadas += 1
                     else:
