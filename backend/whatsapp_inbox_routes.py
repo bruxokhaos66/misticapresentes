@@ -109,6 +109,7 @@ def status_central_atendimento(response: Response, sessao: dict = Depends(exigir
     _sem_cache(response)
     diagnostico = diagnostico_configuracao_whatsapp_cloud_inbox()
     with conectar() as conn:
+        exigir_atendente(conn, sessao)
         pendentes = conn.execute(
             "SELECT COUNT(*) AS n FROM whatsapp_webhook_events WHERE processing_status='pending'"
         ).fetchone()
@@ -148,6 +149,7 @@ def rota_listar_conversas(
     if status and status not in STATUS_CONVERSA_VALIDOS:
         raise HTTPException(status_code=422, detail="Filtro de status inválido.")
     with conectar() as conn:
+        exigir_atendente(conn, sessao)
         linhas, total = listar_conversas(conn, status=status, apenas_nao_lidas=unread_only, busca=q, pagina=page, tamanho_pagina=page_size)
     return {
         "ok": True,
@@ -387,6 +389,7 @@ def rota_atualizar_conversa(conversation_id: int, body: AtualizarConversaBody, s
     if body.status and body.status not in STATUS_CONVERSA_VALIDOS:
         raise HTTPException(status_code=422, detail="Status inválido.")
     with conectar() as conn:
+        exigir_atendente(conn, sessao)
         conversa = _obter_conversa_ou_404(conn, conversation_id)
         try:
             atualizar_conversa(conn, conversation_id, status=body.status, assigned_admin=body.assigned_admin)
@@ -522,6 +525,9 @@ def rota_listar_templates(response: Response, sessao: dict = Depends(exigir_perf
     rota de listagem simples) e nunca inclui nenhum segredo."""
     _sem_cache(response)
     import os
+
+    with conectar() as conn:
+        exigir_atendente(conn, sessao)
 
     bruto = os.environ.get("WHATSAPP_INBOX_TEMPLATES", "").strip()
     templates = []

@@ -176,6 +176,43 @@ def test_adm_acessa_tudo_mesmo_com_flag_desligada(monkeypatch):
         assert resp.status_code == 200
 
 
+def test_supervisor_sem_flag_ligada_nao_acessa_rotas_legadas_da_central(monkeypatch):
+    """Regressão: supervisor_atendimento passava pelo gate de perfil de
+    /status, /conversations (listagem geral), PATCH /conversations e
+    /templates (backend/whatsapp_inbox_routes.py) sem exigir_atendente --
+    ou seja, via essas 4 rotas, um supervisor via TODAS as conversas da
+    empresa mesmo com ATENDIMENTO_SELLERS_ENABLED desligada e mesmo com
+    atendimento_enabled=0/suspenso. As rotas novas (queue/my-conversations/
+    claim/...) sempre chamaram exigir_atendente; só essas 4 rotas do
+    módulo legado tinham o gap."""
+    _habilitar(monkeypatch)
+    _ligar_multiatendente(monkeypatch, ligado=False)
+    supervisor_id = _criar_usuario(perfil="supervisor_atendimento", atendimento_enabled=0)
+    conversa_id = _criar_conversa_waiting()
+    with Sessao(_sessao(supervisor_id, "supervisor_atendimento")):
+        assert client.get("/api/admin/whatsapp/conversations").status_code == 403
+        assert client.get("/api/admin/whatsapp/status").status_code == 403
+        assert client.get("/api/admin/whatsapp/templates").status_code == 403
+        resp = client.patch(
+            f"/api/admin/whatsapp/conversations/{conversa_id}", json={"status": "open"}, headers=ORIGEM_PERMITIDA
+        )
+        assert resp.status_code == 403
+
+    # Com a flag ligada mas atendimento_enabled ainda 0, continua bloqueado.
+    _ligar_multiatendente(monkeypatch, ligado=True)
+    with Sessao(_sessao(supervisor_id, "supervisor_atendimento")):
+        assert client.get("/api/admin/whatsapp/conversations").status_code == 403
+
+    # Só com a flag ligada E atendimento_enabled=1 o supervisor acessa.
+    with conectar() as conn:
+        conn.execute("UPDATE usuarios SET atendimento_enabled=1 WHERE id=?", (supervisor_id,))
+        conn.commit()
+    with Sessao(_sessao(supervisor_id, "supervisor_atendimento")):
+        assert client.get("/api/admin/whatsapp/conversations").status_code == 200
+        assert client.get("/api/admin/whatsapp/status").status_code == 200
+        assert client.get("/api/admin/whatsapp/templates").status_code == 200
+
+
 # ---------------------------------------------------------------------------
 # Claim atômico
 # ---------------------------------------------------------------------------

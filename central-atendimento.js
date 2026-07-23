@@ -96,7 +96,13 @@
       ...options,
       headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     });
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401) {
+      // Só 401 (sessão inválida/expirada) desloga. 403 agora também
+      // representa negação de autorização por linha (ex.: vendedor tentando
+      // ver/responder conversa de outro, ou ação restrita a adm/supervisor)
+      // -- nunca deve derrubar a sessão inteira nem trocar a tela para
+      // login; cada chamador trata erro.status === 403 com uma mensagem
+      // própria, mantendo o app funcionando.
       pararPolling();
       mostrarLogin();
       const erro = new Error("Sessão expirada. Faça login novamente.");
@@ -315,7 +321,11 @@
       idsConversasConhecidos = idsAtuais;
       statusListaConversas.textContent = dados.conversations.length ? "" : "Nenhuma conversa encontrada.";
     } catch (erro) {
-      if (erro.status !== 401 && erro.status !== 403) {
+      if (erro.status === 401) {
+        // sessão expirada -- apiFetch já trocou a tela para login.
+      } else if (erro.status === 403) {
+        statusListaConversas.textContent = erro.message || "Você não tem acesso a esta lista.";
+      } else {
         statusListaConversas.textContent = "Falha ao carregar conversas.";
       }
     }
@@ -661,7 +671,9 @@
     if (event.target === modalMidia) fecharModalMidia();
   });
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !modalMidia.hidden) fecharModalMidia();
+    if (event.key !== "Escape") return;
+    if (!modalMidia.hidden) fecharModalMidia();
+    if (!modalTransferir.hidden) modalTransferir.hidden = true;
   });
 
   function abrirModalComConteudo(nodo) {
