@@ -44,7 +44,7 @@ from backend.whatsapp_inbox_repository import (
     vincular_cliente,
     vincular_pedido,
 )
-from backend.whatsapp_media_service import WhatsAppMediaError, baixar_midia, salvar_midia_local
+from backend.whatsapp_media_service import WhatsAppMediaError, baixar_midia, extensao_para_mime, salvar_midia_local
 from backend.whatsapp_provider import ComponenteTemplate, WhatsAppEnvioPermanente, WhatsAppEnvioTransitorio, construir_provider
 
 logger = get_logger(__name__)
@@ -366,18 +366,38 @@ def rota_obter_midia(message_id: int, sessao: dict = Depends(exigir_perfil(perfi
             raise HTTPException(status_code=404, detail="Esta mensagem não possui mídia.")
 
         if not mensagem.get("media_path"):
-            try:
-                conteudo, extensao, mime_canonico = baixar_midia(mensagem["media_id"])
-            except WhatsAppMediaError as exc:
-                raise HTTPException(status_code=502, detail="Não foi possível obter a mídia da Meta no momento.") from exc
-            caminho = salvar_midia_local(conteudo, extensao)
-            conn.execute(
-                "UPDATE whatsapp_messages SET media_path=?, media_mime_type=?, media_size=? WHERE id=?",
-                (caminho, mime_canonico, len(conteudo), message_id),
+            # Reivindicação atômica: só uma requisição concorrente baixa a
+            # mesma mídia da Meta. Se outra já está baixando (ou já
+            # terminou entre o SELECT acima e este UPDATE), não repetimos o
+            # download -- ver migração de whatsapp_messages.media_status.
+            claim = conn.execute(
+                "UPDATE whatsapp_messages SET media_status='downloading' "
+                "WHERE id=? AND media_path IS NULL AND media_status!='downloading'",
+                (message_id,),
             )
             conn.commit()
-            mensagem["media_path"] = caminho
-            mensagem["media_mime_type"] = mime_canonico
+            if claim.rowcount == 0:
+                atual = conn.execute("SELECT media_path, media_mime_type, media_status FROM whatsapp_messages WHERE id=?", (message_id,)).fetchone()
+                if atual and atual["media_path"]:
+                    mensagem["media_path"] = atual["media_path"]
+                    mensagem["media_mime_type"] = atual["media_mime_type"]
+                else:
+                    raise HTTPException(status_code=409, detail="Mídia ainda sendo baixada por outra requisição, tente novamente em instantes.")
+            else:
+                try:
+                    conteudo, extensao, mime_canonico = baixar_midia(mensagem["media_id"])
+                except WhatsAppMediaError as exc:
+                    conn.execute("UPDATE whatsapp_messages SET media_status='failed' WHERE id=?", (message_id,))
+                    conn.commit()
+                    raise HTTPException(status_code=502, detail="Não foi possível obter a mídia da Meta no momento.") from exc
+                caminho = salvar_midia_local(conteudo, extensao)
+                conn.execute(
+                    "UPDATE whatsapp_messages SET media_path=?, media_mime_type=?, media_size=?, media_status='available' WHERE id=?",
+                    (caminho, mime_canonico, len(conteudo), message_id),
+                )
+                conn.commit()
+                mensagem["media_path"] = caminho
+                mensagem["media_mime_type"] = mime_canonico
 
     try:
         with open(mensagem["media_path"], "rb") as arquivo:
@@ -386,11 +406,13 @@ def rota_obter_midia(message_id: int, sessao: dict = Depends(exigir_perfil(perfi
         raise HTTPException(status_code=404, detail="Arquivo de mídia não encontrado no armazenamento.")
 
     mime = mensagem.get("media_mime_type") or "application/octet-stream"
+    extensao = extensao_para_mime(mime)
     return Response(
         content=conteudo_arquivo,
         media_type=mime,
         headers={
-            "Content-Disposition": f'attachment; filename="midia-{message_id}"',
+            "Content-Disposition": f'attachment; filename="midia-{message_id}.{extensao}"',
+            "Content-Length": str(len(conteudo_arquivo)),
             "X-Content-Type-Options": "nosniff",
             "Cache-Control": "private, no-store",
         },

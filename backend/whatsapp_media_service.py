@@ -21,6 +21,7 @@ from __future__ import annotations
 import os
 import uuid
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -61,6 +62,37 @@ _MIME_FTYP = {
     b"ftypM4A ": ("m4a", "audio/mp4"),
     b"ftyp3gp5": ("3gp", "video/3gpp"),
 }
+
+# Domínios oficiais da Meta usados pela Graph API/CDN de mídia do WhatsApp
+# Cloud API. A URL temporária devolvida pelos metadados só é seguida se o
+# host bater com um destes (exato ou subdomínio) -- nunca seguimos redirect
+# nem baixamos de um host arbitrário injetado numa resposta adulterada.
+_DOMINIOS_MIDIA_PERMITIDOS = ("fbcdn.net", "fbsbx.com", "facebook.com", "whatsapp.net")
+
+
+def extensao_para_mime(mime_type: str | None) -> str:
+    """Extensão de arquivo segura para um mime canônico já validado por
+    magic bytes -- usada só para nomear o download (Content-Disposition),
+    nunca para decidir o tipo real do conteúdo."""
+    mapa = {
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "image/webp": "webp",
+        "application/pdf": "pdf",
+        "audio/ogg": "ogg",
+        "audio/mpeg": "mp3",
+        "video/mp4": "mp4",
+        "audio/mp4": "m4a",
+        "video/3gpp": "3gp",
+    }
+    return mapa.get((mime_type or "").lower(), "bin")
+
+
+def _host_permitido(url: str) -> bool:
+    host = (urlsplit(url).hostname or "").lower()
+    if not host:
+        return False
+    return any(host == dominio or host.endswith("." + dominio) for dominio in _DOMINIOS_MIDIA_PERMITIDOS)
 
 
 def _identificar_por_magic_bytes(cabecalho: bytes) -> tuple[str, str] | None:
@@ -112,18 +144,29 @@ def baixar_midia(media_id: str) -> tuple[bytes, str, str]:
         if meta_resposta.status_code != 200:
             raise WhatsAppMediaError(f"Metadados da mídia indisponíveis (http {meta_resposta.status_code}).", codigo="metadata_unavailable")
 
-        dados_meta = meta_resposta.json()
+        try:
+            dados_meta = meta_resposta.json()
+        except ValueError as exc:
+            raise WhatsAppMediaError("Resposta de metadados da mídia não é JSON válido.", codigo="metadata_invalid") from exc
         url_arquivo = str(dados_meta.get("url") or "")
         tamanho_informado = int(dados_meta.get("file_size") or 0)
         if not url_arquivo.lower().startswith("https://"):
             raise WhatsAppMediaError("URL de mídia inválida (não-HTTPS).", codigo="invalid_media_url")
+        if not _host_permitido(url_arquivo):
+            raise WhatsAppMediaError("URL de mídia fora dos domínios permitidos da Meta.", codigo="invalid_media_domain")
         if tamanho_informado and tamanho_informado > limite:
             raise WhatsAppMediaError("Mídia excede o tamanho máximo permitido.", codigo="media_too_large")
 
         try:
             with cliente.stream("GET", url_arquivo) as resposta_arquivo:
+                if resposta_arquivo.is_redirect:
+                    destino = resposta_arquivo.headers.get("location", "")
+                    if not _host_permitido(destino):
+                        raise WhatsAppMediaError("Redirecionamento de mídia para domínio não permitido.", codigo="invalid_redirect_domain")
+                    raise WhatsAppMediaError("Redirecionamento de mídia não suportado.", codigo="unsupported_redirect")
                 if resposta_arquivo.status_code != 200:
                     raise WhatsAppMediaError(f"Download da mídia falhou (http {resposta_arquivo.status_code}).", codigo="download_failed")
+                content_type_recebido = (resposta_arquivo.headers.get("content-type") or "").split(";")[0].strip().lower()
                 pedacos = bytearray()
                 for pedaco in resposta_arquivo.iter_bytes():
                     pedacos.extend(pedaco)
@@ -132,26 +175,46 @@ def baixar_midia(media_id: str) -> tuple[bytes, str, str]:
         except httpx.HTTPError as exc:
             raise WhatsAppMediaError(f"Falha de rede ao baixar mídia: {type(exc).__name__}", codigo="download_network_error") from exc
 
+    if not pedacos:
+        raise WhatsAppMediaError("Mídia baixada está vazia.", codigo="empty_media")
+
     conteudo = bytes(pedacos)
     identificado = _identificar_por_magic_bytes(conteudo[:64])
     if not identificado:
         raise WhatsAppMediaError("Tipo de arquivo não reconhecido/permitido (magic bytes).", codigo="unsupported_media_type")
     extensao, mime_canonico = identificado
+    if content_type_recebido and not content_type_recebido.startswith(mime_canonico.split("/")[0]):
+        logger.warning(
+            "whatsapp_media_content_type_divergente",
+            extra={"evento": "whatsapp_media_content_type_divergente", "detectado": mime_canonico},
+        )
     return conteudo, extensao, mime_canonico
 
 
 def salvar_midia_local(conteudo: bytes, extensao: str) -> str:
     """Grava o conteúdo com um nome gerado pelo servidor (uuid4 -- nunca
-    derivado de entrada do cliente/Meta) e retorna o caminho absoluto
-    resultante, sempre dentro do diretório configurado (sem possibilidade de
-    path traversal, já que nem diretório nem nome vêm de fora)."""
+    derivado de entrada do cliente/Meta), sempre dentro do diretório
+    configurado (sem possibilidade de path traversal, já que nem diretório
+    nem nome vêm de fora). Escreve num arquivo temporário no mesmo
+    diretório, dá fsync e só então renomeia atomicamente para o nome final
+    -- assim um leitor concorrente nunca vê um arquivo parcialmente
+    escrito, e uma falha no meio da escrita nunca deixa um arquivo corrompido
+    com o nome definitivo."""
     destino = _diretorio_destino()
     nome_arquivo = f"{uuid.uuid4().hex}.{extensao}"
     caminho = destino / nome_arquivo
-    with open(caminho, "wb") as arquivo:
-        arquivo.write(conteudo)
+    caminho_temp = destino / f".tmp-{uuid.uuid4().hex}"
     try:
-        os.chmod(caminho, 0o600)
-    except OSError:
-        pass
+        with open(caminho_temp, "wb") as arquivo:
+            arquivo.write(conteudo)
+            arquivo.flush()
+            os.fsync(arquivo.fileno())
+        os.chmod(caminho_temp, 0o600)
+        os.replace(caminho_temp, caminho)
+    finally:
+        if caminho_temp.exists():
+            try:
+                caminho_temp.unlink()
+            except OSError:
+                pass
     return str(caminho)
