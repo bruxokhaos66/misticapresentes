@@ -14,20 +14,21 @@ function createMemoryStorage() {
   };
 }
 
-// Simula os <input id="qty-<id>"> que app.js renderiza por produto na
-// grade da vitrine (ver app.js#productCardHtml). CartAssistant.add()
+// Simula os botões [data-add-to-cart] que app.js renderiza por produto
+// na grade da vitrine (ver app.js#productCardHtml). CartAssistant.add()
 // depende desse elemento existir na página para poder chamar
-// window.addToCart com segurança — em testes unitários, `withQtyInputs`
-// decide para quais produtos esse input "existe" (por padrão, todos).
-function createDocumentStub({ withQtyInputs = [] } = {}) {
-  const inputs = new Map(withQtyInputs.map(id => [`qty-${id}`, { value: "1" }]));
+// window.addToCart com segurança — em testes unitários, `withAddButtons`
+// decide para quais produtos esse botão "existe" (por padrão, todos).
+function createDocumentStub({ withAddButtons = [] } = {}) {
+  const buttons = withAddButtons.map(id => ({ dataset: { addToCart: id } }));
   return {
-    getElementById: id => inputs.get(id) || null,
+    getElementById: () => null,
     querySelector: () => null,
+    querySelectorAll: selector => (selector === "[data-add-to-cart]" ? buttons : []),
   };
 }
 
-function loadIsis2({ products = [], stock = null, qtyInputsFor = null } = {}) {
+function loadIsis2({ products = [], stock = null, addButtonsFor = null } = {}) {
   delete require.cache[require.resolve("../../../isis2/product-knowledge.js")];
   delete require.cache[require.resolve("../../../isis2/intent-engine.js")];
   delete require.cache[require.resolve("../../../isis2/safety-guardrails.js")];
@@ -53,31 +54,36 @@ function loadIsis2({ products = [], stock = null, qtyInputsFor = null } = {}) {
   };
   global.cart = [];
   global.window.cart = global.cart;
-  // Réplica fiel de app.js#addToCart: lê a quantidade do <input
-  // id="qty-<id>">, valida contra o estoque (getStock) e a quantidade já
-  // no carrinho, e só adiciona se for um inteiro >=1 dentro do estoque
-  // disponível — sem aceitar parâmetro de quantidade direto, exatamente
-  // como o comportamento real que o Cart Assistant precisa respeitar.
+  // Réplica fiel de app.js#addToCart: a vitrine não tem mais campo de
+  // quantidade, então sempre adiciona 1 unidade, validando contra o
+  // estoque (getStock) e a quantidade já no carrinho -- exatamente como
+  // o comportamento real que o Cart Assistant precisa respeitar.
   global.window.addToCart = productId => {
     const product = products.find(item => item.id === productId);
     if (!product) return;
-    const input = global.document.getElementById(`qty-${productId}`);
-    if (!input) return;
-    const qty = Number.parseInt(input.value, 10);
+    const qty = 1;
     const available = global.getStock(productId);
     const existing = global.cart.find(item => item.id === productId);
     const inCart = existing?.qty || 0;
-    if (!Number.isInteger(qty) || qty < 1) return;
     if (qty + inCart > available) return;
     if (existing) existing.qty += qty;
     else global.cart.push({ id: product.id, name: product.name, price: product.price, qty });
+  };
+  // Réplica fiel de app.js#setCartQty: ajusta a quantidade de um item já
+  // no carrinho, sempre limitada ao estoque disponível.
+  global.window.setCartQty = (productId, nextQty) => {
+    const existing = global.cart.find(item => item.id === productId);
+    if (!existing) return;
+    if (nextQty <= 0) { global.window.removeFromCart(productId); return; }
+    const available = global.getStock(productId);
+    existing.qty = Math.min(nextQty, available);
   };
   global.window.removeFromCart = productId => {
     global.cart = global.cart.filter(item => item.id !== productId);
     global.window.cart = global.cart;
   };
   global.window.products = products;
-  global.document = createDocumentStub({ withQtyInputs: qtyInputsFor || products.map(p => p.id) });
+  global.document = createDocumentStub({ withAddButtons: addButtonsFor || products.map(p => p.id) });
 
   require("../../../isis2/product-knowledge.js");
   require("../../../isis2/intent-engine.js");

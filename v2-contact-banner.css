@@ -1,18 +1,78 @@
-/* Contato: usa caminho relativo para funcionar na raiz do domínio e em previews. */
-.contact-section{
-  position:relative!important;
-  display:block!important;
-  width:100%!important;
-  min-height:clamp(360px,50vw,820px)!important;
-  padding:0!important;
-  margin:0!important;
-  border-top:1px solid rgba(242,201,109,.22)!important;
-  border-bottom:1px solid rgba(242,201,109,.22)!important;
-  background-color:#030407!important;
-  background-image:url("contact-banner-hd.webp?v=20260712-new-banner")!important;
-  background-size:cover!important;
-  background-position:center center!important;
-  background-repeat:no-repeat!important;
-  overflow:hidden!important;
+/* Bloco institucional (Etapa 11): antes era só uma imagem de banner com
+   endereço, WhatsApp, Instagram e selos de confiança desenhados dentro do
+   arquivo .webp (texto preso em pixel, sem acessibilidade, sem SEO, e um
+   min-height de até 820px que colaborava com o excesso de área vazia do
+   site). A imagem agora é só decorativa (recorte à esquerda, sem o texto
+   embutido) e todo o conteúdo relevante é HTML real ao lado. */
+.institutional-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, .8fr) minmax(0, 1.1fr);
+  gap: clamp(24px, 4vw, 48px);
+  align-items: stretch;
 }
-.contact-section::before,.contact-section::after{content:none!important;display:none!important;background:none!important;opacity:0!important}.contact-section .split,.contact-section .contact-card,.contact-section .eyebrow,.contact-section h2,.contact-section p{display:none!important;visibility:hidden!important;opacity:0!important}.contact-banner-art{display:none!important;visibility:hidden!important;opacity:0!important;width:0!important;height:0!important;pointer-events:none!important}@media(max-width:980px){.contact-section{min-height:clamp(300px,54vw,560px)!important;background-size:cover!important;background-position:center center!important}}@media(max-width:680px){.contact-section{min-height:clamp(220px,60vw,430px)!important;background-size:cover!important;background-position:center center!important}}
+.institutional-visual {
+  min-height: clamp(320px, 34vw, 440px);
+  border-radius: var(--radius);
+  border: 1px solid rgba(242, 201, 109, .28);
+  box-shadow: var(--shadow);
+  background-color: #030407;
+  background-image: url("contact-banner-hd.webp?v=20260722-institucional-html");
+  background-repeat: no-repeat;
+  background-size: auto 100%;
+  background-position: 4% 38%;
+}
+.institutional-panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: clamp(24px, 3vw, 38px);
+  background: linear-gradient(180deg, rgba(255, 248, 230, .09), rgba(255, 248, 230, .045)), rgba(6, 6, 9, .58);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.institutional-panel > p:not(.eyebrow) { color: var(--muted); margin: 0 0 8px; }
+.institutional-contacts { list-style: none; margin: 10px 0 20px; padding: 0; display: grid; gap: 12px; }
+.institutional-contacts li { display: flex; align-items: flex-start; gap: 12px; color: var(--muted); line-height: 1.5; min-width: 0; }
+.institutional-contacts li > span:last-child,
+.institutional-contacts li > a { min-width: 0; overflow-wrap: break-word; }
+.institutional-contacts a { color: var(--gold-2); font-weight: 750; }
+.institutional-contacts a:hover { text-decoration: underline; }
+.institutional-icon { flex: 0 0 auto; font-size: 1.15rem; line-height: 1.4; }
+.institutional-badges { margin-top: auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.institutional-badges article { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid rgba(242, 201, 109, .2); border-radius: 16px; background: rgba(255, 255, 255, .035); }
+.institutional-badges span { font-size: 1.2rem; }
+.institutional-badges strong { color: var(--cream); font-size: .88rem; font-weight: 750; }
+
+@media (max-width: 860px) {
+  .institutional-grid { grid-template-columns: minmax(0, 1fr); }
+  .institutional-visual { min-height: 260px; }
+}
+@media (max-width: 520px) {
+  .institutional-badges { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Etapa 8: faixa premium e compacta de pagamento, substitui o espaço que
+   antes ficava vazio abaixo do banner institucional. */
+.payment-strip-section { padding: clamp(28px, 3vw, 40px) 0; }
+.payment-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 28px;
+  padding: 20px 26px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 248, 230, .07), rgba(255, 248, 230, .03)), rgba(6, 6, 9, .5);
+  box-shadow: var(--shadow);
+}
+.payment-strip-methods, .payment-strip-trust { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; }
+.payment-chip { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border: 1px solid rgba(242, 201, 109, .3); border-radius: 999px; color: var(--gold-2); font-weight: 800; font-size: .88rem; background: rgba(242, 201, 109, .06); }
+.payment-strip-trust span { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: .86rem; font-weight: 650; }
+.payment-strip-trust span span[aria-hidden] { font-size: 1rem; }
+@media (max-width: 680px) {
+  .payment-strip { border-radius: 28px; justify-content: center; text-align: center; }
+  .payment-strip-methods, .payment-strip-trust { justify-content: center; }
+}

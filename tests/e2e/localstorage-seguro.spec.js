@@ -362,9 +362,10 @@ test.describe("persistência segura do navegador", () => {
     let raw = await page.evaluate(() => localStorage.getItem("misticaCart"));
     expect(JSON.parse(raw)).toEqual([{ id: "api-701", qty: 1 }]);
 
-    // 2) alterar quantidade (adicionar novamente soma a quantidade)
-    await page.locator("[data-product-grid] input[type='number']").fill("2");
-    await page.locator("[data-product-grid] button", { hasText: "Adicionar" }).click();
+    // 2) alterar quantidade pelo stepper do carrinho (a vitrine não tem mais
+    // campo de quantidade -- ajuste passa a acontecer só no carrinho).
+    await page.locator("#cartList [data-cart-qty-increase]").click();
+    await page.locator("#cartList [data-cart-qty-increase]").click();
     raw = await page.evaluate(() => localStorage.getItem("misticaCart"));
     expect(JSON.parse(raw)).toEqual([{ id: "api-701", qty: 3 }]);
 
@@ -374,7 +375,7 @@ test.describe("persistência segura do navegador", () => {
     expect(JSON.parse(raw)).toEqual([]);
 
     // adiciona de novo para testar reload/segunda aba/atualização de catálogo
-    await page.locator("[data-product-grid] input[type='number']").fill("1");
+    // (a vitrine sempre adiciona 1 unidade; ajuste de quantidade é só no carrinho)
     await page.locator("[data-product-grid] button", { hasText: "Adicionar" }).click();
 
     // 4) recarregar a página

@@ -46,11 +46,11 @@ test("Produto esgotou entre a recomendação e o clique em adicionar", () => {
   assert.equal(result.reason, "rejected_by_store");
 });
 
-test("Produto recomendado sem <input qty-*> renderizado na página atual não crasha, devolve motivo claro", () => {
-  // Reproduz produto.html/kit.html: só o produto em foco tem o input de
-  // quantidade renderizado. Um produto recomendado pela Isis que não é o
+test("Produto recomendado sem botão 'Adicionar ao carrinho' renderizado na página atual não crasha, devolve motivo claro", () => {
+  // Reproduz produto.html/kit.html: só o produto em foco tem o botão de
+  // adicionar renderizado. Um produto recomendado pela Isis que não é o
   // produto da página não deve ser adicionado "no escuro".
-  const Isis2 = loadIsis2({ products: SAMPLE_PRODUCTS, qtyInputsFor: ["vela-ritualistica"] });
+  const Isis2 = loadIsis2({ products: SAMPLE_PRODUCTS, addButtonsFor: ["vela-ritualistica"] });
   const result = Isis2.CartAssistant.add("incenso-natural", 1);
   assert.equal(result.ok, false);
   assert.equal(result.reason, "not_addable_here");

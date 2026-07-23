@@ -105,24 +105,11 @@
     document.body.classList.add('product-inspector-open');
   };
 
-  // Descrição fica escondida por padrão (gaveta/accordion) — só a foto,
-  // categoria, nome, preço e os botões de ação aparecem de cara. O estado
-  // aberto/fechado de cada card é lembrado aqui: sempre que o grid inteiro é
-  // reconstruído (ex.: depois de "Adicionar ao carrinho", que chama
-  // renderProducts() de novo), a gaveta que o cliente já tinha aberto
-  // continua aberta — só o toggle isolado (clique em "Ver descrição") evita
-  // reconstruir o grid inteiro, pra animação ficar suave e não mexer nos
-  // outros cards.
-  const openDrawers = (typeof window !== 'undefined' && window.openProductDrawers) || new Set();
-
   function renderProductsWithInspector() {
     if (!productGrid) return;
     productGrid.innerHTML = products.map((product) => {
       const available = getStock(product.id);
       const disabled = available <= 0 ? 'disabled' : '';
-      const id = safeId(product.id);
-      const descId = `desc-${id}`;
-      const isOpen = openDrawers.has(product.id);
       const media = `<div class="product-media-wrap"><div class="product-media-frame">${productMedia(product)}</div><button class="product-zoom-button" type="button" data-inspect-product="${esc(product.id)}" aria-label="Inspecionar ${esc(product.name)}">🔍</button></div>`;
       const bestSeller = typeof isBestSeller === 'function' && isBestSeller(product) ? `<span class="product-badge-best">${esc(typeof productBadgeText === 'function' ? productBadgeText(product) : product.selo)}</span>` : '';
       const rating = typeof socialProofHtml === 'function' ? socialProofHtml(product) : '';
@@ -130,12 +117,15 @@
       const t = encomenda();
       const encomendaBadge = sob && t ? `<span class="product-badge-encomenda">${esc(t.BADGE)}</span>` : '';
       const encomendaNote = sob && t ? `<p class="product-encomenda-note">${esc(t.CARD_NOTE)}</p>` : '';
+      const outOfStock = !sob && available <= 0;
+      const addLabel = outOfStock ? 'Indisponível' : 'Adicionar ao carrinho';
       const stockBadge = sob && t
         ? `<span class="stock-badge">${esc(t.ESTOQUE_NOTE)}</span>`
-        : `<span class="stock-badge ${available <= storeConfig.minStock ? 'stock-low' : ''}">Estoque: ${available}</span>`;
-      const descriptionText = product.description || 'Produto selecionado pela Mística Presentes.';
-      const drawer = `<button class="product-desc-toggle" type="button" aria-expanded="${isOpen}" aria-controls="${descId}" data-toggle-desc="${esc(product.id)}"><span>Ver descrição</span><svg class="product-desc-chevron" viewBox="0 0 20 20" aria-hidden="true"><path d="M5 7l5 5 5-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="product-desc-drawer${isOpen ? ' is-open' : ''}" id="${descId}"${isOpen ? '' : ' aria-hidden="true"'}><div class="product-desc-drawer-inner"><p>${esc(descriptionText)}</p>${encomendaNote}</div></div>`;
-      return `<article class="product-card" data-category="${esc(product.category || '')}" data-best-seller="${typeof isBestSeller === 'function' ? isBestSeller(product) : false}">${bestSeller}${encomendaBadge}${media}<div class="product-card-body"><p class="eyebrow">${esc(product.category)}</p><h3>${esc(product.name)}</h3>${rating}<strong class="product-price">${currency.format(product.price)}</strong>${stockBadge}<div class="qty-row"><input id="qty-${id}" type="number" min="1" max="${available}" step="1" value="1" aria-label="Quantidade de ${esc(product.name)}" ${disabled} /><button class="btn" type="button" data-add-to-cart="${esc(product.id)}" ${disabled}>Adicionar</button></div><button class="btn btn-ghost btn-full" type="button" data-buy-whatsapp="${esc(product.id)}">Comprar pelo WhatsApp</button>${drawer}</div></article>`;
+        : `<span class="stock-badge ${outOfStock ? 'stock-out' : available <= storeConfig.minStock ? 'stock-low' : ''}">${outOfStock ? 'Esgotado' : `Estoque: ${available}`}</span>`;
+      // "Ver detalhes" abre o modal do inspetor (mais foto, descrição e
+      // ações completas) em vez da gaveta inline: reduz a altura do card
+      // na vitrine (etapa 1/3 da modernização premium).
+      return `<article class="product-card" data-category="${esc(product.category || '')}" data-best-seller="${typeof isBestSeller === 'function' ? isBestSeller(product) : false}" data-out-of-stock="${outOfStock}">${bestSeller}${encomendaBadge}${media}<div class="product-card-body"><p class="eyebrow">${esc(product.category)}</p><h3>${esc(product.name)}</h3>${rating}<strong class="product-price">${currency.format(product.price)}</strong>${stockBadge}<button class="btn btn-full product-add-btn" type="button" data-add-to-cart="${esc(product.id)}" ${disabled}>${addLabel}</button><div class="product-card-secondary"><button class="btn btn-ghost btn-small" type="button" data-inspect-product="${esc(product.id)}">Ver detalhes</button><button class="btn btn-ghost btn-small" type="button" data-buy-whatsapp="${esc(product.id)}">WhatsApp</button></div>${encomendaNote}</div></article>`;
     }).join('');
   }
 

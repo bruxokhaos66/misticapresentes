@@ -2,21 +2,24 @@
 //
 // Nunca implementa carrinho próprio: apenas orquestra as funções e o
 // estado globais já usados pelo site (app.js — window.addToCart,
-// window.removeFromCart, `cart`, `products`, `currency`). Isso garante
-// que preço, estoque e regras de negócio (encomenda, limites de
-// quantidade, desconto de estoque) continuam sendo decididas por um
-// único lugar (app.js) — a Isis nunca calcula preço/estoque por conta
-// própria nem confia em números ditos na conversa sem checar o catálogo.
+// window.setCartQty, window.removeFromCart, `cart`, `products`,
+// `currency`). Isso garante que preço, estoque e regras de negócio
+// (encomenda, limites de quantidade, desconto de estoque) continuam
+// sendo decididas por um único lugar (app.js) — a Isis nunca calcula
+// preço/estoque por conta própria nem confia em números ditos na
+// conversa sem checar o catálogo.
 //
-// window.addToCart(id) (app.js) lê a quantidade de um <input
-// id="qty-<id>"> renderizado na página para ESSE produto específico —
-// não aceita quantidade por parâmetro. Em produto.html/kit.html esse
-// input só existe para o(s) produto(s) atualmente exibidos: se a Isis
-// recomendar um produto que não está com o input renderizado na página
-// atual, chamar addToCart direto lançaria erro (leitura de `.value` em
-// `null`). Por isso este módulo verifica a presença do input antes de
-// agir e devolve um motivo explícito quando não é possível adicionar
-// "no local" — nunca falha silenciosamente nem finge sucesso.
+// window.addToCart(id) (app.js) sempre adiciona 1 unidade -- a vitrine
+// não tem mais campo de quantidade (produto pode estar "esgotado" ou não
+// disponível na página atual). Este módulo só chama addToCart quando o
+// botão "Adicionar ao carrinho" (`[data-add-to-cart]`) do produto está
+// de fato renderizado na página atual -- em produto.html/kit.html esse
+// botão só existe para o(s) produto(s) atualmente exibidos, então um
+// produto recomendado pela Isis que não está na página não pode ser
+// adicionado "no escuro". Quando é pedida mais de 1 unidade, o ajuste
+// depois do primeiro clique usa window.setCartQty (o mesmo stepper do
+// carrinho), com o estoque disponível checado ANTES de tocar no
+// carrinho, para nunca aceitar parcialmente um pedido acima do estoque.
 (() => {
   window.Isis2 = window.Isis2 || {};
   if (window.Isis2.CartAssistant) return;
@@ -56,9 +59,17 @@
     return catalog().find(item => String(item.id) === String(productId)) || null;
   }
 
-  function qtyInputFor(productId) {
+  // Encontra o botão "Adicionar ao carrinho" do produto na página atual
+  // (iterando em vez de montar um seletor CSS com o id do produto, para
+  // não depender de escapar caracteres especiais no valor do atributo).
+  function addButtonFor(productId) {
     try {
-      return document.getElementById(`qty-${productId}`);
+      const buttons = document.querySelectorAll("[data-add-to-cart]");
+      for (const button of buttons) {
+        const value = button.dataset ? button.dataset.addToCart : button.getAttribute?.("data-add-to-cart");
+        if (String(value) === String(productId)) return button;
+      }
+      return null;
     } catch {
       return null;
     }
@@ -78,22 +89,31 @@
   }
 
   function canAddDirectly(productId) {
-    return typeof window.addToCart === "function" && Boolean(qtyInputFor(productId));
+    return typeof window.addToCart === "function" && Boolean(addButtonFor(productId));
   }
 
   function add(productId, requestedQty = 1) {
     if (typeof window.addToCart !== "function") return { ok: false, reason: "unavailable" };
     if (!findProduct(productId)) return { ok: false, reason: "not_found" };
 
-    const input = qtyInputFor(productId);
-    if (!input) return { ok: false, reason: "not_addable_here" };
+    if (!addButtonFor(productId)) return { ok: false, reason: "not_addable_here" };
 
     const qty = normalizeQty(requestedQty);
     const before = cartQtyOf(productId);
-    const previousValue = input.value;
-    input.value = String(qty);
+
+    // Checa o estoque disponível ANTES de tocar no carrinho: um pedido
+    // acima do estoque deve ser recusado por inteiro (nunca adicionar
+    // parcialmente o quanto couber) -- mesma regra que validateQuantity
+    // já aplica em app.js.
+    const available = typeof window.getStock === "function"
+      ? window.getStock(productId)
+      : (typeof getStock === "function" ? getStock(productId) : Infinity);
+    if (qty + before > available) return { ok: false, reason: "rejected_by_store" };
+
     window.addToCart(productId);
-    input.value = previousValue;
+    if (qty > 1 && typeof window.setCartQty === "function") {
+      window.setCartQty(productId, before + qty);
+    }
     const after = cartQtyOf(productId);
 
     // window.addToCart não lança nem retorna status em caso de recusa
