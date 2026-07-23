@@ -5,18 +5,22 @@
    botão/cartão) e da faixa de pagamentos, alinhada à mesma largura.
    Endereço, WhatsApp, Instagram e site já aparecem no rodapé e no topo
    da página — não são duplicados aqui. */
-.institutional-section { padding: clamp(40px, 5vw, 72px) 0; }
+.institutional-section { padding: clamp(28px, 3.6vw, 52px) 0; }
+/* .institutional-stack e .payment-strip também têm a classe .container;
+   esta largura (até 1300px, ~90-95% do viewport em notebooks/desktops
+   comuns) substitui o max-width padrão de 1180px só nesta seção, para o
+   banner voltar a ser o elemento de maior impacto da página. */
 .institutional-stack {
+  width: min(1300px, calc(100% - 32px));
+  margin: 0 auto;
   display: grid;
-  gap: clamp(28px, 3.4vw, 40px);
+  gap: clamp(16px, 2.2vw, 28px);
 }
 .institutional-banner {
   display: block;
-  width: auto;
-  max-width: 100%;
-  height: clamp(280px, 30vw, 420px);
+  width: 100%;
+  height: auto;
   aspect-ratio: 1914 / 822;
-  margin: 0 auto;
   object-fit: cover;
   object-position: center;
   border-radius: calc(var(--radius) - 2px);
@@ -39,7 +43,6 @@
   align-items: flex-start;
   gap: 12px;
   flex: 1 1 240px;
-  max-width: 300px;
   padding: 2px 24px;
   border-left: 1px solid rgba(242, 201, 109, .14);
 }
@@ -48,9 +51,6 @@
 .institutional-benefits strong { display: block; color: var(--cream); font-size: .92rem; font-weight: 750; }
 .institutional-benefits small { display: block; margin-top: 3px; color: var(--muted); font-size: .8rem; line-height: 1.45; }
 
-@media (max-width: 900px) {
-  .institutional-banner { width: 100%; height: auto; }
-}
 @media (max-width: 640px) {
   .institutional-benefits { flex-direction: column; gap: 0; }
   .institutional-benefits li {
@@ -66,8 +66,10 @@
 
 /* Faixa de pagamento: mesma largura e ritmo visual do banner acima,
    com bordas discretas para não parecer um painel administrativo. */
-.payment-strip-section { padding: 0 0 clamp(40px, 5vw, 72px); }
+.payment-strip-section { padding: 0 0 clamp(32px, 4vw, 60px); }
 .payment-strip {
+  width: min(1300px, calc(100% - 32px));
+  margin: 0 auto;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
