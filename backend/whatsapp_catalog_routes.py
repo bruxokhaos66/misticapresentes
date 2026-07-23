@@ -258,20 +258,26 @@ def rota_enviar_produto(
             try:
                 produto = _validar_produto_para_envio(conn, body.product_id, base_url=_base_url(request))
             except HTTPException as exc:
-                registrar_envio_produto(
-                    conn,
-                    RegistroEnvioProduto(
-                        conversation_id=conversation_id,
-                        product_id=body.product_id,
-                        message_id=None,
-                        performed_by_user_id=usuario.get("id"),
-                        action="unavailable_product_blocked",
-                        price_at_send=0.0,
-                        status="blocked",
-                        idempotency_key_hash=_hash_chave(idempotency_key),
-                    ),
-                )
-                conn.commit()
+                if exc.status_code != 404:
+                    # Produto existe mas está indisponível/inativo/sem link
+                    # -- registra o bloqueio (item 12). Um 404 (produto
+                    # inexistente) nunca é gravado aqui: a FK de
+                    # whatsapp_catalog_sends.product_id exige um produto
+                    # real.
+                    registrar_envio_produto(
+                        conn,
+                        RegistroEnvioProduto(
+                            conversation_id=conversation_id,
+                            product_id=body.product_id,
+                            message_id=None,
+                            performed_by_user_id=usuario.get("id"),
+                            action="unavailable_product_blocked",
+                            price_at_send=0.0,
+                            status="blocked",
+                            idempotency_key_hash=_hash_chave(idempotency_key),
+                        ),
+                    )
+                    conn.commit()
                 liberar_chave_idempotente(conectar, escopo, idempotency_key)
                 raise exc
 
