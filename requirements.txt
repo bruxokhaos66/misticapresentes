@@ -27,6 +27,7 @@ google-auth==2.55.2
 Pillow==12.3.0
 boto3==1.43.48
 cryptography==49.0.0
+openpyxl==3.1.5
 
 # Provedor de IA opcional do Estudio de Conteudo da Isis (Fase 3). So e
 # importado em tempo de execucao (backend/isis_ai_providers.py) quando

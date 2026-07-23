@@ -262,6 +262,7 @@
             </div>
             <div class="admin-product-actions">
               <button class="btn btn-ghost" type="button" data-edit-product="${product.id}">Editar</button>
+              <button class="btn btn-ghost" type="button" data-duplicate-product="${product.id}">Duplicar</button>
               <button class="btn btn-ghost" type="button" data-delete-product="${product.id}">Excluir</button>
             </div>
           </article>
@@ -348,15 +349,34 @@
       }
     });
 
+    const duplicateProduct = async (id) => {
+      const product = currentProducts.find((item) => String(item.id) === String(id));
+      const copiarImagem = !!(product && product.imagem_url) && confirm('Copiar também a imagem principal para o produto duplicado?');
+      const response = await fetch(`${API_BASE}/api/produtos/${id}/duplicar`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ copiar_imagem: copiarImagem }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || 'Falha ao duplicar produto.');
+      setStatus(`Produto duplicado como rascunho: "${data.nome}". Edite-o para revisar e publicar.`, true);
+    };
+
     panel.querySelector('[data-refresh-products]').addEventListener('click', loadProducts);
     panel.querySelector('[data-new-product]').addEventListener('click', clearForm);
     list.addEventListener('click', async (event) => {
       const editButton = event.target.closest('[data-edit-product]');
       const deleteButton = event.target.closest('[data-delete-product]');
+      const duplicateButton = event.target.closest('[data-duplicate-product]');
       if (editButton) editProduct(editButton.dataset.editProduct);
       if (deleteButton) {
         try { await deleteProduct(deleteButton.dataset.deleteProduct); }
         catch (error) { setStatus(error.message || 'Erro ao excluir produto.'); }
+      }
+      if (duplicateButton) {
+        try { await duplicateProduct(duplicateButton.dataset.duplicateProduct); }
+        catch (error) { setStatus(error.message || 'Erro ao duplicar produto.'); }
       }
     });
 

@@ -245,6 +245,33 @@ class ProductImageStorage:
                     extra={"evento": "product_image_delete_local_falhou", "erro_tipo": type(exc).__name__},
                 )
 
+    def read(self, key_or_url: str | None) -> bytes | None:
+        """Lê os bytes de um objeto gerenciado por este storage (local ou
+        remoto). Usado pela duplicação de produto para copiar fisicamente uma
+        imagem sem reaproveitar a mesma chave/arquivo mutável do original.
+        Retorna None para URLs externas/não gerenciadas ou em caso de falha."""
+        if not key_or_url:
+            return None
+        key = self.key_from_url(key_or_url) if key_or_url.startswith(("http://", "https://")) else key_or_url
+        if self.remote_enabled and key and self.key_from_url(key_or_url) is not None:
+            try:
+                client = self._s3_client()
+                resposta = client.get_object(Bucket=self.config.bucket, Key=key)
+                return resposta["Body"].read()
+            except Exception as exc:
+                logger.warning(
+                    "falha ao ler imagem de produto do storage remoto",
+                    extra={"evento": "product_image_read_falhou", "erro_tipo": type(exc).__name__},
+                )
+                return None
+        caminho_local = _caminho_local_gerenciado(key_or_url)
+        if caminho_local:
+            try:
+                return (self.local_dir / Path(caminho_local).name).read_bytes()
+            except OSError:
+                return None
+        return None
+
     def exists(self, key_or_url: str | None) -> bool:
         if not key_or_url:
             return False
