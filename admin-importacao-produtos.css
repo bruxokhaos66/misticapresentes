@@ -1,0 +1,22 @@
+.import-produtos-panel .import-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px}
+.import-produtos-panel .import-form-grid{display:grid;gap:14px;grid-template-columns:repeat(2,minmax(0,1fr));margin-top:16px}
+.import-produtos-panel .import-form-grid label{display:grid;gap:6px;font-size:.86rem;color:rgba(255,246,225,.82)}
+.import-produtos-panel .import-form-grid select,.import-produtos-panel .import-form-grid input[type=file]{width:100%}
+.import-produtos-panel .import-modo-aviso{display:none;margin-top:6px;padding:10px 14px;border-radius:12px;background:rgba(242,109,109,.12);border:1px solid rgba(242,109,109,.4);color:#ffd7d7;font-size:.86rem}
+.import-produtos-panel .import-modo-aviso.is-visible{display:block}
+.import-produtos-panel .import-resumo{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-top:16px}
+.import-produtos-panel .import-resumo-item{padding:10px 12px;border-radius:14px;background:rgba(8,8,12,.6);border:1px solid rgba(231,198,128,.18);text-align:center}
+.import-produtos-panel .import-resumo-item strong{display:block;font-size:1.2rem;color:#fff7df}
+.import-produtos-panel .import-resumo-item span{display:block;font-size:.74rem;color:rgba(255,246,225,.66);text-transform:uppercase;letter-spacing:.04em}
+.import-produtos-panel .import-filtros{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.import-produtos-panel .import-filtros button{border:1px solid rgba(231,198,128,.3);background:rgba(255,255,255,.04);color:var(--gold-strong,#f0c56a);border-radius:999px;padding:6px 14px;font-size:.8rem;cursor:pointer}
+.import-produtos-panel .import-filtros button.is-active{background:rgba(240,197,106,.24)}
+.import-produtos-panel table.import-tabela{width:100%;border-collapse:collapse;margin-top:12px;font-size:.86rem}
+.import-produtos-panel table.import-tabela th,.import-produtos-panel table.import-tabela td{padding:8px 10px;border-bottom:1px solid rgba(231,198,128,.14);text-align:left;vertical-align:top}
+.import-produtos-panel table.import-tabela tr.linha-erro{background:rgba(242,109,109,.08)}
+.import-produtos-panel table.import-tabela tr.linha-ignorado{opacity:.65}
+.import-produtos-panel .import-tabela-wrap{max-height:480px;overflow:auto;border-radius:14px;border:1px solid rgba(231,198,128,.14)}
+.import-produtos-panel .import-paginacao{display:flex;gap:8px;align-items:center;margin-top:10px}
+.import-produtos-panel .import-progress-estado{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border-radius:999px;background:rgba(255,255,255,.06);font-size:.8rem}
+.import-produtos-panel .import-historico-item{display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;padding:10px 12px;border-radius:12px;border:1px solid rgba(231,198,128,.14);margin-top:8px;font-size:.82rem}
+@media (max-width:760px){.import-produtos-panel .import-form-grid{grid-template-columns:1fr}}

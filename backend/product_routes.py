@@ -217,7 +217,9 @@ _CAMPOS_PRODUTO_PUBLICO = """p.id, p.codigo_p, p.nome, p.marca, p.preco, p.quant
                        p.sob_encomenda, p.limite_encomenda, p.atualizado_em"""
 _CAMPOS_PRODUTO_ADMIN = """p.id, p.codigo_p, p.nome, p.marca, p.preco, p.quantidade, p.categoria, p.custo, p.lucro,
                        p.estoque_minimo, p.descricao, p.imagem_url, p.imagens_json, p.link_externo, p.selo,
-                       p.sob_encomenda, p.limite_encomenda, p.atualizado_em"""
+                       p.sob_encomenda, p.limite_encomenda, p.atualizado_em,
+                       p.subcategoria, p.descricao_curta, p.preco_promocional, p.peso, p.largura, p.altura,
+                       p.comprimento, p.destaques, p.modo_de_uso, p.ativo, COALESCE(p.rascunho,0) AS rascunho"""
 _JOIN_AVALIACOES = """
 LEFT JOIN (
     SELECT produto_id, COUNT(*) AS total, AVG(nota) AS media
@@ -227,15 +229,19 @@ LEFT JOIN (
 ) a ON a.produto_id = p.id"""
 
 
-def _buscar_produtos(campos: str, busca: str, limite: int):
+def _buscar_produtos(campos: str, busca: str, limite: int, *, incluir_rascunhos: bool = False):
     termo = f"%{busca.strip()}%"
+    # incluir_rascunhos nunca é aceito pelo endpoint público (só o admin passa
+    # True) -- por padrão False, preservando exatamente o filtro
+    # `ativo=1` que já existia antes desta opção existir.
+    condicao_ativo = "1=1" if incluir_rascunhos else "COALESCE(p.ativo,1)=1"
     with conectar() as conn:
         garantir_colunas_comerciais(conn)
         if busca.strip():
             rows = conn.execute(
                 f"""SELECT {campos}, COALESCE(a.total,0) AS avaliacoes_total, ROUND(a.media,1) AS avaliacoes_media
                 FROM produtos p{_JOIN_AVALIACOES}
-                WHERE COALESCE(p.ativo,1)=1
+                WHERE {condicao_ativo}
                   AND (p.nome LIKE ? OR p.codigo_p LIKE ? OR p.categoria LIKE ? OR p.marca LIKE ? OR p.descricao LIKE ? OR p.selo LIKE ?)
                 ORDER BY p.nome COLLATE NOCASE LIMIT ?""",
                 (termo, termo, termo, termo, termo, termo, limite),
@@ -244,7 +250,7 @@ def _buscar_produtos(campos: str, busca: str, limite: int):
             rows = conn.execute(
                 f"""SELECT {campos}, COALESCE(a.total,0) AS avaliacoes_total, ROUND(a.media,1) AS avaliacoes_media
                 FROM produtos p{_JOIN_AVALIACOES}
-                WHERE COALESCE(p.ativo,1)=1 ORDER BY p.nome COLLATE NOCASE LIMIT ?""",
+                WHERE {condicao_ativo} ORDER BY p.nome COLLATE NOCASE LIMIT ?""",
                 (limite,),
             ).fetchall()
     return [produto_row_to_dict(row) for row in rows]
@@ -256,8 +262,13 @@ def listar_produtos_completos(busca: str = "", limite: int = Query(100, ge=1, le
 
 
 @router.get("/produtos/admin")
-def listar_produtos_admin(busca: str = "", limite: int = Query(100, ge=1, le=500), sessao: dict = Depends(exigir_sessao_ou_chave_api())):
-    return _buscar_produtos(_CAMPOS_PRODUTO_ADMIN, busca, limite)
+def listar_produtos_admin(
+    busca: str = "",
+    limite: int = Query(100, ge=1, le=500),
+    incluir_rascunhos: bool = Query(False, description="Inclui produtos inativos/rascunho (ex.: recém-importados) na listagem administrativa."),
+    sessao: dict = Depends(exigir_sessao_ou_chave_api()),
+):
+    return _buscar_produtos(_CAMPOS_PRODUTO_ADMIN, busca, limite, incluir_rascunhos=incluir_rascunhos)
 
 
 @router.post("/checkout/pedidos", dependencies=[Depends(limitar_checkout_publico)])

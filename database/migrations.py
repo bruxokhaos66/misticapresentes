@@ -313,6 +313,26 @@ def _aplicar_migracoes(db_path_atual: str) -> None:
     ]:
         _exec_tolerante(f"ALTER TABLE produtos ADD COLUMN {col} {typ}")
 
+    # Colunas adicionais do catálogo usadas pela importação em massa de
+    # produtos (subcategoria, preço promocional, dimensões, destaques, modo
+    # de uso, descrição curta e marcador de rascunho). Todas nullable/com
+    # default neutro -- produtos existentes continuam válidos sem alteração,
+    # e nenhuma delas é obrigatória nas rotas de cadastro/edição já
+    # existentes (que não as leem nem escrevem).
+    for col, typ in [
+        ("subcategoria", "TEXT"),
+        ("descricao_curta", "TEXT"),
+        ("preco_promocional", "REAL"),
+        ("peso", "REAL"),
+        ("largura", "REAL"),
+        ("altura", "REAL"),
+        ("comprimento", "REAL"),
+        ("destaques", "TEXT"),
+        ("modo_de_uso", "TEXT"),
+        ("rascunho", "INTEGER NOT NULL DEFAULT 0"),
+    ]:
+        _exec_tolerante(f"ALTER TABLE produtos ADD COLUMN {col} {typ}")
+
     # Colunas de pedidos (site) sobre a tabela vendas (antes duplicadas em
     # backend/order_status_routes.py, backend/order_api_guard_inner_routes.py,
     # backend/main.py e backend/user_sync_routes.py).
@@ -569,8 +589,40 @@ def _aplicar_migracoes(db_path_atual: str) -> None:
     _criar_tabelas_mercadopago()
     _criar_pedido_comercial_unificado()
     _criar_tabelas_whatsapp_notificacoes()
+    _criar_tabela_importacoes_produtos()
 
     _BANCOS_MIGRADOS.add(db_path_atual)
+
+
+def _criar_tabela_importacoes_produtos():
+    """Histórico de importações em massa de produtos (planilha + ZIP opcional
+    de imagens). Guarda só metadados/contadores do lote -- nunca o conteúdo
+    da planilha, credenciais ou caminhos internos de disco (ver
+    backend/product_import.py, que é quem escreve nesta tabela)."""
+    query_db(
+        """
+        CREATE TABLE IF NOT EXISTS importacoes_produtos (
+            id TEXT PRIMARY KEY,
+            iniciado_em TEXT NOT NULL,
+            concluido_em TEXT,
+            admin_login TEXT,
+            planilha_nome TEXT,
+            zip_nome TEXT,
+            modo TEXT NOT NULL,
+            total_linhas INTEGER NOT NULL DEFAULT 0,
+            criados INTEGER NOT NULL DEFAULT 0,
+            atualizados INTEGER NOT NULL DEFAULT 0,
+            ignorados INTEGER NOT NULL DEFAULT 0,
+            com_erro INTEGER NOT NULL DEFAULT 0,
+            sem_imagem INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'em_andamento',
+            mensagem_erro TEXT,
+            duracao_ms INTEGER
+        )
+        """,
+        commit=True,
+    )
+    _exec_tolerante("CREATE INDEX IF NOT EXISTS idx_importacoes_produtos_data ON importacoes_produtos(iniciado_em)")
 
 
 def _criar_tabelas_isis_content_studio():

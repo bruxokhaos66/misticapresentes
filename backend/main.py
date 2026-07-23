@@ -49,6 +49,7 @@ from backend.payment_webhook_routes import router as payment_webhook_router
 from backend.mercadopago_routes import router as mercadopago_router
 from backend.api_security import APP_ENV, ORIGENS_PERMITIDAS, estorno_rest_habilitado, validar_site_api_key as validar_chave_api
 from backend.product_routes import router as product_router, validar_site_api_key
+from backend.product_import_routes import router as product_import_router
 from backend.review_routes import router as review_router
 from backend.upload_routes import CURSOS_DIR, UPLOAD_DIR as PRODUTOS_UPLOAD_DIR, router as upload_router
 from backend.user_sync_routes import router as user_sync_router
@@ -304,6 +305,7 @@ def servir_material_curso_protegido(
 
 
 app.include_router(product_router)
+app.include_router(product_import_router)
 app.include_router(user_sync_router)
 app.include_router(site_stock_router)
 app.include_router(order_status_router)
