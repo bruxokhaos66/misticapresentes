@@ -1195,6 +1195,20 @@ def _criar_tabelas_whatsapp_central_atendimento():
     ]:
         _exec_tolerante(sql_idx)
 
+    # Estado do download de mídia (aditivo -- mensagens antigas ficam NULL,
+    # tratadas como "pending" pelo backend). Evita que duas requisições
+    # concorrentes de /api/admin/whatsapp/media/{id} baixem a mesma mídia da
+    # Meta duas vezes: a primeira reivindica a linha (pending->downloading)
+    # antes de chamar a Graph API; a segunda vê 0 linhas afetadas e aguarda o
+    # resultado da primeira em vez de baixar de novo.
+    _exec_tolerante(
+        "ALTER TABLE whatsapp_messages ADD COLUMN media_status TEXT NOT NULL DEFAULT 'pending' "
+        "CHECK(media_status IN ('pending','downloading','available','rejected','failed'))"
+    )
+    _exec_tolerante(
+        "UPDATE whatsapp_messages SET media_status='available' WHERE media_path IS NOT NULL AND media_status='pending'"
+    )
+
     # Idempotência dos eventos de MENSAGEM RECEBIDA do webhook (distinta de
     # whatsapp_status_eventos, que só cobre status de entrega). event_key é o
     # meta_message_id quando existe; para eventos sem id de mensagem
