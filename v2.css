@@ -13,6 +13,40 @@
   --line: rgba(242, 201, 109, .24);
   --shadow: 0 28px 90px rgba(0,0,0,.38);
   --radius: 28px;
+
+  /* Design tokens (Fase 2 — etapa 2): aliases sobre a paleta já existente
+     acima, para dar nomes previsíveis a valores reaproveitados pelo CSS,
+     sem substituir nenhuma cor/medida em uso. Novo CSS deve preferir estes
+     tokens; CSS existente continua funcionando sem alteração. */
+  --color-background: var(--bg);
+  --color-surface: rgba(6, 6, 9, .58);
+  --color-surface-elevated: var(--panel-strong);
+  --color-text: var(--cream);
+  --color-text-muted: var(--muted);
+  --color-primary: var(--gold);
+  --color-primary-hover: var(--gold-2);
+  --color-border: var(--line);
+  --color-success: var(--sage);
+  --color-error: #ffb0b0;
+
+  --radius-sm: 12px;
+  --radius-md: 18px;
+  --radius-lg: var(--radius);
+  --radius-pill: 999px;
+
+  --shadow-sm: 0 8px 24px rgba(0,0,0,.22);
+  --shadow-md: 0 18px 54px rgba(0,0,0,.3);
+  --shadow-lg: var(--shadow);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --transition-fast: .15s ease;
+  --transition-normal: .25s ease;
 }
 
 * { box-sizing: border-box; }
@@ -41,7 +75,9 @@ button, input, textarea { font: inherit; }
 .ribbon-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 16px; align-items: center; padding: 11px 0; }
 .ribbon-grid span:nth-child(2) { color: var(--sage); }
 .ribbon-grid a { justify-self: end; }
-.site-header { position: sticky; top: 0; z-index: 40; border-bottom: 1px solid var(--line); background: rgba(5,5,9,.86); backdrop-filter: blur(18px); box-shadow: 0 18px 58px rgba(0,0,0,.28); }
+.site-header { position: sticky; top: 0; z-index: 40; border-bottom: 1px solid var(--line); background: rgba(5,5,9,.86); backdrop-filter: blur(18px); box-shadow: none; transition: box-shadow .2s ease, border-color .2s ease; }
+.site-header.is-scrolled { box-shadow: var(--shadow-md); border-color: rgba(242,201,109,.34); }
+.nav-links a.is-active:not(.btn) { color: var(--gold-2); background: rgba(242,201,109,.1); }
 .nav { min-height: 88px; display: flex; align-items: center; justify-content: space-between; gap: 22px; }
 .brand { display: flex; align-items: center; gap: 14px; }
 .brand-mark { width: 58px; height: 58px; display: grid; place-items: center; border: 1px solid rgba(242,201,109,.48); border-radius: 999px; color: var(--gold); font-size: 2rem; background: radial-gradient(circle, rgba(242,201,109,.18), rgba(5,5,9,.88)); box-shadow: 0 0 0 6px rgba(242,201,109,.06), 0 0 38px rgba(242,201,109,.2); }
@@ -110,6 +146,9 @@ button, input, textarea { font: inherit; }
 .product-price { display: block; margin: auto 0 10px; color: var(--gold-2); font-size: 1.35rem; }
 .stock-badge { display: inline-flex; width: fit-content; border: 1px solid rgba(189,209,122,.3); border-radius: 999px; padding: 6px 10px; color: #dff1a4; background: rgba(189,209,122,.08); font-size: .78rem; font-weight: 850; }
 .stock-low { color: #ffe0a3; border-color: rgba(242,201,109,.38); background: rgba(242,201,109,.08); }
+.stock-out { color: var(--color-error); border-color: rgba(255,140,140,.4); background: rgba(255,110,110,.1); }
+.product-card[data-out-of-stock="true"] .product-media-frame { opacity: .55; }
+.product-card[data-out-of-stock="true"] .product-add-btn { background: rgba(255,255,255,.06); color: var(--muted); border-color: rgba(255,255,255,.14); box-shadow: none; }
 .qty-row { display: grid; grid-template-columns: 80px 1fr; gap: 10px; margin: 14px 0 10px; }
 input, textarea { width: 100%; border: 1px solid rgba(242,201,109,.24); border-radius: 16px; padding: 13px 14px; color: var(--cream); background: rgba(0,0,0,.28); outline: none; }
 textarea { min-height: 120px; resize: vertical; }
@@ -198,7 +237,7 @@ label { display: grid; gap: 7px; color: var(--muted); font-weight: 750; }
   .footer-brand { grid-column: 1 / -1; }
 }
 @media (max-width: 560px) {
-  .footer-grid { grid-template-columns: 1fr; gap: 24px; }
+  .footer-grid { grid-template-columns: minmax(0, 1fr); gap: 24px; }
 }
 .floating-whatsapp { position: fixed; right: 18px; bottom: 18px; z-index: 80; border-radius: 999px; padding: 14px 18px; color: #10150e; background: linear-gradient(135deg, #dcf9b9, #9bc969); font-weight: 950; box-shadow: 0 20px 60px rgba(0,0,0,.42); transition: transform .2s ease, box-shadow .2s ease; }
 .floating-whatsapp:hover { transform: translateY(-2px) scale(1.03); box-shadow: 0 24px 66px rgba(0,0,0,.46); }

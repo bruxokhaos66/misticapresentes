@@ -170,7 +170,9 @@ function productCardHtml(product) {
   const imgSrc = escapeHtml(product.imageUrl || PRODUCT_FALLBACK_IMAGE);
   const media = `<div class="product-media-frame"><img class="product-photo" src="${imgSrc}" alt="${name}" loading="lazy" decoding="async" data-fallback-src="${PRODUCT_FALLBACK_IMAGE}">${isBestSeller(product) ? `<span class="product-badge-best">${escapeHtml(productBadgeText(product))}</span>` : ""}</div>`;
   const descId = `desc-${id}`;
-  return `<article class="product-card" data-category="${escapeHtml(product.category || "")}" data-best-seller="${isBestSeller(product)}">${media}<div class="product-card-body"><p class="eyebrow">${escapeHtml(product.category)}</p><h3>${name}</h3>${socialProofHtml(product)}<strong class="product-price">${currency.format(product.price)}</strong><span class="stock-badge ${available <= storeConfig.minStock ? "stock-low" : ""}">Estoque: ${available}</span><button class="btn btn-full product-add-btn" type="button" data-add-to-cart="${escapeHtml(product.id)}" ${disabled}>Adicionar ao carrinho</button><div class="product-card-secondary"><button class="btn btn-ghost btn-small" type="button" aria-expanded="${openProductDrawers.has(product.id)}" aria-controls="${descId}" data-toggle-desc="${escapeHtml(product.id)}">Ver detalhes</button><button class="btn btn-ghost btn-small" type="button" data-buy-whatsapp="${escapeHtml(product.id)}">WhatsApp</button></div><div class="product-desc-drawer${openProductDrawers.has(product.id) ? " is-open" : ""}" id="${descId}"${openProductDrawers.has(product.id) ? "" : ' aria-hidden="true"'}><div class="product-desc-drawer-inner"><p>${escapeHtml(product.description)}</p></div></div></div></article>`;
+  const outOfStock = available <= 0;
+  const addLabel = outOfStock ? "Indisponível" : "Adicionar ao carrinho";
+  return `<article class="product-card" data-category="${escapeHtml(product.category || "")}" data-best-seller="${isBestSeller(product)}" data-out-of-stock="${outOfStock}">${media}<div class="product-card-body"><p class="eyebrow">${escapeHtml(product.category)}</p><h3>${name}</h3>${socialProofHtml(product)}<strong class="product-price">${currency.format(product.price)}</strong><span class="stock-badge ${outOfStock ? "stock-out" : available <= storeConfig.minStock ? "stock-low" : ""}">${outOfStock ? "Esgotado" : `Estoque: ${available}`}</span><button class="btn btn-full product-add-btn" type="button" data-add-to-cart="${escapeHtml(product.id)}" ${disabled}>${addLabel}</button><div class="product-card-secondary"><button class="btn btn-ghost btn-small" type="button" aria-expanded="${openProductDrawers.has(product.id)}" aria-controls="${descId}" data-toggle-desc="${escapeHtml(product.id)}">Ver detalhes</button><button class="btn btn-ghost btn-small" type="button" data-buy-whatsapp="${escapeHtml(product.id)}">WhatsApp</button></div><div class="product-desc-drawer${openProductDrawers.has(product.id) ? " is-open" : ""}" id="${descId}"${openProductDrawers.has(product.id) ? "" : ' aria-hidden="true"'}><div class="product-desc-drawer-inner"><p>${escapeHtml(product.description)}</p></div></div></div></article>`;
 }
 const openProductDrawers = new Set();
 function toggleProductDescription(productId) {
@@ -797,6 +799,10 @@ $("[data-restore-backup]")?.addEventListener("click", restoreBackupInfo);
     toggleBtn.setAttribute("aria-expanded", String(open));
     toggleBtn.setAttribute("aria-label", open ? "Fechar menu" : "Abrir menu");
     document.body.style.overflow = open ? "hidden" : "";
+    // Leva o foco para dentro do menu ao abrir e devolve ao botão ao
+    // fechar, para quem navega por teclado não perder a posição.
+    if (open) navLinks.querySelector("a")?.focus();
+    else if (document.activeElement && navLinks.contains(document.activeElement)) toggleBtn.focus();
   };
   toggleBtn.addEventListener("click", () => setMenuOpen(!navLinks.classList.contains("open")));
   document.addEventListener("keydown", event => {
@@ -810,6 +816,27 @@ $("[data-restore-backup]")?.addEventListener("click", restoreBackupInfo);
   navLinks.addEventListener("click", event => {
     if (event.target.closest("a")) setMenuOpen(false);
   });
+})();
+// Sombra sutil no cabeçalho quando há conteúdo rolando por baixo, e
+// destaque do link da seção atual -- puramente visual, sem afetar layout
+// nem alturas (evita layout shift). Listener passivo e leve.
+(() => {
+  const header = $(".site-header");
+  if (!header) return;
+  const onScroll = () => header.classList.toggle("is-scrolled", window.scrollY > 8);
+  onScroll();
+  window.addEventListener("scroll", onScroll, { passive: true });
+  const sections = $$("main > section[id]");
+  const navAnchors = $$("[data-nav-links] a[href^='#']");
+  if (!sections.length || !navAnchors.length || typeof IntersectionObserver !== "function") return;
+  const setActive = id => {
+    navAnchors.forEach(a => a.classList.toggle("is-active", a.getAttribute("href") === `#${id}`));
+  };
+  const observer = new IntersectionObserver(entries => {
+    const visible = entries.filter(entry => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+    if (visible) setActive(visible.target.id);
+  }, { rootMargin: "-45% 0px -50% 0px", threshold: [0, 0.25, 0.5, 0.75, 1] });
+  sections.forEach(section => observer.observe(section));
 })();
 if (supplierForm) supplierForm.addEventListener("submit", handleSupplierSubmit);
 if (adminLoginForm) adminLoginForm.addEventListener("submit", event => { event.preventDefault(); unlockAdmin(); });

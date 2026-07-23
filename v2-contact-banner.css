@@ -34,7 +34,9 @@
 }
 .institutional-panel > p:not(.eyebrow) { color: var(--muted); margin: 0 0 8px; }
 .institutional-contacts { list-style: none; margin: 10px 0 20px; padding: 0; display: grid; gap: 12px; }
-.institutional-contacts li { display: flex; align-items: flex-start; gap: 12px; color: var(--muted); line-height: 1.5; }
+.institutional-contacts li { display: flex; align-items: flex-start; gap: 12px; color: var(--muted); line-height: 1.5; min-width: 0; }
+.institutional-contacts li > span:last-child,
+.institutional-contacts li > a { min-width: 0; overflow-wrap: break-word; }
 .institutional-contacts a { color: var(--gold-2); font-weight: 750; }
 .institutional-contacts a:hover { text-decoration: underline; }
 .institutional-icon { flex: 0 0 auto; font-size: 1.15rem; line-height: 1.4; }
@@ -44,11 +46,11 @@
 .institutional-badges strong { color: var(--cream); font-size: .88rem; font-weight: 750; }
 
 @media (max-width: 860px) {
-  .institutional-grid { grid-template-columns: 1fr; }
+  .institutional-grid { grid-template-columns: minmax(0, 1fr); }
   .institutional-visual { min-height: 260px; }
 }
 @media (max-width: 520px) {
-  .institutional-badges { grid-template-columns: 1fr; }
+  .institutional-badges { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* Etapa 8: faixa premium e compacta de pagamento, substitui o espaço que
