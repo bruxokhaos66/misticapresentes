@@ -119,13 +119,19 @@
       const encomendaNote = sob && t ? `<p class="product-encomenda-note">${esc(t.CARD_NOTE)}</p>` : '';
       const outOfStock = !sob && available <= 0;
       const addLabel = outOfStock ? 'Indisponível' : 'Adicionar ao carrinho';
-      const stockBadge = sob && t
-        ? `<span class="stock-badge">${esc(t.ESTOQUE_NOTE)}</span>`
-        : `<span class="stock-badge ${outOfStock ? 'stock-out' : available <= storeConfig.minStock ? 'stock-low' : ''}">${outOfStock ? 'Esgotado' : `Estoque: ${available}`}</span>`;
+      // Nota de "sob encomenda" é sempre exibida (informação funcional).
+      // Estoque normal (nem baixo, nem esgotado) não recebe badge nenhum --
+      // só sinaliza quando há algo relevante para o cliente (baixo/esgotado).
+      const lowStock = !sob && !outOfStock && available <= storeConfig.minStock;
+      let stockBadge = '';
+      if (sob && t) stockBadge = `<span class="stock-badge">${esc(t.ESTOQUE_NOTE)}</span>`;
+      else if (outOfStock || lowStock) stockBadge = `<span class="stock-badge ${outOfStock ? 'stock-out' : 'stock-low'}">${outOfStock ? 'Esgotado' : `Estoque: ${available}`}</span>`;
       // "Ver detalhes" abre o modal do inspetor (mais foto, descrição e
       // ações completas) em vez da gaveta inline: reduz a altura do card
-      // na vitrine (etapa 1/3 da modernização premium).
-      return `<article class="product-card" data-category="${esc(product.category || '')}" data-best-seller="${typeof isBestSeller === 'function' ? isBestSeller(product) : false}" data-out-of-stock="${outOfStock}">${bestSeller}${encomendaBadge}${media}<div class="product-card-body"><p class="eyebrow">${esc(product.category)}</p><h3>${esc(product.name)}</h3>${rating}<strong class="product-price">${currency.format(product.price)}</strong>${stockBadge}<button class="btn btn-full product-add-btn" type="button" data-add-to-cart="${esc(product.id)}" ${disabled}>${addLabel}</button><div class="product-card-secondary"><button class="btn btn-ghost btn-small" type="button" data-inspect-product="${esc(product.id)}">Ver detalhes</button><button class="btn btn-ghost btn-small" type="button" data-buy-whatsapp="${esc(product.id)}">WhatsApp</button></div>${encomendaNote}</div></article>`;
+      // na vitrine (etapa 1/3 da modernização premium). Ação secundária de
+      // WhatsApp vira ícone discreto -- hierarquia clara vs. o botão
+      // principal dourado de "Adicionar ao carrinho".
+      return `<article class="product-card" data-category="${esc(product.category || '')}" data-best-seller="${typeof isBestSeller === 'function' ? isBestSeller(product) : false}" data-out-of-stock="${outOfStock}">${bestSeller}${encomendaBadge}${media}<div class="product-card-body"><p class="eyebrow">${esc(product.category)}</p><h3>${esc(product.name)}</h3>${rating}<strong class="product-price">${currency.format(product.price)}</strong>${stockBadge}<button class="btn btn-full product-add-btn" type="button" data-add-to-cart="${esc(product.id)}" ${disabled}>${addLabel}</button><div class="product-card-secondary"><button class="product-detail-link" type="button" data-inspect-product="${esc(product.id)}">Ver detalhes</button><button class="product-whatsapp-icon" type="button" data-buy-whatsapp="${esc(product.id)}" aria-label="Perguntar sobre ${esc(product.name)} no WhatsApp">💬</button></div>${encomendaNote}</div></article>`;
     }).join('');
   }
 
