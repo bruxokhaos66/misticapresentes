@@ -351,6 +351,23 @@ def exigir_perfil(perfil_minimo: str = "vendedor"):
     return dependencia
 
 
+def exigir_perfis(*perfis_permitidos: str):
+    """Dependência FastAPI que exige sessão válida com o perfil dentro de um
+    conjunto explícito (em vez do limiar único de exigir_perfil). Usada pela
+    Central Multiatendente, onde adm/supervisor_atendimento/vendedor têm
+    permissões distintas por rota -- a checagem fina de QUAL conversa cada um
+    pode ver/agir é sempre feita depois, no próprio handler, nunca só aqui."""
+    permitidos = set(perfis_permitidos)
+
+    def dependencia(request: Request, sessao: dict = Depends(sessao_atual)) -> dict:
+        if sessao.get("perfil") not in permitidos:
+            raise HTTPException(status_code=403, detail="Seu perfil não tem acesso a esta ação.")
+        _validar_origem_csrf(request)
+        return sessao
+
+    return dependencia
+
+
 def exigir_sessao_ou_chave_api(perfil_minimo: str = "vendedor"):
     """Dependência FastAPI que aceita a sessão de painel (uso pelo navegador) OU a chave
     estática MISTICA_SITE_API_KEY/MISTICA_SYNC_KEY (uso por integrações servidor-a-servidor).

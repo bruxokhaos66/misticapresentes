@@ -79,15 +79,18 @@ def upsert_contact(conn, *, wa_id: str, profile_name: str | None) -> dict[str, A
 
 
 def obter_ou_criar_conversa(conn, *, contact_id: int) -> dict[str, Any]:
-    """Uma conversa aberta/pendente por contato -- se a última conversa desse
-    contato já estiver resolvida/arquivada, abre uma nova em vez de reabrir
-    silenciosamente uma conversa que o administrador já encerrou."""
+    """Uma conversa por contato -- reaproveita a mais recente, mesmo que
+    esteja resolvida/arquivada. Reabrir uma conversa encerrada quando o
+    cliente escreve de novo é responsabilidade de
+    backend.atendimento_repository.reabrir_automaticamente_se_resolvida
+    (chamada logo depois desta função em
+    backend/whatsapp_inbox_service.py::processar_webhook_mensagens): ela
+    move a conversa de volta para queue_status='waiting'/status='open' sem
+    atribuir a ninguém e registra o evento no histórico -- nunca apaga
+    mensagem/conversa anterior, então o histórico do cliente permanece
+    contínuo em vez de se fragmentar numa segunda conversa desconectada."""
     linha = conn.execute(
-        """
-        SELECT * FROM whatsapp_conversations
-         WHERE contact_id=? AND status IN ('open','pending')
-         ORDER BY id DESC LIMIT 1
-        """,
+        "SELECT * FROM whatsapp_conversations WHERE contact_id=? ORDER BY id DESC LIMIT 1",
         (contact_id,),
     ).fetchone()
     if linha:

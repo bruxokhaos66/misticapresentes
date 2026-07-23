@@ -84,6 +84,8 @@ def _normalizar_perfil(perfil):
     texto = str(perfil or "vendedor").strip().lower()
     if texto in ("adm", "admin", "administrador"):
         return "adm"
+    if texto in ("supervisor_atendimento", "supervisor-atendimento", "supervisor"):
+        return "supervisor_atendimento"
     return "vendedor"
 
 
@@ -97,6 +99,21 @@ def _permissoes_por_perfil(perfil):
             "fornecedores": True,
             "backup": True,
             "admin": True,
+        }
+    if perfil == "supervisor_atendimento":
+        # Perfil novo (Central Multiatendente): mesmas permissões de
+        # atendimento de um vendedor no POS/painel legado -- a permissão
+        # elevada de supervisor (ver todas as conversas, transferir,
+        # finalizar/reabrir qualquer uma) vive só nas rotas da Central
+        # (backend/whatsapp_atendimento_routes.py), nunca aqui.
+        return {
+            "produtos": True,
+            "estoque": True,
+            "vendas": True,
+            "clientes": False,
+            "fornecedores": False,
+            "backup": False,
+            "admin": False,
         }
     return {
         "produtos": True,

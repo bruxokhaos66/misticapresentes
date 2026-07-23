@@ -20,6 +20,13 @@ fluxo tem sua própria tabela de idempotência, e nenhum dos dois lê/escreve
 nas tabelas do outro. Os dois reaproveitam as mesmas credenciais da Meta
 (mesmo número, mesmo app), porque é a mesma conta WhatsApp Business.
 
+**Central Multiatendente (perfis, fila, assunção e transferência)** é a
+etapa seguinte, construída por cima deste documento — ver
+`docs/admin/WHATSAPP_ATENDIMENTO_MULTIATENDENTE.md`. Continua
+completamente desligada por padrão via `ATENDIMENTO_SELLERS_ENABLED=false`;
+com essa flag desligada, tudo neste documento (fluxo administrador-apenas)
+continua valendo sem nenhuma mudança de comportamento.
+
 ---
 
 ## 1. Arquitetura
