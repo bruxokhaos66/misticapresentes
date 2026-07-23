@@ -589,6 +589,7 @@ def _aplicar_migracoes(db_path_atual: str) -> None:
     _criar_tabelas_mercadopago()
     _criar_pedido_comercial_unificado()
     _criar_tabelas_whatsapp_notificacoes()
+    _criar_tabelas_whatsapp_central_atendimento()
     _criar_tabela_importacoes_produtos()
 
     _BANCOS_MIGRADOS.add(db_path_atual)
@@ -1083,3 +1084,143 @@ def _criar_tabelas_whatsapp_notificacoes():
         commit=True,
     )
     _exec_tolerante("CREATE INDEX IF NOT EXISTS idx_whatsapp_status_eventos_msg ON whatsapp_status_eventos(provider_message_id)")
+
+
+def _criar_tabelas_whatsapp_central_atendimento():
+    """Central de Atendimento WhatsApp (mensagens RECEBIDAS de clientes,
+    conversas, respostas pelo painel) -- ver backend/whatsapp_inbox_*.py.
+
+    Completamente separada das tabelas de notificações administrativas
+    (notification_outbox/whatsapp_status_eventos, acima): nenhuma rota ou
+    serviço desta seção lê/escreve nas tabelas de notificação, e vice-versa.
+    Nasce vazia e a flag (WHATSAPP_CLOUD_ENABLED) nasce desligada -- criar a
+    estrutura aqui não ativa nenhum comportamento novo.
+
+    Limitação documentada de privacidade: este projeto não possui
+    infraestrutura própria de gerenciamento de chaves (KMS/HSM) -- construir
+    criptografia em repouso caseira seria pior que não ter nenhuma (falsa
+    sensação de segurança). Por isso o telefone é armazenado em texto no
+    mesmo nível de proteção que `clientes.telefone` já usa hoje (acesso
+    restrito a administradores autenticados, nunca exposto a rota pública),
+    e toda exibição no painel usa phone_last4/mascaramento
+    (ver backend/whatsapp_flags.py::mascarar_numero_whatsapp) em vez do
+    número completo. Ver docs/WHATSAPP_CLOUD_API.md, seção de privacidade."""
+    query_db(
+        """
+        CREATE TABLE IF NOT EXISTS whatsapp_contacts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            wa_id TEXT NOT NULL,
+            phone_e164 TEXT,
+            phone_last4 TEXT,
+            profile_name TEXT,
+            customer_id INTEGER,
+            first_seen_at TEXT NOT NULL,
+            last_seen_at TEXT NOT NULL,
+            blocked_at TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT,
+            UNIQUE(wa_id)
+        )
+        """,
+        commit=True,
+    )
+    for sql_idx in [
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_whatsapp_contacts_wa_id ON whatsapp_contacts(wa_id)",
+        "CREATE INDEX IF NOT EXISTS idx_whatsapp_contacts_customer ON whatsapp_contacts(customer_id)",
+    ]:
+        _exec_tolerante(sql_idx)
+
+    query_db(
+        """
+        CREATE TABLE IF NOT EXISTS whatsapp_conversations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            contact_id INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'open'
+                CHECK(status IN ('open','pending','resolved','archived')),
+            assigned_admin TEXT,
+            unread_count INTEGER NOT NULL DEFAULT 0,
+            last_message_at TEXT,
+            last_inbound_at TEXT,
+            last_outbound_at TEXT,
+            customer_id INTEGER,
+            order_id INTEGER,
+            created_at TEXT NOT NULL,
+            updated_at TEXT,
+            FOREIGN KEY (contact_id) REFERENCES whatsapp_contacts(id)
+        )
+        """,
+        commit=True,
+    )
+    for sql_idx in [
+        "CREATE INDEX IF NOT EXISTS idx_whatsapp_conversations_contact ON whatsapp_conversations(contact_id)",
+        "CREATE INDEX IF NOT EXISTS idx_whatsapp_conversations_status ON whatsapp_conversations(status)",
+        "CREATE INDEX IF NOT EXISTS idx_whatsapp_conversations_last_message ON whatsapp_conversations(last_message_at)",
+        "CREATE INDEX IF NOT EXISTS idx_whatsapp_conversations_unread ON whatsapp_conversations(unread_count)",
+        "CREATE INDEX IF NOT EXISTS idx_whatsapp_conversations_customer ON whatsapp_conversations(customer_id)",
+        "CREATE INDEX IF NOT EXISTS idx_whatsapp_conversations_order ON whatsapp_conversations(order_id)",
+    ]:
+        _exec_tolerante(sql_idx)
+
+    query_db(
+        """
+        CREATE TABLE IF NOT EXISTS whatsapp_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            conversation_id INTEGER NOT NULL,
+            meta_message_id TEXT,
+            direction TEXT NOT NULL CHECK(direction IN ('inbound','outbound')),
+            message_type TEXT NOT NULL,
+            text_body TEXT,
+            media_id TEXT,
+            media_path TEXT,
+            media_mime_type TEXT,
+            media_size INTEGER,
+            reply_to_meta_message_id TEXT,
+            template_name TEXT,
+            status TEXT NOT NULL DEFAULT 'received'
+                CHECK(status IN ('queued','sent','delivered','read','failed','received')),
+            error_code TEXT,
+            error_message_sanitized TEXT,
+            sent_by_admin TEXT,
+            timestamp_meta TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT,
+            FOREIGN KEY (conversation_id) REFERENCES whatsapp_conversations(id)
+        )
+        """,
+        commit=True,
+    )
+    for sql_idx in [
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_whatsapp_messages_meta_id ON whatsapp_messages(meta_message_id) WHERE meta_message_id IS NOT NULL",
+        "CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_conversation ON whatsapp_messages(conversation_id, id)",
+    ]:
+        _exec_tolerante(sql_idx)
+
+    # Idempotência dos eventos de MENSAGEM RECEBIDA do webhook (distinta de
+    # whatsapp_status_eventos, que só cobre status de entrega). event_key é o
+    # meta_message_id quando existe; para eventos sem id de mensagem
+    # individual (raro), cai no hash canônico do evento (ver
+    # backend/whatsapp_inbox_service.py).
+    query_db(
+        """
+        CREATE TABLE IF NOT EXISTS whatsapp_webhook_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_key TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            payload_hash TEXT,
+            received_at TEXT NOT NULL,
+            processed_at TEXT,
+            processing_status TEXT NOT NULL DEFAULT 'pending'
+                CHECK(processing_status IN ('pending','processed','duplicate','failed')),
+            retry_count INTEGER NOT NULL DEFAULT 0,
+            last_error_sanitized TEXT,
+            expires_at TEXT,
+            UNIQUE(event_key)
+        )
+        """,
+        commit=True,
+    )
+    for sql_idx in [
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_whatsapp_webhook_events_key ON whatsapp_webhook_events(event_key)",
+        "CREATE INDEX IF NOT EXISTS idx_whatsapp_webhook_events_expires ON whatsapp_webhook_events(expires_at)",
+    ]:
+        _exec_tolerante(sql_idx)

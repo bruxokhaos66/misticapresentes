@@ -114,6 +114,16 @@ class WhatsAppProvider(ABC):
             codigo="text_not_supported",
         )
 
+    def send_inbox_text(self, *, to: str, texto: str, reply_to_meta_message_id: str | None = None) -> ResultadoEnvioWhatsApp:
+        """Resposta de texto livre de um ADMINISTRADOR pela Central de
+        Atendimento -- só é permitida pela Meta dentro da janela de 24h de
+        uma conversa iniciada pelo cliente (backend/whatsapp_inbox_routes.py
+        é quem decide, a partir de whatsapp_conversations.last_inbound_at, se
+        deve chamar isto ou exigir um template). Distinto de send_text
+        (reservado ao fluxo de notificações administrativas, que nunca deve
+        usar texto livre)."""
+        raise WhatsAppEnvioPermanente("send_inbox_text não suportado por este provedor.", codigo="text_not_supported")
+
     @abstractmethod
     def parse_delivery_webhook(self, payload: dict) -> list[StatusEntregaWhatsApp]:
         raise NotImplementedError
@@ -137,6 +147,9 @@ class DisabledWhatsAppProvider(WhatsAppProvider):
     nome = "disabled"
 
     def send_template(self, *, to: str, template_name: str, language: str, components: list[ComponenteTemplate] = ()) -> ResultadoEnvioWhatsApp:
+        return ResultadoEnvioWhatsApp(ok=False, status="skipped_disabled")
+
+    def send_inbox_text(self, *, to: str, texto: str, reply_to_meta_message_id: str | None = None) -> ResultadoEnvioWhatsApp:
         return ResultadoEnvioWhatsApp(ok=False, status="skipped_disabled")
 
     def parse_delivery_webhook(self, payload: dict) -> list[StatusEntregaWhatsApp]:
@@ -212,6 +225,35 @@ class MetaWhatsAppCloudProvider(WhatsAppProvider):
                     "parameters": [{"type": "text", "text": comp.texto} for comp in components],
                 }
             ]
+
+        try:
+            with self._cliente() as cliente:
+                resposta = cliente.post(f"{self._base_url()}/messages", json=corpo)
+        except httpx.TimeoutException as exc:
+            raise WhatsAppEnvioTransitorio("Timeout ao chamar a Graph API.", codigo="timeout") from exc
+        except httpx.TransportError as exc:
+            raise WhatsAppEnvioTransitorio("Falha de conexão com a Graph API.", codigo="connection_error") from exc
+
+        return self._interpretar_resposta(resposta)
+
+    def send_inbox_text(self, *, to: str, texto: str, reply_to_meta_message_id: str | None = None) -> ResultadoEnvioWhatsApp:
+        if not to:
+            raise WhatsAppEnvioPermanente("Destinatário ausente.", codigo="missing_recipient")
+        texto_limpo = str(texto or "").strip()
+        if not texto_limpo:
+            raise WhatsAppEnvioPermanente("Texto vazio.", codigo="empty_text")
+        if len(texto_limpo) > 4096:
+            raise WhatsAppEnvioPermanente("Texto excede o limite de 4096 caracteres da Cloud API.", codigo="text_too_long")
+
+        corpo = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": to,
+            "type": "text",
+            "text": {"body": texto_limpo, "preview_url": False},
+        }
+        if reply_to_meta_message_id:
+            corpo["context"] = {"message_id": reply_to_meta_message_id}
 
         try:
             with self._cliente() as cliente:

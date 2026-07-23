@@ -1,15 +1,20 @@
-"""Endpoint de callback de status de entrega do WhatsApp Cloud API (Meta).
+"""Endpoint único de webhook do WhatsApp Cloud API (Meta): callbacks de
+status de entrega das notificações administrativas E (quando
+WHATSAPP_CLOUD_ENABLED) mensagens RECEBIDAS de clientes para a Central de
+Atendimento (ver backend/whatsapp_inbox_service.py).
 
 Ponto de entrada SEPARADO do webhook do Mercado Pago
 (backend/payment_webhook_routes.py) -- nunca compartilha rota, tabela de
-idempotência ou lógica de negócio com ele. Este endpoint só recebe eventos
-de status de MENSAGENS já enviadas (sent/delivered/read/failed), nunca
-eventos financeiros.
+idempotência ou lógica de negócio com ele; nunca processa eventos
+financeiros. Os dois fluxos acima (status de saída / mensagens de entrada)
+também são independentes entre si: cada um com sua própria tabela de
+idempotência (whatsapp_status_eventos / whatsapp_webhook_events) e sua
+própria feature flag (WHATSAPP_NOTIFICATIONS_ENABLED / WHATSAPP_CLOUD_ENABLED).
 
 Nunca confia em nenhum dado do payload sem antes validar a assinatura
 (X-Hub-Signature-256, ver backend/whatsapp_provider.py::
 MetaWhatsAppCloudProvider.validate_webhook_signature). Responde rápido (não
-faz chamadas de rede) e é idempotente (whatsapp_status_eventos.UNIQUE)."""
+faz chamadas de rede) e é idempotente."""
 from __future__ import annotations
 
 import hashlib
@@ -22,7 +27,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from backend.database import conectar
 from backend.logging_config import get_logger
 from backend.rate_limit import limitar_requisicoes
-from backend.whatsapp_flags import whatsapp_provider_nome, whatsapp_verify_token
+from backend.whatsapp_flags import (
+    whatsapp_cloud_inbox_habilitado,
+    whatsapp_provider_nome,
+    whatsapp_verify_token,
+    whatsapp_webhook_max_body_bytes,
+)
+from backend.whatsapp_inbox_service import processar_webhook_mensagens
 from backend.whatsapp_provider import construir_provider
 
 logger = get_logger(__name__)
@@ -30,10 +41,6 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api/webhooks/whatsapp", tags=["webhooks-whatsapp"])
 
 limitar_webhook_whatsapp = limitar_requisicoes("webhook_whatsapp", limite=120, janela_segundos=60)
-
-# Tamanho máximo aceito para o corpo do webhook -- proteção contra payload
-# hostil/anormalmente grande antes mesmo do parsing.
-_LIMITE_PAYLOAD_BYTES = 1_000_000
 
 
 @router.get("")
@@ -59,7 +66,7 @@ def _payload_hash(payload_bruto: bytes) -> str:
 @router.post("", dependencies=[Depends(limitar_webhook_whatsapp)])
 async def receber_webhook_whatsapp(request: Request):
     payload_bruto = await request.body()
-    if len(payload_bruto) > _LIMITE_PAYLOAD_BYTES:
+    if len(payload_bruto) > whatsapp_webhook_max_body_bytes():
         raise HTTPException(status_code=413, detail="Payload muito grande.")
 
     provider = construir_provider(whatsapp_provider_nome())
@@ -76,11 +83,20 @@ async def receber_webhook_whatsapp(request: Request):
         return {"ok": True, "ignorado": True}
 
     eventos_status = provider.parse_delivery_webhook(payload)
-    if not eventos_status:
+
+    # Mensagens RECEBIDAS de clientes (Central de Atendimento) -- só
+    # processadas/persistidas quando a feature está explicitamente habilitada
+    # e configurada (fail-closed); com a flag desligada, o handshake GET
+    # continua funcionando normalmente mas nenhuma mensagem é armazenada. Isso
+    # é INDEPENDENTE dos callbacks de status acima (WHATSAPP_NOTIFICATIONS_ENABLED),
+    # que continuam funcionando sem alteração de comportamento.
+    resultado_mensagens = {"processadas": 0, "duplicadas": 0, "ignoradas": 0}
+
+    if not eventos_status and not whatsapp_cloud_inbox_habilitado():
         return {"ok": True, "ignorado": True}
 
     agora = datetime.now().isoformat(timespec="seconds")
-    processados = 0
+    processados_status = 0
     with conectar() as conn:
         for evento in eventos_status:
             try:
@@ -97,10 +113,14 @@ async def receber_webhook_whatsapp(request: Request):
                 continue
 
             _aplicar_status_entrega(conn, evento, agora)
-            processados += 1
+            processados_status += 1
+
+        if whatsapp_cloud_inbox_habilitado():
+            resultado_mensagens = processar_webhook_mensagens(conn, payload)
+
         conn.commit()
 
-    return {"ok": True, "processados": processados}
+    return {"ok": True, "processados": processados_status, "mensagens": resultado_mensagens}
 
 
 def _aplicar_status_entrega(conn, evento, agora: str) -> None:
