@@ -10,14 +10,13 @@ import json
 import os
 import uuid
 
+import pytest
+
 os.environ.setdefault("MISTICA_SITE_API_KEY", "test-api-key")
 os.environ.setdefault("MISTICA_SYNC_KEY", "test-api-key")
 os.environ.setdefault("MISTICA_PIX_KEY", "49999999999")
-
-APP_SECRET = os.environ.get("WHATSAPP_APP_SECRET") or "app-secret-teste-" + uuid.uuid4().hex[:8]
-VERIFY_TOKEN = os.environ.get("WHATSAPP_VERIFY_TOKEN") or "verify-teste-" + uuid.uuid4().hex[:8]
-os.environ["WHATSAPP_APP_SECRET"] = APP_SECRET
-os.environ["WHATSAPP_VERIFY_TOKEN"] = VERIFY_TOKEN
+os.environ.setdefault("WHATSAPP_APP_SECRET", "app-secret-teste-" + uuid.uuid4().hex[:8])
+os.environ.setdefault("WHATSAPP_VERIFY_TOKEN", "verify-teste-" + uuid.uuid4().hex[:8])
 os.environ.setdefault("WHATSAPP_PROVIDER", "meta_cloud")
 os.environ.setdefault("WHATSAPP_PHONE_NUMBER_ID", "123456")
 os.environ.setdefault("WHATSAPP_ACCESS_TOKEN", "token-de-teste")
@@ -30,6 +29,23 @@ client.__enter__()
 
 from backend.database import conectar
 import backend.whatsapp_webhook_routes as webhook_routes
+
+# Valores FIXOS deste módulo -- outros arquivos de teste (ex.:
+# tests/test_whatsapp_webhook.py) também mexem em WHATSAPP_APP_SECRET/
+# WHATSAPP_VERIFY_TOKEN a nível de módulo; ao rodar a suíte inteira, a ORDEM
+# de importação entre arquivos decide qual valor fica em os.environ por
+# último. Reforçar os valores deste módulo antes de cada teste (via
+# monkeypatch, que desfaz sozinho ao final do teste) torna estes testes
+# imunes a essa ordem, em vez de depender de qual arquivo importou por
+# último.
+APP_SECRET = os.environ["WHATSAPP_APP_SECRET"]
+VERIFY_TOKEN = os.environ["WHATSAPP_VERIFY_TOKEN"]
+
+
+@pytest.fixture(autouse=True)
+def _reforcar_segredos_deste_modulo(monkeypatch):
+    monkeypatch.setenv("WHATSAPP_APP_SECRET", APP_SECRET)
+    monkeypatch.setenv("WHATSAPP_VERIFY_TOKEN", VERIFY_TOKEN)
 
 
 def _assinar(corpo: bytes) -> str:
