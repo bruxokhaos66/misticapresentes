@@ -1,75 +1,85 @@
-/* Bloco institucional (Etapa 11): antes era só uma imagem de banner com
-   endereço, WhatsApp, Instagram e selos de confiança desenhados dentro do
-   arquivo .webp (texto preso em pixel, sem acessibilidade, sem SEO, e um
-   min-height de até 820px que colaborava com o excesso de área vazia do
-   site). A imagem agora é só decorativa (recorte à esquerda, sem o texto
-   embutido) e todo o conteúdo relevante é HTML real ao lado. */
-.institutional-grid {
+/* Bloco institucional — banner único (substitui o layout anterior de
+   imagem + card lateral, que ficou pesado e desproporcional). A seção
+   agora é um único banner premium em praticamente toda a largura do
+   container, seguido de uma faixa leve de benefícios (sem aparência de
+   botão/cartão) e da faixa de pagamentos, alinhada à mesma largura.
+   Endereço, WhatsApp, Instagram e site já aparecem no rodapé e no topo
+   da página — não são duplicados aqui. */
+.institutional-section { padding: clamp(40px, 5vw, 72px) 0; }
+.institutional-stack {
   display: grid;
-  grid-template-columns: minmax(260px, .8fr) minmax(0, 1.1fr);
-  gap: clamp(24px, 4vw, 48px);
-  align-items: stretch;
+  gap: clamp(28px, 3.4vw, 40px);
 }
-.institutional-visual {
-  min-height: clamp(320px, 34vw, 440px);
-  border-radius: var(--radius);
-  border: 1px solid rgba(242, 201, 109, .28);
-  box-shadow: var(--shadow);
+.institutional-banner {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: clamp(280px, 30vw, 420px);
+  aspect-ratio: 1914 / 822;
+  margin: 0 auto;
+  object-fit: cover;
+  object-position: center;
+  border-radius: calc(var(--radius) - 2px);
+  border: 1px solid rgba(242, 201, 109, .22);
+  box-shadow: 0 22px 64px rgba(0, 0, 0, .32);
   background-color: #030407;
-  background-image: url("contact-banner-hd.webp?v=20260722-institucional-html");
-  background-repeat: no-repeat;
-  background-size: auto 100%;
-  background-position: 4% 38%;
 }
-.institutional-panel {
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: clamp(24px, 3vw, 38px);
-  background: linear-gradient(180deg, rgba(255, 248, 230, .09), rgba(255, 248, 230, .045)), rgba(6, 6, 9, .58);
-  backdrop-filter: blur(14px);
-  box-shadow: var(--shadow);
+.institutional-benefits {
+  list-style: none;
+  margin: 0;
+  padding: 20px 0 0;
+  border-top: 1px solid rgba(242, 201, 109, .14);
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 18px 0;
 }
-.institutional-panel > p:not(.eyebrow) { color: var(--muted); margin: 0 0 8px; }
-.institutional-contacts { list-style: none; margin: 10px 0 20px; padding: 0; display: grid; gap: 12px; }
-.institutional-contacts li { display: flex; align-items: flex-start; gap: 12px; color: var(--muted); line-height: 1.5; min-width: 0; }
-.institutional-contacts li > span:last-child,
-.institutional-contacts li > a { min-width: 0; overflow-wrap: break-word; }
-.institutional-contacts a { color: var(--gold-2); font-weight: 750; }
-.institutional-contacts a:hover { text-decoration: underline; }
-.institutional-icon { flex: 0 0 auto; font-size: 1.15rem; line-height: 1.4; }
-.institutional-badges { margin-top: auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-.institutional-badges article { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid rgba(242, 201, 109, .2); border-radius: 16px; background: rgba(255, 255, 255, .035); }
-.institutional-badges span { font-size: 1.2rem; }
-.institutional-badges strong { color: var(--cream); font-size: .88rem; font-weight: 750; }
+.institutional-benefits li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex: 1 1 240px;
+  max-width: 300px;
+  padding: 2px 24px;
+  border-left: 1px solid rgba(242, 201, 109, .14);
+}
+.institutional-benefits li:first-child { border-left: none; }
+.institutional-benefit-icon { flex: 0 0 auto; font-size: 1.3rem; line-height: 1.35; }
+.institutional-benefits strong { display: block; color: var(--cream); font-size: .92rem; font-weight: 750; }
+.institutional-benefits small { display: block; margin-top: 3px; color: var(--muted); font-size: .8rem; line-height: 1.45; }
 
-@media (max-width: 860px) {
-  .institutional-grid { grid-template-columns: minmax(0, 1fr); }
-  .institutional-visual { min-height: 260px; }
+@media (max-width: 900px) {
+  .institutional-banner { width: 100%; height: auto; }
 }
-@media (max-width: 520px) {
-  .institutional-badges { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 640px) {
+  .institutional-benefits { flex-direction: column; gap: 0; }
+  .institutional-benefits li {
+    flex: 0 1 auto;
+    max-width: none;
+    width: 100%;
+    padding: 14px 4px;
+    border-left: none;
+    border-top: 1px solid rgba(242, 201, 109, .12);
+  }
+  .institutional-benefits li:first-child { border-top: none; }
 }
 
-/* Etapa 8: faixa premium e compacta de pagamento, substitui o espaço que
-   antes ficava vazio abaixo do banner institucional. */
-.payment-strip-section { padding: clamp(28px, 3vw, 40px) 0; }
+/* Faixa de pagamento: mesma largura e ritmo visual do banner acima,
+   com bordas discretas para não parecer um painel administrativo. */
+.payment-strip-section { padding: 0 0 clamp(40px, 5vw, 72px); }
 .payment-strip {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 16px 28px;
-  padding: 20px 26px;
-  border: 1px solid var(--line);
+  gap: 14px 24px;
+  padding: 18px 26px;
+  border: 1px solid rgba(242, 201, 109, .14);
   border-radius: 999px;
-  background: linear-gradient(180deg, rgba(255, 248, 230, .07), rgba(255, 248, 230, .03)), rgba(6, 6, 9, .5);
-  box-shadow: var(--shadow);
+  background: rgba(255, 248, 230, .035);
 }
 .payment-strip-methods, .payment-strip-trust { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; }
-.payment-chip { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border: 1px solid rgba(242, 201, 109, .3); border-radius: 999px; color: var(--gold-2); font-weight: 800; font-size: .88rem; background: rgba(242, 201, 109, .06); }
+.payment-chip { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border: 1px solid rgba(242, 201, 109, .26); border-radius: 999px; color: var(--gold-2); font-weight: 800; font-size: .88rem; background: transparent; }
 .payment-strip-trust span { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: .86rem; font-weight: 650; }
 .payment-strip-trust span span[aria-hidden] { font-size: 1rem; }
 @media (max-width: 680px) {
