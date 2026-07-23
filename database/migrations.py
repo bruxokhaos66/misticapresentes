@@ -590,6 +590,7 @@ def _aplicar_migracoes(db_path_atual: str) -> None:
     _criar_pedido_comercial_unificado()
     _criar_tabelas_whatsapp_notificacoes()
     _criar_tabelas_whatsapp_central_atendimento()
+    _criar_estrutura_atendimento_multiatendente()
     _criar_tabela_importacoes_produtos()
 
     _BANCOS_MIGRADOS.add(db_path_atual)
@@ -1238,3 +1239,93 @@ def _criar_tabelas_whatsapp_central_atendimento():
         "CREATE INDEX IF NOT EXISTS idx_whatsapp_webhook_events_expires ON whatsapp_webhook_events(expires_at)",
     ]:
         _exec_tolerante(sql_idx)
+
+
+def _criar_estrutura_atendimento_multiatendente():
+    """Central Multiatendente (fila, assunção, transferência) -- ver
+    backend/atendimento_repository.py e backend/whatsapp_atendimento_routes.py.
+
+    100% aditivo: reaproveita a tabela `usuarios` já existente (perfil
+    'adm'/'vendedor' já usado pelo painel/POS -- este recurso soma o novo
+    perfil 'supervisor_atendimento' e colunas prefixadas `atendimento_*`,
+    nunca cria uma segunda tabela de usuários) e `whatsapp_conversations`.
+    Nasce com ATENDIMENTO_SELLERS_ENABLED=false (ver
+    backend/atendimento_flags.py): enquanto desligada, o fluxo atual do
+    administrador (que já ignora fila/atribuição) continua idêntico. Nenhuma
+    mensagem, contato ou conversa existente é apagada por esta migração."""
+    for coluna, tipo in [
+        ("atendimento_enabled", "INTEGER NOT NULL DEFAULT 0"),
+        (
+            "atendimento_status",
+            "TEXT NOT NULL DEFAULT 'offline' CHECK(atendimento_status IN ('online','ausente','ocupado','offline'))",
+        ),
+        ("atendimento_max_active_conversations", "INTEGER"),
+        ("atendimento_last_activity_at", "TEXT"),
+        ("atendimento_suspended_at", "TEXT"),
+        ("created_at", "TEXT"),
+        ("updated_at", "TEXT"),
+    ]:
+        _exec_tolerante(f"ALTER TABLE usuarios ADD COLUMN {coluna} {tipo}")
+    _exec_tolerante("CREATE INDEX IF NOT EXISTS idx_usuarios_atendimento_enabled ON usuarios(atendimento_enabled)")
+
+    # Fila multiatendente: toda conversa nasce 'waiting'/sem atendente (ver
+    # DEFAULT abaixo). assignment_version é o controle otimista usado por
+    # claim/release/transfer/resolve/reopen (UPDATE condicional na versão
+    # esperada -- nunca duas ações concorrentes aplicam efeito por cima uma
+    # da outra silenciosamente).
+    for coluna, tipo in [
+        ("assigned_user_id", "INTEGER"),
+        ("assigned_at", "TEXT"),
+        ("assignment_version", "INTEGER NOT NULL DEFAULT 0"),
+        (
+            "queue_status",
+            "TEXT NOT NULL DEFAULT 'waiting' CHECK(queue_status IN ('waiting','assigned','resolved'))",
+        ),
+        ("resolved_at", "TEXT"),
+        ("resolved_by", "TEXT"),
+        ("last_agent_activity_at", "TEXT"),
+    ]:
+        _exec_tolerante(f"ALTER TABLE whatsapp_conversations ADD COLUMN {coluna} {tipo}")
+    for sql_idx in [
+        "CREATE INDEX IF NOT EXISTS idx_whatsapp_conversations_queue_status ON whatsapp_conversations(queue_status)",
+        "CREATE INDEX IF NOT EXISTS idx_whatsapp_conversations_assigned_user ON whatsapp_conversations(assigned_user_id)",
+    ]:
+        _exec_tolerante(sql_idx)
+
+    # Backfill seguro: conversas antigas já encerradas (status legado
+    # 'resolved'/'archived') viram queue_status='resolved' preservando
+    # histórico; NUNCA reatribui assigned_user_id (o campo legado
+    # `assigned_admin` é texto livre, não um id confiável de usuário) e NUNCA
+    # apaga nenhuma linha. Roda sempre (idempotente: só atualiza quem ainda
+    # está no DEFAULT 'waiting' incorretamente).
+    _exec_tolerante(
+        "UPDATE whatsapp_conversations "
+        "SET queue_status='resolved', resolved_at=COALESCE(resolved_at, updated_at, created_at) "
+        "WHERE status IN ('resolved','archived') AND queue_status='waiting'"
+    )
+
+    # Histórico imutável de claim/release/transfer/resolve/reopen (nunca
+    # grava conteúdo de mensagem, telefone, token ou payload bruto -- ver
+    # backend/atendimento_repository.py::registrar_historico_atendimento).
+    query_db(
+        """
+        CREATE TABLE IF NOT EXISTS atendimento_assignment_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            conversation_id INTEGER NOT NULL,
+            action TEXT NOT NULL
+                CHECK(action IN ('claim','release','transfer','resolve','reopen','auto_reopen','send_denied','admin_override')),
+            from_user_id INTEGER,
+            to_user_id INTEGER,
+            performed_by_user_id INTEGER,
+            reason TEXT,
+            previous_version INTEGER,
+            new_version INTEGER,
+            created_at TEXT NOT NULL
+        )
+        """,
+        commit=True,
+    )
+    _exec_tolerante(
+        "CREATE INDEX IF NOT EXISTS idx_atendimento_history_conversation "
+        "ON atendimento_assignment_history(conversation_id, id)"
+    )
