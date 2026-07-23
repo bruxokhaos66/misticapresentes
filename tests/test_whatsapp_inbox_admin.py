@@ -265,3 +265,234 @@ def test_enviar_sem_texto_nem_template_e_rejeitado(monkeypatch):
         assert resp.status_code == 422
     finally:
         client.cookies.delete("mistica_painel_sessao")
+
+
+# ---------------------------------------------------------------------------
+# Mídia recebida via WhatsApp (correção da imagem branca -- Fase 1)
+#
+# Fixture: JPEG mínimo real (1x1 pixel) -- não é mock de chamada, é conteúdo
+# binário de verdade. Os testes comparam os BYTES finais servidos pelo
+# endpoint com os bytes originais da fixture, não apenas se a função foi
+# chamada -- é exatamente a garantia que faltava para provar que o painel
+# não entrega mais um arquivo em branco/inválido.
+# ---------------------------------------------------------------------------
+from backend.whatsapp_inbox_repository import registrar_mensagem_recebida
+import backend.whatsapp_media_service as media_service
+
+JPEG_MINIMO = bytes.fromhex(
+    "ffd8ffe000104a46494600010100000100010000ffdb0043000302020202020302020"
+    "2030303030406040404040408060605070605080808080909090808080a0b0c0a"
+    "0a0b0a08080b0d0b0b0c0c0c0c0c07090e0f0d0c0e0b0c0c0cffc9000b0800010001010"
+    "1001100ffcc000601000101ffda0008010100003f00d2cf20ffd9"
+)
+
+
+def _criar_mensagem_midia(media_id: str = "wamid.media.teste", conversation_id: int | None = None) -> int:
+    conversation_id = conversation_id or _criar_conversa_com_inbound()
+    with conectar() as conn:
+        message_id, _ = registrar_mensagem_recebida(
+            conn,
+            conversation_id=conversation_id,
+            meta_message_id=f"wamid.{uuid.uuid4().hex}",
+            message_type="image",
+            media_id=media_id,
+        )
+        conn.commit()
+    return message_id
+
+
+def test_baixar_midia_bytes_identicos_a_fixture_real():
+    """Não usa só mock que confirma chamada: baixa via função real do
+    serviço com transporte HTTP falso e confere byte a byte."""
+    import httpx
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "graph.facebook.com" in str(request.url):
+            return httpx.Response(200, json={"url": "https://lookaside.fbsbx.com/whatsapp_business/attachments/?id=abc", "file_size": len(JPEG_MINIMO)})
+        if "lookaside.fbsbx.com" in str(request.url):
+            return httpx.Response(200, content=JPEG_MINIMO, headers={"content-type": "image/jpeg"})
+        return httpx.Response(404)
+
+    transport = httpx.MockTransport(handler)
+    original = httpx.Client
+
+    def client_falso(*a, **kw):
+        kw["transport"] = transport
+        return original(*a, **kw)
+
+    import backend.whatsapp_media_service as svc
+    with mock_httpx_client(svc, client_falso):
+        conteudo, extensao, mime = svc.baixar_midia("media-real")
+    assert conteudo == JPEG_MINIMO
+    assert extensao == "jpg"
+    assert mime == "image/jpeg"
+
+
+class mock_httpx_client:
+    def __init__(self, modulo, cliente_falso):
+        self.modulo = modulo
+        self.cliente_falso = cliente_falso
+
+    def __enter__(self):
+        import httpx
+        self._original = httpx.Client
+        httpx.Client = self.cliente_falso
+        return self
+
+    def __exit__(self, *a):
+        import httpx
+        httpx.Client = self._original
+
+
+def test_endpoint_media_serve_bytes_identicos_e_extensao_correta(monkeypatch):
+    """Ponta a ponta: mensagem inbound com media_id -> endpoint autenticado
+    -> bytes servidos idênticos à fixture -> Content-Disposition com
+    extensão correta (o bug original: nome de arquivo sem extensão fazia o
+    download 'parecer' inválido mesmo com bytes corretos)."""
+    _habilitar(monkeypatch)
+    message_id = _criar_mensagem_midia()
+
+    def baixar_falso(media_id):
+        return JPEG_MINIMO, "jpg", "image/jpeg"
+
+    monkeypatch.setattr(inbox_routes, "baixar_midia", baixar_falso)
+
+    token = _sessao_admin()
+    client.cookies.set("mistica_painel_sessao", token)
+    try:
+        resp = client.get(f"/api/admin/whatsapp/media/{message_id}")
+        assert resp.status_code == 200
+        assert resp.content == JPEG_MINIMO
+        assert resp.headers["content-type"] == "image/jpeg"
+        assert resp.headers["content-disposition"].endswith('.jpg"')
+        assert resp.headers["cache-control"] == "private, no-store"
+        assert resp.headers["x-content-type-options"] == "nosniff"
+
+        # segunda chamada: já está em disco, não deve rebaixar da Meta
+        monkeypatch.setattr(inbox_routes, "baixar_midia", lambda media_id: (_ for _ in ()).throw(AssertionError("não deveria rebaixar mídia já disponível")))
+        resp2 = client.get(f"/api/admin/whatsapp/media/{message_id}")
+        assert resp2.status_code == 200
+        assert resp2.content == JPEG_MINIMO
+    finally:
+        client.cookies.delete("mistica_painel_sessao")
+
+
+def test_endpoint_media_html_disfarcado_e_rejeitado(monkeypatch):
+    """HTML/script disfarçado de imagem (mime_type mentiroso da Meta) é
+    rejeitado pelos magic bytes reais -- nunca vira Blob no navegador."""
+    _habilitar(monkeypatch)
+    message_id = _criar_mensagem_midia()
+
+    def baixar_falso(media_id):
+        raise media_service.WhatsAppMediaError("Tipo de arquivo não reconhecido/permitido (magic bytes).", codigo="unsupported_media_type")
+
+    monkeypatch.setattr(inbox_routes, "baixar_midia", baixar_falso)
+    token = _sessao_admin()
+    client.cookies.set("mistica_painel_sessao", token)
+    try:
+        resp = client.get(f"/api/admin/whatsapp/media/{message_id}")
+        assert resp.status_code == 502
+        assert resp.headers["content-type"].startswith("application/json")
+    finally:
+        client.cookies.delete("mistica_painel_sessao")
+
+
+def test_endpoint_media_json_de_erro_da_meta_nao_vira_arquivo(monkeypatch):
+    """Se a Meta devolve um erro (401/404) em vez da mídia, o endpoint nunca
+    grava/serve um JSON como se fosse imagem."""
+    _habilitar(monkeypatch)
+    message_id = _criar_mensagem_midia()
+
+    def baixar_falso(media_id):
+        raise media_service.WhatsAppMediaError("Metadados da mídia indisponíveis (http 401).", codigo="metadata_unavailable")
+
+    monkeypatch.setattr(inbox_routes, "baixar_midia", baixar_falso)
+    token = _sessao_admin()
+    client.cookies.set("mistica_painel_sessao", token)
+    try:
+        resp = client.get(f"/api/admin/whatsapp/media/{message_id}")
+        assert resp.status_code == 502
+        with conectar() as conn:
+            linha = conn.execute("SELECT media_path, media_status FROM whatsapp_messages WHERE id=?", (message_id,)).fetchone()
+        assert linha["media_path"] is None
+        assert linha["media_status"] == "failed"
+    finally:
+        client.cookies.delete("mistica_painel_sessao")
+
+
+def test_endpoint_media_arquivo_inexistente_no_disco(monkeypatch):
+    """media_path aponta pra um arquivo já apagado do disco -> 404
+    explícito, nunca um corpo vazio/branco silencioso."""
+    _habilitar(monkeypatch)
+    message_id = _criar_mensagem_midia()
+    with conectar() as conn:
+        conn.execute(
+            "UPDATE whatsapp_messages SET media_path=?, media_mime_type=?, media_status='available' WHERE id=?",
+            ("/data/uploads/whatsapp/nao-existe-" + uuid.uuid4().hex + ".jpg", "image/jpeg", message_id),
+        )
+        conn.commit()
+    token = _sessao_admin()
+    client.cookies.set("mistica_painel_sessao", token)
+    try:
+        resp = client.get(f"/api/admin/whatsapp/media/{message_id}")
+        assert resp.status_code == 404
+    finally:
+        client.cookies.delete("mistica_painel_sessao")
+
+
+def test_endpoint_media_duas_requisicoes_concorrentes_nao_baixam_duas_vezes(monkeypatch):
+    """Reivindicação atômica (media_status pending->downloading): a segunda
+    requisição concorrente nunca dispara um segundo download da Meta."""
+    _habilitar(monkeypatch)
+    message_id = _criar_mensagem_midia()
+
+    chamadas = {"n": 0}
+
+    def baixar_falso(media_id):
+        chamadas["n"] += 1
+        return JPEG_MINIMO, "jpg", "image/jpeg"
+
+    monkeypatch.setattr(inbox_routes, "baixar_midia", baixar_falso)
+
+    # simula a segunda requisição chegando enquanto a primeira já reivindicou
+    # a linha (media_status='downloading') mas ainda não terminou o download
+    with conectar() as conn:
+        conn.execute("UPDATE whatsapp_messages SET media_status='downloading' WHERE id=?", (message_id,))
+        conn.commit()
+
+    token = _sessao_admin()
+    client.cookies.set("mistica_painel_sessao", token)
+    try:
+        resp = client.get(f"/api/admin/whatsapp/media/{message_id}")
+        assert resp.status_code == 409
+        assert chamadas["n"] == 0
+    finally:
+        client.cookies.delete("mistica_painel_sessao")
+
+
+def test_endpoint_media_mensagem_sem_midia_404(monkeypatch):
+    _habilitar(monkeypatch)
+    conversa_id = _criar_conversa_com_inbound()
+    with conectar() as conn:
+        message_id, _ = registrar_mensagem_recebida(
+            conn,
+            conversation_id=conversa_id,
+            meta_message_id=f"wamid.{uuid.uuid4().hex}",
+            message_type="text",
+            text_body="oi",
+        )
+        conn.commit()
+    token = _sessao_admin()
+    client.cookies.set("mistica_painel_sessao", token)
+    try:
+        resp = client.get(f"/api/admin/whatsapp/media/{message_id}")
+        assert resp.status_code == 404
+    finally:
+        client.cookies.delete("mistica_painel_sessao")
+
+
+def test_endpoint_media_exige_sessao_admin(monkeypatch):
+    _habilitar(monkeypatch)
+    message_id = _criar_mensagem_midia()
+    resp = client.get(f"/api/admin/whatsapp/media/{message_id}")
+    assert resp.status_code == 401
