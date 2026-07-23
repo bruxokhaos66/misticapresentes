@@ -176,6 +176,21 @@ services:
         value: true
       - key: WHATSAPP_INBOX_TEMPLATES
         sync: false
+      # Central Multiatendente (fila/claim/transferencia -- ver
+      # docs/admin/WHATSAPP_ATENDIMENTO_MULTIATENDENTE.md). value: false
+      # mantem o comportamento identico ao de antes desta funcionalidade
+      # (so administradores, sem fila obrigatoria). Ligar em produção só
+      # depois de validar em homologação (ver rollout na documentação).
+      - key: ATENDIMENTO_SELLERS_ENABLED
+        value: false
+      - key: ATENDIMENTO_MAX_ACTIVE_CONVERSATIONS
+        value: "5"
+      - key: ATENDIMENTO_PRESENCE_TIMEOUT_SECONDS
+        value: "120"
+      - key: ATENDIMENTO_ALLOW_SELLER_TRANSFER
+        value: true
+      - key: ATENDIMENTO_REQUIRE_ASSIGNMENT_FOR_ADMIN
+        value: true
     disk:
       name: mistica-dados
       mountPath: /data
