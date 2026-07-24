@@ -1,5 +1,8 @@
 plugins {
     id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.kotlin.plugin.compose'
+    id 'org.jetbrains.kotlin.plugin.serialization'
 }
 
 android {
@@ -10,16 +13,148 @@ android {
         applicationId 'br.com.misticapresentes.painel'
         minSdk 23
         targetSdk 35
-        versionCode 5
-        versionName '1.1.3'
+        versionCode 6
+        versionName '2.0.0'
+
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
 
     buildFeatures {
         buildConfig true
+        compose true
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_11
-        targetCompatibility JavaVersion.VERSION_11
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    flavorDimensions = ['ambiente']
+    productFlavors {
+        dev {
+            dimension 'ambiente'
+            applicationIdSuffix '.dev'
+            versionNameSuffix '-dev'
+            resValue 'string', 'app_name', 'Mística Dev'
+            buildConfigField 'String', 'ENVIRONMENT_NAME', '"dev"'
+            buildConfigField 'String', 'ENVIRONMENT_LABEL', '"DEV"'
+            buildConfigField 'String', 'BASE_URL', '"https://dev.misticaesotericos.com.br/"'
+            buildConfigField 'String', 'LEGACY_PANEL_URL', '"https://dev.misticaesotericos.com.br/painel-operacional.html"'
+            buildConfigField 'boolean', 'ALLOW_LOCAL_HTTP', 'true'
+            buildConfigField 'boolean', 'ALLOW_CUSTOM_LEGACY_URL', 'true'
+            buildConfigField 'boolean', 'VERBOSE_NETWORK_LOGS', 'true'
+            buildConfigField 'boolean', 'DEFAULT_NEW_AUTH_ENABLED', 'true'
+            buildConfigField 'boolean', 'DEFAULT_LEGACY_WEBVIEW_ENABLED', 'true'
+            buildConfigField 'boolean', 'DEFAULT_NATIVE_WHATSAPP_ENABLED', 'false'
+            buildConfigField 'boolean', 'DEFAULT_NATIVE_DASHBOARD_ENABLED', 'false'
+            buildConfigField 'boolean', 'DEFAULT_PUSH_NOTIFICATIONS_ENABLED', 'false'
+            manifestPlaceholders = [networkSecurityConfig: '@xml/network_security_config_dev']
+        }
+        homolog {
+            dimension 'ambiente'
+            applicationIdSuffix '.homolog'
+            versionNameSuffix '-homolog'
+            resValue 'string', 'app_name', 'Mística Homologação'
+            buildConfigField 'String', 'ENVIRONMENT_NAME', '"homolog"'
+            buildConfigField 'String', 'ENVIRONMENT_LABEL', '"HOMOLOGAÇÃO"'
+            buildConfigField 'String', 'BASE_URL', '"https://homolog.misticaesotericos.com.br/"'
+            buildConfigField 'String', 'LEGACY_PANEL_URL', '"https://homolog.misticaesotericos.com.br/painel-operacional.html"'
+            buildConfigField 'boolean', 'ALLOW_LOCAL_HTTP', 'false'
+            buildConfigField 'boolean', 'ALLOW_CUSTOM_LEGACY_URL', 'false'
+            buildConfigField 'boolean', 'VERBOSE_NETWORK_LOGS', 'true'
+            buildConfigField 'boolean', 'DEFAULT_NEW_AUTH_ENABLED', 'true'
+            buildConfigField 'boolean', 'DEFAULT_LEGACY_WEBVIEW_ENABLED', 'true'
+            buildConfigField 'boolean', 'DEFAULT_NATIVE_WHATSAPP_ENABLED', 'false'
+            buildConfigField 'boolean', 'DEFAULT_NATIVE_DASHBOARD_ENABLED', 'false'
+            buildConfigField 'boolean', 'DEFAULT_PUSH_NOTIFICATIONS_ENABLED', 'false'
+            manifestPlaceholders = [networkSecurityConfig: '@xml/network_security_config']
+        }
+        prod {
+            dimension 'ambiente'
+            resValue 'string', 'app_name', 'Mística'
+            buildConfigField 'String', 'ENVIRONMENT_NAME', '"prod"'
+            buildConfigField 'String', 'ENVIRONMENT_LABEL', '"PRODUÇÃO"'
+            buildConfigField 'String', 'BASE_URL', '"https://misticaesotericos.com.br/"'
+            buildConfigField 'String', 'LEGACY_PANEL_URL', '"https://misticaesotericos.com.br/painel-operacional.html"'
+            buildConfigField 'boolean', 'ALLOW_LOCAL_HTTP', 'false'
+            buildConfigField 'boolean', 'ALLOW_CUSTOM_LEGACY_URL', 'false'
+            buildConfigField 'boolean', 'VERBOSE_NETWORK_LOGS', 'false'
+            buildConfigField 'boolean', 'DEFAULT_NEW_AUTH_ENABLED', 'false'
+            buildConfigField 'boolean', 'DEFAULT_LEGACY_WEBVIEW_ENABLED', 'true'
+            buildConfigField 'boolean', 'DEFAULT_NATIVE_WHATSAPP_ENABLED', 'false'
+            buildConfigField 'boolean', 'DEFAULT_NATIVE_DASHBOARD_ENABLED', 'false'
+            buildConfigField 'boolean', 'DEFAULT_PUSH_NOTIFICATIONS_ENABLED', 'false'
+            manifestPlaceholders = [networkSecurityConfig: '@xml/network_security_config']
+        }
+    }
+
+    // A produção ainda não habilita o novo fluxo de autenticação por padrão nesta PR
+    // (fundação apenas). Dev/homolog habilitam para permitir testar o fluxo novo.
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+        }
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    packagingOptions {
+        resources {
+            excludes += ['META-INF/AL2.0', 'META-INF/LGPL2.1']
+        }
+    }
+
+    testOptions {
+        unitTests {
+            includeAndroidResources = true
+            returnDefaultValues = true
+        }
+    }
+}
+
+dependencies {
+    implementation platform('androidx.compose:compose-bom:2024.10.01')
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.ui:ui-graphics'
+    implementation 'androidx.compose.ui:ui-tooling-preview'
+    implementation 'androidx.compose.material3:material3'
+    implementation 'androidx.compose.material:material-icons-extended'
+    debugImplementation 'androidx.compose.ui:ui-tooling'
+
+    implementation 'androidx.core:core-ktx:1.13.1'
+    implementation 'androidx.activity:activity-compose:1.9.3'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.8.7'
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7'
+    implementation 'androidx.lifecycle:lifecycle-runtime-compose:2.8.7'
+    implementation 'androidx.navigation:navigation-compose:2.8.4'
+
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0'
+    implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3'
+
+    implementation 'com.squareup.retrofit2:retrofit:2.11.0'
+    implementation 'com.squareup.retrofit2:converter-kotlinx-serialization:2.11.0'
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+    implementation 'com.squareup.okhttp3:logging-interceptor:4.12.0'
+
+    implementation 'androidx.security:security-crypto:1.1.0-alpha06'
+    implementation 'androidx.datastore:datastore-preferences:1.1.1'
+
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0'
+    testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
+    testImplementation 'org.robolectric:robolectric:4.13'
+    testImplementation 'androidx.test:core-ktx:1.6.1'
+
+    androidTestImplementation platform('androidx.compose:compose-bom:2024.10.01')
+    androidTestImplementation 'androidx.compose.ui:ui-test-junit4'
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.6.1'
+    debugImplementation 'androidx.compose.ui:ui-test-manifest'
 }
