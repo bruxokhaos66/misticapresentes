@@ -47,11 +47,14 @@ jobs:
       - name: Lint (todas as variantes)
         run: ./gradlew lint --no-daemon
 
-      - name: Testes unitarios (build type debug)
-        run: ./gradlew testDebugUnitTest --no-daemon
+      # Com flavorDimensions, "testDebugUnitTest"/"assembleDebug" sao
+      # ambiguos para o Gradle (ele nao infere as 3 variantes sozinho) -
+      # entao listamos as 3 variantes explicitamente, uma por flavor.
+      - name: Testes unitarios (dev/homolog/prod, build type debug)
+        run: ./gradlew testDevDebugUnitTest testHomologDebugUnitTest testProdDebugUnitTest --no-daemon
 
       - name: Gerar APKs debug (dev/homolog/prod)
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew assembleDevDebug assembleHomologDebug assembleProdDebug --no-daemon
 
       - name: Publicar relatorios de lint e teste
         if: always()
