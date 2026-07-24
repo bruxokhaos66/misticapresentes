@@ -40,14 +40,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import br.com.misticapresentes.painel.app.MisticaViewModelFactory
 import br.com.misticapresentes.painel.atendimento.model.Conversation
 import br.com.misticapresentes.painel.atendimento.model.ConversationFilter
+import br.com.misticapresentes.painel.atendimento.ui.common.syncStatusLabel
 import br.com.misticapresentes.painel.security.ScreenSecurity
 
 private const val MAX_CONTENT_WIDTH_DP = 720
@@ -73,10 +77,52 @@ fun AtendimentoListScreen(
         }
     }
 
+    // Sincronização em primeiro plano (PR #414): liga/desliga o polling só
+    // enquanto esta tela está de fato visível (ON_RESUME/ON_PAUSE) -- nunca
+    // recriado a cada recomposição, pois a chave do DisposableEffect é o
+    // par (lifecycleOwner, viewModel), estável entre recomposições da mesma
+    // tela; `onScreenResumed()` também é chamado uma vez de imediato, já que
+    // a tela pode já estar em RESUMED quando este efeito entra em execução.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> viewModel.onScreenResumed()
+                Lifecycle.Event.ON_PAUSE -> viewModel.onScreenPaused()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        viewModel.onScreenResumed()
+        onDispose {
+            viewModel.onScreenPaused()
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Central de Atendimento") },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Central de Atendimento")
+                        if (uiState.totalUnreadCount > 0) {
+                            Spacer(modifier = Modifier.size(8.dp))
+                            Surface(
+                                color = MaterialTheme.colorScheme.error,
+                                shape = CircleShape,
+                                modifier = Modifier.testTag("atendimento_unread_badge"),
+                            ) {
+                                Text(
+                                    text = uiState.totalUnreadCount.coerceAtMost(99).toString(),
+                                    color = MaterialTheme.colorScheme.onError,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                )
+                            }
+                        }
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack, modifier = Modifier.semantics { contentDescription = "Voltar" }) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = null)
@@ -109,6 +155,20 @@ fun AtendimentoListScreen(
                             color = MaterialTheme.colorScheme.onErrorContainer,
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.padding(12.dp).testTag("atendimento_offline_banner"),
+                        )
+                    }
+                } else {
+                    // Indicador discreto de sincronização (PR #414) -- só um
+                    // texto pequeno, nunca um diálogo/snackbar repetido a
+                    // cada ciclo de polling.
+                    syncStatusLabel(uiState.syncStatus)?.let { label ->
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .padding(horizontal = 16.dp, vertical = 4.dp)
+                                .testTag("atendimento_sync_status"),
                         )
                     }
                 }

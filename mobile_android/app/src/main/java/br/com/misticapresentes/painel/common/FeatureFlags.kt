@@ -18,6 +18,16 @@ enum class FeatureFlag(val key: String, val defaultValue: Boolean) {
     NATIVE_WHATSAPP_ENABLED("NATIVE_WHATSAPP_ENABLED", BuildConfig.DEFAULT_NATIVE_WHATSAPP_ENABLED),
     NATIVE_DASHBOARD_ENABLED("NATIVE_DASHBOARD_ENABLED", BuildConfig.DEFAULT_NATIVE_DASHBOARD_ENABLED),
     PUSH_NOTIFICATIONS_ENABLED("PUSH_NOTIFICATIONS_ENABLED", BuildConfig.DEFAULT_PUSH_NOTIFICATIONS_ENABLED),
+
+    // PR #414 -- sincronização em tempo real (polling), WorkManager e
+    // notificações locais da Central de Atendimento. As três nascem
+    // DESLIGADAS em todos os flavors (dev/homolog/prod): nenhuma exceção
+    // técnica de default `true` em dev nesta PR -- habilite via override
+    // local de DataStore para testar. Cada rota/Worker/receiver relevante
+    // revalida a flag internamente (nunca só esconde botão na UI).
+    REALTIME_SYNC_ENABLED("REALTIME_SYNC_ENABLED", BuildConfig.DEFAULT_REALTIME_SYNC_ENABLED),
+    BACKGROUND_SYNC_ENABLED("BACKGROUND_SYNC_ENABLED", BuildConfig.DEFAULT_BACKGROUND_SYNC_ENABLED),
+    ATTENDANCE_NOTIFICATIONS_ENABLED("ATTENDANCE_NOTIFICATIONS_ENABLED", BuildConfig.DEFAULT_ATTENDANCE_NOTIFICATIONS_ENABLED),
 }
 
 interface FeatureFlagsRepository {

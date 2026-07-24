@@ -66,17 +66,21 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import br.com.misticapresentes.painel.app.AppContainer
 import br.com.misticapresentes.painel.app.ConversationViewModelFactory
 import br.com.misticapresentes.painel.atendimento.model.MediaKind
 import br.com.misticapresentes.painel.atendimento.model.Message
 import br.com.misticapresentes.painel.atendimento.model.Product
+import br.com.misticapresentes.painel.atendimento.ui.common.syncStatusLabel
 import br.com.misticapresentes.painel.security.ScreenSecurity
 import coil.compose.AsyncImage
 
@@ -100,6 +104,28 @@ fun ConversationScreen(
         if (activity != null) ScreenSecurity.enable(activity)
         onDispose {
             if (activity != null) ScreenSecurity.disable(activity)
+        }
+    }
+
+    // Sincronização em primeiro plano (PR #414): mesmo padrão de
+    // AtendimentoListScreen -- liga/desliga o polling desta conversa só
+    // enquanto a tela está de fato em ON_RESUME, e marca/desmarca esta
+    // conversa como "visível" (usado pela notificação local para nunca
+    // duplicar aviso de uma mensagem que o atendente já está vendo).
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> viewModel.onScreenResumed()
+                Lifecycle.Event.ON_PAUSE -> viewModel.onScreenPaused()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        viewModel.onScreenResumed()
+        onDispose {
+            viewModel.onScreenPaused()
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
@@ -211,6 +237,28 @@ fun ConversationScreen(
                     .widthIn(max = MAX_CONTENT_WIDTH_DP.dp)
                     .align(Alignment.TopCenter),
             ) {
+                if (!uiState.isOnline) {
+                    Surface(color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = "Sem conexão com a internet.",
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(12.dp).testTag("conversation_offline_banner"),
+                        )
+                    }
+                }
+
+                syncStatusLabel(uiState.syncStatus)?.let { label ->
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                            .testTag("conversation_sync_status"),
+                    )
+                }
+
                 (uiState.infoMessage ?: uiState.errorMessage)?.let { message ->
                     Surface(
                         color = if (uiState.errorMessage != null) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.secondaryContainer,

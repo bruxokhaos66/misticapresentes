@@ -30,6 +30,8 @@ class MisticaViewModelFactory(private val container: AppContainer) : ViewModelPr
                 repository = container.atendimentoRepository,
                 authRepository = container.authRepository,
                 connectivityObserver = container.connectivityObserver,
+                featureFlagsRepository = container.featureFlagsRepository,
+                notifier = container.attendanceNotifier,
             ) as T
             else -> throw IllegalArgumentException("ViewModel desconhecida: ${modelClass.name}")
         }
@@ -56,6 +58,9 @@ class ConversationViewModelFactory(
                 conversationId = conversationId,
                 mediaFileStore = container.mediaFileStore,
                 imageCompressor = container.imageCompressor,
+                featureFlagsRepository = container.featureFlagsRepository,
+                connectivityObserver = container.connectivityObserver,
+                notifier = container.attendanceNotifier,
             ) as T
             else -> throw IllegalArgumentException("ViewModel desconhecida: ${modelClass.name}")
         }

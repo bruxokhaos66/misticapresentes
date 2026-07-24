@@ -2,10 +2,14 @@ package br.com.misticapresentes.painel.atendimento.ui.list
 
 import br.com.misticapresentes.painel.atendimento.model.ConversationFilter
 import br.com.misticapresentes.painel.atendimento.repository.AtendimentoRepository
+import br.com.misticapresentes.painel.atendimento.sync.SyncStatus
 import br.com.misticapresentes.painel.auth.AuthRepository
+import br.com.misticapresentes.painel.common.FeatureFlag
 import br.com.misticapresentes.painel.network.PersistentCookieJar
 import br.com.misticapresentes.painel.testutil.FakeAtendimentoApi
+import br.com.misticapresentes.painel.testutil.FakeAttendanceNotifier
 import br.com.misticapresentes.painel.testutil.FakeConnectivityObserver
+import br.com.misticapresentes.painel.testutil.FakeFeatureFlagsRepository
 import br.com.misticapresentes.painel.testutil.FakeMisticaApi
 import br.com.misticapresentes.painel.testutil.FakeSecureSessionStore
 import kotlinx.coroutines.Dispatchers
@@ -41,12 +45,18 @@ class AtendimentoListViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private suspend fun createViewModel(): AtendimentoListViewModel {
+    private suspend fun createViewModel(
+        connectivityObserver: FakeConnectivityObserver = FakeConnectivityObserver(initiallyOnline = true),
+        featureFlagsRepository: FakeFeatureFlagsRepository = FakeFeatureFlagsRepository(),
+        notifier: FakeAttendanceNotifier = FakeAttendanceNotifier(),
+    ): AtendimentoListViewModel {
         authRepository.login("luna", "senha-correta")
         return AtendimentoListViewModel(
             repository = AtendimentoRepository(atendimentoApi),
             authRepository = authRepository,
-            connectivityObserver = FakeConnectivityObserver(initiallyOnline = true),
+            connectivityObserver = connectivityObserver,
+            featureFlagsRepository = featureFlagsRepository,
+            notifier = notifier,
         )
     }
 
@@ -111,5 +121,121 @@ class AtendimentoListViewModelTest {
         dispatcher.scheduler.advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.conversations.isEmpty())
+    }
+
+    // -------- Sincronização em primeiro plano (PR #414) --------
+
+    @Test
+    fun `polling is disabled when REALTIME_SYNC_ENABLED flag is off`() = runTest {
+        val flags = FakeFeatureFlagsRepository(mapOf(FeatureFlag.REALTIME_SYNC_ENABLED to false))
+        val viewModel = createViewModel(featureFlagsRepository = flags)
+        dispatcher.scheduler.advanceUntilIdle()
+        viewModel.onScreenResumed()
+        val callsAfterInitialLoad = atendimentoApi.callLog.size
+
+        dispatcher.scheduler.advanceTimeBy(120_000)
+        dispatcher.scheduler.runCurrent()
+
+        assertEquals(callsAfterInitialLoad, atendimentoApi.callLog.size)
+    }
+
+    @Test
+    fun `polling refreshes the list while screen is active and flag is on`() = runTest {
+        val flags = FakeFeatureFlagsRepository(mapOf(FeatureFlag.REALTIME_SYNC_ENABLED to true))
+        val viewModel = createViewModel(featureFlagsRepository = flags)
+        dispatcher.scheduler.advanceUntilIdle()
+        viewModel.onScreenResumed()
+        val callsAfterInitialLoad = atendimentoApi.callLog.size
+
+        dispatcher.scheduler.advanceTimeBy(16_000)
+        dispatcher.scheduler.runCurrent()
+
+        assertTrue(atendimentoApi.callLog.size > callsAfterInitialLoad)
+        assertEquals(SyncStatus.UPDATED, viewModel.uiState.value.syncStatus)
+    }
+
+    @Test
+    fun `polling pauses when screen goes to background and resumes after onScreenResumed`() = runTest {
+        val flags = FakeFeatureFlagsRepository(mapOf(FeatureFlag.REALTIME_SYNC_ENABLED to true))
+        val viewModel = createViewModel(featureFlagsRepository = flags)
+        dispatcher.scheduler.advanceUntilIdle()
+        viewModel.onScreenResumed()
+        viewModel.onScreenPaused()
+        val callsWhilePaused = atendimentoApi.callLog.size
+
+        dispatcher.scheduler.advanceTimeBy(60_000)
+        dispatcher.scheduler.runCurrent()
+        assertEquals(callsWhilePaused, atendimentoApi.callLog.size)
+
+        viewModel.onScreenResumed()
+        dispatcher.scheduler.advanceTimeBy(16_000)
+        dispatcher.scheduler.runCurrent()
+        assertTrue(atendimentoApi.callLog.size > callsWhilePaused)
+    }
+
+    @Test
+    fun `does not start a second polling loop on repeated onScreenResumed calls`() = runTest {
+        val flags = FakeFeatureFlagsRepository(mapOf(FeatureFlag.REALTIME_SYNC_ENABLED to true))
+        val viewModel = createViewModel(featureFlagsRepository = flags)
+        dispatcher.scheduler.advanceUntilIdle()
+        viewModel.onScreenResumed()
+        viewModel.onScreenResumed()
+        viewModel.onScreenResumed()
+        val callsAfterInitialLoad = atendimentoApi.callLog.size
+
+        dispatcher.scheduler.advanceTimeBy(16_000)
+        dispatcher.scheduler.runCurrent()
+
+        // Só um ciclo de polling deve ter ocorrido (uma chamada por endpoint
+        // usado pelo filtro atual), nunca múltiplos loops concorrentes.
+        assertEquals(callsAfterInitialLoad + 1, atendimentoApi.callLog.size)
+    }
+
+    @Test
+    fun `offline sets status and network is not retried while offline`() = runTest {
+        val connectivity = FakeConnectivityObserver(initiallyOnline = true)
+        val flags = FakeFeatureFlagsRepository(mapOf(FeatureFlag.REALTIME_SYNC_ENABLED to true))
+        val viewModel = createViewModel(connectivityObserver = connectivity, featureFlagsRepository = flags)
+        dispatcher.scheduler.advanceUntilIdle()
+        viewModel.onScreenResumed()
+
+        connectivity.setOnline(false)
+        dispatcher.scheduler.advanceTimeBy(16_000)
+        dispatcher.scheduler.runCurrent()
+
+        assertEquals(SyncStatus.OFFLINE, viewModel.uiState.value.syncStatus)
+    }
+
+    @Test
+    fun `notifies once when unread count increases for a conversation not currently visible`() = runTest {
+        val flags = FakeFeatureFlagsRepository(mapOf(FeatureFlag.REALTIME_SYNC_ENABLED to true))
+        val notifier = FakeAttendanceNotifier()
+        val viewModel = createViewModel(featureFlagsRepository = flags, notifier = notifier)
+        dispatcher.scheduler.advanceUntilIdle()
+        viewModel.onScreenResumed()
+
+        atendimentoApi.myConversations = listOf(
+            FakeAtendimentoApi.defaultQueueConversation().copy(unreadCount = 5),
+        )
+        dispatcher.scheduler.advanceTimeBy(16_000)
+        dispatcher.scheduler.runCurrent()
+
+        assertEquals(listOf(1L), notifier.notifiedConversationIds)
+    }
+
+    @Test
+    fun `does not notify again when unread count stays the same across polling cycles`() = runTest {
+        val flags = FakeFeatureFlagsRepository(mapOf(FeatureFlag.REALTIME_SYNC_ENABLED to true))
+        val notifier = FakeAttendanceNotifier()
+        val viewModel = createViewModel(featureFlagsRepository = flags, notifier = notifier)
+        dispatcher.scheduler.advanceUntilIdle()
+        viewModel.onScreenResumed()
+
+        dispatcher.scheduler.advanceTimeBy(16_000)
+        dispatcher.scheduler.runCurrent()
+        dispatcher.scheduler.advanceTimeBy(16_000)
+        dispatcher.scheduler.runCurrent()
+
+        assertTrue(notifier.notifiedConversationIds.isEmpty())
     }
 }

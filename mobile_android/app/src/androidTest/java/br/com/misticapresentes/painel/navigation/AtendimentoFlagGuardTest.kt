@@ -116,6 +116,7 @@ class AtendimentoFlagGuardTest {
             repository = AtendimentoRepository(api),
             authRepository = authRepository,
             connectivityObserver = FakeConnectivityObserver(initiallyOnline = true),
+            featureFlagsRepository = FakeFeatureFlagsRepository(),
         )
     }
 

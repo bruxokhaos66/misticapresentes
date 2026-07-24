@@ -11,6 +11,7 @@ import br.com.misticapresentes.painel.auth.AuthRepository
 import br.com.misticapresentes.painel.network.PersistentCookieJar
 import br.com.misticapresentes.painel.testutil.FakeAtendimentoApi
 import br.com.misticapresentes.painel.testutil.FakeConnectivityObserver
+import br.com.misticapresentes.painel.testutil.FakeFeatureFlagsRepository
 import br.com.misticapresentes.painel.testutil.FakeMisticaApi
 import br.com.misticapresentes.painel.testutil.FakeSecureSessionStore
 import br.com.misticapresentes.painel.ui.theme.MisticaTheme
@@ -36,6 +37,7 @@ class AtendimentoListScreenTest {
             repository = AtendimentoRepository(api),
             authRepository = authRepository,
             connectivityObserver = FakeConnectivityObserver(initiallyOnline = true),
+            featureFlagsRepository = FakeFeatureFlagsRepository(),
         )
     }
 

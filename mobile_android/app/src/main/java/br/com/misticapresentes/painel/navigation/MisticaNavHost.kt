@@ -30,6 +30,9 @@ fun MisticaNavHost(
     onOpenLegacyPanel: () -> Unit,
     onEnterLegacyOnly: () -> Unit,
     navController: NavHostController = rememberNavController(),
+    /** Id de conversa vindo de uma notificação tocada (PR #414) -- ver [br.com.misticapresentes.painel.MainActivity]. */
+    pendingConversationDeepLink: Long? = null,
+    onDeepLinkConsumed: () -> Unit = {},
 ) {
     val factory = remember(container) { MisticaViewModelFactory(container) }
 
@@ -39,6 +42,22 @@ fun MisticaNavHost(
             navController.navigate(NavRoutes.SESSION_EXPIRED) {
                 popUpTo(0)
             }
+        }
+    }
+
+    // Deep link de notificação (PR #414): só navega quando já há sessão
+    // logada (a tela de destino, ATENDIMENTO_DETAIL, já revalida a flag
+    // NATIVE_WHATSAPP_ENABLED via AtendimentoFlagGuard e o backend revalida
+    // a própria conversationId/permissão em cada chamada -- este trecho só
+    // decide "para onde navegar", nunca concede acesso). Consumido uma única
+    // vez (onDeepLinkConsumed) para não navegar de novo numa recomposição.
+    LaunchedEffect(pendingConversationDeepLink, authState) {
+        val conversationId = pendingConversationDeepLink
+        if (conversationId != null && conversationId > 0 && authState is AuthState.LoggedIn) {
+            navController.navigate(NavRoutes.atendimentoDetail(conversationId)) {
+                launchSingleTop = true
+            }
+            onDeepLinkConsumed()
         }
     }
 
