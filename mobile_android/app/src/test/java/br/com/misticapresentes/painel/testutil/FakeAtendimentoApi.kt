@@ -24,6 +24,7 @@ import br.com.misticapresentes.painel.atendimento.network.dto.SendMessageRespons
 import br.com.misticapresentes.painel.atendimento.network.dto.SendProductRequestDto
 import br.com.misticapresentes.painel.atendimento.network.dto.SendProductResponseDto
 import br.com.misticapresentes.painel.atendimento.network.dto.TransferRequestDto
+import kotlinx.coroutines.delay
 import okhttp3.ResponseBody.Companion.toResponseBody
 import retrofit2.Response
 
@@ -54,73 +55,148 @@ class FakeAtendimentoApi : AtendimentoApi {
     var transferCallCount = 0
     var resolveCallCount = 0
 
+    /** Todas as Idempotency-Key usadas em `sendMessage`, na ordem das chamadas (não só a última). */
+    val sendMessageIdempotencyKeys = mutableListOf<String>()
+
+    /**
+     * Registro de toda chamada feita neste fake, na ordem em que ocorreram --
+     * usado para provar em testes que NENHUMA chamada foi feita (ex.: guard
+     * de feature flag bloqueando a tela antes do ViewModel existir).
+     */
+    val callLog = mutableListOf<String>()
+
+    /** Atraso artificial (ms de tempo virtual) só em `getConversation`, para simular respostas fora de ordem em teste. */
+    var getConversationDelayMs: Long = 0
+
+    /** Atraso artificial (ms de tempo virtual) só em `getMessages`, para simular respostas fora de ordem em teste. */
+    var getMessagesDelayMs: Long = 0
+
+    /** Atraso artificial (ms de tempo virtual) só em `sendMessage`, para simular um envio "em voo" em teste. */
+    var sendMessageDelayMs: Long = 0
+
     private fun <T> errorOrElse(body: () -> Response<T>): Response<T> =
         if (responseCode in 200..299) body() else Response.error(responseCode, "erro".toResponseBody(null))
 
-    override suspend fun queue(page: Int, pageSize: Int) = errorOrElse {
-        Response.success(QueueConversationsPageDto(total = queueConversations.size, page = page, pageSize = pageSize, conversations = queueConversations))
+    override suspend fun queue(page: Int, pageSize: Int): Response<QueueConversationsPageDto> {
+        callLog += "queue"
+        return errorOrElse {
+            Response.success(QueueConversationsPageDto(total = queueConversations.size, page = page, pageSize = pageSize, conversations = queueConversations))
+        }
     }
 
-    override suspend fun myConversations(page: Int, pageSize: Int) = errorOrElse {
-        Response.success(QueueConversationsPageDto(total = myConversations.size, page = page, pageSize = pageSize, conversations = myConversations))
+    override suspend fun myConversations(page: Int, pageSize: Int): Response<QueueConversationsPageDto> {
+        callLog += "myConversations"
+        return errorOrElse {
+            Response.success(QueueConversationsPageDto(total = myConversations.size, page = page, pageSize = pageSize, conversations = myConversations))
+        }
     }
 
-    override suspend fun conversations(status: String?, unreadOnly: Boolean?, q: String?, page: Int, pageSize: Int) = errorOrElse {
-        Response.success(InboxConversationsPageDto(total = allConversations.size, page = page, pageSize = pageSize, conversations = allConversations))
+    override suspend fun conversations(status: String?, unreadOnly: Boolean?, q: String?, page: Int, pageSize: Int): Response<InboxConversationsPageDto> {
+        callLog += "conversations"
+        return errorOrElse {
+            Response.success(InboxConversationsPageDto(total = allConversations.size, page = page, pageSize = pageSize, conversations = allConversations))
+        }
     }
 
-    override suspend fun getConversation(conversationId: Long) = errorOrElse {
-        Response.success(ConversationDetailResponseDto(conversation = conversationDetail))
+    override suspend fun getConversation(conversationId: Long): Response<ConversationDetailResponseDto> {
+        callLog += "getConversation"
+        // Captura o valor ANTES do delay -- assim como um servidor real
+        // "veria" o estado no momento em que recebeu a requisição, não no
+        // momento em que a resposta é escrita de volta. Isso permite simular
+        // em teste duas chamadas concorrentes com respostas diferentes e
+        // ordem de chegada invertida (a mais lenta chega por último).
+        val snapshot = conversationDetail
+        if (getConversationDelayMs > 0) delay(getConversationDelayMs)
+        return errorOrElse {
+            Response.success(ConversationDetailResponseDto(conversation = snapshot))
+        }
     }
 
-    override suspend fun getMessages(conversationId: Long, beforeId: Long?, limit: Int) = errorOrElse {
-        Response.success(MessagesResponseDto(messages = messages))
+    override suspend fun getMessages(conversationId: Long, beforeId: Long?, limit: Int): Response<MessagesResponseDto> {
+        callLog += "getMessages"
+        val snapshot = messages
+        if (getMessagesDelayMs > 0) delay(getMessagesDelayMs)
+        return errorOrElse {
+            Response.success(MessagesResponseDto(messages = snapshot))
+        }
     }
 
-    override suspend fun sendMessage(conversationId: Long, body: SendMessageRequestDto, idempotencyKey: String) = errorOrElse {
+    override suspend fun sendMessage(conversationId: Long, body: SendMessageRequestDto, idempotencyKey: String): Response<SendMessageResponseDto> {
+        callLog += "sendMessage"
         sendMessageCallCount++
         lastSendMessageIdempotencyKey = idempotencyKey
-        Response.success(SendMessageResponseDto(ok = sendMessageOk, messageId = 1, status = if (sendMessageOk) "sent" else "failed"))
+        sendMessageIdempotencyKeys += idempotencyKey
+        if (sendMessageDelayMs > 0) delay(sendMessageDelayMs)
+        return errorOrElse {
+            Response.success(SendMessageResponseDto(ok = sendMessageOk, messageId = 1, status = if (sendMessageOk) "sent" else "failed"))
+        }
     }
 
-    override suspend fun sendProduct(conversationId: Long, body: SendProductRequestDto, idempotencyKey: String) = errorOrElse {
-        Response.success(SendProductResponseDto(ok = sendProductOk, messageId = 2, status = if (sendProductOk) "sent" else "failed", productId = body.productId))
+    override suspend fun sendProduct(conversationId: Long, body: SendProductRequestDto, idempotencyKey: String): Response<SendProductResponseDto> {
+        callLog += "sendProduct"
+        return errorOrElse {
+            Response.success(SendProductResponseDto(ok = sendProductOk, messageId = 2, status = if (sendProductOk) "sent" else "failed", productId = body.productId))
+        }
     }
 
-    override suspend fun searchProducts(q: String, page: Int, pageSize: Int) = errorOrElse {
-        Response.success(ProductsPageDto(total = products.size, page = page, pageSize = pageSize, products = products))
+    override suspend fun searchProducts(q: String, page: Int, pageSize: Int): Response<ProductsPageDto> {
+        callLog += "searchProducts"
+        return errorOrElse {
+            Response.success(ProductsPageDto(total = products.size, page = page, pageSize = pageSize, products = products))
+        }
     }
 
-    override suspend fun recentProducts(limit: Int) = errorOrElse {
-        Response.success(RecentProductsResponseDto(products = products))
+    override suspend fun recentProducts(limit: Int): Response<RecentProductsResponseDto> {
+        callLog += "recentProducts"
+        return errorOrElse {
+            Response.success(RecentProductsResponseDto(products = products))
+        }
     }
 
-    override suspend fun claim(conversationId: Long) = errorOrElse {
+    override suspend fun claim(conversationId: Long): Response<ClaimReleaseResponseDto> {
+        callLog += "claim"
         claimCallCount++
-        Response.success(ClaimReleaseResponseDto(conversation = queueConversations.first()))
+        return errorOrElse {
+            Response.success(ClaimReleaseResponseDto(conversation = queueConversations.first()))
+        }
     }
 
-    override suspend fun release(conversationId: Long, body: ReleaseRequestDto) = errorOrElse {
+    override suspend fun release(conversationId: Long, body: ReleaseRequestDto): Response<ClaimReleaseResponseDto> {
+        callLog += "release"
         releaseCallCount++
-        Response.success(ClaimReleaseResponseDto(conversation = queueConversations.first()))
+        return errorOrElse {
+            Response.success(ClaimReleaseResponseDto(conversation = queueConversations.first()))
+        }
     }
 
-    override suspend fun transfer(conversationId: Long, body: TransferRequestDto) = errorOrElse {
+    override suspend fun transfer(conversationId: Long, body: TransferRequestDto): Response<ClaimReleaseResponseDto> {
+        callLog += "transfer"
         transferCallCount++
-        Response.success(ClaimReleaseResponseDto(conversation = queueConversations.first()))
+        return errorOrElse {
+            Response.success(ClaimReleaseResponseDto(conversation = queueConversations.first()))
+        }
     }
 
-    override suspend fun resolve(conversationId: Long, body: ResolveRequestDto) = errorOrElse {
+    override suspend fun resolve(conversationId: Long, body: ResolveRequestDto): Response<ClaimReleaseResponseDto> {
+        callLog += "resolve"
         resolveCallCount++
-        Response.success(ClaimReleaseResponseDto(conversation = queueConversations.first()))
+        return errorOrElse {
+            Response.success(ClaimReleaseResponseDto(conversation = queueConversations.first()))
+        }
     }
 
-    override suspend fun assignmentHistory(conversationId: Long, page: Int, pageSize: Int) = errorOrElse {
-        Response.success(AssignmentHistoryResponseDto(total = assignmentHistory.size, page = page, pageSize = pageSize, history = assignmentHistory))
+    override suspend fun assignmentHistory(conversationId: Long, page: Int, pageSize: Int): Response<AssignmentHistoryResponseDto> {
+        callLog += "assignmentHistory"
+        return errorOrElse {
+            Response.success(AssignmentHistoryResponseDto(total = assignmentHistory.size, page = page, pageSize = pageSize, history = assignmentHistory))
+        }
     }
 
-    override suspend fun agents() = errorOrElse {
-        Response.success(AgentsResponseDto(agents = agents))
+    override suspend fun agents(): Response<AgentsResponseDto> {
+        callLog += "agents"
+        return errorOrElse {
+            Response.success(AgentsResponseDto(agents = agents))
+        }
     }
 
     companion object {

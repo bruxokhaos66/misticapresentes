@@ -56,15 +56,28 @@ class ConversationViewModel(
     private val _uiState = MutableStateFlow(ConversationUiState())
     val uiState: StateFlow<ConversationUiState> = _uiState.asStateFlow()
 
+    /**
+     * Geração da carga "cheia" da conversa (load()/refreshMessagesQuietly()).
+     * Cada chamada captura o valor incrementado em uma variável local antes
+     * de suspender; ao voltar, só aplica o resultado se nenhuma chamada mais
+     * nova tiver começado nesse meio-tempo -- evita que a resposta atrasada
+     * de um load()/refresh antigo sobrescreva um estado mais novo (ex.: dois
+     * refreshes disparados em sequência rápida, ou um retry manual enquanto
+     * o load() anterior ainda estava em voo).
+     */
+    private var requestGeneration = 0
+
     init {
         load()
     }
 
     fun load() {
+        val generation = ++requestGeneration
         _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
         viewModelScope.launch {
             val conversationResult = repository.getConversation(conversationId)
             val messagesResult = repository.getMessages(conversationId, beforeId = null, limit = MESSAGES_PAGE_SIZE)
+            if (generation != requestGeneration) return@launch
             when {
                 conversationResult is ApiResult.Failure -> {
                     _uiState.value = _uiState.value.copy(
@@ -319,12 +332,16 @@ class ConversationViewModel(
     }
 
     private fun refreshMessagesQuietly() {
+        val generation = ++requestGeneration
         viewModelScope.launch {
             when (val result = repository.getMessages(conversationId, beforeId = null, limit = MESSAGES_PAGE_SIZE)) {
-                is ApiResult.Success -> _uiState.value = _uiState.value.copy(
-                    messages = result.data,
-                    hasMoreHistory = result.data.size >= MESSAGES_PAGE_SIZE,
-                )
+                is ApiResult.Success -> {
+                    if (generation != requestGeneration) return@launch
+                    _uiState.value = _uiState.value.copy(
+                        messages = result.data,
+                        hasMoreHistory = result.data.size >= MESSAGES_PAGE_SIZE,
+                    )
+                }
                 is ApiResult.Failure -> Unit // mensagem já foi enviada; falha aqui só afeta o refresh da lista
             }
         }
