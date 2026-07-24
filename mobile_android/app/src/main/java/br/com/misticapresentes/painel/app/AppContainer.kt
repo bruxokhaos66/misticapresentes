@@ -1,6 +1,7 @@
 package br.com.misticapresentes.painel.app
 
 import android.content.Context
+import br.com.misticapresentes.painel.atendimento.repository.AtendimentoRepository
 import br.com.misticapresentes.painel.auth.AuthRepository
 import br.com.misticapresentes.painel.common.AndroidConnectivityObserver
 import br.com.misticapresentes.painel.common.AppPreferences
@@ -44,4 +45,16 @@ class AppContainer(context: Context) {
     // (criado antes do AuthRepository, pois o client HTTP é uma dependência
     // dele) notifique sessão expirada sem depender de um Flow global estático.
     private var authRepositoryRef: AuthRepository? = null
+
+    // Central de Atendimento (PR #412): reaproveita o mesmo cookie de sessão
+    // (secureSessionStore) e o mesmo fluxo de sessão expirada do restante do
+    // app, numa interface Retrofit irmã (ver ApiClient.createAtendimentoApi).
+    val atendimentoRepository: AtendimentoRepository by lazy {
+        AtendimentoRepository(
+            api = ApiClient.createAtendimentoApi(
+                secureSessionStore = secureSessionStore,
+                sessionExpiredNotifier = { authRepositoryRef?.onSessionExpired() },
+            ),
+        )
+    }
 }
