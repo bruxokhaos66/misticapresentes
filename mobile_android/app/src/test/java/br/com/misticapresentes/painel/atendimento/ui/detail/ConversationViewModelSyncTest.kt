@@ -195,7 +195,14 @@ class ConversationViewModelSyncTest {
         // Dispara um ciclo de polling que vai ficar "em voo" por 5s...
         dispatcher.scheduler.advanceTimeBy(9_000)
         dispatcher.scheduler.runCurrent()
-        // ...e antes dele responder, uma carga manual mais nova começa.
+        // ...e antes dele responder, uma carga manual mais nova começa. Para
+        // o polling ANTES do advanceUntilIdle() abaixo -- o comportamento
+        // sob teste (resposta antiga descartada por carga mais nova) não
+        // depende dele continuar ativo, e um advanceUntilIdle() com o
+        // AttendanceSyncLoop (infinito por design) ainda ativo trava para
+        // sempre pelo mesmo motivo já corrigido no teardown de runSyncTest
+        // -- só que aqui a chamada é no MEIO do teste, antes do finally.
+        viewModel.onScreenPaused()
         atendimentoApi.getMessagesDelayMs = 0
         atendimentoApi.getConversationDelayMs = 0
         viewModel.load()
