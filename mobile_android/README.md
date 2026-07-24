@@ -10,8 +10,8 @@ remover o modo WebView legado que as lojas já usam hoje.
 Migração híbrida e gradual: telas novas em **Kotlin + Jetpack Compose**
 (Material 3), o WebView legado preservado como tela isolada de transição, e
 nenhuma regra de negócio duplicada no app — o app só consome as APIs REST já
-existentes no backend (`backend/user_sync_routes.py` nesta PR; a Central de
-Atendimento vem na PR #412).
+existentes no backend (`backend/user_sync_routes.py` na fundação; a Central
+de Atendimento nativa, PR #412, consome `/api/admin/whatsapp/*`).
 
 ```text
 br.com.misticapresentes.painel
@@ -19,6 +19,8 @@ br.com.misticapresentes.painel
 ├── navigation   # NavHost e rotas Compose
 ├── ui           # Telas Compose (splash, login, home, estados) e tema
 ├── auth         # AuthRepository, estado de autenticação
+├── atendimento  # Central de Atendimento nativa (PR #412) -- network/dto,
+│                # repository, model, ui/list, ui/detail
 ├── network      # Retrofit/OkHttp, interceptors, ApiResult, CookieJar
 ├── security     # Armazenamento criptografado (Keystore), FLAG_SECURE
 ├── legacy       # Activity do WebView legado, endurecida
@@ -202,23 +204,41 @@ direto no painel legado — exatamente o comportamento de hoje —, o que dá
 flag (novo build ou, futuramente, flag remota) volta o app ao estado atual
 sem precisar reverter código.
 
-## Limitações desta PR
+## Central de Atendimento nativa (PR #412)
 
-- A Central de Atendimento, dashboard nativo e push (FCM) **não** são
-  implementados aqui — só a fundação para recebê-los.
+Pacote `atendimento` (`network`, `network/dto`, `repository`, `model`,
+`ui/list`, `ui/detail`), atrás da flag `NATIVE_WHATSAPP_ENABLED` (default
+`false` em todos os flavors nesta PR — habilite localmente via override de
+DataStore para testar em dev/homolog). Consome exclusivamente os endpoints já
+existentes sob `/api/admin/whatsapp` (`backend/whatsapp_atendimento_routes.py`,
+`backend/whatsapp_inbox_routes.py`, `backend/whatsapp_catalog_routes.py`) pela
+mesma sessão por cookie/Retrofit/OkHttp desta fundação (ver
+`network/ApiClient.createAtendimentoApi`). Escopo desta PR: fila, lista de
+conversas (minhas/fila/todas), detalhe/histórico de mensagens paginado, envio
+de texto e de produto (com Idempotency-Key por tentativa), assumir/liberar/
+transferir/resolver, histórico de atribuição, atualização manual (sem
+polling/WorkManager/tempo real). Nunca persiste mensagem, telefone completo ou
+dado de cliente em disco — tudo em memória via StateFlow, perdido ao sair do
+processo. Câmera, imagem, áudio, push e IA ficam para PRs futuras.
+
+## Limitações desta PR (#412)
+
+- Câmera, envio de imagem/áudio, notificações push, sincronização em tempo
+  real, WorkManager, IA e Dashboard **não** são implementados na Central de
+  Atendimento nativa — apenas o que está listado acima.
 - Não há tela de configuração de URL customizada em dev ainda (só a flag no
   `BuildConfig`).
-- DI é manual (`app/AppContainer`), sem Hilt/Koin — reavaliar se a
-  complexidade justificar na PR #412.
+- DI é manual (`app/AppContainer`), sem Hilt/Koin.
 - Testes de UI/Compose exigem dispositivo/emulador e não rodam no CI desta
   PR.
 - Nenhuma build de release é assinada ou publicada por este módulo/workflow.
 
-## Próximos passos (PR #412)
+## Próximos passos
 
-- Central de Atendimento nativa consumindo `backend/whatsapp_inbox_routes.py`
-  e `backend/whatsapp_atendimento_routes.py` (fila, conversas, mensagens,
-  produtos, mídia, assumir/transferir/resolver) sobre esta mesma fundação de
-  rede/auth/segurança.
-- `FLAG_SECURE` nas novas telas com dado de cliente/mensagem.
-- Permissões de câmera/áudio com fluxo de runtime permission.
+- Dashboard nativo, push (FCM) e sincronização em tempo real da Central de
+  Atendimento (WorkManager/websocket), câmera e mídia (imagem/áudio) no envio
+  de mensagens.
+- `FLAG_SECURE` já cobre lista e detalhe da Central de Atendimento; estender
+  a qualquer tela nova com dado de cliente/mensagem.
+- Permissões de câmera/áudio com fluxo de runtime permission (quando mídia
+  for implementada).
