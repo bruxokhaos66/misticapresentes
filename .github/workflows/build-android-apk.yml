@@ -2,6 +2,10 @@ name: Build Android APK
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'mobile_android/**'
+      - '.github/workflows/build-android-apk.yml'
   push:
     branches: [ main ]
     paths:
@@ -9,8 +13,11 @@ on:
       - '.github/workflows/build-android-apk.yml'
 
 jobs:
-  build-apk:
+  build-and-test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile_android
     steps:
       - name: Baixar codigo
         uses: actions/checkout@v4
@@ -21,16 +28,61 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Configurar Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Cache Gradle
+        uses: actions/cache@v4
         with:
-          gradle-version: '8.10.2'
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('mobile_android/**/*.gradle*', 'mobile_android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
 
-      - name: Gerar APK debug
-        run: gradle -p mobile_android assembleDebug --no-daemon
+      - name: Dar permissao de execucao ao wrapper
+        run: chmod +x ./gradlew
 
-      - name: Publicar APK
+      # A build local e a do CI usam exatamente a mesma versao do Gradle,
+      # sempre via wrapper (nunca uma instalacao de Gradle separada que
+      # ignore o mobile_android/gradle/wrapper/gradle-wrapper.properties).
+      - name: Lint (todas as variantes)
+        run: ./gradlew lint --no-daemon
+
+      - name: Testes unitarios (build type debug)
+        run: ./gradlew testDebugUnitTest --no-daemon
+
+      - name: Gerar APKs debug (dev/homolog/prod)
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Publicar relatorios de lint e teste
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: MisticaPainel-Android-debug
-          path: mobile_android/app/build/outputs/apk/debug/app-debug.apk
+          name: MisticaPainel-Android-relatorios
+          path: |
+            mobile_android/app/build/reports/lint-results-*.html
+            mobile_android/app/build/test-results/**
+            mobile_android/app/build/reports/tests/**
+
+      # Somente artefatos de DEBUG sao publicados. Nenhum APK de release e
+      # gerado, assinado ou publicado por este workflow.
+      - name: Publicar APK debug (dev)
+        uses: actions/upload-artifact@v4
+        with:
+          name: MisticaPainel-Android-dev-debug
+          path: mobile_android/app/build/outputs/apk/dev/debug/app-dev-debug.apk
+
+      - name: Publicar APK debug (homolog)
+        uses: actions/upload-artifact@v4
+        with:
+          name: MisticaPainel-Android-homolog-debug
+          path: mobile_android/app/build/outputs/apk/homolog/debug/app-homolog-debug.apk
+
+      - name: Publicar APK debug (prod)
+        uses: actions/upload-artifact@v4
+        with:
+          name: MisticaPainel-Android-prod-debug
+          path: mobile_android/app/build/outputs/apk/prod/debug/app-prod-debug.apk
+
+# O scan de segredos deste diretório já é coberto pelo workflow
+# `security-secrets.yml` (detect-secrets), que roda sem filtro de path em
+# todo push/PR e portanto também cobre mobile_android/** — não duplicado aqui.
