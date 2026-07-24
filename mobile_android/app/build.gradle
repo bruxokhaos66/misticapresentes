@@ -146,6 +146,13 @@ dependencies {
     implementation 'androidx.security:security-crypto:1.1.0-alpha06'
     implementation 'androidx.datastore:datastore-preferences:1.1.1'
 
+    // Carregamento de imagem leve para os cards de produto da Central de
+    // Atendimento (PR #412) -- nenhuma outra lib de imagem existia no
+    // projeto; Coil é o padrão de fato para Compose (API pequena, suporte
+    // oficial a Compose via coil-compose, cache em memória/disco já
+    // configurado de forma sensata por padrão).
+    implementation 'io.coil-kt:coil-compose:2.7.0'
+
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0'
     testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'

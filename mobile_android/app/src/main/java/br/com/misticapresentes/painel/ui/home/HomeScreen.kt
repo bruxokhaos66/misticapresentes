@@ -29,6 +29,7 @@ import br.com.misticapresentes.painel.common.Environment
 fun HomeScreen(
     factory: MisticaViewModelFactory,
     onOpenLegacyPanel: () -> Unit,
+    onOpenAtendimento: () -> Unit,
     onLoggedOut: () -> Unit,
     viewModel: HomeViewModel = viewModel(factory = factory),
 ) {
@@ -93,7 +94,13 @@ fun HomeScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp),
             )
-            OutlinedButton(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(
+                onClick = onOpenAtendimento,
+                enabled = uiState.nativeWhatsAppEnabled,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("open_atendimento_button"),
+            ) {
                 Text("Central de Atendimento")
             }
             OutlinedButton(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) {

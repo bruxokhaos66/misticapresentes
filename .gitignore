@@ -48,6 +48,12 @@ dist-site/
 # IDE / sistema operacional
 .vscode/
 .idea/
+
+# Android / Gradle
+mobile_android/.gradle/
+mobile_android/build/
+mobile_android/app/build/
+mobile_android/local.properties
 .DS_Store
 Thumbs.db
 

@@ -1,5 +1,6 @@
 package br.com.misticapresentes.painel.network
 
+import br.com.misticapresentes.painel.atendimento.network.AtendimentoApi
 import br.com.misticapresentes.painel.common.EnvironmentConfig
 import br.com.misticapresentes.painel.security.SecureSessionStore
 import java.util.concurrent.TimeUnit
@@ -28,6 +29,33 @@ object ApiClient {
         baseUrl: String = EnvironmentConfig.baseUrl,
         verboseLogs: Boolean = EnvironmentConfig.verboseNetworkLogs,
     ): MisticaApi {
+        return buildRetrofit(secureSessionStore, sessionExpiredNotifier, baseUrl, verboseLogs)
+            .create(MisticaApi::class.java)
+    }
+
+    /**
+     * Cria a interface irmã da Central de Atendimento (PR #412) reaproveitando
+     * exatamente a mesma construção de OkHttpClient/Retrofit acima (cookie de
+     * sessão, Origin/CSRF, retry, sessão expirada e log sanitizado) -- nenhum
+     * endpoint novo de infraestrutura, só uma segunda interface Retrofit sobre
+     * o mesmo client HTTP autenticado por cookie.
+     */
+    fun createAtendimentoApi(
+        secureSessionStore: SecureSessionStore,
+        sessionExpiredNotifier: SessionExpiredNotifier,
+        baseUrl: String = EnvironmentConfig.baseUrl,
+        verboseLogs: Boolean = EnvironmentConfig.verboseNetworkLogs,
+    ): AtendimentoApi {
+        return buildRetrofit(secureSessionStore, sessionExpiredNotifier, baseUrl, verboseLogs)
+            .create(AtendimentoApi::class.java)
+    }
+
+    private fun buildRetrofit(
+        secureSessionStore: SecureSessionStore,
+        sessionExpiredNotifier: SessionExpiredNotifier,
+        baseUrl: String,
+        verboseLogs: Boolean,
+    ): Retrofit {
         val httpUrl = baseUrl.toHttpUrl()
         val cookieJar = PersistentCookieJar(secureSessionStore)
 
@@ -52,12 +80,10 @@ object ApiClient {
             .addInterceptor(loggingInterceptor)
             .build()
 
-        val retrofit = Retrofit.Builder()
+        return Retrofit.Builder()
             .baseUrl(httpUrl)
             .client(okHttpClient)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
-
-        return retrofit.create(MisticaApi::class.java)
     }
 }

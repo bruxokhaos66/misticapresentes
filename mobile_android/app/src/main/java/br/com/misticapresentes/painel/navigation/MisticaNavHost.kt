@@ -6,11 +6,15 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import br.com.misticapresentes.painel.app.AppContainer
 import br.com.misticapresentes.painel.app.MisticaViewModelFactory
+import br.com.misticapresentes.painel.atendimento.ui.detail.ConversationScreen
+import br.com.misticapresentes.painel.atendimento.ui.list.AtendimentoListScreen
 import br.com.misticapresentes.painel.auth.AuthState
 import br.com.misticapresentes.painel.ui.common.LoadingScreen
 import br.com.misticapresentes.painel.ui.common.NoConnectionScreen
@@ -68,12 +72,45 @@ fun MisticaNavHost(
             HomeScreen(
                 factory = factory,
                 onOpenLegacyPanel = onOpenLegacyPanel,
+                onOpenAtendimento = { navController.navigate(NavRoutes.ATENDIMENTO_LIST) },
                 onLoggedOut = {
                     if (navController.currentDestination?.route == NavRoutes.HOME) {
                         navController.navigate(NavRoutes.LOGIN) { popUpTo(NavRoutes.HOME) { inclusive = true } }
                     }
                 },
             )
+        }
+
+        composable(NavRoutes.ATENDIMENTO_LIST) {
+            AtendimentoFlagGuard(
+                featureFlagsRepository = container.featureFlagsRepository,
+                onDenied = { navController.redirectHomeFromAtendimento() },
+            ) {
+                AtendimentoListScreen(
+                    factory = factory,
+                    onOpenConversation = { conversationId ->
+                        navController.navigate(NavRoutes.atendimentoDetail(conversationId))
+                    },
+                    onBack = { navController.popBackStack() },
+                )
+            }
+        }
+
+        composable(
+            route = NavRoutes.ATENDIMENTO_DETAIL,
+            arguments = listOf(navArgument("conversationId") { type = NavType.LongType }),
+        ) { backStackEntry ->
+            AtendimentoFlagGuard(
+                featureFlagsRepository = container.featureFlagsRepository,
+                onDenied = { navController.redirectHomeFromAtendimento() },
+            ) {
+                val conversationId = backStackEntry.arguments?.getLong("conversationId") ?: 0L
+                ConversationScreen(
+                    container = container,
+                    conversationId = conversationId,
+                    onBack = { navController.popBackStack() },
+                )
+            }
         }
 
         composable(NavRoutes.SESSION_EXPIRED) {
@@ -91,5 +128,20 @@ fun MisticaNavHost(
                 },
             )
         }
+    }
+}
+
+/**
+ * Usado por [AtendimentoFlagGuard] quando `NATIVE_WHATSAPP_ENABLED` está
+ * desligada -- volta para Home e retira ATENDIMENTO_LIST/ATENDIMENTO_DETAIL
+ * da pilha (`popUpTo` inclusive=false mantém a própria Home, só limpa o que
+ * está acima dela), para a rota nativa nunca ficar acessível via "voltar".
+ * `launchSingleTop` evita empilhar uma segunda instância de Home quando ela
+ * já é o destino logo abaixo na pilha.
+ */
+private fun NavHostController.redirectHomeFromAtendimento() {
+    navigate(NavRoutes.HOME) {
+        popUpTo(NavRoutes.HOME) { inclusive = false }
+        launchSingleTop = true
     }
 }
