@@ -3,7 +3,9 @@ package br.com.misticapresentes.painel.navigation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import br.com.misticapresentes.painel.common.FeatureFlag
 import br.com.misticapresentes.painel.common.FeatureFlagsRepository
 
@@ -22,10 +24,18 @@ import br.com.misticapresentes.painel.common.FeatureFlagsRepository
  * Com a flag ligada, toda ação continua sujeita às mesmas regras de sempre
  * no servidor.
  *
- * Reavalia a flag a cada composição (não guarda estado fora do Composable),
+ * Reavalia a flag a cada composição (o `remember`/`LaunchedEffect` abaixo são
+ * escopados a esta entrada específica na árvore de composição -- uma nova
+ * entrada, como a que a navegação cria ao recompor a rota, começa do zero),
  * então cobre tanto a navegação inicial quanto a restauração do back stack
  * (processo recriado com a rota ainda salva) e uma eventual mudança de valor
  * da flag enquanto a rota está montada.
+ *
+ * Usa `remember` + `LaunchedEffect` em vez de `produceState` de propósito:
+ * `produceState` colide com o lint `ProduceStateDoesNotAssignValue` quando a
+ * atribuição de `value` acontece dentro do `collect { }` de um Flow (o lint
+ * não enxerga essa atribuição indireta), então preferimos este padrão mais
+ * explícito, que tem exatamente a mesma semântica.
  */
 @Composable
 fun AtendimentoFlagGuard(
@@ -36,8 +46,10 @@ fun AtendimentoFlagGuard(
     // `null` = ainda não chegou o primeiro valor do Flow (evita expulsar a
     // tela por um instante mesmo com a flag ligada, só por causa do delay
     // natural de coletar o primeiro valor de um Flow assíncrono).
-    val enabled by produceState<Boolean?>(initialValue = null, featureFlagsRepository) {
-        featureFlagsRepository.isEnabled(FeatureFlag.NATIVE_WHATSAPP_ENABLED).collect { value = it }
+    var enabled by remember(featureFlagsRepository) { mutableStateOf<Boolean?>(null) }
+
+    LaunchedEffect(featureFlagsRepository) {
+        featureFlagsRepository.isEnabled(FeatureFlag.NATIVE_WHATSAPP_ENABLED).collect { enabled = it }
     }
 
     // onDenied() navega (efeito colateral) -- precisa rodar fora da fase de
