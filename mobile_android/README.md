@@ -197,6 +197,9 @@ backend negaria; ele só decide o que a UI deste build mostra:
 | `NATIVE_WHATSAPP_ENABLED` | `false` | `false` |
 | `NATIVE_DASHBOARD_ENABLED` | `false` | `false` |
 | `PUSH_NOTIFICATIONS_ENABLED` | `false` | `false` |
+| `REALTIME_SYNC_ENABLED` | `false` | `false` |
+| `BACKGROUND_SYNC_ENABLED` | `false` | `false` |
+| `ATTENDANCE_NOTIFICATIONS_ENABLED` | `false` | `false` |
 
 Com `NEW_AUTH_ENABLED` desligada (padrão de produção nesta PR), o app abre
 direto no painel legado — exatamente o comportamento de hoje —, o que dá
@@ -233,12 +236,94 @@ processo. Câmera, imagem, áudio, push e IA ficam para PRs futuras.
   PR.
 - Nenhuma build de release é assinada ou publicada por este módulo/workflow.
 
+## Sincronização, WorkManager e notificações (PR #414)
+
+**Auditoria feita ANTES de implementar** (backend `backend/whatsapp_*_routes.py`
+e app existente da PR #412/#413): o backend não expõe WebSocket, SSE, long
+polling, webhook interno para o app, nem endpoint incremental por cursor/
+timestamp para eventos — só paginação por página (fila/`my-conversations`/
+`conversations`) e por `before_id` (mensagens). Já existem, e esta PR
+reaproveita: `unread_count` por conversa, `assignment_version` (controle
+otimista já usado desde a PR #412), Retrofit/OkHttp/interceptors/cookie de
+sessão, `ConnectivityObserver`, `FeatureFlagsRepository`/DataStore,
+`SecureSessionStore`. Não havia FCM configurado (sem `google-services.json`,
+sem plugin/dependência do Google Services, sem `firebase-messaging` em
+nenhum `build.gradle`) — só a flag `PUSH_NOTIFICATIONS_ENABLED`, já existente
+e não usada por nenhum código.
+
+Com base nisso, a estratégia adotada é **polling HTTP eficiente** (não havia
+WebSocket/SSE/endpoint incremental para reaproveitar, e não faria sentido
+criar um do zero só para esta PR):
+
+- Conversa aberta (`ConversationScreen` visível): a cada
+  `SyncConfig.CONVERSATION_POLL_INTERVAL_MS` (8s).
+- Lista/fila (`AtendimentoListScreen` visível): a cada
+  `SyncConfig.LIST_POLL_INTERVAL_MS` (15s).
+- Todos os intervalos vivem em `atendimento/sync/SyncConfig.kt` — nenhum
+  outro arquivo tem um valor de intervalo "solto".
+- `atendimento/sync/AttendanceSyncLoop` é o motor único (`start()`/`stop()`
+  idempotentes) usado por ambas as telas via `viewModelScope` (nunca
+  `GlobalScope`) — liga só quando a tela está em `ON_RESUME` E a flag
+  `REALTIME_SYNC_ENABLED` está ligada; qualquer falha dispara backoff
+  exponencial (dobra o intervalo até `FOREGROUND_MAX_BACKOFF_MS`), sucesso
+  volta ao intervalo-base.
+- O generation guard que já existia em `ConversationViewModel` (PR #412,
+  para `load()`/`refreshMessagesQuietly()`) agora também guarda os ciclos de
+  polling — uma resposta atrasada de um ciclo antigo nunca sobrescreve um
+  estado mais novo.
+- Background: `AttendanceBackgroundSyncWorker` (WorkManager,
+  `PeriodicWorkRequest` a cada `SyncConfig.BACKGROUND_SYNC_INTERVAL_MINUTES`
+  = 15min, o mínimo absoluto do Android), agendado/cancelado como trabalho
+  ÚNICO (`enqueueUniquePeriodicWork` + `ExistingPeriodicWorkPolicy.UPDATE`)
+  por `AttendanceBackgroundSyncScheduler`. Constraint de rede conectada,
+  `BackoffPolicy.EXPONENTIAL`. Nunca substitui o polling em primeiro plano —
+  só uma checagem leve de não lidas quando o app está em background. Checa
+  `BACKGROUND_SYNC_ENABLED` e sessão local (`SecureSessionStore.hasSession()`)
+  DENTRO do próprio `doWork()` (nunca só no agendamento), e é cancelado no
+  logout/sessão expirada e quando a flag é desligada
+  (`MisticaApplication.observeBackgroundSyncFlagAndSession`).
+- Notificações: sem FCM configurado (ver auditoria acima), esta PR implementa
+  só uma camada de abstração (`notifications/AttendanceNotifier`) + uma
+  implementação local (`AndroidAttendanceNotifier`, `NotificationManagerCompat`),
+  disparada pela própria sincronização (polling e Worker) — nunca por push de
+  verdade. **Limitação conhecida**: sem servidor push real, uma mensagem só é
+  percebida no próximo ciclo de sincronização, nunca instantaneamente com o
+  app fechado fora da janela do WorkManager. Conteúdo sempre genérico
+  ("Nova mensagem na Central de Atendimento" — nunca nome, telefone, texto da
+  mensagem ou mídia), suprimida quando a própria conversa já está visível em
+  primeiro plano (`atendimento/sync/AttendanceForegroundState`), id estável
+  por conversa (dedupe), `PendingIntent` imutável, `FLAG_ACTIVITY_NEW_TASK` +
+  extra de `conversationId` validado (`> 0`) para abrir a conversa certa, e
+  limpa ao abrir a conversa (`onScreenResumed`) ou no logout (`clearAll`).
+- Três novas flags, todas desligadas em todos os flavors (ver tabela acima):
+  `REALTIME_SYNC_ENABLED`, `BACKGROUND_SYNC_ENABLED`,
+  `ATTENDANCE_NOTIFICATIONS_ENABLED`. Cada uma é revalidada onde importa
+  (ViewModel antes de iniciar o polling, dentro do `doWork()` do Worker,
+  antes de notificar) — nunca só escondida na UI.
+- UI: só um indicador textual discreto de sincronização ("Sincronizando...",
+  "Atualizado agora", "Falha ao atualizar" — `atendimento/ui/common/syncStatusLabel`),
+  o banner de offline já existente (agora também na tela de detalhe) e um
+  badge simples de não lidas no topo da lista. Nenhum redesenho de tela, e o
+  fluxo de câmera/galeria/áudio da PR #413 não foi alterado.
+
+### Limitações conhecidas desta PR (#414)
+
+- Sem FCM real: entrega depende do próximo ciclo de polling/WorkManager (ver
+  acima) — não há push instantâneo com o app totalmente fechado.
+- Ambiente de build usado para esta PR não teve acesso ao repositório Maven
+  do Google (`dl.google.com` bloqueado pela política de saída da sessão) —
+  não foi possível compilar/rodar `./gradlew test`/`assemble*` aqui; ver
+  relatório da PR para o que foi verificado por revisão manual de código.
+- Testes de notificação/WorkManager usam Robolectric (JVM, sem
+  dispositivo/emulador real) — nenhum teste manual em aparelho físico foi
+  executado nesta PR.
+
 ## Próximos passos
 
-- Dashboard nativo, push (FCM) e sincronização em tempo real da Central de
-  Atendimento (WorkManager/websocket), câmera e mídia (imagem/áudio) no envio
-  de mensagens.
+- Dashboard nativo e IA da Central de Atendimento continuam fora de escopo.
+- FCM real (projeto Firebase de verdade, `google-services.json` real) para
+  substituir a notificação local por push de verdade, quando/se decidido.
 - `FLAG_SECURE` já cobre lista e detalhe da Central de Atendimento; estender
   a qualquer tela nova com dado de cliente/mensagem.
-- Permissões de câmera/áudio com fluxo de runtime permission (quando mídia
-  for implementada).
+- Ícone de notificação dedicado (mono, para a barra de status) em vez de
+  reaproveitar `ic_launcher`.

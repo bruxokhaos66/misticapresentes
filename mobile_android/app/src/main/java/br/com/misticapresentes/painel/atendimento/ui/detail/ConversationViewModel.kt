@@ -14,16 +14,42 @@ import br.com.misticapresentes.painel.atendimento.model.MediaKind
 import br.com.misticapresentes.painel.atendimento.model.Message
 import br.com.misticapresentes.painel.atendimento.model.Product
 import br.com.misticapresentes.painel.atendimento.repository.AtendimentoRepository
+import br.com.misticapresentes.painel.atendimento.sync.AttendanceForegroundState
+import br.com.misticapresentes.painel.atendimento.sync.AttendanceSyncLoop
+import br.com.misticapresentes.painel.atendimento.sync.SyncConfig
+import br.com.misticapresentes.painel.atendimento.sync.SyncStatus
+import br.com.misticapresentes.painel.common.ConnectivityObserver
+import br.com.misticapresentes.painel.common.FeatureFlag
+import br.com.misticapresentes.painel.common.FeatureFlagsRepository
 import br.com.misticapresentes.painel.network.ApiError
 import br.com.misticapresentes.painel.network.ApiResult
+import br.com.misticapresentes.painel.notifications.AttendanceNotifier
+import br.com.misticapresentes.painel.notifications.NoopAttendanceNotifier
 import java.io.File
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 
 private const val MESSAGES_PAGE_SIZE = 50
+
+/**
+ * Repositório de flags "sempre desligado", usado só como valor padrão do
+ * construtor (mesmo padrão de [InertMediaFileStore]) -- em produção
+ * [ConversationViewModelFactory] sempre injeta o real via [AppContainer].
+ */
+private object AlwaysDisabledFeatureFlags : FeatureFlagsRepository {
+    override fun isEnabled(flag: FeatureFlag) = flowOf(false)
+    override suspend fun setEnabled(flag: FeatureFlag, enabled: Boolean) = Unit
+}
+
+/** Sempre online por padrão -- mesmo padrão de valor inerte usado nos demais parâmetros opcionais desta classe. */
+private object AlwaysOnlineConnectivityObserver : ConnectivityObserver {
+    override fun isOnlineNow(): Boolean = true
+    override fun observe() = flowOf(true)
+}
 private const val PRODUCT_SEARCH_PAGE_SIZE = 20
 private const val RECENT_PRODUCTS_LIMIT = 20
 private const val ASSIGNMENT_HISTORY_PAGE_SIZE = 30
@@ -76,6 +102,9 @@ data class ConversationUiState(
     val assignmentHistory: List<AssignmentHistoryEntry> = emptyList(),
     val isAssignmentHistoryExpanded: Boolean = false,
     val media: MediaComposerUiState = MediaComposerUiState(),
+    /** Estado discreto de sincronização em primeiro plano (PR #414) -- ver [SyncStatus]. */
+    val syncStatus: SyncStatus = SyncStatus.IDLE,
+    val isOnline: Boolean = true,
 )
 
 /**
@@ -115,26 +144,129 @@ class ConversationViewModel(
     private val conversationId: Long,
     private val mediaFileStore: MediaFileStore = InertMediaFileStore,
     private val imageCompressor: ImageCompressor = AndroidImageCompressor(),
+    private val featureFlagsRepository: FeatureFlagsRepository = AlwaysDisabledFeatureFlags,
+    private val connectivityObserver: ConnectivityObserver = AlwaysOnlineConnectivityObserver,
+    private val notifier: AttendanceNotifier = NoopAttendanceNotifier,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ConversationUiState())
     val uiState: StateFlow<ConversationUiState> = _uiState.asStateFlow()
 
     /**
-     * Geração da carga "cheia" da conversa (load()/refreshMessagesQuietly()).
-     * Cada chamada captura o valor incrementado em uma variável local antes
-     * de suspender; ao voltar, só aplica o resultado se nenhuma chamada mais
-     * nova tiver começado nesse meio-tempo -- evita que a resposta atrasada
-     * de um load()/refresh antigo sobrescreva um estado mais novo (ex.: dois
-     * refreshes disparados em sequência rápida, ou um retry manual enquanto
-     * o load() anterior ainda estava em voo).
+     * Geração da carga "cheia" da conversa (load()/refreshMessagesQuietly()/
+     * polling em primeiro plano). Cada chamada captura o valor incrementado
+     * em uma variável local antes de suspender; ao voltar, só aplica o
+     * resultado se nenhuma chamada mais nova tiver começado nesse meio-tempo
+     * -- evita que a resposta atrasada de um load()/refresh/tick de polling
+     * antigo sobrescreva um estado mais novo (ex.: dois refreshes disparados
+     * em sequência rápida, um retry manual enquanto o load() anterior ainda
+     * estava em voo, ou um ciclo de polling atrasado que chega depois de um
+     * mais recente já ter respondido).
      */
     private var requestGeneration = 0
 
     /** Job do upload de mídia em voo -- cancelado explicitamente por [cancelMediaUpload]. */
     private var uploadJob: Job? = null
 
+    // -------- Sincronização em primeiro plano (PR #414) --------
+    //
+    // Um único AttendanceSyncLoop por instância desta ViewModel, ou seja, por
+    // conversationId -- nunca compartilhado entre conversas. Só roda quando a
+    // tela está de fato visível (onScreenResumed/onScreenPaused, chamados
+    // pela Composable via lifecycle) E a flag REALTIME_SYNC_ENABLED está
+    // ligada; qualquer uma das duas condições ausentes para o loop.
+    // viewModelScope garante que o loop morre com a ViewModel (nunca
+    // GlobalScope) e nunca sobrevive à troca de conversa.
+
+    private val syncLoop = AttendanceSyncLoop(
+        scope = viewModelScope,
+        baseIntervalMs = SyncConfig.CONVERSATION_POLL_INTERVAL_MS,
+        tick = ::pollTick,
+    )
+
+    private var isScreenActive = false
+    private var isRealtimeSyncFlagEnabled = false
+
     init {
+        load()
+        _uiState.value = _uiState.value.copy(isOnline = connectivityObserver.isOnlineNow())
+        viewModelScope.launch {
+            featureFlagsRepository.isEnabled(FeatureFlag.REALTIME_SYNC_ENABLED).collect { enabled ->
+                isRealtimeSyncFlagEnabled = enabled
+                evaluateSync()
+            }
+        }
+        viewModelScope.launch {
+            connectivityObserver.observe().collect { online ->
+                _uiState.value = _uiState.value.copy(isOnline = online)
+            }
+        }
+    }
+
+    /** Chamado pela tela quando ela entra em primeiro plano (ON_RESUME) -- nunca no init, para não iniciar o loop antes da UI existir de fato. */
+    fun onScreenResumed() {
+        isScreenActive = true
+        AttendanceForegroundState.setVisibleConversation(conversationId)
+        notifier.clearForConversation(conversationId)
+        evaluateSync()
+    }
+
+    /** Chamado quando a tela sai de primeiro plano (ON_PAUSE) ou é destruída -- pausa o polling, nunca o cancela de forma que impeça retomar. */
+    fun onScreenPaused() {
+        isScreenActive = false
+        AttendanceForegroundState.clearVisibleConversation(conversationId)
+        evaluateSync()
+    }
+
+    private fun evaluateSync() {
+        if (isScreenActive && isRealtimeSyncFlagEnabled) {
+            syncLoop.start()
+        } else {
+            syncLoop.stop()
+        }
+    }
+
+    /**
+     * Um ciclo de polling: conversa + página mais recente de mensagens.
+     * Devolve `true` em sucesso (o [AttendanceSyncLoop] volta ao intervalo-
+     * base) e `false` em falha (dispara backoff exponencial). Uma resposta
+     * descartada por ser antiga (generation guard) conta como sucesso -- não
+     * foi uma falha de rede, só uma corrida com uma chamada mais nova.
+     */
+    private suspend fun pollTick(): Boolean {
+        if (!connectivityObserver.isOnlineNow()) {
+            _uiState.value = _uiState.value.copy(syncStatus = SyncStatus.OFFLINE)
+            return false
+        }
+        // Nunca sobrescreve um envio/ação em andamento no meio do caminho.
+        val stateBeforeTick = _uiState.value
+        if (stateBeforeTick.isSending || stateBeforeTick.isActionInProgress) return true
+
+        _uiState.value = _uiState.value.copy(syncStatus = SyncStatus.SYNCING)
+        val generation = ++requestGeneration
+        val conversationResult = repository.getConversation(conversationId)
+        val messagesResult = repository.getMessages(conversationId, beforeId = null, limit = MESSAGES_PAGE_SIZE)
+        if (generation != requestGeneration) return true
+
+        return if (conversationResult is ApiResult.Success && messagesResult is ApiResult.Success) {
+            val previousMessageIds = _uiState.value.messages.map { it.id }.toSet()
+            val hasNewInbound = messagesResult.data.any { it.id !in previousMessageIds && it.direction == "inbound" }
+            _uiState.value = _uiState.value.copy(
+                conversation = conversationResult.data,
+                messages = messagesResult.data,
+                hasMoreHistory = messagesResult.data.size >= MESSAGES_PAGE_SIZE,
+                syncStatus = SyncStatus.UPDATED,
+            )
+            if (hasNewInbound) notifier.notifyNewMessage(conversationId)
+            true
+        } else {
+            _uiState.value = _uiState.value.copy(syncStatus = SyncStatus.FAILED)
+            false
+        }
+    }
+
+    /** Atualização manual (botão/gesto) -- sempre disponível independente da flag/tela ativa, mesmo padrão de [load]. */
+    fun refresh() {
         load()
     }
 
@@ -582,6 +714,12 @@ class ConversationViewModel(
 
     override fun onCleared() {
         super.onCleared()
+        // Polling desta conversa nunca sobrevive à ViewModel -- cancelamento
+        // explícito além do que viewModelScope já garantiria, e limpeza do
+        // estado global de "conversa visível" (rede de segurança contra
+        // destruição fora da ordem onScreenPaused -> onCleared).
+        syncLoop.stop()
+        AttendanceForegroundState.clearVisibleConversation(conversationId)
         // Rede de segurança: se a tela for destruída com mídia pendente (o
         // usuário nunca confirmou nem cancelou explicitamente), nenhum
         // arquivo de cliente pode sobreviver além da sessão -- ver regra de

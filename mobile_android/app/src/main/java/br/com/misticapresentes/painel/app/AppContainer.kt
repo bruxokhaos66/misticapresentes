@@ -13,8 +13,11 @@ import br.com.misticapresentes.painel.common.ConnectivityObserver
 import br.com.misticapresentes.painel.common.DefaultFeatureFlagsRepository
 import br.com.misticapresentes.painel.common.FeatureFlagsRepository
 import br.com.misticapresentes.painel.common.LegacyPrefsMigration
+import br.com.misticapresentes.painel.atendimento.sync.AttendanceBackgroundSyncScheduler
 import br.com.misticapresentes.painel.network.ApiClient
 import br.com.misticapresentes.painel.network.PersistentCookieJar
+import br.com.misticapresentes.painel.notifications.AndroidAttendanceNotifier
+import br.com.misticapresentes.painel.notifications.AttendanceNotifier
 import br.com.misticapresentes.painel.security.SecureSessionStore
 import br.com.misticapresentes.painel.security.SecureStorage
 
@@ -73,4 +76,16 @@ class AppContainer(context: Context) {
     // antes do upload -- ver atendimento.media.
     val mediaFileStore: MediaFileStore by lazy { AndroidMediaFileStore(appContext) }
     val imageCompressor: ImageCompressor by lazy { AndroidImageCompressor() }
+
+    // Notificações locais da Central de Atendimento (PR #414): sem FCM
+    // configurado neste projeto (auditoria em atendimento/sync/README) --
+    // só notificação local disparada pela própria sincronização.
+    val attendanceNotifier: AttendanceNotifier by lazy { AndroidAttendanceNotifier(appContext) }
+
+    // Agendador do WorkManager de background (PR #414): observa as flags
+    // BACKGROUND_SYNC_ENABLED/logout e agenda ou cancela o trabalho único
+    // periódico -- nunca chamado diretamente pela UI.
+    val backgroundSyncScheduler: AttendanceBackgroundSyncScheduler by lazy {
+        AttendanceBackgroundSyncScheduler(appContext)
+    }
 }
