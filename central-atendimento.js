@@ -46,6 +46,30 @@
   const btnEnviarMensagem = document.getElementById("btnEnviarMensagem");
   const statusEnvio = document.getElementById("statusEnvio");
 
+  // Compose avançado: anexar imagem/foto, gravar áudio, prévia + progresso
+  // de envio, toast de sucesso (ver bloco dedicado mais abaixo, próximo a
+  // montarBolhaMensagem, por depender de conversaSelecionadaId/conversaAtual).
+  const btnAnexarImagem = document.getElementById("btnAnexarImagem");
+  const btnTirarFoto = document.getElementById("btnTirarFoto");
+  const btnGravarAudio = document.getElementById("btnGravarAudio");
+  const inputArquivoImagem = document.getElementById("inputArquivoImagem");
+  const inputArquivoCamera = document.getElementById("inputArquivoCamera");
+  const painelPreviaMidia = document.getElementById("painelPreviaMidia");
+  const previaMidiaConteudo = document.getElementById("previaMidiaConteudo");
+  const campoLegendaMidia = document.getElementById("campoLegendaMidia");
+  const blocoProgressoMidia = document.getElementById("blocoProgressoMidia");
+  const progressoEnvioMidia = document.getElementById("progressoEnvioMidia");
+  const textoProgressoMidia = document.getElementById("textoProgressoMidia");
+  const statusPreviaMidia = document.getElementById("statusPreviaMidia");
+  const btnCancelarPreviaMidia = document.getElementById("btnCancelarPreviaMidia");
+  const btnEnviarPreviaMidia = document.getElementById("btnEnviarPreviaMidia");
+  const painelGravacaoAudio = document.getElementById("painelGravacaoAudio");
+  const statusGravacaoAudio = document.getElementById("statusGravacaoAudio");
+  const tempoGravacaoAudio = document.getElementById("tempoGravacaoAudio");
+  const btnPararGravacaoAudio = document.getElementById("btnPararGravacaoAudio");
+  const btnCancelarGravacaoAudio = document.getElementById("btnCancelarGravacaoAudio");
+  const toastContainer = document.getElementById("toastContainer");
+
   const btnAssumir = document.getElementById("btnAssumir");
   const btnLiberar = document.getElementById("btnLiberar");
   const btnTransferir = document.getElementById("btnTransferir");
@@ -89,6 +113,61 @@
     return node;
   }
 
+  // ---------------------------------------------------------------------
+  // Compose avançado: funções puras de decisão (Enter-para-enviar,
+  // validade de texto/arquivo, limites de gravação) -- extraídas dos
+  // handlers de evento para serem testáveis isoladamente (ver
+  // tests/central-atendimento-compose.test.js). Nunca dependem do DOM
+  // nem de estado do módulo, só dos parâmetros recebidos.
+  // ---------------------------------------------------------------------
+  const IMAGEM_TIPOS_PERMITIDOS = new Set(["image/jpeg", "image/png", "image/webp"]);
+  const IMAGEM_MAX_BYTES = 5 * 1024 * 1024;
+  const AUDIO_MAX_BYTES = 16 * 1024 * 1024;
+  const GRAVACAO_MAX_SEGUNDOS = 120;
+
+  function decidirEnviarPorTecla(event) {
+    if (!event || event.key !== "Enter") return false;
+    if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return false;
+    if (event.isComposing) return false; // IME em composição (mobile/CJK) -- nunca envia no meio da digitação
+    return true;
+  }
+
+  function textoEhValidoParaEnvio(texto) {
+    return typeof texto === "string" && texto.trim().length > 0;
+  }
+
+  function arquivoImagemEhValido(file, { maxBytes = IMAGEM_MAX_BYTES } = {}) {
+    if (!file) return { valido: false, motivo: "Nenhum arquivo selecionado." };
+    if (!IMAGEM_TIPOS_PERMITIDOS.has(file.type)) {
+      return { valido: false, motivo: "Use uma imagem JPG, PNG ou WEBP." };
+    }
+    if (!file.size) return { valido: false, motivo: "Arquivo vazio." };
+    if (file.size > maxBytes) {
+      return { valido: false, motivo: `Imagem muito grande (máx. ${Math.round(maxBytes / (1024 * 1024))} MB).` };
+    }
+    return { valido: true, motivo: "" };
+  }
+
+  function blobAudioEhValido(blob, { maxBytes = AUDIO_MAX_BYTES } = {}) {
+    if (!blob) return { valido: false, motivo: "Nada foi gravado." };
+    if (!blob.size) return { valido: false, motivo: "Gravação vazia." };
+    if (blob.size > maxBytes) {
+      return { valido: false, motivo: `Áudio muito grande (máx. ${Math.round(maxBytes / (1024 * 1024))} MB).` };
+    }
+    return { valido: true, motivo: "" };
+  }
+
+  function duracaoGravacaoExcedeuLimite(segundosDecorridos, limiteSegundos = GRAVACAO_MAX_SEGUNDOS) {
+    return segundosDecorridos >= limiteSegundos;
+  }
+
+  function formatarTempoGravacao(segundos) {
+    const total = Math.max(0, Math.floor(segundos));
+    const minutos = String(Math.floor(total / 60)).padStart(2, "0");
+    const restoSegundos = String(total % 60).padStart(2, "0");
+    return `${minutos}:${restoSegundos}`;
+  }
+
   async function apiFetch(path, options = {}) {
     const response = await fetch(`${API_BASE}${path}`, {
       credentials: "include",
@@ -123,6 +202,18 @@
     if (!valor) return "";
     const data = new Date(valor);
     return Number.isNaN(data.getTime()) ? "" : dateTime.format(data);
+  }
+
+  // Toast leve e não-bloqueante (sucesso de envio de texto/imagem/áudio) --
+  // role="status" já está no container, auto-descarta sozinho.
+  let toastTimer = null;
+  function mostrarToast(mensagem) {
+    if (!toastContainer) return;
+    toastContainer.textContent = "";
+    const toast = elemento("div", "toast", mensagem);
+    toastContainer.append(toast);
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toast.remove(); }, 3000);
   }
 
   function mostrarLogin() {
@@ -602,7 +693,9 @@
   function montarBolhaMensagem(mensagem) {
     const bolha = elemento("div", `bolha ${mensagem.direction}`);
     let corpo = mensagem.text_body;
-    if (!corpo && mensagem.media_id) corpo = `[${mensagem.message_type}] mídia recebida`;
+    if (!corpo && mensagem.media_id) {
+      corpo = mensagem.direction === "outbound" ? `[${mensagem.message_type}] mídia enviada` : `[${mensagem.message_type}] mídia recebida`;
+    }
     if (!corpo) corpo = "[Tipo de mensagem ainda não suportado]";
     bolha.append(elemento("span", "", corpo));
 
@@ -1072,15 +1165,29 @@
     }
   });
 
+  // Double-submit guard (item 1 da especificação "envio avançado"):
+  // compartilhado entre o botão Enviar e o atalho Enter -- um Enter duplo
+  // muito rápido nunca dispara duas submissões, porque a flag é marcada
+  // sincronamente antes de qualquer await.
+  let envioEmAndamento = false;
+
+  campoTexto.addEventListener("keydown", (event) => {
+    if (!decidirEnviarPorTecla(event)) return;
+    event.preventDefault();
+    if (envioEmAndamento) return;
+    formEnviarMensagem.requestSubmit();
+  });
+
   formEnviarMensagem.addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (!conversaSelecionadaId) return;
+    if (!conversaSelecionadaId || envioEmAndamento) return;
     const texto = campoTexto.value.trim();
     const template = selectTemplate.value;
-    if (!texto && !template) {
+    if (!textoEhValidoParaEnvio(texto) && !template) {
       statusEnvio.textContent = "Escreva uma mensagem ou selecione um template.";
       return;
     }
+    envioEmAndamento = true;
     btnEnviarMensagem.disabled = true;
     statusEnvio.textContent = "Enviando…";
     try {
@@ -1094,6 +1201,8 @@
       campoTexto.value = "";
       statusEnvio.textContent = "";
       await carregarMensagens();
+      mostrarToast("Mensagem enviada.");
+      campoTexto.focus();
     } catch (erro) {
       if (erro.status === 403) {
         statusEnvio.textContent = erro.message || "Assuma esta conversa antes de responder.";
@@ -1105,7 +1214,260 @@
       }
     } finally {
       btnEnviarMensagem.disabled = false;
+      envioEmAndamento = false;
     }
+  });
+
+  // ---------------------------------------------------------------------
+  // Compose avançado: anexar imagem/foto, gravar áudio, prévia + progresso
+  // de envio (XMLHttpRequest -- é a única API com upload.onprogress; fetch
+  // não expõe progresso de upload). Sempre valida tipo/tamanho no cliente
+  // (rejeição rápida) mas o backend é sempre a fonte de verdade (magic
+  // bytes + Pillow) -- ver backend/whatsapp_inbox_routes.py::rota_enviar_midia.
+  // ---------------------------------------------------------------------
+  let midiaPendente = null; // { blob, mediaKind: "image"|"audio", previewObjectUrl }
+  let xhrEnvioMidiaAtual = null;
+
+  function revogarPreviewMidiaPendente() {
+    if (midiaPendente && midiaPendente.previewObjectUrl) {
+      URL.revokeObjectURL(midiaPendente.previewObjectUrl);
+    }
+  }
+
+  function abrirPreviaMidia({ blob, mediaKind }) {
+    if (gravador && gravador.state !== "inactive") cancelarGravacaoAudio();
+    revogarPreviewMidiaPendente();
+    const url = URL.createObjectURL(blob);
+    midiaPendente = { blob, mediaKind, previewObjectUrl: url };
+    previaMidiaConteudo.textContent = "";
+    if (mediaKind === "image") {
+      const img = document.createElement("img");
+      img.src = url;
+      img.alt = "Prévia da imagem a enviar";
+      previaMidiaConteudo.append(img);
+      campoLegendaMidia.hidden = false;
+    } else {
+      const audio = document.createElement("audio");
+      audio.controls = true;
+      audio.src = url;
+      previaMidiaConteudo.append(audio);
+      campoLegendaMidia.hidden = true;
+    }
+    campoLegendaMidia.value = "";
+    statusPreviaMidia.textContent = "";
+    blocoProgressoMidia.hidden = true;
+    progressoEnvioMidia.value = 0;
+    textoProgressoMidia.textContent = "0%";
+    btnEnviarPreviaMidia.disabled = false;
+    painelPreviaMidia.hidden = false;
+  }
+
+  function fecharPreviaMidia() {
+    if (xhrEnvioMidiaAtual) {
+      xhrEnvioMidiaAtual.abort();
+      xhrEnvioMidiaAtual = null;
+    }
+    revogarPreviewMidiaPendente();
+    midiaPendente = null;
+    painelPreviaMidia.hidden = true;
+    previaMidiaConteudo.textContent = "";
+    statusPreviaMidia.textContent = "";
+  }
+
+  function selecionarArquivoImagem(file) {
+    inputArquivoImagem.value = "";
+    inputArquivoCamera.value = "";
+    if (!file) return;
+    const resultado = arquivoImagemEhValido(file);
+    if (!resultado.valido) {
+      statusEnvio.textContent = resultado.motivo;
+      return;
+    }
+    abrirPreviaMidia({ blob: file, mediaKind: "image" });
+  }
+
+  btnAnexarImagem.addEventListener("click", () => inputArquivoImagem.click());
+  btnTirarFoto.addEventListener("click", () => inputArquivoCamera.click());
+  inputArquivoImagem.addEventListener("change", () => selecionarArquivoImagem(inputArquivoImagem.files && inputArquivoImagem.files[0]));
+  inputArquivoCamera.addEventListener("change", () => selecionarArquivoImagem(inputArquivoCamera.files && inputArquivoCamera.files[0]));
+
+  btnCancelarPreviaMidia.addEventListener("click", () => {
+    fecharPreviaMidia();
+    campoTexto.focus();
+  });
+
+  function enviarMidiaPendente() {
+    if (!midiaPendente || !conversaSelecionadaId) return;
+    const { blob, mediaKind } = midiaPendente;
+    btnEnviarPreviaMidia.disabled = true;
+    statusPreviaMidia.textContent = "Enviando…";
+    blocoProgressoMidia.hidden = false;
+    progressoEnvioMidia.value = 0;
+    textoProgressoMidia.textContent = "0%";
+
+    const formData = new FormData();
+    formData.append("media_kind", mediaKind);
+    if (mediaKind === "image" && campoLegendaMidia.value.trim()) {
+      formData.append("caption", campoLegendaMidia.value.trim());
+    }
+    if (conversaAtual && conversaAtual.assignment_version != null) {
+      formData.append("assignment_version", String(conversaAtual.assignment_version));
+    }
+    const extensaoAudio = (blob.type && blob.type.split("/")[1]) ? blob.type.split("/")[1].split(";")[0] : "webm";
+    const nomeArquivo = mediaKind === "image" ? "imagem.jpg" : `audio.${extensaoAudio}`;
+    formData.append("file", blob, nomeArquivo);
+
+    const xhr = new XMLHttpRequest();
+    xhrEnvioMidiaAtual = xhr;
+    xhr.open("POST", `${API_BASE}/api/admin/whatsapp/conversations/${conversaSelecionadaId}/media`, true);
+    xhr.withCredentials = true;
+    xhr.setRequestHeader("Idempotency-Key", crypto.randomUUID());
+    xhr.upload.addEventListener("progress", (event) => {
+      if (!event.lengthComputable) return;
+      const percentual = Math.round((event.loaded / event.total) * 100);
+      progressoEnvioMidia.value = percentual;
+      textoProgressoMidia.textContent = `${percentual}%`;
+    });
+    xhr.addEventListener("load", () => {
+      xhrEnvioMidiaAtual = null;
+      if (xhr.status === 401) {
+        pararPolling();
+        mostrarLogin();
+        return;
+      }
+      let corpoResposta = {};
+      try { corpoResposta = JSON.parse(xhr.responseText || "{}"); } catch { /* resposta não-JSON -- tratado como falha genérica abaixo */ }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        fecharPreviaMidia();
+        carregarMensagens();
+        mostrarToast(mediaKind === "image" ? "Imagem enviada." : "Áudio enviado.");
+        campoTexto.focus();
+      } else {
+        statusPreviaMidia.textContent = corpoResposta.detail || "Falha ao enviar mídia.";
+        btnEnviarPreviaMidia.disabled = false;
+        blocoProgressoMidia.hidden = true;
+      }
+    });
+    xhr.addEventListener("error", () => {
+      xhrEnvioMidiaAtual = null;
+      statusPreviaMidia.textContent = "Falha de rede ao enviar mídia.";
+      btnEnviarPreviaMidia.disabled = false;
+      blocoProgressoMidia.hidden = true;
+    });
+    xhr.addEventListener("abort", () => {
+      xhrEnvioMidiaAtual = null;
+      statusPreviaMidia.textContent = "Envio cancelado.";
+      btnEnviarPreviaMidia.disabled = false;
+      blocoProgressoMidia.hidden = true;
+    });
+    xhr.send(formData);
+  }
+
+  btnEnviarPreviaMidia.addEventListener("click", enviarMidiaPendente);
+
+  // ---------------------------------------------------------------------
+  // Gravação de áudio (MediaRecorder) -- getUserMedia é o próprio prompt de
+  // permissão do navegador; nunca solicitado antecipadamente. O stream do
+  // microfone é sempre encerrado (todas as tracks) ao parar, cancelar ou
+  // trocar de conversa/mídia -- nunca fica "vivo" em segundo plano.
+  // ---------------------------------------------------------------------
+  let gravador = null;
+  let streamGravacaoAtual = null;
+  let pedacosGravacaoAtual = [];
+  let timerGravacaoAtual = null;
+  let inicioGravacaoAtual = 0;
+  let gravacaoFoiCancelada = false;
+
+  function pararStreamGravacao() {
+    if (streamGravacaoAtual) {
+      streamGravacaoAtual.getTracks().forEach((track) => track.stop());
+      streamGravacaoAtual = null;
+    }
+  }
+
+  async function iniciarGravacaoAudio() {
+    if (!conversaSelecionadaId) return;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === "undefined") {
+      statusEnvio.textContent = "Gravação de áudio não é suportada neste navegador.";
+      return;
+    }
+    try {
+      streamGravacaoAtual = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (erro) {
+      statusEnvio.textContent = erro && erro.name === "NotAllowedError"
+        ? "Permissão de microfone negada."
+        : "Não foi possível acessar o microfone.";
+      return;
+    }
+    gravacaoFoiCancelada = false;
+    pedacosGravacaoAtual = [];
+    try {
+      gravador = new MediaRecorder(streamGravacaoAtual);
+    } catch {
+      statusEnvio.textContent = "Gravação de áudio não é suportada neste navegador.";
+      pararStreamGravacao();
+      gravador = null;
+      return;
+    }
+    gravador.addEventListener("dataavailable", (event) => {
+      if (event.data && event.data.size > 0) pedacosGravacaoAtual.push(event.data);
+    });
+    gravador.addEventListener("stop", () => {
+      pararStreamGravacao();
+      const pedacos = pedacosGravacaoAtual;
+      const mimeType = gravador ? gravador.mimeType || "audio/webm" : "audio/webm";
+      pedacosGravacaoAtual = [];
+      if (gravacaoFoiCancelada) return;
+      const blob = new Blob(pedacos, { type: mimeType });
+      const validacao = blobAudioEhValido(blob);
+      if (!validacao.valido) {
+        statusEnvio.textContent = validacao.motivo;
+        return;
+      }
+      abrirPreviaMidia({ blob, mediaKind: "audio" });
+    });
+    inicioGravacaoAtual = Date.now();
+    tempoGravacaoAudio.textContent = "00:00";
+    statusGravacaoAudio.textContent = "";
+    painelGravacaoAudio.hidden = false;
+    gravador.start();
+    timerGravacaoAtual = setInterval(() => {
+      const decorrido = (Date.now() - inicioGravacaoAtual) / 1000;
+      tempoGravacaoAudio.textContent = formatarTempoGravacao(decorrido);
+      if (duracaoGravacaoExcedeuLimite(decorrido, GRAVACAO_MAX_SEGUNDOS)) {
+        statusEnvio.textContent = "Duração máxima de gravação atingida.";
+        pararGravacaoAudio();
+      }
+    }, 250);
+  }
+
+  function pararGravacaoAudio() {
+    if (timerGravacaoAtual) { clearInterval(timerGravacaoAtual); timerGravacaoAtual = null; }
+    painelGravacaoAudio.hidden = true;
+    if (gravador && gravador.state !== "inactive") gravador.stop();
+  }
+
+  function cancelarGravacaoAudio() {
+    gravacaoFoiCancelada = true;
+    if (timerGravacaoAtual) { clearInterval(timerGravacaoAtual); timerGravacaoAtual = null; }
+    painelGravacaoAudio.hidden = true;
+    if (gravador && gravador.state !== "inactive") {
+      gravador.stop(); // dispara "stop", que vê gravacaoFoiCancelada=true e descarta os pedaços
+    } else {
+      pararStreamGravacao();
+    }
+  }
+
+  btnGravarAudio.addEventListener("click", iniciarGravacaoAudio);
+  btnPararGravacaoAudio.addEventListener("click", pararGravacaoAudio);
+  btnCancelarGravacaoAudio.addEventListener("click", cancelarGravacaoAudio);
+
+  // Escape cancela uma prévia de mídia aberta ou uma gravação em andamento
+  // -- mesmo padrão já usado para modalMidia/modalTransferir/modalProdutos.
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    if (!painelPreviaMidia.hidden) fecharPreviaMidia();
+    if (!painelGravacaoAudio.hidden) cancelarGravacaoAudio();
   });
 
   formVincularCliente.addEventListener("submit", async (event) => {
@@ -1178,6 +1540,22 @@
       atualizarStatus();
       if (abaAtual !== "vendedores") carregarConversas();
     }, POLL_LISTA_MS);
+  }
+
+  // Hooks de teste -- só expostos quando window.__MISTICA_TEST__ === true
+  // (nunca em produção; o harness de testes de tests/central-atendimento-
+  // compose.test.js define essa flag ANTES de carregar este script via
+  // vm.runInContext, mesma técnica de tests/site-production-guard.test.js).
+  // Só funções puras, sem estado sensível/DOM real.
+  if (window.__MISTICA_TEST__ === true) {
+    window.__misticaCentralAtendimentoTestHooks = {
+      decidirEnviarPorTecla,
+      textoEhValidoParaEnvio,
+      arquivoImagemEhValido,
+      blobAudioEhValido,
+      duracaoGravacaoExcedeuLimite,
+      formatarTempoGravacao,
+    };
   }
 
   apiFetch("/api/auth/me")

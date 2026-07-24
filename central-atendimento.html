@@ -105,14 +105,46 @@
 
           <div id="listaMensagens" class="lista-mensagens" role="log" aria-live="polite" aria-label="Histórico de mensagens" tabindex="0"></div>
 
+          <div id="painelGravacaoAudio" class="gravacao-audio" hidden role="status" aria-live="polite">
+            <p id="statusGravacaoAudio" class="hint">Gravando… <span id="tempoGravacaoAudio">00:00</span></p>
+            <div class="gravacao-audio-acoes">
+              <button type="button" class="btn-secondary" id="btnPararGravacaoAudio">Parar e revisar</button>
+              <button type="button" class="btn-secondary" id="btnCancelarGravacaoAudio">Cancelar</button>
+            </div>
+          </div>
+
+          <div id="painelPreviaMidia" class="previa-midia" hidden>
+            <div id="previaMidiaConteudo" class="previa-midia-conteudo"></div>
+            <label for="campoLegendaMidia" class="visually-hidden">Legenda (opcional, só para imagens)</label>
+            <input type="text" id="campoLegendaMidia" maxlength="1024" placeholder="Legenda (opcional)">
+            <div id="blocoProgressoMidia" class="previa-midia-progresso" hidden>
+              <progress id="progressoEnvioMidia" max="100" value="0"></progress>
+              <span id="textoProgressoMidia" class="hint">0%</span>
+            </div>
+            <p id="statusPreviaMidia" class="hint" role="status" aria-live="polite"></p>
+            <div class="previa-midia-acoes">
+              <button type="button" class="btn-secondary" id="btnCancelarPreviaMidia">Cancelar</button>
+              <button type="button" class="btn" id="btnEnviarPreviaMidia">Enviar</button>
+            </div>
+          </div>
+
           <form id="formEnviarMensagem" class="form-enviar">
             <label for="selectTemplate" class="visually-hidden">Template aprovado</label>
             <select id="selectTemplate">
               <option value="">Texto livre (só dentro da janela de 24h)</option>
             </select>
-            <label for="campoTexto" class="visually-hidden">Mensagem</label>
-            <textarea id="campoTexto" rows="2" maxlength="4096" placeholder="Escreva uma resposta…"></textarea>
-            <button class="btn" type="submit" id="btnEnviarMensagem">Enviar</button>
+            <div class="compose-linha">
+              <label for="campoTexto" class="visually-hidden">Mensagem</label>
+              <textarea id="campoTexto" rows="2" maxlength="4096" placeholder="Escreva uma resposta… (Enter envia, Shift+Enter quebra linha)"></textarea>
+              <div class="compose-acoes-midia">
+                <button type="button" class="btn-icone" id="btnAnexarImagem" title="Anexar imagem" aria-label="Anexar imagem">📎</button>
+                <button type="button" class="btn-icone" id="btnTirarFoto" title="Tirar foto" aria-label="Tirar foto com a câmera">📷</button>
+                <button type="button" class="btn-icone" id="btnGravarAudio" title="Gravar áudio" aria-label="Gravar mensagem de áudio">🎤</button>
+              </div>
+              <input type="file" id="inputArquivoImagem" accept="image/jpeg,image/png,image/webp" hidden aria-hidden="true">
+              <input type="file" id="inputArquivoCamera" accept="image/*" capture="environment" hidden aria-hidden="true">
+              <button class="btn" type="submit" id="btnEnviarMensagem">Enviar</button>
+            </div>
             <p id="statusEnvio" class="hint" role="status" aria-live="polite"></p>
           </form>
         </div>
@@ -215,6 +247,8 @@
       </div>
     </div>
   </div>
+
+  <div id="toastContainer" class="toast-container" aria-live="polite"></div>
 
   <script src="site-config.js"></script>
   <script src="central-atendimento.js"></script>

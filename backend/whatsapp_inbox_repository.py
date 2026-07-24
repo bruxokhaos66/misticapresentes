@@ -178,16 +178,32 @@ def registrar_mensagem_enviada(
     sent_by_admin: str,
     reply_to_meta_message_id: str | None = None,
     status: str = "queued",
+    media_id: str | None = None,
+    media_mime_type: str | None = None,
+    media_size: int | None = None,
+    media_path: str | None = None,
 ) -> int:
+    """media_id/media_mime_type/media_size/media_path são opcionais (default
+    None) -- só usados pelo envio de imagem/áudio da Central de Atendimento
+    (backend/whatsapp_inbox_routes.py). Chamadores existentes (texto/
+    template) continuam funcionando sem nenhuma mudança de comportamento."""
     agora = _agora()
     cur = conn.execute(
         """
         INSERT INTO whatsapp_messages
             (conversation_id, direction, message_type, text_body, template_name,
-             sent_by_admin, reply_to_meta_message_id, status, created_at, updated_at)
-        VALUES (?, 'outbound', ?, ?, ?, ?, ?, ?, ?, ?)
+             sent_by_admin, reply_to_meta_message_id, status,
+             media_id, media_mime_type, media_size, media_path,
+             media_status, created_at, updated_at)
+        VALUES (?, 'outbound', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (conversation_id, message_type, sanitizar_texto(text_body), template_name, sent_by_admin, reply_to_meta_message_id, status, agora, agora),
+        (
+            conversation_id, message_type, sanitizar_texto(text_body), template_name, sent_by_admin,
+            reply_to_meta_message_id, status,
+            media_id, media_mime_type, media_size, media_path,
+            "available" if media_path else "pending",
+            agora, agora,
+        ),
     )
     conn.execute(
         "UPDATE whatsapp_conversations SET last_message_at=?, last_outbound_at=?, updated_at=? WHERE id=?",

@@ -14,9 +14,11 @@ Nunca devolve token, app secret, verify token, caminho de disco (media_path)
 ou payload bruto do provedor em nenhuma resposta."""
 from __future__ import annotations
 
+import io
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Request, Response, UploadFile
+from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, Field
 
 from backend.atendimento_flags import atendimento_exige_assuncao_para_admin, atendimento_sellers_habilitado
@@ -39,6 +41,8 @@ from backend.rate_limit import limitar_requisicoes
 from backend.whatsapp_flags import (
     diagnostico_configuracao_whatsapp_cloud_inbox,
     whatsapp_cloud_inbox_habilitado,
+    whatsapp_outbound_audio_max_bytes,
+    whatsapp_outbound_image_max_bytes,
     whatsapp_provider_nome,
     whatsapp_template_language,
 )
@@ -56,8 +60,21 @@ from backend.whatsapp_inbox_repository import (
     vincular_cliente,
     vincular_pedido,
 )
-from backend.whatsapp_media_service import WhatsAppMediaError, baixar_midia, extensao_para_mime, salvar_midia_local
-from backend.whatsapp_provider import ComponenteTemplate, WhatsAppEnvioPermanente, WhatsAppEnvioTransitorio, construir_provider
+from backend.whatsapp_media_service import (
+    WhatsAppMediaError,
+    baixar_midia,
+    extensao_para_mime,
+    identificar_audio_saida,
+    identificar_imagem_saida,
+    salvar_midia_local,
+)
+from backend.whatsapp_provider import (
+    ComponenteTemplate,
+    ResultadoEnvioWhatsApp,
+    WhatsAppEnvioPermanente,
+    WhatsAppEnvioTransitorio,
+    construir_provider,
+)
 
 logger = get_logger(__name__)
 
@@ -71,6 +88,19 @@ TAMANHO_PAGINA_PADRAO = 30
 TAMANHO_PAGINA_MAXIMO = 100
 LIMITE_MENSAGENS_PADRAO = 50
 LIMITE_MENSAGENS_MAXIMO = 200
+
+# Compose de mídia (item 8 da especificação "envio avançado") -- allowlist
+# fechada por finalidade (media_kind), nunca aberta a qualquer content-type.
+MEDIA_KINDS_VALIDOS = {"image", "audio"}
+# Rejeitados explicitamente cedo, mesmo que a allowlist de magic bytes já
+# torne isso impossível de qualquer forma -- deixa a intenção clara no
+# código e documenta o caso mesmo que a allowlist mude no futuro.
+CONTENT_TYPES_REJEITADOS_EXPLICITAMENTE = {
+    "image/svg+xml", "text/html", "application/xhtml+xml",
+    "application/javascript", "text/javascript", "application/x-javascript",
+}
+TAMANHO_PEDACO_LEITURA_UPLOAD = 262_144  # 256 KiB por pedaço, lido em streaming
+LIMITE_LEGENDA_MIDIA = 1024  # mesmo limite aplicado pela Cloud API a image.caption
 
 
 def _exigir_habilitado() -> None:
@@ -214,6 +244,59 @@ def rota_listar_mensagens(
     return {"ok": True, "messages": [linha_mensagem_publica(row) for row in linhas]}
 
 
+def _autorizar_e_validar_janela_envio(
+    conn, sessao: dict, conversa: dict, assignment_version: int | None,
+) -> tuple[dict, str, bool]:
+    """Validações compartilhadas por toda rota de ENVIO desta Central (texto,
+    template, mídia): atendente habilitado, controle de assunção da Central
+    Multiatendente (item 11 da especificação original) e cálculo da janela
+    de atendimento de 24h. Levanta HTTPException para qualquer acesso
+    negado -- fatorada aqui só para não duplicar a lógica entre
+    rota_enviar_mensagem e rota_enviar_midia, nunca muda o comportamento
+    histórico de nenhuma delas. Nunca libera a Idempotency-Key aqui: o
+    chamador sempre envolve toda a rota num único except HTTPException/
+    Exception que já faz isso (ver liberar_chave_idempotente logo abaixo em
+    cada rota)."""
+    usuario_atendente = exigir_atendente(conn, sessao)
+    registrar_atividade_atendente(conn, usuario_atendente.get("id"))
+    conn.execute(
+        "UPDATE whatsapp_conversations SET last_agent_activity_at=? WHERE id=?",
+        (datetime.now().isoformat(timespec="seconds"), conversa["id"]),
+    )
+
+    # Com a flag desligada, preserva o fluxo legado (só adm, sem exigir
+    # assunção -- exigir_atendente já barra qualquer outro perfil quando a
+    # flag está desligada). Com a flag ligada, vendedor só responde conversa
+    # própria; adm/supervisor só respondem sem assumir quando
+    # ATENDIMENTO_REQUIRE_ASSIGNMENT_FOR_ADMIN=false.
+    if atendimento_sellers_habilitado():
+        exige_assuncao = usuario_atendente.get("perfil") == "vendedor" or atendimento_exige_assuncao_para_admin()
+        if exige_assuncao and not autorizado_para_conversa(usuario_atendente, conversa):
+            registrar_historico_atendimento(
+                conn, conversation_id=conversa["id"], action="send_denied",
+                performed_by_user_id=usuario_atendente.get("id"),
+                reason="Tentativa de envio sem assumir a conversa.",
+            )
+            conn.commit()
+            raise HTTPException(status_code=403, detail="Assuma esta conversa antes de responder.")
+        if assignment_version is not None and int(assignment_version) != int(conversa.get("assignment_version") or 0):
+            raise HTTPException(status_code=409, detail="Esta conversa foi alterada por outra ação; recarregue e tente novamente.")
+
+    destinatario = conversa.get("phone_e164") or conversa.get("wa_id")
+    if not destinatario:
+        raise HTTPException(status_code=409, detail="Conversa sem destinatário válido.")
+
+    dentro_da_janela = False
+    if conversa.get("last_inbound_at"):
+        try:
+            ultimo_inbound = datetime.fromisoformat(str(conversa["last_inbound_at"]))
+            dentro_da_janela = (datetime.now() - ultimo_inbound) <= timedelta(hours=JANELA_ATENDIMENTO_HORAS)
+        except ValueError:
+            dentro_da_janela = False
+
+    return usuario_atendente, destinatario, dentro_da_janela
+
+
 @router.post("/conversations/{conversation_id}/messages", dependencies=[Depends(limitar_envio)])
 def rota_enviar_mensagem(
     conversation_id: int,
@@ -239,49 +322,9 @@ def rota_enviar_mensagem(
     try:
         with conectar() as conn:
             conversa = _obter_conversa_ou_404(conn, conversation_id)
-            usuario_atendente = exigir_atendente(conn, sessao)
-            registrar_atividade_atendente(conn, usuario_atendente.get("id"))
-            conn.execute(
-                "UPDATE whatsapp_conversations SET last_agent_activity_at=? WHERE id=?",
-                (datetime.now().isoformat(timespec="seconds"), conversation_id),
+            usuario_atendente, destinatario, dentro_da_janela = _autorizar_e_validar_janela_envio(
+                conn, sessao, conversa, body.assignment_version
             )
-
-            # Controle de envio da Central Multiatendente (item 11 da
-            # especificação): com a flag desligada, preserva o fluxo legado
-            # (só adm, sem exigir assunção -- exigir_atendente já barra
-            # qualquer outro perfil quando a flag está desligada). Com a
-            # flag ligada, vendedor só responde conversa própria; adm/
-            # supervisor só respondem sem assumir quando
-            # ATENDIMENTO_REQUIRE_ASSIGNMENT_FOR_ADMIN=false.
-            if atendimento_sellers_habilitado():
-                exige_assuncao = usuario_atendente.get("perfil") == "vendedor" or atendimento_exige_assuncao_para_admin()
-                if exige_assuncao and not autorizado_para_conversa(usuario_atendente, conversa):
-                    registrar_historico_atendimento(
-                        conn, conversation_id=conversation_id, action="send_denied",
-                        performed_by_user_id=usuario_atendente.get("id"),
-                        reason="Tentativa de envio sem assumir a conversa.",
-                    )
-                    conn.commit()
-                    liberar_chave_idempotente(conectar, escopo_idempotencia, idempotency_key)
-                    raise HTTPException(status_code=403, detail="Assuma esta conversa antes de responder.")
-                if (
-                    body.assignment_version is not None
-                    and int(body.assignment_version) != int(conversa.get("assignment_version") or 0)
-                ):
-                    liberar_chave_idempotente(conectar, escopo_idempotencia, idempotency_key)
-                    raise HTTPException(status_code=409, detail="Esta conversa foi alterada por outra ação; recarregue e tente novamente.")
-
-            destinatario = conversa.get("phone_e164") or conversa.get("wa_id")
-            if not destinatario:
-                raise HTTPException(status_code=409, detail="Conversa sem destinatário válido.")
-
-            dentro_da_janela = False
-            if conversa.get("last_inbound_at"):
-                try:
-                    ultimo_inbound = datetime.fromisoformat(str(conversa["last_inbound_at"]))
-                    dentro_da_janela = (datetime.now() - ultimo_inbound) <= timedelta(hours=JANELA_ATENDIMENTO_HORAS)
-                except ValueError:
-                    dentro_da_janela = False
 
             provider = construir_provider(whatsapp_provider_nome())
 
@@ -363,6 +406,177 @@ def rota_enviar_mensagem(
         liberar_chave_idempotente(conectar, escopo_idempotencia, idempotency_key)
         logger.exception("whatsapp_inbox_envio_falha_inesperada", extra={"evento": "whatsapp_inbox_envio_falha_inesperada"})
         raise HTTPException(status_code=500, detail="Falha inesperada ao enviar mensagem.")
+
+
+async def _ler_upload_com_limite(arquivo: UploadFile, limite: int) -> bytes:
+    """Lê o upload em pedaços de TAMANHO_PEDACO_LEITURA_UPLOAD bytes,
+    abortando assim que o total ultrapassar `limite` -- nunca bufferiza um
+    arquivo arbitrariamente grande antes de checar o tamanho (mesmo padrão
+    de backend/whatsapp_media_service.py::baixar_midia, que aplica o limite
+    ENQUANTO baixa a mídia recebida)."""
+    pedacos = bytearray()
+    while True:
+        pedaco = await arquivo.read(TAMANHO_PEDACO_LEITURA_UPLOAD)
+        if not pedaco:
+            break
+        pedacos.extend(pedaco)
+        if len(pedacos) > limite:
+            raise HTTPException(status_code=413, detail="Arquivo excede o tamanho máximo permitido.")
+    return bytes(pedacos)
+
+
+@router.post("/conversations/{conversation_id}/media", dependencies=[Depends(limitar_envio)])
+async def rota_enviar_midia(
+    conversation_id: int,
+    media_kind: str = Form(...),
+    caption: str | None = Form(default=None),
+    assignment_version: int | None = Form(default=None),
+    file: UploadFile = File(...),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    sessao: dict = Depends(exigir_perfis("adm", "supervisor_atendimento", "vendedor")),
+):
+    """Envio de imagem/áudio pelo compose avançado da Central de Atendimento
+    (item 8 da especificação "envio avançado de mensagens e mídia"). Mesma
+    autenticação/autorização/janela de 24h de rota_enviar_mensagem (ver
+    _autorizar_e_validar_janela_envio) -- nunca aceita chave de API estática
+    (mesma regra do restante deste router). Nunca confia no content-type ou
+    na extensão do arquivo declarados pelo navegador: o tipo real é sempre
+    decidido por magic bytes (e, para imagem, também pela verificação
+    Pillow), com um cap de tamanho aplicado DURANTE a leitura, não depois."""
+    _exigir_habilitado()
+    usuario = str(sessao.get("nome") or sessao.get("login") or "Admin")
+    escopo_idempotencia = "whatsapp_inbox_send_media"
+
+    if media_kind not in MEDIA_KINDS_VALIDOS:
+        raise HTTPException(status_code=422, detail="media_kind deve ser 'image' ou 'audio'.")
+    # Mensagens de áudio da Cloud API não suportam legenda -- só imagem.
+    if caption and media_kind != "image":
+        raise HTTPException(status_code=422, detail="Legenda só é suportada para imagens.")
+    content_type_declarado = (file.content_type or "").split(";")[0].strip().lower()
+    if content_type_declarado in CONTENT_TYPES_REJEITADOS_EXPLICITAMENTE:
+        raise HTTPException(status_code=422, detail="Tipo de arquivo não permitido.")
+
+    # A idempotência aqui não pode incluir os bytes do arquivo na prática
+    # (custaria hashear todo upload em cada tentativa) -- o payload usado só
+    # cobre metadados relevantes, igual ao endpoint de texto acima (que
+    # também não faz hash de conteúdo, só dos campos estruturados). A
+    # defesa principal contra duplo-envio continua sendo o guard de
+    # double-submit do frontend; esta chave evita reprocessar a MESMA
+    # tentativa em caso de retry de rede.
+    payload_idempotencia = {
+        "conversation_id": conversation_id,
+        "media_kind": media_kind,
+        "content_type_declarado": content_type_declarado,
+        "filename_len": len(file.filename or ""),
+    }
+    resposta_existente = reivindicar_chave_idempotente(conectar, escopo_idempotencia, idempotency_key, payload_idempotencia)
+    if resposta_existente is not None:
+        return resposta_existente
+
+    limite_bytes = whatsapp_outbound_image_max_bytes() if media_kind == "image" else whatsapp_outbound_audio_max_bytes()
+
+    try:
+        conteudo = await _ler_upload_com_limite(file, limite_bytes)
+        if not conteudo:
+            raise HTTPException(status_code=400, detail="Arquivo vazio.")
+
+        if media_kind == "image":
+            identificado = identificar_imagem_saida(conteudo[:64])
+            if not identificado:
+                raise HTTPException(status_code=422, detail="Formato de imagem não suportado. Use JPG, PNG ou WEBP.")
+            extensao, mime_canonico = identificado
+            try:
+                imagem = Image.open(io.BytesIO(conteudo))
+                imagem.verify()
+            except (UnidentifiedImageError, OSError, ValueError):
+                raise HTTPException(status_code=422, detail="Arquivo não é uma imagem válida.")
+        else:
+            identificado = identificar_audio_saida(conteudo[:64])
+            if not identificado:
+                raise HTTPException(status_code=422, detail="Formato de áudio não suportado. Use WEBM, OGG, MP3, M4A ou WAV.")
+            extensao, mime_canonico = identificado
+
+        legenda = None
+        if media_kind == "image" and caption and caption.strip():
+            legenda = caption.strip()[:LIMITE_LEGENDA_MIDIA]
+
+        with conectar() as conn:
+            conversa = _obter_conversa_ou_404(conn, conversation_id)
+            usuario_atendente, destinatario, dentro_da_janela = _autorizar_e_validar_janela_envio(
+                conn, sessao, conversa, assignment_version
+            )
+
+            if not dentro_da_janela:
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        "Esta conversa está fora da janela de atendimento de 24h da Meta. "
+                        "Envie um template aprovado em vez de mídia."
+                    ),
+                )
+
+            # Nunca confia em file.filename para nada além de log cosmético
+            # -- o nome de armazenamento é sempre gerado pelo servidor
+            # (uuid4, ver whatsapp_media_service.salvar_midia_local),
+            # eliminando path traversal e extensão dupla maliciosa.
+            caminho_local = salvar_midia_local(conteudo, extensao)
+            provider = construir_provider(whatsapp_provider_nome())
+
+            mensagem_id = registrar_mensagem_enviada(
+                conn,
+                conversation_id=conversation_id,
+                message_type=media_kind,
+                text_body=legenda,
+                template_name=None,
+                sent_by_admin=usuario,
+                media_mime_type=mime_canonico,
+                media_size=len(conteudo),
+                media_path=caminho_local,
+            )
+
+            try:
+                media_id_meta = provider.upload_media(conteudo=conteudo, mime_type=mime_canonico, filename=f"midia.{extensao}")
+                if media_id_meta:
+                    conn.execute("UPDATE whatsapp_messages SET media_id=? WHERE id=?", (media_id_meta, mensagem_id))
+                    resultado = provider.send_inbox_media(
+                        to=destinatario, media_id=media_id_meta, media_type=media_kind, caption=legenda,
+                    )
+                else:
+                    # Provedor desabilitado (ver DisabledWhatsAppProvider) --
+                    # nunca levanta exceção, só reporta "não enviado".
+                    resultado = ResultadoEnvioWhatsApp(ok=False, status="skipped_disabled")
+            except (WhatsAppEnvioTransitorio, WhatsAppEnvioPermanente) as exc:
+                atualizar_status_mensagem_enviada(
+                    conn, mensagem_id, meta_message_id=None, status="failed",
+                    error_code=getattr(exc, "codigo", None), error_message_sanitized="Falha ao enviar mídia.",
+                )
+                registrar_auditoria(
+                    conn, "whatsapp_conversation", conversation_id, "enviar_midia_falhou", usuario,
+                    depois={"media_kind": media_kind, "mime": mime_canonico, "size": len(conteudo), "codigo": getattr(exc, "codigo", None)},
+                )
+                conn.commit()
+                resposta = {"ok": False, "message_id": mensagem_id, "status": "failed"}
+                concluir_chave_idempotente(conn, escopo_idempotencia, idempotency_key, resposta)
+                conn.commit()
+                return resposta
+
+            atualizar_status_mensagem_enviada(conn, mensagem_id, meta_message_id=resultado.provider_message_id, status="sent" if resultado.ok else "failed")
+            registrar_auditoria(
+                conn, "whatsapp_conversation", conversation_id,
+                "enviar_imagem" if media_kind == "image" else "enviar_audio", usuario,
+                depois={"mime": mime_canonico, "size": len(conteudo)},
+            )
+            resposta = {"ok": resultado.ok, "message_id": mensagem_id, "status": "sent" if resultado.ok else "failed"}
+            concluir_chave_idempotente(conn, escopo_idempotencia, idempotency_key, resposta)
+            conn.commit()
+            return resposta
+    except HTTPException:
+        liberar_chave_idempotente(conectar, escopo_idempotencia, idempotency_key)
+        raise
+    except Exception:
+        liberar_chave_idempotente(conectar, escopo_idempotencia, idempotency_key)
+        logger.exception("whatsapp_inbox_envio_midia_falha_inesperada", extra={"evento": "whatsapp_inbox_envio_midia_falha_inesperada"})
+        raise HTTPException(status_code=500, detail="Falha inesperada ao enviar mídia.")
 
 
 @router.post("/conversations/{conversation_id}/read")
