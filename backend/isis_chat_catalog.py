@@ -81,11 +81,20 @@ def _produto_para_dict(dados: dict) -> dict:
 def produto_url(produto: dict, *, base_url: str = "") -> str:
     """URL real do produto no site: prioriza o link direto já cadastrado
     (`link_externo`); sem ele, a página padrão de produto (`produto.html`)
-    com o ID -- nunca uma URL inventada fora desse padrão."""
+    com o ID -- nunca uma URL inventada fora desse padrão.
+
+    O prefixo `api-` no id é obrigatório: `produto-page.js` (mesma página
+    que renderiza esse link) só reconhece produtos do catálogo oficial
+    pelo id que `mobile-sync.js` atribui a cada um depois de sincronizar
+    com `/api/produtos` (`api-<id>`, ver `normalizarProduto()`) -- é assim
+    que os cards do catálogo público, os relacionados e o Chat da Isis já
+    linkam para produto.html. Sem o prefixo, `findProduct()` nunca acha o
+    produto e a página mostra "produto não encontrado" mesmo com o produto
+    ativo."""
     if produto.get("link_externo"):
         return produto["link_externo"]
     base = base_url.rstrip("/") if base_url else ""
-    return f"{base}/produto.html?id={produto['id']}"
+    return f"{base}/produto.html?id=api-{produto['id']}"
 
 
 def buscar_cursos_ativos(conn, *, termo: str = "") -> list[dict]:
