@@ -191,6 +191,23 @@ services:
         value: true
       - key: ATENDIMENTO_REQUIRE_ASSIGNMENT_FOR_ADMIN
         value: true
+      # Catalogo Comercial na Central de Atendimento (PR #408 -- ver
+      # docs/WHATSAPP_CATALOGO_ATENDIMENTO.md). value: false mantem a
+      # Central identica a versao sem catalogo (nenhuma rota nova responde,
+      # painel "Produtos" nao aparece). Ligar em produção só depois de
+      # validar em homologação (ver rollout na documentação).
+      - key: ATENDIMENTO_CATALOG_ENABLED
+        value: false
+      - key: ATENDIMENTO_CATALOG_MAX_PRODUCTS_PER_SEND
+        value: "5"
+      - key: ATENDIMENTO_CATALOG_LOW_STOCK_THRESHOLD
+        value: "3"
+      # Hosts extras liberados para imagem comercial do Catalogo, alem do
+      # dominio oficial e do drive.google.com (ja liberados por padrao no
+      # codigo -- ver backend/whatsapp_catalog_flags.py). Vazio por
+      # padrao; revise o host antes de preencher.
+      - key: ATENDIMENTO_CATALOG_ALLOWED_IMAGE_HOSTS
+        value: ""
     disk:
       name: mistica-dados
       mountPath: /data

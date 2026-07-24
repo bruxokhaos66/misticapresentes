@@ -369,3 +369,94 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .fila-acoes button, .aba-btn { flex: 1 1 auto; }
   .modal-midia-conteudo { max-width: 95vw; }
 }
+
+/* -------------------------------------------------------------------
+ * Catálogo Comercial: painel de produtos (drawer/modal reaproveitando
+ * .modal-midia), busca, cards de produto e seleção múltipla.
+ * ------------------------------------------------------------------- */
+
+.modal-produtos-conteudo { max-width: min(95vw, 900px); }
+
+.produtos-corpo { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 0.6rem; }
+
+.produtos-busca { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.produtos-busca input[type="search"], .produtos-busca input[type="text"] {
+  flex: 1 1 160px;
+  padding: 0.5rem;
+  border-radius: var(--raio);
+  border: 1px solid var(--cor-borda);
+  background: var(--cor-painel-alt);
+  color: var(--cor-texto);
+}
+.produtos-busca label { display: flex; align-items: center; gap: 0.3rem; font-size: 0.82rem; color: var(--cor-texto-fraco); }
+
+.lista-produtos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.6rem;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.lista-produtos-recentes { max-height: 20vh; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+
+.cartao-produto {
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+  padding: 0.5rem;
+  background: var(--cor-painel-alt);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.cartao-produto.is-selecionado { border-color: var(--cor-acento); box-shadow: 0 0 0 1px var(--cor-acento) inset; }
+
+.cartao-produto-imagem {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: calc(var(--raio) - 2px);
+  background: var(--cor-painel);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.cartao-produto-imagem img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cartao-produto-imagem .sem-imagem { color: var(--cor-texto-fraco); font-size: 0.75rem; text-align: center; padding: 0.4rem; }
+
+.cartao-produto-nome { font-size: 0.88rem; font-weight: 600; }
+.cartao-produto-preco { font-size: 0.85rem; }
+.cartao-produto-preco .preco-promocional { color: var(--cor-sucesso); font-weight: 600; }
+.cartao-produto-preco .preco-original { text-decoration: line-through; color: var(--cor-texto-fraco); margin-right: 0.3rem; }
+
+.badge-estoque {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.7rem;
+  border: 1px solid var(--cor-borda);
+  width: fit-content;
+}
+.badge-estoque.available { color: var(--cor-sucesso); border-color: var(--cor-sucesso); }
+.badge-estoque.low_stock { color: var(--cor-alerta); border-color: var(--cor-alerta); }
+.badge-estoque.unavailable { color: var(--cor-erro); border-color: var(--cor-erro); }
+
+.cartao-produto-acoes { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin-top: auto; }
+.cartao-produto-acoes label { display: flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; }
+.cartao-produto-acoes a, .cartao-produto-acoes button { font-size: 0.78rem; min-height: 32px; }
+
+.produtos-paginacao { display: flex; align-items: center; justify-content: center; gap: 0.6rem; }
+
+.produtos-rodape { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; }
+.produtos-rodape #contadorSelecionados { margin: 0; }
+
+@media (max-width: 900px) {
+  .modal-produtos { align-items: flex-end; padding: 0; }
+  .modal-produtos-conteudo { max-width: 100vw; width: 100%; max-height: 92vh; border-radius: var(--raio) var(--raio) 0 0; }
+  .lista-produtos { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); max-height: 45vh; }
+  .produtos-busca input[type="search"], .produtos-busca input[type="text"] { flex: 1 1 100%; }
+}

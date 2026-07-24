@@ -124,6 +124,17 @@ class WhatsAppProvider(ABC):
         usar texto livre)."""
         raise WhatsAppEnvioPermanente("send_inbox_text não suportado por este provedor.", codigo="text_not_supported")
 
+    def send_inbox_image(self, *, to: str, image_url: str, caption: str | None = None) -> ResultadoEnvioWhatsApp:
+        """Envia uma imagem (mensagem `type: image`) referenciada por URL
+        pública HTTPS -- usado pelo Catálogo Comercial
+        (backend/whatsapp_catalog_routes.py) para enviar a foto oficial do
+        produto sem baixar/reenviar mídia (a Cloud API busca a imagem
+        diretamente da URL informada). Mesma janela de 24h de
+        send_inbox_text. Nunca aceita uma URL vinda do frontend -- quem
+        chama este método sempre revalida a URL no backend antes (ver
+        backend/whatsapp_catalog_repository.py::produto_linha_publica)."""
+        raise WhatsAppEnvioPermanente("send_inbox_image não suportado por este provedor.", codigo="image_not_supported")
+
     @abstractmethod
     def parse_delivery_webhook(self, payload: dict) -> list[StatusEntregaWhatsApp]:
         raise NotImplementedError
@@ -150,6 +161,9 @@ class DisabledWhatsAppProvider(WhatsAppProvider):
         return ResultadoEnvioWhatsApp(ok=False, status="skipped_disabled")
 
     def send_inbox_text(self, *, to: str, texto: str, reply_to_meta_message_id: str | None = None) -> ResultadoEnvioWhatsApp:
+        return ResultadoEnvioWhatsApp(ok=False, status="skipped_disabled")
+
+    def send_inbox_image(self, *, to: str, image_url: str, caption: str | None = None) -> ResultadoEnvioWhatsApp:
         return ResultadoEnvioWhatsApp(ok=False, status="skipped_disabled")
 
     def parse_delivery_webhook(self, payload: dict) -> list[StatusEntregaWhatsApp]:
@@ -254,6 +268,33 @@ class MetaWhatsAppCloudProvider(WhatsAppProvider):
         }
         if reply_to_meta_message_id:
             corpo["context"] = {"message_id": reply_to_meta_message_id}
+
+        try:
+            with self._cliente() as cliente:
+                resposta = cliente.post(f"{self._base_url()}/messages", json=corpo)
+        except httpx.TimeoutException as exc:
+            raise WhatsAppEnvioTransitorio("Timeout ao chamar a Graph API.", codigo="timeout") from exc
+        except httpx.TransportError as exc:
+            raise WhatsAppEnvioTransitorio("Falha de conexão com a Graph API.", codigo="connection_error") from exc
+
+        return self._interpretar_resposta(resposta)
+
+    def send_inbox_image(self, *, to: str, image_url: str, caption: str | None = None) -> ResultadoEnvioWhatsApp:
+        if not to:
+            raise WhatsAppEnvioPermanente("Destinatário ausente.", codigo="missing_recipient")
+        url_limpa = str(image_url or "").strip()
+        if not url_limpa.startswith("https://"):
+            raise WhatsAppEnvioPermanente("URL de imagem deve ser HTTPS absoluta.", codigo="invalid_image_url")
+
+        corpo: dict = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": to,
+            "type": "image",
+            "image": {"link": url_limpa},
+        }
+        if caption:
+            corpo["image"]["caption"] = str(caption)[:1024]
 
         try:
             with self._cliente() as cliente:
