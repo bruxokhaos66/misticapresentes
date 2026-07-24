@@ -4,6 +4,14 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Central de Atendimento (PR #413): câmera para foto e microfone para
+         áudio, ambos pedidos em runtime só quando o atendente toca no botão
+         correspondente no compositor (nunca no início do app). -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Não obrigatório: dispositivos sem câmera continuam podendo instalar o app. -->
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+
     <application
         android:name=".app.MisticaApplication"
         android:allowBackup="false"

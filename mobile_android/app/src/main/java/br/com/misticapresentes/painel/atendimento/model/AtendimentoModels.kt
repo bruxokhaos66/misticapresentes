@@ -58,6 +58,16 @@ data class SendResult(
     val status: String?,
 )
 
+/**
+ * Tipo de mídia enviável pelo compose avançado (câmera/galeria = IMAGE,
+ * gravação de áudio = AUDIO) -- espelha `media_kind` aceito por
+ * `POST /conversations/{id}/media` (`"image"` ou `"audio"`, ver
+ * `backend/whatsapp_inbox_routes.py`). Vive no pacote de modelos de domínio
+ * (não em `atendimento.media`, que é infraestrutura específica de
+ * plataforma) porque é usado tanto pelo repository quanto pela UI.
+ */
+enum class MediaKind { IMAGE, AUDIO }
+
 data class Product(
     val id: Long,
     val nome: String,

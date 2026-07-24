@@ -1,6 +1,10 @@
 package br.com.misticapresentes.painel.app
 
 import android.content.Context
+import br.com.misticapresentes.painel.atendimento.media.AndroidImageCompressor
+import br.com.misticapresentes.painel.atendimento.media.AndroidMediaFileStore
+import br.com.misticapresentes.painel.atendimento.media.ImageCompressor
+import br.com.misticapresentes.painel.atendimento.media.MediaFileStore
 import br.com.misticapresentes.painel.atendimento.repository.AtendimentoRepository
 import br.com.misticapresentes.painel.auth.AuthRepository
 import br.com.misticapresentes.painel.common.AndroidConnectivityObserver
@@ -21,6 +25,8 @@ import br.com.misticapresentes.painel.security.SecureStorage
  * apenas fiação (wiring) de infraestrutura do app.
  */
 class AppContainer(context: Context) {
+
+    private val appContext = context.applicationContext
 
     val appPreferences = AppPreferences(context)
     val featureFlagsRepository: FeatureFlagsRepository = DefaultFeatureFlagsRepository(appPreferences)
@@ -55,6 +61,16 @@ class AppContainer(context: Context) {
                 secureSessionStore = secureSessionStore,
                 sessionExpiredNotifier = { authRepositoryRef?.onSessionExpired() },
             ),
+            mediaApi = ApiClient.createAtendimentoMediaApi(
+                secureSessionStore = secureSessionStore,
+                sessionExpiredNotifier = { authRepositoryRef?.onSessionExpired() },
+            ),
         )
     }
+
+    // Suporte nativo de mídia (PR #413): arquivo temporário sempre em
+    // cacheDir (nunca armazenamento externo/público) e compressão de imagem
+    // antes do upload -- ver atendimento.media.
+    val mediaFileStore: MediaFileStore by lazy { AndroidMediaFileStore(appContext) }
+    val imageCompressor: ImageCompressor by lazy { AndroidImageCompressor() }
 }
