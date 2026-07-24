@@ -50,8 +50,59 @@ jobs:
       # Com flavorDimensions, "testDebugUnitTest"/"assembleDebug" sao
       # ambiguos para o Gradle (ele nao infere as 3 variantes sozinho) -
       # entao listamos as 3 variantes explicitamente, uma por flavor.
+      #
+      # INSTRUMENTACAO TEMPORARIA DE DIAGNOSTICO (investigacao do travamento
+      # reproduzido nesta etapa na PR #414) -- NAO altera a logica do app,
+      # NAO altera nenhum teste, NAO adiciona/aumenta nenhum timeout e NAO
+      # mata o processo: so tira "fotos" (thread dump + lista de processos +
+      # status do daemon) se a etapa passar do baseline normal (~78s) em
+      # muito, para localizar a causa raiz real. Se os testes terminarem
+      # normalmente, nenhum arquivo de diagnostico e gerado. Remover esta
+      # instrumentacao assim que a causa raiz for confirmada.
       - name: Testes unitarios (dev/homolog/prod, build type debug)
-        run: ./gradlew testDevDebugUnitTest testHomologDebugUnitTest testProdDebugUnitTest --no-daemon
+        run: |
+          set +e
+          mkdir -p diagnostics
+          ./gradlew testDevDebugUnitTest testHomologDebugUnitTest testProdDebugUnitTest --no-daemon > gradle-unit-tests.log 2>&1 &
+          GRADLE_PID=$!
+
+          ELAPSED=0
+          DUMP_THRESHOLD=180   # baseline normal desta etapa: ~78s
+          DUMP_INTERVAL=300    # capturas extras espacadas p/ distinguir deadlock (pilhas identicas) de livelock (pilhas mudando)
+          DUMP_COUNT=0
+          MAX_DUMPS=4
+
+          while kill -0 "$GRADLE_PID" 2>/dev/null; do
+            sleep 10
+            ELAPSED=$((ELAPSED + 10))
+
+            if [ "$DUMP_COUNT" -lt "$MAX_DUMPS" ] && [ "$ELAPSED" -ge "$((DUMP_THRESHOLD + DUMP_COUNT * DUMP_INTERVAL))" ]; then
+              DUMP_COUNT=$((DUMP_COUNT + 1))
+              echo "::warning::Testes unitarios ainda rodando apos ${ELAPSED}s (baseline: ~78s) -- capturando diagnostico #${DUMP_COUNT}."
+
+              SNAPSHOT="diagnostics/snapshot-${DUMP_COUNT}-${ELAPSED}s"
+              mkdir -p "$SNAPSHOT"
+
+              ps -ef > "${SNAPSHOT}/processes.txt"
+
+              : > "${SNAPSHOT}/thread-dumps.txt"
+              for PID in $(pgrep -f 'java'); do
+                echo "== jstack PID ${PID} ==" >> "${SNAPSHOT}/thread-dumps.txt"
+                jstack "$PID" >> "${SNAPSHOT}/thread-dumps.txt" 2>&1
+                echo >> "${SNAPSHOT}/thread-dumps.txt"
+              done
+
+              ./gradlew --status > "${SNAPSHOT}/gradle-daemon-status.txt" 2>&1
+
+              cp gradle-unit-tests.log "${SNAPSHOT}/gradle-unit-tests-partial.log"
+            fi
+          done
+
+          wait "$GRADLE_PID"
+          EXIT_CODE=$?
+          cp gradle-unit-tests.log diagnostics/gradle-unit-tests-full.log 2>/dev/null
+
+          exit $EXIT_CODE
 
       - name: Gerar APKs debug (dev/homolog/prod)
         run: ./gradlew assembleDevDebug assembleHomologDebug assembleProdDebug --no-daemon
@@ -65,6 +116,17 @@ jobs:
             mobile_android/app/build/reports/lint-results-*.html
             mobile_android/app/build/test-results/**
             mobile_android/app/build/reports/tests/**
+
+      # Instrumentacao temporaria de diagnostico -- ver comentario acima do
+      # step de testes unitarios. So publica algo se o watchdog realmente
+      # disparou (testes normais nao geram nenhum arquivo aqui).
+      - name: Publicar diagnostico de bloqueio (instrumentacao temporaria)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MisticaPainel-Android-diagnostico
+          path: mobile_android/diagnostics/**
+          if-no-files-found: ignore
 
       # Somente artefatos de DEBUG sao publicados. Nenhum APK de release e
       # gerado, assinado ou publicado por este workflow.
