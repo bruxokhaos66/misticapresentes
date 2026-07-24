@@ -1,11 +1,9 @@
 package br.com.misticapresentes.painel.ui.home
 
-import androidx.test.core.app.ApplicationProvider
 import br.com.misticapresentes.painel.auth.AuthRepository
-import br.com.misticapresentes.painel.common.AppPreferences
-import br.com.misticapresentes.painel.common.DefaultFeatureFlagsRepository
 import br.com.misticapresentes.painel.network.PersistentCookieJar
 import br.com.misticapresentes.painel.testutil.FakeConnectivityObserver
+import br.com.misticapresentes.painel.testutil.FakeFeatureFlagsRepository
 import br.com.misticapresentes.painel.testutil.FakeMisticaApi
 import br.com.misticapresentes.painel.testutil.FakeSecureSessionStore
 import kotlinx.coroutines.Dispatchers
@@ -19,13 +17,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 
 @OptIn(ExperimentalCoroutinesApi::class)
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
 class HomeViewModelTest {
 
     private val dispatcher = StandardTestDispatcher()
@@ -42,7 +35,6 @@ class HomeViewModelTest {
 
     @Test
     fun `logout clears user and marks state as logged out`() = runTest {
-        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val store = FakeSecureSessionStore()
         val api = FakeMisticaApi()
         val authRepository = AuthRepository(api, store, PersistentCookieJar(store))
@@ -51,7 +43,7 @@ class HomeViewModelTest {
         val viewModel = HomeViewModel(
             authRepository = authRepository,
             connectivityObserver = FakeConnectivityObserver(initiallyOnline = true),
-            featureFlagsRepository = DefaultFeatureFlagsRepository(AppPreferences(context)),
+            featureFlagsRepository = FakeFeatureFlagsRepository(),
         )
 
         dispatcher.scheduler.advanceUntilIdle()

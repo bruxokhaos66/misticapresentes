@@ -16,13 +16,15 @@ class AuthInterceptorTest {
 
     private lateinit var server: MockWebServer
     private lateinit var client: OkHttpClient
+    private lateinit var baseUrl: okhttp3.HttpUrl
 
     @Before
     fun setUp() {
         server = MockWebServer()
         server.start()
+        baseUrl = server.url("/").toString().toHttpUrl()
         client = OkHttpClient.Builder()
-            .addInterceptor(AuthInterceptor(server.url("/").toString().toHttpUrl()))
+            .addInterceptor(AuthInterceptor(baseUrl))
             .build()
     }
 
@@ -42,7 +44,7 @@ class AuthInterceptorTest {
         client.newCall(request).execute()
 
         val recorded = server.takeRequest()
-        assertEquals("http://127.0.0.1:${server.port}", recorded.getHeader("Origin"))
+        assertEquals("${baseUrl.scheme}://${baseUrl.host}:${baseUrl.port}", recorded.getHeader("Origin"))
     }
 
     @Test

@@ -43,7 +43,7 @@ class HomeViewModel(
             nativeDashboardEnabled = dashboardEnabled,
             loggedOut = state !is AuthState.LoggedIn,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HomeUiState())
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, HomeUiState())
 
     fun logout() {
         viewModelScope.launch { authRepository.logout() }

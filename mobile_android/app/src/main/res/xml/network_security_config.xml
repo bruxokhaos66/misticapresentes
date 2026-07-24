@@ -3,8 +3,9 @@
     Configuração padrão (usada por homolog e prod): somente HTTPS, em qualquer
     domínio, com validação normal de certificado (sem trust-anchors extras,
     sem TrustManager permissivo). Cleartext (HTTP puro) fica bloqueado
-    globalmente porque não existe nenhum <domain-config> nem <base-config>
-    com cleartextTrafficPermitted="true".
+    globalmente porque nenhum <domain-config>/<base-config> abaixo libera
+    cleartext (o único atributo de cleartext presente neste arquivo é
+    "false").
 -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="false">
