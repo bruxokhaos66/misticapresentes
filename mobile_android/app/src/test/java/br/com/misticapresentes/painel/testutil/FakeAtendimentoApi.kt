@@ -59,6 +59,21 @@ class FakeAtendimentoApi : AtendimentoApi {
     var lastSendMediaAssignmentVersion: String? = null
     val sendMediaIdempotencyKeys = mutableListOf<String>()
 
+    /**
+     * Exceção a lançar na PRÓXIMA chamada de `sendMedia` (ex.:
+     * `SocketTimeoutException`/`IOException`), para testar como
+     * `ConversationViewModel` reage a timeout/falha de rede reais sem
+     * precisar de um MockWebServer -- `apiCall` (network/ApiCall.kt) mapeia
+     * essas duas exceções especificamente, então lançá-las aqui exercita
+     * exatamente o mesmo caminho que uma falha de rede real percorreria.
+     * Fica setado entre chamadas por design (só o teste limpa, simulando o
+     * usuário corrigir a rede antes de um retry manual).
+     */
+    var sendMediaThrows: Exception? = null
+
+    /** conversationId de cada chamada de `sendMedia`, na ordem em que ocorreram -- prova de que o destinatário nunca troca. */
+    val sendMediaConversationIds = mutableListOf<Long>()
+
     var lastSendMessageIdempotencyKey: String? = null
     var sendMessageCallCount = 0
     var claimCallCount = 0
@@ -160,10 +175,12 @@ class FakeAtendimentoApi : AtendimentoApi {
     ): Response<SendMessageResponseDto> {
         callLog += "sendMedia"
         sendMediaCallCount++
+        sendMediaConversationIds += conversationId
         lastSendMediaKind = mediaKind.readUtf8()
         lastSendMediaCaption = caption?.readUtf8()
         lastSendMediaAssignmentVersion = assignmentVersion?.readUtf8()
         sendMediaIdempotencyKeys += idempotencyKey
+        sendMediaThrows?.let { throw it }
         if (sendMediaDelayMs > 0) delay(sendMediaDelayMs)
         return errorOrElse {
             Response.success(SendMessageResponseDto(ok = sendMediaOk, messageId = 3, status = if (sendMediaOk) "sent" else "failed"))

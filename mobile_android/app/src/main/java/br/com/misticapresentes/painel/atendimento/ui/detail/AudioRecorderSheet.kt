@@ -77,6 +77,21 @@ fun AudioRecorderSheet(
             onRecordingError("Gravação interrompida (ex.: chamada recebida).")
         }
         onDispose {
+            // Invariante: esta composable sair de composição enquanto uma
+            // gravação está em andamento SEMPRE significa cancelamento --
+            // não importa o motivo (troca de conversa, back do sistema
+            // ignorando o sheet, ou recriação da Activity por mudança de
+            // configuração como rotação de tela). `controller`/`mediaPlayer`
+            // são recursos de plataforma presos a esta composição (não
+            // sobrevivem à recriação), mas `onRecordingCancelled()` age
+            // sobre o ViewModel (que sobrevive) -- sem isso, uma rotação
+            // durante a gravação para o MediaRecorder aqui embaixo mas deixa
+            // `media.isRecordingAudio=true` preso no ViewModel, com a nova
+            // composição recriando um controller novo sem saber que já
+            // havia uma gravação "fantasma" em andamento segundo o estado.
+            if (isRecording) {
+                onRecordingCancelled()
+            }
             controller.cancel()
             mediaPlayer.release()
         }

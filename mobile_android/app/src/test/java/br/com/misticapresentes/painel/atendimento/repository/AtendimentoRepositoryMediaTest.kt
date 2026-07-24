@@ -12,6 +12,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.SocketPolicy
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -144,5 +145,38 @@ class AtendimentoRepositoryMediaTest {
 
         assertTrue(result is ApiResult.Failure)
         assertTrue((result as ApiResult.Failure).error is ApiError.Unknown)
+    }
+
+    /**
+     * O servidor aceita a conexão mas nunca responde -- com um client de
+     * readTimeout curto, isso força um `SocketTimeoutException` real do
+     * OkHttp (não simulado), exercitando o mesmo mapeamento de `apiCall`
+     * (network/ApiCall.kt) que qualquer outro upload de mídia usaria em
+     * produção numa rede lenta/instável.
+     */
+    @Test
+    fun `sendMedia times out when the server never responds, mapping to ApiError Timeout`() = runTest {
+        val shortTimeoutRepository = AtendimentoRepository(buildApi(readTimeoutMillis = 200))
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
+
+        val result = shortTimeoutRepository.sendMedia(5, MediaKind.IMAGE, tempFile, "image/jpeg", null, null)
+
+        assertTrue(result is ApiResult.Failure)
+        assertTrue((result as ApiResult.Failure).error is ApiError.Timeout)
+    }
+
+    /**
+     * Conexão derrubada logo no início (queda de rede real, não um código
+     * HTTP de erro) -- gera uma `IOException` que não é `SocketTimeoutException`,
+     * mapeada por `apiCall` para `ApiError.NoConnection`.
+     */
+    @Test
+    fun `sendMedia surfaces a real network disconnect as ApiError NoConnection`() = runTest {
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AT_START))
+
+        val result = repository.sendMedia(5, MediaKind.AUDIO, tempFile, "audio/mp4", null, null)
+
+        assertTrue(result is ApiResult.Failure)
+        assertTrue((result as ApiResult.Failure).error is ApiError.NoConnection)
     }
 }

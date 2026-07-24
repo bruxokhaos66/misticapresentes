@@ -196,6 +196,67 @@ class ConversationViewModelMediaTest {
         assertTrue(mediaFileStore.deletedFiles.contains(outputFile))
     }
 
+    /**
+     * Regressão do bug de rotação: `AudioRecorderSheet.onDispose` (ver
+     * AudioRecorderSheet.kt) agora chama `onAudioRecordingCancelled()` sempre
+     * que a composable sai de composição com uma gravação em andamento --
+     * exatamente a chamada exercitada abaixo. Isso é o que acontece quando a
+     * Activity é recriada por uma mudança de configuração (ex.: rotação de
+     * tela): a composição antiga é descartada e sua `DisposableEffect`
+     * dispara `onDispose` ANTES da nova composição montar, sobre o mesmo
+     * ViewModel (que sobrevive à recriação) -- não há como simular a
+     * recriação de Activity num teste JVM/Robolectric de ViewModel puro, mas
+     * a invariante que a correção estabelece ("gravação em andamento + esta
+     * UI sumir == cancelamento") é inteiramente testável aqui, no único
+     * ponto que tinha lógica de verdade (o que `onAudioRecordingCancelled`
+     * faz ao estado). A causa raiz do bug nunca esteve nesta função -- ela
+     * já limpava o estado corretamente antes desta PR (ver o teste anterior);
+     * o bug era o `onDispose` da UI nunca chamá-la fora do caminho de
+     * dismiss explícito do usuário.
+     */
+    @Test
+    fun `a recording torn down mid-flight (simulating a configuration change like rotation) fully resets ViewModel state`() {
+        viewModel.openAudioRecorder()
+        val outputFile = viewModel.uiState.value.media.audioOutputFile!!
+        viewModel.onAudioRecordingStarted()
+        viewModel.onAudioRecordingTick(2_500)
+        assertTrue(viewModel.uiState.value.media.isRecordingAudio)
+
+        // Simula exatamente o que o onDispose corrigido faz quando a
+        // composable é destruída (rotação/recriação de Activity) com uma
+        // gravação em andamento.
+        viewModel.onAudioRecordingCancelled()
+
+        // ViewModel totalmente sincronizado: nada preso em "gravando".
+        assertFalse(viewModel.uiState.value.media.isRecordingAudio)
+        // UI reagiria a isso automaticamente: audioOutputFile nulo faz
+        // ConversationScreen parar de compor o AudioRecorderSheet (ver
+        // `uiState.media.audioOutputFile?.let { AudioRecorderSheet(...) }`).
+        assertNull(viewModel.uiState.value.media.audioOutputFile)
+        // Nenhum áudio pendente fantasma (não existia antes da rotação, e a
+        // correção nunca cria um a partir do cancelamento).
+        assertNull(viewModel.uiState.value.media.pendingMedia)
+        // Nenhum arquivo temporário restante.
+        assertTrue(mediaFileStore.deletedFiles.contains(outputFile))
+
+        // Nova gravação continua possível (nenhum estado preso bloqueando um
+        // novo ciclo) -- gera um arquivo de saída novo e distinto do anterior.
+        viewModel.openAudioRecorder()
+        val newOutputFile = viewModel.uiState.value.media.audioOutputFile
+        assertNotNull(newOutputFile)
+        assertNotEquals(outputFile, newOutputFile)
+        viewModel.onAudioRecordingStarted()
+        assertTrue(viewModel.uiState.value.media.isRecordingAudio)
+
+        // Nenhuma coroutine pendente/vazando: todo o fluxo de câmera/áudio
+        // acima é síncrono sobre o StateFlow (nunca passa por
+        // viewModelScope.launch) -- então advanceUntilIdle() não tem nada a
+        // executar, e o estado permanece exatamente o mesmo antes e depois.
+        val stateBeforeIdle = viewModel.uiState.value
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(stateBeforeIdle, viewModel.uiState.value)
+    }
+
     @Test
     fun `closing the audio sheet while a clip is pending discards it`() {
         viewModel.openAudioRecorder()
@@ -267,6 +328,59 @@ class ConversationViewModelMediaTest {
     }
 
     @Test
+    fun `a SocketTimeoutException during upload ends the attempt cleanly and allows a manual retry with a new idempotency key`() = runTest {
+        stagePendingImage(bytes = ByteArray(10))
+        atendimentoApi.sendMediaThrows = java.net.SocketTimeoutException("timeout")
+
+        viewModel.sendPendingMedia()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        // Upload encerrado e progresso finalizado (nunca fica "travado" em andamento).
+        assertFalse(viewModel.uiState.value.media.isUploadingMedia)
+        assertEquals(0f, viewModel.uiState.value.media.uploadProgress, 0.001f)
+        // Nenhuma mídia enviada parcialmente: nada foi confirmado como enviado, o
+        // arquivo pendente é preservado para um retry manual (nunca reenviado sozinho).
+        assertNotNull(viewModel.uiState.value.media.pendingMedia)
+        assertNotNull(viewModel.uiState.value.errorMessage)
+        assertEquals(1, atendimentoApi.sendMediaCallCount)
+        val firstKey = atendimentoApi.sendMediaIdempotencyKeys.single()
+
+        // Retry manual explícito (usuário toca em enviar de novo) -- gera uma nova tentativa.
+        atendimentoApi.sendMediaThrows = null
+        viewModel.sendPendingMedia()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(2, atendimentoApi.sendMediaCallCount)
+        assertNotEquals(firstKey, atendimentoApi.sendMediaIdempotencyKeys[1])
+        assertNull(viewModel.uiState.value.media.pendingMedia)
+        assertFalse(viewModel.uiState.value.media.isUploadingMedia)
+    }
+
+    @Test
+    fun `an IOException (network failure) during upload preserves the pending file and touches nothing else`() = runTest {
+        stagePendingImage(bytes = ByteArray(10))
+        atendimentoApi.sendMediaThrows = java.io.IOException("network down")
+        val conversationBefore = viewModel.uiState.value.conversation
+        val messagesBefore = viewModel.uiState.value.messages
+
+        viewModel.sendPendingMedia()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        // Estado consistente, progresso encerrado.
+        assertFalse(viewModel.uiState.value.media.isUploadingMedia)
+        assertEquals(0f, viewModel.uiState.value.media.uploadProgress, 0.001f)
+        // Arquivo temporário preservado para retry (nunca apagado numa falha).
+        assertNotNull(viewModel.uiState.value.media.pendingMedia)
+        assertNotNull(viewModel.uiState.value.errorMessage)
+        // Nenhuma mensagem "enviada": a lista de mensagens não mudou (nenhum
+        // refreshMessagesQuietly aconteceu, que só roda no caminho de sucesso).
+        assertEquals(messagesBefore, viewModel.uiState.value.messages)
+        // Nenhuma conversa alterada: IOException não é Conflict, então
+        // handleActionFailure nunca recarrega a conversa a partir do backend.
+        assertEquals(conversationBefore, viewModel.uiState.value.conversation)
+    }
+
+    @Test
     fun `409 while uploading reloads the conversation instead of a generic error`() = runTest {
         stagePendingImage(bytes = ByteArray(10))
         atendimentoApi.responseCode = 409
@@ -326,6 +440,55 @@ class ConversationViewModelMediaTest {
         dispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(1, atendimentoApi.sendMediaCallCount)
+    }
+
+    /**
+     * Troca de conversa durante um upload em voo: cada conversa tem sua
+     * própria instância de [ConversationViewModel] (mesmo padrão de
+     * `ConversationViewModelFactory` em produção -- uma nova instância por
+     * `conversationId`, compartilhando só o `AtendimentoRepository`
+     * subjacente). Isso prova que a resposta atrasada do upload de A não tem
+     * como "vazar" para o StateFlow de B: são objetos totalmente distintos.
+     */
+    @Test
+    fun `a delayed upload started in one conversation never updates a different conversation's ViewModel`() = runTest {
+        atendimentoApi.sendMediaDelayMs = 5_000
+        val storeB = FakeMediaFileStore()
+        val compressorB = FakeImageCompressor()
+
+        // Conversa A (o `viewModel` da classe, conversationId = 1): inicia
+        // upload que só vai responder bem mais tarde.
+        stagePendingImage(bytes = ByteArray(10))
+        viewModel.sendPendingMedia()
+        dispatcher.scheduler.runCurrent()
+        assertTrue(viewModel.uiState.value.media.isUploadingMedia)
+
+        // Usuário navega para a conversa B ANTES do upload de A terminar.
+        val viewModelB = ConversationViewModel(
+            repository = AtendimentoRepository(atendimentoApi),
+            conversationId = 2,
+            mediaFileStore = storeB,
+            imageCompressor = compressorB,
+        )
+        dispatcher.scheduler.advanceUntilIdle()
+        val stateBBeforeAFinishes = viewModelB.uiState.value
+
+        // O upload de A finalmente termina (o delay de 5s decorre).
+        dispatcher.scheduler.advanceUntilIdle()
+
+        // Nenhuma atualização chegou em B: nem progresso, nem mídia
+        // pendente, nem qualquer outro campo do estado de B mudou.
+        assertEquals(stateBBeforeAFinishes, viewModelB.uiState.value)
+        assertFalse(viewModelB.uiState.value.media.isUploadingMedia)
+        assertEquals(0f, viewModelB.uiState.value.media.uploadProgress, 0.001f)
+        assertNull(viewModelB.uiState.value.media.pendingMedia)
+
+        // O upload de A completou normalmente na própria instância -- e foi
+        // para o destinatário certo (conversationId 1, nunca 2).
+        assertFalse(viewModel.uiState.value.media.isUploadingMedia)
+        assertNull(viewModel.uiState.value.media.pendingMedia)
+        assertEquals(1, atendimentoApi.sendMediaCallCount)
+        assertEquals(listOf(1L), atendimentoApi.sendMediaConversationIds)
     }
 
     private fun stagePendingImage(bytes: ByteArray) {
