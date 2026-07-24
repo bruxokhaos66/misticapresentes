@@ -80,22 +80,20 @@ class AndroidAttendanceNotifier(private val context: Context) : AttendanceNotifi
             .setContentIntent(pendingIntent)
             .build()
 
-        if (!hasPostNotificationsPermission()) return
+        // Checagem inline (não extraída para outro método): o lint só
+        // reconhece o guard de permissão via análise de fluxo dentro do
+        // mesmo método que faz a chamada. Android < 13 nem declara/exige
+        // POST_NOTIFICATIONS em runtime, então checkSelfPermission já
+        // retorna GRANTED nesses casos.
+        if (ContextCompat.checkSelfPermission(appContext, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            return
+        }
         runCatching {
             NotificationManagerCompat.from(appContext).notify(notificationIdFor(conversationId), notification)
         }
         // runCatching cobre a corrida rara em que a permissão é revogada
         // entre o check acima e a chamada -- best effort, nunca derruba o
         // app por causa de um aviso.
-    }
-
-    /** Android 13+ (API 33) exige POST_NOTIFICATIONS em tempo de execução; antes disso a permissão é implícita. */
-    private fun hasPostNotificationsPermission(): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
-        return ContextCompat.checkSelfPermission(
-            appContext,
-            Manifest.permission.POST_NOTIFICATIONS,
-        ) == PackageManager.PERMISSION_GRANTED
     }
 
     override fun clearForConversation(conversationId: Long) {
