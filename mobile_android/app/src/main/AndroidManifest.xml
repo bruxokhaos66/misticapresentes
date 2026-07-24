@@ -38,7 +38,7 @@
             android:label="@string/app_name" />
 
         <!-- MisticaApplication implementa Configuration.Provider (PR #414,
-             WorkManager com WorkerFactory própria) -- o initializer padrão
+             WorkManager com WorkerFactory própria); o initializer padrão
              via androidx.startup precisa ser removido para a inicialização
              sob demanda funcionar (ver AttendanceWorkerFactory). -->
         <provider
