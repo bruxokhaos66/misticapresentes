@@ -82,25 +82,35 @@ fun MisticaNavHost(
         }
 
         composable(NavRoutes.ATENDIMENTO_LIST) {
-            AtendimentoListScreen(
-                factory = factory,
-                onOpenConversation = { conversationId ->
-                    navController.navigate(NavRoutes.atendimentoDetail(conversationId))
-                },
-                onBack = { navController.popBackStack() },
-            )
+            AtendimentoFlagGuard(
+                featureFlagsRepository = container.featureFlagsRepository,
+                onDenied = { navController.redirectHomeFromAtendimento() },
+            ) {
+                AtendimentoListScreen(
+                    factory = factory,
+                    onOpenConversation = { conversationId ->
+                        navController.navigate(NavRoutes.atendimentoDetail(conversationId))
+                    },
+                    onBack = { navController.popBackStack() },
+                )
+            }
         }
 
         composable(
             route = NavRoutes.ATENDIMENTO_DETAIL,
             arguments = listOf(navArgument("conversationId") { type = NavType.LongType }),
         ) { backStackEntry ->
-            val conversationId = backStackEntry.arguments?.getLong("conversationId") ?: 0L
-            ConversationScreen(
-                container = container,
-                conversationId = conversationId,
-                onBack = { navController.popBackStack() },
-            )
+            AtendimentoFlagGuard(
+                featureFlagsRepository = container.featureFlagsRepository,
+                onDenied = { navController.redirectHomeFromAtendimento() },
+            ) {
+                val conversationId = backStackEntry.arguments?.getLong("conversationId") ?: 0L
+                ConversationScreen(
+                    container = container,
+                    conversationId = conversationId,
+                    onBack = { navController.popBackStack() },
+                )
+            }
         }
 
         composable(NavRoutes.SESSION_EXPIRED) {
@@ -118,5 +128,20 @@ fun MisticaNavHost(
                 },
             )
         }
+    }
+}
+
+/**
+ * Usado por [AtendimentoFlagGuard] quando `NATIVE_WHATSAPP_ENABLED` está
+ * desligada -- volta para Home e retira ATENDIMENTO_LIST/ATENDIMENTO_DETAIL
+ * da pilha (`popUpTo` inclusive=false mantém a própria Home, só limpa o que
+ * está acima dela), para a rota nativa nunca ficar acessível via "voltar".
+ * `launchSingleTop` evita empilhar uma segunda instância de Home quando ela
+ * já é o destino logo abaixo na pilha.
+ */
+private fun NavHostController.redirectHomeFromAtendimento() {
+    navigate(NavRoutes.HOME) {
+        popUpTo(NavRoutes.HOME) { inclusive = false }
+        launchSingleTop = true
     }
 }
