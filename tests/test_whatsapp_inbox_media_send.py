@@ -448,3 +448,138 @@ def test_imagem_outbound_pode_ser_recuperada_via_endpoint_de_midia(monkeypatch):
         assert resp_midia.headers["content-type"] == "image/jpeg"
     finally:
         _limpar_sessao()
+
+
+# ---------------------------------------------------------------------------
+# Correção de revisão (PR #410) -- itens 20-24 do checklist de testes
+# obrigatórios: falha do provider, feature flag desligada, imagem corrompida
+# com assinatura válida, e formatos de áudio adicionais (ogg/mp4).
+# ---------------------------------------------------------------------------
+
+def _desabilitar(monkeypatch):
+    monkeypatch.setattr(inbox_routes, "whatsapp_cloud_inbox_habilitado", lambda: False)
+
+
+# Cabeçalho OGG real (assinatura "OggS") -- suficiente para
+# identificar_audio_saida, mesmo padrão de AUDIO_WEBM_MINIMO acima.
+AUDIO_OGG_MINIMO = b"OggS" + b"\x00" * 64
+
+# Box `ftyp` de MP4/M4A: bytes[4:8] == b"ftyp" -- identificar_audio_saida só
+# olha essa janela, não valida a caixa inteira.
+AUDIO_MP4_MINIMO = b"\x00\x00\x00\x18ftypM4A " + b"\x00" * 64
+
+# JPEG com magic bytes reais (passa identificar_imagem_saida) mas corpo
+# corrompido logo em seguida -- deve falhar no Image.open(...).verify() do
+# Pillow, não na checagem de assinatura.
+JPEG_ASSINATURA_VALIDA_CORPO_CORROMPIDO = b"\xff\xd8\xff" + bytes(range(256)) * 4
+
+
+def test_falha_do_provider_registra_status_failed(monkeypatch):
+    _habilitar(monkeypatch)
+    fake = _ProviderFalso(upload_falha=True)
+    monkeypatch.setattr(inbox_routes, "construir_provider", lambda nome: fake)
+    conversa_id = _criar_conversa_com_inbound()
+    token = _sessao_admin()
+    _sessao_admin_client(token)
+    try:
+        resp = _upload_imagem(conversa_id, idem=f"idem-{uuid.uuid4().hex}")
+        # Falha do provider nunca vira 5xx nem HTTPException -- é reportada
+        # como um envio malsucedido (ok=False), mesmo padrão do endpoint de
+        # texto (rota_enviar_mensagem) para template/texto.
+        assert resp.status_code == 200
+        corpo = resp.json()
+        assert corpo["ok"] is False
+        assert corpo["status"] == "failed"
+        with conectar() as conn:
+            mensagem = conn.execute(
+                "SELECT * FROM whatsapp_messages WHERE conversation_id=? AND direction='outbound' ORDER BY id DESC LIMIT 1",
+                (conversa_id,),
+            ).fetchone()
+            auditoria = conn.execute(
+                "SELECT * FROM audit_log WHERE entidade='whatsapp_conversation' AND entidade_id=? ORDER BY id DESC LIMIT 1",
+                (conversa_id,),
+            ).fetchone()
+        assert mensagem["status"] == "failed"
+        assert auditoria["acao"] == "enviar_midia_falhou"
+        # Nunca grava o binário/conteúdo do arquivo na auditoria.
+        assert auditoria["dados_depois"] is None or b"\xff\xd8\xff" not in (auditoria["dados_depois"] or "").encode("latin-1", errors="ignore")
+    finally:
+        _limpar_sessao()
+
+
+def test_flag_desligada_retorna_503(monkeypatch):
+    _desabilitar(monkeypatch)
+    monkeypatch.setattr(inbox_routes, "construir_provider", lambda nome: _ProviderFalso())
+    conversa_id = _criar_conversa_com_inbound()
+    token = _sessao_admin()
+    _sessao_admin_client(token)
+    try:
+        resp = _upload_imagem(conversa_id, idem=f"idem-{uuid.uuid4().hex}")
+        assert resp.status_code == 503
+        with conectar() as conn:
+            total = conn.execute(
+                "SELECT COUNT(*) AS n FROM whatsapp_messages WHERE conversation_id=? AND direction='outbound'", (conversa_id,)
+            ).fetchone()
+        assert total["n"] == 0
+    finally:
+        _limpar_sessao()
+
+
+def test_jpeg_assinatura_valida_corpo_corrompido_e_rejeitado(monkeypatch):
+    _habilitar(monkeypatch)
+    fake = _ProviderFalso()
+    monkeypatch.setattr(inbox_routes, "construir_provider", lambda nome: fake)
+    conversa_id = _criar_conversa_com_inbound()
+    token = _sessao_admin()
+    _sessao_admin_client(token)
+    try:
+        resp = _upload_imagem(conversa_id, idem=f"idem-{uuid.uuid4().hex}", jpeg=JPEG_ASSINATURA_VALIDA_CORPO_CORROMPIDO)
+        assert resp.status_code == 422
+        assert fake.chamadas_upload == 0
+        with conectar() as conn:
+            total = conn.execute(
+                "SELECT COUNT(*) AS n FROM whatsapp_messages WHERE conversation_id=? AND direction='outbound'", (conversa_id,)
+            ).fetchone()
+        assert total["n"] == 0
+    finally:
+        _limpar_sessao()
+
+
+def test_audio_ogg_e_aceito(monkeypatch):
+    _habilitar(monkeypatch)
+    fake = _ProviderFalso()
+    monkeypatch.setattr(inbox_routes, "construir_provider", lambda nome: fake)
+    conversa_id = _criar_conversa_com_inbound()
+    token = _sessao_admin()
+    _sessao_admin_client(token)
+    try:
+        resp = _upload_audio(conversa_id, idem=f"idem-{uuid.uuid4().hex}", audio=AUDIO_OGG_MINIMO)
+        assert resp.status_code == 200
+        with conectar() as conn:
+            mensagem = conn.execute(
+                "SELECT * FROM whatsapp_messages WHERE conversation_id=? AND direction='outbound' ORDER BY id DESC LIMIT 1",
+                (conversa_id,),
+            ).fetchone()
+        assert mensagem["media_mime_type"] == "audio/ogg"
+    finally:
+        _limpar_sessao()
+
+
+def test_audio_mp4_e_aceito(monkeypatch):
+    _habilitar(monkeypatch)
+    fake = _ProviderFalso()
+    monkeypatch.setattr(inbox_routes, "construir_provider", lambda nome: fake)
+    conversa_id = _criar_conversa_com_inbound()
+    token = _sessao_admin()
+    _sessao_admin_client(token)
+    try:
+        resp = _upload_audio(conversa_id, idem=f"idem-{uuid.uuid4().hex}", audio=AUDIO_MP4_MINIMO)
+        assert resp.status_code == 200
+        with conectar() as conn:
+            mensagem = conn.execute(
+                "SELECT * FROM whatsapp_messages WHERE conversation_id=? AND direction='outbound' ORDER BY id DESC LIMIT 1",
+                (conversa_id,),
+            ).fetchone()
+        assert mensagem["media_mime_type"] == "audio/mp4"
+    finally:
+        _limpar_sessao()

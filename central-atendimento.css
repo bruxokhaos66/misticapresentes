@@ -317,6 +317,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
 }
 
+.toast.aviso { border-left-color: var(--cor-alerta); }
+
 @media (max-width: 900px) {
   .compose-linha { flex-direction: column; align-items: stretch; }
   .compose-acoes-midia { justify-content: flex-start; }
