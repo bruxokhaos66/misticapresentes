@@ -9,9 +9,12 @@ from __future__ import annotations
 
 import importlib
 import os
+import re
 import secrets as secrets_mod
 import uuid
 from datetime import datetime, timedelta
+
+import pytest
 
 os.environ.setdefault("MISTICA_SITE_API_KEY", "test-api-key")
 os.environ.setdefault("MISTICA_SYNC_KEY", "test-api-key")
@@ -412,6 +415,189 @@ def test_url_publica_e_sempre_do_dominio_permitido(monkeypatch):
         assert "malicioso" not in produto["url_publica"]
         assert produto["url_publica"].startswith(("http://localhost", "https://"))
         assert str(produto_id) in produto["url_publica"]
+    finally:
+        client.cookies.delete("mistica_painel_sessao")
+
+
+# ---------------------------------------------------------------------------
+# Link público do produto (fix/whatsapp-catalog-product-link)
+#
+# produto-page.js (a página que abre quando o cliente clica no link recebido
+# pelo WhatsApp) só reconhece produtos do array `products`, que é populado
+# por mobile-sync.js a partir de /api/produtos com o id prefixado
+# (`api-<id>`, ver normalizarProduto() em mobile-sync.js) -- o mesmo formato
+# usado pelos cards do catálogo público, pelos relacionados e pelo Chat da
+# Isis (isis-guided.js/v2-commerce.js). Sem o prefixo "api-" o
+# findProduct() da página pública nunca casa o id da URL com nenhum produto
+# e mostra "produto não encontrado" mesmo com o produto ativo -- é
+# exatamente o bug relatado pela Central de Atendimento.
+# ---------------------------------------------------------------------------
+
+def _simula_find_product_pagina_publica(url_publica: str, produtos_no_frontend: list[dict]) -> dict | None:
+    """Reimplementação mínima, só para teste, de findProduct() em
+    produto-page.js: lê `id` da query string e casa com `String(product.id)`
+    -- os mesmos três critérios daquela função, na mesma ordem."""
+    from urllib.parse import urlparse, parse_qs
+
+    id_param = parse_qs(urlparse(url_publica).query).get("id", [""])[0]
+    if not id_param:
+        return None
+    for produto in produtos_no_frontend:
+        slug = str(produto["id"])
+        nome_slug = re.sub(r"[^a-z0-9]+", "-", _sem_acentos(produto["name"]).lower())
+        if str(produto["id"]) == id_param or slug == id_param or nome_slug == id_param:
+            return produto
+    return None
+
+
+def _sem_acentos(texto: str) -> str:
+    import unicodedata
+
+    return "".join(c for c in unicodedata.normalize("NFD", texto) if unicodedata.category(c) != "Mn")
+
+
+def _produto_normalizado_no_frontend(produto_id: int, nome: str) -> dict:
+    """Reimplementação mínima de normalizarProduto() em mobile-sync.js: é
+    ela quem monta o array `products` real do site a partir de
+    /api/produtos, prefixando o id com "api-"."""
+    return {"id": f"api-{produto_id}", "apiId": produto_id, "name": nome}
+
+
+def test_url_publica_usa_o_mesmo_id_que_a_pagina_publica_espera(monkeypatch):
+    _habilitar(monkeypatch)
+    nome_unico = f"LinkPublico{uuid.uuid4().hex[:8]}"
+    produto_id = _criar_produto(nome=nome_unico)
+    token = _login_admin()
+    client.cookies.set("mistica_painel_sessao", token)
+    try:
+        resp = client.get("/api/admin/whatsapp/catalog/products", params={"q": nome_unico})
+        produto = next(p for p in resp.json()["products"] if p["nome"] == nome_unico)
+        assert produto["url_publica"].endswith(f"/produto.html?id=api-{produto_id}")
+    finally:
+        client.cookies.delete("mistica_painel_sessao")
+
+
+def test_integracao_link_da_central_abre_o_produto_correto_na_pagina_publica(monkeypatch):
+    """Teste de integração entre o gerador de URL (Central), o parser da
+    página pública (produto-page.js) e o carregamento do produto
+    (mobile-sync.js): falha com o bug antigo (id sem prefixo "api-") e
+    passa com a correção."""
+    _habilitar(monkeypatch)
+    nome_unico = f"Integracao{uuid.uuid4().hex[:8]}"
+    produto_id = _criar_produto(nome=nome_unico)
+    token = _login_admin()
+    client.cookies.set("mistica_painel_sessao", token)
+    try:
+        resp = client.get("/api/admin/whatsapp/catalog/products", params={"q": nome_unico})
+        produto = next(p for p in resp.json()["products"] if p["nome"] == nome_unico)
+        url_publica = produto["url_publica"]
+
+        produtos_no_frontend = [_produto_normalizado_no_frontend(produto_id, nome_unico)]
+        encontrado = _simula_find_product_pagina_publica(url_publica, produtos_no_frontend)
+        assert encontrado is not None, (
+            f"Link da Central ({url_publica}) não abre nenhum produto na página "
+            "pública -- reproduz o 'produto não encontrado' relatado."
+        )
+        assert encontrado["apiId"] == produto_id
+    finally:
+        client.cookies.delete("mistica_painel_sessao")
+
+
+@pytest.mark.parametrize(
+    "nome",
+    [
+        "Vela com Espaço no Nome",
+        "Incensário com Acentuação e Ç",
+        "Kit Presente - Edição Limitada",
+        "Água de Cheiro São Jorge",
+    ],
+)
+def test_link_da_central_funciona_para_nomes_com_acento_espaco_e_hifen(monkeypatch, nome):
+    _habilitar(monkeypatch)
+    nome_unico = f"{nome} {uuid.uuid4().hex[:6]}"
+    produto_id = _criar_produto(nome=nome_unico)
+    token = _login_admin()
+    client.cookies.set("mistica_painel_sessao", token)
+    try:
+        resp = client.get("/api/admin/whatsapp/catalog/products", params={"q": nome_unico})
+        produto = next(p for p in resp.json()["products"] if p["nome"] == nome_unico)
+        produtos_no_frontend = [_produto_normalizado_no_frontend(produto_id, nome_unico)]
+        encontrado = _simula_find_product_pagina_publica(produto["url_publica"], produtos_no_frontend)
+        assert encontrado is not None and encontrado["apiId"] == produto_id
+    finally:
+        client.cookies.delete("mistica_painel_sessao")
+
+
+def test_link_externo_cadastrado_e_usado_no_lugar_do_padrao(monkeypatch):
+    _habilitar(monkeypatch)
+    from backend.isis_chat_catalog import produto_url
+
+    produto = {"id": 123, "link_externo": "https://loja.exemplo.com.br/produto-especial"}
+    assert produto_url(produto, base_url="https://www.misticaesotericos.com.br") == produto["link_externo"]
+
+
+def test_envio_unico_usa_a_url_corrigida_na_mensagem(monkeypatch):
+    _habilitar(monkeypatch)
+    monkeypatch.setattr(catalog_routes, "construir_provider", lambda nome: _ProviderFalso())
+    token = _login_admin()
+    conversa_id, _ = _criar_conversa_com_inbound()
+    produto_id = _criar_produto(imagem_url="")
+    client.cookies.set("mistica_painel_sessao", token)
+    try:
+        resp = client.post(
+            f"/api/admin/whatsapp/conversations/{conversa_id}/send-product",
+            json={"product_id": produto_id},
+            headers={"Idempotency-Key": f"idem-{uuid.uuid4().hex}", **ORIGEM_PERMITIDA},
+        )
+        assert resp.status_code == 200
+        with conectar() as conn:
+            linha = conn.execute(
+                "SELECT text_body FROM whatsapp_messages WHERE conversation_id=? AND message_type='product'",
+                (conversa_id,),
+            ).fetchone()
+            assert f"id=api-{produto_id}" in linha["text_body"]
+    finally:
+        client.cookies.delete("mistica_painel_sessao")
+
+
+def test_envio_em_lote_usa_a_url_corrigida_em_todas_as_mensagens(monkeypatch):
+    _habilitar(monkeypatch)
+    provider = _ProviderFalso()
+    monkeypatch.setattr(catalog_routes, "construir_provider", lambda nome: provider)
+    token = _login_admin()
+    conversa_id, _ = _criar_conversa_com_inbound()
+    ids = [_criar_produto(imagem_url="") for _ in range(3)]
+    client.cookies.set("mistica_painel_sessao", token)
+    try:
+        resp = client.post(
+            f"/api/admin/whatsapp/conversations/{conversa_id}/send-products",
+            json={"product_ids": ids},
+            headers={"Idempotency-Key": f"idem-{uuid.uuid4().hex}", **ORIGEM_PERMITIDA},
+        )
+        assert resp.status_code == 200
+        textos = [chamada["texto"] for chamada in provider.chamadas_texto]
+        for produto_id in ids:
+            assert any(f"id=api-{produto_id}" in texto for texto in textos)
+    finally:
+        client.cookies.delete("mistica_painel_sessao")
+
+
+def test_recentes_usam_a_url_corrigida(monkeypatch):
+    _habilitar(monkeypatch)
+    monkeypatch.setattr(catalog_routes, "construir_provider", lambda nome: _ProviderFalso())
+    token = _login_admin()
+    conversa_id, _ = _criar_conversa_com_inbound()
+    produto_id = _criar_produto()
+    client.cookies.set("mistica_painel_sessao", token)
+    try:
+        client.post(
+            f"/api/admin/whatsapp/conversations/{conversa_id}/send-product",
+            json={"product_id": produto_id},
+            headers={"Idempotency-Key": f"idem-{uuid.uuid4().hex}", **ORIGEM_PERMITIDA},
+        )
+        resp = client.get("/api/admin/whatsapp/catalog/recent-products")
+        recente = next(p for p in resp.json()["products"] if p["id"] == produto_id)
+        assert recente["url_publica"].endswith(f"/produto.html?id=api-{produto_id}")
     finally:
         client.cookies.delete("mistica_painel_sessao")
 
