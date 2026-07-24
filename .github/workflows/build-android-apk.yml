@@ -50,8 +50,27 @@ jobs:
       # Com flavorDimensions, "testDebugUnitTest"/"assembleDebug" sao
       # ambiguos para o Gradle (ele nao infere as 3 variantes sozinho) -
       # entao listamos as 3 variantes explicitamente, uma por flavor.
+      #
+      # --continue (temporario, so para esta investigacao): deixa rodar as
+      # 3 flavors mesmo se uma falhar, para diagnosticar as 3 de uma vez em
+      # vez de precisar de uma rodada de CI por flavor.
       - name: Testes unitarios (dev/homolog/prod, build type debug)
-        run: ./gradlew testDevDebugUnitTest testHomologDebugUnitTest testProdDebugUnitTest --no-daemon
+        run: ./gradlew testDevDebugUnitTest testHomologDebugUnitTest testProdDebugUnitTest --no-daemon --continue
+
+      # Instrumentacao TEMPORARIA de diagnostico (investigacao das 15
+      # falhas reveladas apos a correcao do livelock) -- so imprime os XMLs
+      # de resultado de teste (stack trace completo) se a etapa acima
+      # falhou. Remover assim que a causa raiz for confirmada.
+      - name: Diagnostico de falhas de teste (instrumentacao temporaria)
+        if: failure()
+        run: |
+          for f in app/build/test-results/test*UnitTest/TEST-*.xml; do
+            if grep -q '<failure\|<error' "$f" 2>/dev/null; then
+              echo "::group::$f"
+              cat "$f"
+              echo "::endgroup::"
+            fi
+          done
 
       - name: Gerar APKs debug (dev/homolog/prod)
         run: ./gradlew assembleDevDebug assembleHomologDebug assembleProdDebug --no-daemon
