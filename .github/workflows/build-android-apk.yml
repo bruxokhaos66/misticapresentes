@@ -95,6 +95,22 @@ jobs:
               ./gradlew --status > "${SNAPSHOT}/gradle-daemon-status.txt" 2>&1
 
               cp gradle-unit-tests.log "${SNAPSHOT}/gradle-unit-tests-partial.log"
+
+              # Alem de subir como artifact, imprime tudo no log do job --
+              # o artifact fica em blob storage, que nem sempre e acessivel
+              # de todo lugar; o log do job e sempre legivel via API.
+              echo "::group::[diagnostico #${DUMP_COUNT}, ${ELAPSED}s] processes.txt"
+              cat "${SNAPSHOT}/processes.txt"
+              echo "::endgroup::"
+              echo "::group::[diagnostico #${DUMP_COUNT}, ${ELAPSED}s] thread-dumps.txt"
+              cat "${SNAPSHOT}/thread-dumps.txt"
+              echo "::endgroup::"
+              echo "::group::[diagnostico #${DUMP_COUNT}, ${ELAPSED}s] gradle-daemon-status.txt"
+              cat "${SNAPSHOT}/gradle-daemon-status.txt"
+              echo "::endgroup::"
+              echo "::group::[diagnostico #${DUMP_COUNT}, ${ELAPSED}s] gradle-unit-tests.log (parcial ate agora)"
+              cat "${SNAPSHOT}/gradle-unit-tests-partial.log"
+              echo "::endgroup::"
             fi
           done
 
