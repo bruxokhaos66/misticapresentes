@@ -16,11 +16,15 @@ import br.com.misticapresentes.painel.atendimento.network.dto.SendMessageRespons
 import br.com.misticapresentes.painel.atendimento.network.dto.SendProductRequestDto
 import br.com.misticapresentes.painel.atendimento.network.dto.SendProductResponseDto
 import br.com.misticapresentes.painel.atendimento.network.dto.TransferRequestDto
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Header
+import retrofit2.http.Multipart
 import retrofit2.http.POST
+import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -79,6 +83,25 @@ interface AtendimentoApi {
         @Body body: SendProductRequestDto,
         @Header("Idempotency-Key") idempotencyKey: String,
     ): Response<SendProductResponseDto>
+
+    /**
+     * Envio de imagem/áudio (compose avançado de mídia, PR #413). Multipart
+     * porque o backend (`rota_enviar_midia`) recebe `Form(...)` + `File(...)`,
+     * não JSON -- `caption`/`assignment_version` seguem opcionais igual ao
+     * endpoint de texto acima. Resposta tem a mesma forma de
+     * [SendMessageResponseDto] (`ok`/`message_id`/`status`), reaproveitada
+     * aqui em vez de duplicar um DTO idêntico.
+     */
+    @Multipart
+    @POST("api/admin/whatsapp/conversations/{conversationId}/media")
+    suspend fun sendMedia(
+        @Path("conversationId") conversationId: Long,
+        @Part("media_kind") mediaKind: RequestBody,
+        @Part("caption") caption: RequestBody?,
+        @Part("assignment_version") assignmentVersion: RequestBody?,
+        @Part file: MultipartBody.Part,
+        @Header("Idempotency-Key") idempotencyKey: String,
+    ): Response<SendMessageResponseDto>
 
     @GET("api/admin/whatsapp/catalog/products")
     suspend fun searchProducts(

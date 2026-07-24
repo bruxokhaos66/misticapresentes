@@ -1,6 +1,14 @@
 package br.com.misticapresentes.painel.atendimento.ui.detail
 
+import android.Manifest
 import android.app.Activity
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,7 +26,10 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material3.AlertDialog
@@ -29,6 +40,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -58,9 +70,11 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import br.com.misticapresentes.painel.app.AppContainer
 import br.com.misticapresentes.painel.app.ConversationViewModelFactory
+import br.com.misticapresentes.painel.atendimento.model.MediaKind
 import br.com.misticapresentes.painel.atendimento.model.Message
 import br.com.misticapresentes.painel.atendimento.model.Product
 import br.com.misticapresentes.painel.security.ScreenSecurity
@@ -93,6 +107,50 @@ fun ConversationScreen(
     LaunchedEffect(listState) {
         androidx.compose.runtime.snapshotFlow { listState.firstVisibleItemIndex }
             .collect { index -> if (index == 0) viewModel.loadOlderMessages() }
+    }
+
+    // -------- Permissões de câmera/microfone e Photo Picker de galeria --------
+    //
+    // O Photo Picker (PickVisualMedia) não exige NENHUMA permissão de
+    // runtime (é o motivo de existir) -- só câmera/microfone passam pelo
+    // fluxo de shouldShowRequestPermissionRationale abaixo.
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) {
+            viewModel.openCamera()
+        } else {
+            val activity = context as? Activity
+            val rationale = activity?.let {
+                androidx.core.app.ActivityCompat.shouldShowRequestPermissionRationale(it, Manifest.permission.CAMERA)
+            } ?: false
+            viewModel.onMediaPermissionDenied(MediaPermissionType.CAMERA, permanentlyDenied = !rationale)
+        }
+    }
+    val microphonePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) {
+            viewModel.openAudioRecorder()
+        } else {
+            val activity = context as? Activity
+            val rationale = activity?.let {
+                androidx.core.app.ActivityCompat.shouldShowRequestPermissionRationale(it, Manifest.permission.RECORD_AUDIO)
+            } ?: false
+            viewModel.onMediaPermissionDenied(MediaPermissionType.MICROPHONE, permanentlyDenied = !rationale)
+        }
+    }
+    val galleryLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri -> if (uri != null) viewModel.onGalleryImageSelected(uri) }
+
+    fun requestCamera() {
+        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        if (granted) viewModel.openCamera() else cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+    }
+    fun requestMicrophone() {
+        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        if (granted) viewModel.openAudioRecorder() else microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
     }
 
     Scaffold(
@@ -137,6 +195,11 @@ fun ConversationScreen(
                     onDraftChanged = viewModel::onDraftChanged,
                     onSend = viewModel::sendText,
                     onOpenProductPicker = viewModel::openProductPicker,
+                    onOpenCamera = ::requestCamera,
+                    onOpenGallery = {
+                        galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    },
+                    onOpenAudioRecorder = ::requestMicrophone,
                 )
             }
         },
@@ -224,6 +287,155 @@ fun ConversationScreen(
             onProductSelected = { product -> viewModel.sendProduct(product.id) },
         )
     }
+
+    uiState.media.cameraOutputFile?.let { outputFile ->
+        CameraCaptureScreen(
+            outputFile = outputFile,
+            onCaptured = viewModel::onPhotoCaptured,
+            onCancel = viewModel::closeCamera,
+            onError = viewModel::onMediaError,
+        )
+    }
+
+    uiState.media.audioOutputFile?.let { outputFile ->
+        AudioRecorderSheet(
+            outputFile = outputFile,
+            pendingFile = uiState.media.pendingMedia?.takeIf { it.kind == MediaKind.AUDIO }?.file,
+            pendingDurationMs = uiState.media.pendingMedia?.durationMs,
+            onRecordingStarted = viewModel::onAudioRecordingStarted,
+            onRecordingTick = viewModel::onAudioRecordingTick,
+            onRecordingStopped = viewModel::onAudioRecordingStopped,
+            onRecordingCancelled = viewModel::onAudioRecordingCancelled,
+            onRecordingError = viewModel::onMediaError,
+            onDismiss = viewModel::closeAudioRecorder,
+            onSend = viewModel::sendPendingMedia,
+            isUploading = uiState.media.isUploadingMedia,
+            uploadProgress = uiState.media.uploadProgress,
+        )
+    }
+
+    uiState.media.pendingMedia?.takeIf { it.kind == MediaKind.IMAGE }?.let { pending ->
+        MediaPreviewDialog(
+            pendingFile = pending.file,
+            caption = pending.caption,
+            isUploading = uiState.media.isUploadingMedia,
+            uploadProgress = uiState.media.uploadProgress,
+            onCaptionChanged = viewModel::onPendingMediaCaptionChanged,
+            onCancel = viewModel::cancelPendingMedia,
+            onCancelUpload = viewModel::cancelMediaUpload,
+            onSend = viewModel::sendPendingMedia,
+        )
+    }
+
+    uiState.media.permissionRationale?.let { permission ->
+        AlertDialog(
+            onDismissRequest = viewModel::dismissMediaPermissionDialog,
+            modifier = Modifier.testTag("media_permission_rationale_dialog"),
+            title = { Text("Permissão necessária") },
+            text = { Text(mediaPermissionRationaleText(permission)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.dismissMediaPermissionDialog()
+                        when (permission) {
+                            MediaPermissionType.CAMERA -> cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                            MediaPermissionType.MICROPHONE -> microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        }
+                    },
+                    modifier = Modifier.testTag("media_permission_rationale_retry"),
+                ) { Text("Tentar novamente") }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissMediaPermissionDialog) { Text("Cancelar") }
+            },
+        )
+    }
+
+    uiState.media.permissionPermanentlyDenied?.let { permission ->
+        AlertDialog(
+            onDismissRequest = viewModel::dismissMediaPermissionDialog,
+            modifier = Modifier.testTag("media_permission_settings_dialog"),
+            title = { Text("Permissão bloqueada") },
+            text = { Text("${mediaPermissionRationaleText(permission)} Ative a permissão nas configurações do app.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.dismissMediaPermissionDialog()
+                        context.startActivity(
+                            Intent(
+                                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                Uri.fromParts("package", context.packageName, null),
+                            ),
+                        )
+                    },
+                    modifier = Modifier.testTag("media_permission_settings_open"),
+                ) { Text("Abrir configurações") }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissMediaPermissionDialog) { Text("Cancelar") }
+            },
+        )
+    }
+}
+
+private fun mediaPermissionRationaleText(permission: MediaPermissionType): String = when (permission) {
+    MediaPermissionType.CAMERA -> "Precisamos da permissão de câmera para tirar fotos nesta conversa."
+    MediaPermissionType.MICROPHONE -> "Precisamos da permissão de microfone para gravar áudios nesta conversa."
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MediaPreviewDialog(
+    pendingFile: java.io.File,
+    caption: String,
+    isUploading: Boolean,
+    uploadProgress: Float,
+    onCaptionChanged: (String) -> Unit,
+    onCancel: () -> Unit,
+    onCancelUpload: () -> Unit,
+    onSend: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = { if (!isUploading) onCancel() },
+        modifier = Modifier.testTag("media_preview_dialog"),
+        title = { Text("Enviar foto") },
+        text = {
+            Column {
+                AsyncImage(
+                    model = pendingFile,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp).testTag("media_preview_image"),
+                )
+                OutlinedTextField(
+                    value = caption,
+                    onValueChange = onCaptionChanged,
+                    enabled = !isUploading,
+                    placeholder = { Text("Legenda (opcional)") },
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp).testTag("media_preview_caption_field"),
+                )
+                if (isUploading) {
+                    LinearProgressIndicator(
+                        progress = { uploadProgress },
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp).testTag("media_preview_upload_progress"),
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            if (isUploading) {
+                TextButton(onClick = onCancelUpload, modifier = Modifier.testTag("media_preview_cancel_upload")) {
+                    Text("Cancelar envio")
+                }
+            } else {
+                TextButton(onClick = onSend, modifier = Modifier.testTag("media_preview_send")) { Text("Enviar") }
+            }
+        },
+        dismissButton = {
+            if (!isUploading) {
+                TextButton(onClick = onCancel, modifier = Modifier.testTag("media_preview_discard")) { Text("Descartar") }
+            }
+        },
+    )
 }
 
 @Composable
@@ -289,6 +501,9 @@ private fun MessageComposer(
     onDraftChanged: (String) -> Unit,
     onSend: () -> Unit,
     onOpenProductPicker: () -> Unit,
+    onOpenCamera: () -> Unit,
+    onOpenGallery: () -> Unit,
+    onOpenAudioRecorder: () -> Unit,
 ) {
     Surface(tonalElevation = 2.dp) {
         Row(
@@ -303,6 +518,36 @@ private fun MessageComposer(
                     .semantics { contentDescription = "Enviar produto" },
             ) {
                 Icon(Icons.Filled.ShoppingBag, contentDescription = null)
+            }
+
+            IconButton(
+                onClick = onOpenCamera,
+                enabled = !isSending,
+                modifier = Modifier
+                    .testTag("conversation_open_camera")
+                    .semantics { contentDescription = "Tirar foto" },
+            ) {
+                Icon(Icons.Filled.CameraAlt, contentDescription = null)
+            }
+
+            IconButton(
+                onClick = onOpenGallery,
+                enabled = !isSending,
+                modifier = Modifier
+                    .testTag("conversation_open_gallery")
+                    .semantics { contentDescription = "Enviar foto da galeria" },
+            ) {
+                Icon(Icons.Filled.PhotoLibrary, contentDescription = null)
+            }
+
+            IconButton(
+                onClick = onOpenAudioRecorder,
+                enabled = !isSending,
+                modifier = Modifier
+                    .testTag("conversation_open_audio_recorder")
+                    .semantics { contentDescription = "Gravar áudio" },
+            ) {
+                Icon(Icons.Filled.Mic, contentDescription = null)
             }
 
             OutlinedTextField(

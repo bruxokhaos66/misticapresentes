@@ -4,6 +4,7 @@ import br.com.misticapresentes.painel.atendimento.model.Agent
 import br.com.misticapresentes.painel.atendimento.model.AssignmentHistoryEntry
 import br.com.misticapresentes.painel.atendimento.model.Conversation
 import br.com.misticapresentes.painel.atendimento.model.ConversationPage
+import br.com.misticapresentes.painel.atendimento.model.MediaKind
 import br.com.misticapresentes.painel.atendimento.model.Message
 import br.com.misticapresentes.painel.atendimento.model.Product
 import br.com.misticapresentes.painel.atendimento.model.SendResult
@@ -20,8 +21,14 @@ import br.com.misticapresentes.painel.atendimento.network.dto.SendMessageRequest
 import br.com.misticapresentes.painel.atendimento.network.dto.SendProductRequestDto
 import br.com.misticapresentes.painel.atendimento.network.dto.TransferRequestDto
 import br.com.misticapresentes.painel.network.ApiResult
+import br.com.misticapresentes.painel.network.ProgressRequestBody
 import br.com.misticapresentes.painel.network.apiCall
+import java.io.File
 import java.util.UUID
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 
 /**
  * Fonte única de verdade da Central de Atendimento nativa: só consome os
@@ -34,7 +41,14 @@ import java.util.UUID
  * NUNCA persiste nada em disco: cada chamada devolve um resultado em memória
  * (ApiResult), sem cache local de mensagens/conversas entre chamadas.
  */
-class AtendimentoRepository(private val api: AtendimentoApi) {
+class AtendimentoRepository(
+    private val api: AtendimentoApi,
+    // Client irmão só com timeouts maiores para o upload de mídia (ver
+    // ApiClient.createAtendimentoMediaApi) -- por padrão é o mesmo `api`
+    // (ex.: em teste/Fake), produção passa uma instância dedicada via
+    // AppContainer.
+    private val mediaApi: AtendimentoApi = api,
+) {
 
     suspend fun listQueue(page: Int, pageSize: Int): ApiResult<ConversationPage> =
         when (val result = apiCall { api.queue(page, pageSize) }) {
@@ -129,6 +143,50 @@ class AtendimentoRepository(private val api: AtendimentoApi) {
             )
             is ApiResult.Failure -> result
         }
+
+    /**
+     * Envia imagem ou áudio já pronto (comprimido/gravado, arquivo em cache
+     * -- ver `atendimento.media.MediaFileStore`) para a conversa. Idempotency-Key
+     * nova por TENTATIVA de upload, mesma regra de [sendText]/[sendProduct].
+     * [onProgress] reporta 0f..1f conforme os bytes do multipart vão sendo
+     * escritos -- nunca decide nada, só repassa para quem chamou (ViewModel).
+     */
+    suspend fun sendMedia(
+        conversationId: Long,
+        kind: MediaKind,
+        file: File,
+        mimeType: String,
+        caption: String?,
+        assignmentVersion: Int?,
+        onProgress: (Float) -> Unit = {},
+    ): ApiResult<SendResult> {
+        val textPlain = "text/plain".toMediaType()
+        val mediaKindPart = (if (kind == MediaKind.IMAGE) "image" else "audio").toRequestBody(textPlain)
+        val captionPart = caption?.takeIf { it.isNotBlank() }?.toRequestBody(textPlain)
+        val assignmentVersionPart = assignmentVersion?.toString()?.toRequestBody(textPlain)
+        val progressBody = ProgressRequestBody(file.asRequestBody(mimeType.toMediaType())) { sent, total ->
+            if (total > 0) onProgress(sent.toFloat() / total.toFloat())
+        }
+        val filePart = MultipartBody.Part.createFormData("file", file.name, progressBody)
+
+        return when (
+            val result = apiCall {
+                mediaApi.sendMedia(
+                    conversationId = conversationId,
+                    mediaKind = mediaKindPart,
+                    caption = captionPart,
+                    assignmentVersion = assignmentVersionPart,
+                    file = filePart,
+                    idempotencyKey = UUID.randomUUID().toString(),
+                )
+            }
+        ) {
+            is ApiResult.Success -> ApiResult.Success(
+                SendResult(ok = result.data.ok, messageId = result.data.messageId, status = result.data.status),
+            )
+            is ApiResult.Failure -> result
+        }
+    }
 
     suspend fun searchProducts(q: String, page: Int, pageSize: Int): ApiResult<List<Product>> =
         when (val result = apiCall { api.searchProducts(q, page, pageSize) }) {

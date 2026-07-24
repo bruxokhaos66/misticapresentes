@@ -25,7 +25,10 @@ import br.com.misticapresentes.painel.atendimento.network.dto.SendProductRequest
 import br.com.misticapresentes.painel.atendimento.network.dto.SendProductResponseDto
 import br.com.misticapresentes.painel.atendimento.network.dto.TransferRequestDto
 import kotlinx.coroutines.delay
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import okhttp3.ResponseBody.Companion.toResponseBody
+import okio.Buffer
 import retrofit2.Response
 
 /**
@@ -47,6 +50,14 @@ class FakeAtendimentoApi : AtendimentoApi {
     var responseCode = 200
     var sendMessageOk = true
     var sendProductOk = true
+    var sendMediaOk = true
+
+    var sendMediaCallCount = 0
+    var sendMediaDelayMs: Long = 0
+    var lastSendMediaKind: String? = null
+    var lastSendMediaCaption: String? = null
+    var lastSendMediaAssignmentVersion: String? = null
+    val sendMediaIdempotencyKeys = mutableListOf<String>()
 
     var lastSendMessageIdempotencyKey: String? = null
     var sendMessageCallCount = 0
@@ -136,6 +147,26 @@ class FakeAtendimentoApi : AtendimentoApi {
         callLog += "sendProduct"
         return errorOrElse {
             Response.success(SendProductResponseDto(ok = sendProductOk, messageId = 2, status = if (sendProductOk) "sent" else "failed", productId = body.productId))
+        }
+    }
+
+    override suspend fun sendMedia(
+        conversationId: Long,
+        mediaKind: RequestBody,
+        caption: RequestBody?,
+        assignmentVersion: RequestBody?,
+        file: MultipartBody.Part,
+        idempotencyKey: String,
+    ): Response<SendMessageResponseDto> {
+        callLog += "sendMedia"
+        sendMediaCallCount++
+        lastSendMediaKind = mediaKind.readUtf8()
+        lastSendMediaCaption = caption?.readUtf8()
+        lastSendMediaAssignmentVersion = assignmentVersion?.readUtf8()
+        sendMediaIdempotencyKeys += idempotencyKey
+        if (sendMediaDelayMs > 0) delay(sendMediaDelayMs)
+        return errorOrElse {
+            Response.success(SendMessageResponseDto(ok = sendMediaOk, messageId = 3, status = if (sendMediaOk) "sent" else "failed"))
         }
     }
 
@@ -261,4 +292,11 @@ class FakeAtendimentoApi : AtendimentoApi {
             activeConversations = 1,
         )
     }
+}
+
+/** Lê o conteúdo de um RequestBody de campo de formulário simples (texto), só para asserção em teste. */
+private fun RequestBody.readUtf8(): String {
+    val buffer = Buffer()
+    writeTo(buffer)
+    return buffer.readUtf8()
 }

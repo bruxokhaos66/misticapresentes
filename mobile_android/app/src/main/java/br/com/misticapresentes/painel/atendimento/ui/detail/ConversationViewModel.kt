@@ -1,15 +1,23 @@
 package br.com.misticapresentes.painel.atendimento.ui.detail
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import br.com.misticapresentes.painel.atendimento.media.AndroidImageCompressor
+import br.com.misticapresentes.painel.atendimento.media.ImageCompressor
+import br.com.misticapresentes.painel.atendimento.media.MediaFileStore
+import br.com.misticapresentes.painel.atendimento.media.MediaLimits
 import br.com.misticapresentes.painel.atendimento.model.Agent
 import br.com.misticapresentes.painel.atendimento.model.AssignmentHistoryEntry
 import br.com.misticapresentes.painel.atendimento.model.Conversation
+import br.com.misticapresentes.painel.atendimento.model.MediaKind
 import br.com.misticapresentes.painel.atendimento.model.Message
 import br.com.misticapresentes.painel.atendimento.model.Product
 import br.com.misticapresentes.painel.atendimento.repository.AtendimentoRepository
 import br.com.misticapresentes.painel.network.ApiError
 import br.com.misticapresentes.painel.network.ApiResult
+import java.io.File
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,6 +27,34 @@ private const val MESSAGES_PAGE_SIZE = 50
 private const val PRODUCT_SEARCH_PAGE_SIZE = 20
 private const val RECENT_PRODUCTS_LIMIT = 20
 private const val ASSIGNMENT_HISTORY_PAGE_SIZE = 30
+
+/** Qual permissão de runtime está pendente/negada -- só CAMERA e MICROPHONE são pedidas por esta tela. */
+enum class MediaPermissionType { CAMERA, MICROPHONE }
+
+/** Imagem ou áudio já capturado/gravado/selecionado, aguardando confirmação do usuário antes do upload. */
+data class PendingMedia(
+    val kind: MediaKind,
+    val file: File,
+    val caption: String = "",
+    /** Só preenchido para áudio (duração da gravação). */
+    val durationMs: Long? = null,
+)
+
+data class MediaComposerUiState(
+    /** Não-nulo enquanto a tela de câmera (CameraX) está aberta -- arquivo onde a foto será gravada. */
+    val cameraOutputFile: File? = null,
+    /** Não-nulo enquanto o bottom sheet de gravação de áudio está aberto -- arquivo onde o áudio será gravado. */
+    val audioOutputFile: File? = null,
+    val isRecordingAudio: Boolean = false,
+    val recordingElapsedMs: Long = 0L,
+    val pendingMedia: PendingMedia? = null,
+    val isUploadingMedia: Boolean = false,
+    val uploadProgress: Float = 0f,
+    /** Pede pro usuário permitir de novo (rationale) -- ainda pode reperguntar. */
+    val permissionRationale: MediaPermissionType? = null,
+    /** Negada permanentemente ("Não perguntar novamente") -- só resolve indo em Configurações do app. */
+    val permissionPermanentlyDenied: MediaPermissionType? = null,
+)
 
 data class ConversationUiState(
     val isLoading: Boolean = false,
@@ -39,7 +75,26 @@ data class ConversationUiState(
     val productResults: List<Product> = emptyList(),
     val assignmentHistory: List<AssignmentHistoryEntry> = emptyList(),
     val isAssignmentHistoryExpanded: Boolean = false,
+    val media: MediaComposerUiState = MediaComposerUiState(),
 )
+
+/**
+ * Store de mídia inerte, usada só como valor padrão do construtor para não
+ * quebrar os testes/instanciações existentes que criam `ConversationViewModel`
+ * sem se importar com mídia (ver `ConversationViewModelTest`/
+ * `ConversationScreenTest`, que não passam esses parâmetros). Nunca é a
+ * store real usada em produção -- essa vem sempre de `AppContainer` via
+ * `ConversationViewModelFactory`.
+ */
+private object InertMediaFileStore : MediaFileStore {
+    override fun newCameraCaptureFile(): File = File.createTempFile("inert_media_camera", ".jpg")
+    override fun newAudioRecordingFile(): File = File.createTempFile("inert_media_audio", ".m4a")
+    override fun newCompressedImageFile(): File = File.createTempFile("inert_media_compressed", ".jpg")
+    override suspend fun importFromGallery(uri: Uri): File? = null
+    override fun delete(file: File?) {
+        file?.delete()
+    }
+}
 
 /**
  * ViewModel de uma conversa. Não guarda nada em disco -- todo o histórico de
@@ -47,10 +102,19 @@ data class ConversationUiState(
  * sensível de cliente). Controle otimista de `assignment_version`: qualquer
  * 409 recarrega a conversa do zero e avisa o atendente, nunca tenta
  * "adivinhar" o novo estado no cliente.
+ *
+ * Suporte de mídia (PR #413): esta ViewModel nunca toca em CameraX/
+ * MediaRecorder/ContentResolver diretamente -- isso é responsabilidade da
+ * Composable (câmera/áudio/galeria), que só reporta eventos terminais aqui
+ * (arquivo capturado, erro, cancelamento). [mediaFileStore]/[imageCompressor]
+ * são as únicas dependências de plataforma, injetadas para permanecerem
+ * fakeable em teste.
  */
 class ConversationViewModel(
     private val repository: AtendimentoRepository,
     private val conversationId: Long,
+    private val mediaFileStore: MediaFileStore = InertMediaFileStore,
+    private val imageCompressor: ImageCompressor = AndroidImageCompressor(),
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ConversationUiState())
@@ -66,6 +130,9 @@ class ConversationViewModel(
      * o load() anterior ainda estava em voo).
      */
     private var requestGeneration = 0
+
+    /** Job do upload de mídia em voo -- cancelado explicitamente por [cancelMediaUpload]. */
+    private var uploadJob: Job? = null
 
     init {
         load()
@@ -297,21 +364,232 @@ class ConversationViewModel(
         _uiState.value = _uiState.value.copy(errorMessage = null, infoMessage = null)
     }
 
-    private fun runAction(block: suspend () -> ApiResult<Conversation>) {
-        val state = _uiState.value
-        if (state.isActionInProgress) return
-        _uiState.value = state.copy(isActionInProgress = true, isActionsMenuOpen = false, errorMessage = null)
+    // -------- Permissões de mídia (câmera/microfone) --------
+    //
+    // A Composable é quem decide granted/rationale/permanentemente-negada
+    // (via shouldShowRequestPermissionRationale, que exige Activity) -- esta
+    // ViewModel só guarda qual diálogo mostrar, nunca chama API de permissão
+    // diretamente (não tem Context).
+
+    fun onMediaPermissionDenied(permission: MediaPermissionType, permanentlyDenied: Boolean) {
+        _uiState.value = _uiState.value.copy(
+            media = _uiState.value.media.copy(
+                permissionRationale = if (permanentlyDenied) null else permission,
+                permissionPermanentlyDenied = if (permanentlyDenied) permission else null,
+            ),
+        )
+    }
+
+    fun dismissMediaPermissionDialog() {
+        _uiState.value = _uiState.value.copy(
+            media = _uiState.value.media.copy(permissionRationale = null, permissionPermanentlyDenied = null),
+        )
+    }
+
+    // -------- Câmera --------
+
+    fun openCamera() {
+        val file = mediaFileStore.newCameraCaptureFile()
+        _uiState.value = _uiState.value.copy(media = _uiState.value.media.copy(cameraOutputFile = file))
+    }
+
+    fun closeCamera() {
+        mediaFileStore.delete(_uiState.value.media.cameraOutputFile)
+        _uiState.value = _uiState.value.copy(media = _uiState.value.media.copy(cameraOutputFile = null))
+    }
+
+    fun onPhotoCaptured(rawFile: File) {
+        _uiState.value = _uiState.value.copy(media = _uiState.value.media.copy(cameraOutputFile = null))
+        compressAndStagePendingImage(rawFile)
+    }
+
+    // -------- Galeria (Photo Picker) --------
+
+    fun onGalleryImageSelected(uri: Uri) {
         viewModelScope.launch {
-            when (val result = block()) {
+            val imported = mediaFileStore.importFromGallery(uri)
+            if (imported == null) {
+                _uiState.value = _uiState.value.copy(errorMessage = "Não foi possível abrir a imagem selecionada.")
+                return@launch
+            }
+            compressAndStagePendingImage(imported)
+        }
+    }
+
+    private fun compressAndStagePendingImage(rawFile: File) {
+        viewModelScope.launch {
+            try {
+                val destination = mediaFileStore.newCompressedImageFile()
+                val result = imageCompressor.compress(rawFile, destination)
+                mediaFileStore.delete(rawFile)
+                _uiState.value = _uiState.value.copy(
+                    media = _uiState.value.media.copy(
+                        pendingMedia = PendingMedia(kind = MediaKind.IMAGE, file = result.file),
+                    ),
+                )
+            } catch (error: Exception) {
+                mediaFileStore.delete(rawFile)
+                _uiState.value = _uiState.value.copy(errorMessage = "Não foi possível processar a imagem.")
+            }
+        }
+    }
+
+    // -------- Áudio --------
+
+    fun openAudioRecorder() {
+        val file = mediaFileStore.newAudioRecordingFile()
+        _uiState.value = _uiState.value.copy(media = _uiState.value.media.copy(audioOutputFile = file))
+    }
+
+    /** Fecha o sheet de áudio: cancela gravação em andamento e descarta qualquer arquivo pendente (câmera de troco). */
+    fun closeAudioRecorder() {
+        val media = _uiState.value.media
+        mediaFileStore.delete(media.audioOutputFile)
+        mediaFileStore.delete(media.pendingMedia?.takeIf { it.kind == MediaKind.AUDIO }?.file)
+        _uiState.value = _uiState.value.copy(
+            media = media.copy(
+                audioOutputFile = null,
+                isRecordingAudio = false,
+                recordingElapsedMs = 0L,
+                pendingMedia = media.pendingMedia?.takeIf { it.kind != MediaKind.AUDIO },
+            ),
+        )
+    }
+
+    fun onAudioRecordingStarted() {
+        _uiState.value = _uiState.value.copy(
+            media = _uiState.value.media.copy(isRecordingAudio = true, recordingElapsedMs = 0L),
+        )
+    }
+
+    fun onAudioRecordingTick(elapsedMs: Long) {
+        _uiState.value = _uiState.value.copy(media = _uiState.value.media.copy(recordingElapsedMs = elapsedMs))
+    }
+
+    fun onAudioRecordingStopped(file: File, durationMs: Long) {
+        _uiState.value = _uiState.value.copy(
+            media = _uiState.value.media.copy(
+                isRecordingAudio = false,
+                pendingMedia = PendingMedia(kind = MediaKind.AUDIO, file = file, durationMs = durationMs),
+            ),
+        )
+    }
+
+    fun onAudioRecordingCancelled() {
+        val media = _uiState.value.media
+        mediaFileStore.delete(media.audioOutputFile)
+        mediaFileStore.delete(media.pendingMedia?.takeIf { it.kind == MediaKind.AUDIO }?.file)
+        _uiState.value = _uiState.value.copy(
+            media = media.copy(isRecordingAudio = false, audioOutputFile = null, pendingMedia = null),
+        )
+    }
+
+    /** Erro vindo da câmera/gravador (ex.: falha ao abrir a câmera, falha ao salvar a gravação) -- fecha a UI de mídia envolvida e limpa o temp file. */
+    fun onMediaError(message: String) {
+        val media = _uiState.value.media
+        mediaFileStore.delete(media.cameraOutputFile)
+        mediaFileStore.delete(media.audioOutputFile)
+        _uiState.value = _uiState.value.copy(
+            errorMessage = message,
+            media = media.copy(cameraOutputFile = null, audioOutputFile = null, isRecordingAudio = false),
+        )
+    }
+
+    // -------- Envio da mídia pendente (imagem ou áudio) --------
+
+    fun onPendingMediaCaptionChanged(caption: String) {
+        val pending = _uiState.value.media.pendingMedia ?: return
+        _uiState.value = _uiState.value.copy(media = _uiState.value.media.copy(pendingMedia = pending.copy(caption = caption)))
+    }
+
+    /** Descarta a mídia pendente sem enviar (cancelamento explícito do usuário) -- sempre apaga o temp file. */
+    fun cancelPendingMedia() {
+        uploadJob?.cancel()
+        mediaFileStore.delete(_uiState.value.media.pendingMedia?.file)
+        _uiState.value = _uiState.value.copy(
+            media = _uiState.value.media.copy(pendingMedia = null, isUploadingMedia = false, uploadProgress = 0f),
+        )
+    }
+
+    /** Cancela só o upload em voo -- mantém a mídia pendente para um retry explícito do usuário (nunca reenvia sozinho). */
+    fun cancelMediaUpload() {
+        uploadJob?.cancel()
+        _uiState.value = _uiState.value.copy(media = _uiState.value.media.copy(isUploadingMedia = false, uploadProgress = 0f))
+    }
+
+    fun sendPendingMedia() {
+        val state = _uiState.value
+        val pending = state.media.pendingMedia ?: return
+        if (state.media.isUploadingMedia) return
+
+        val limit = if (pending.kind == MediaKind.IMAGE) MediaLimits.MAX_IMAGE_BYTES else MediaLimits.MAX_AUDIO_BYTES
+        if (pending.file.length() > limit) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "Arquivo excede o tamanho máximo permitido (${limit / (1024 * 1024)}MB). Escolha um arquivo menor.",
+            )
+            return
+        }
+
+        _uiState.value = _uiState.value.copy(
+            errorMessage = null,
+            media = _uiState.value.media.copy(isUploadingMedia = true, uploadProgress = 0f),
+        )
+        uploadJob = viewModelScope.launch {
+            val mimeType = if (pending.kind == MediaKind.IMAGE) "image/jpeg" else "audio/mp4"
+            val result = repository.sendMedia(
+                conversationId = conversationId,
+                kind = pending.kind,
+                file = pending.file,
+                mimeType = mimeType,
+                caption = pending.caption.takeIf { it.isNotBlank() },
+                assignmentVersion = _uiState.value.conversation?.assignmentVersion,
+                onProgress = { progress ->
+                    _uiState.value = _uiState.value.copy(media = _uiState.value.media.copy(uploadProgress = progress))
+                },
+            )
+            when (result) {
                 is ApiResult.Success -> {
-                    _uiState.value = _uiState.value.copy(isActionInProgress = false, conversation = result.data)
+                    if (result.data.ok) {
+                        mediaFileStore.delete(pending.file)
+                        _uiState.value = _uiState.value.copy(
+                            media = _uiState.value.media.copy(
+                                pendingMedia = null,
+                                isUploadingMedia = false,
+                                uploadProgress = 0f,
+                                audioOutputFile = null,
+                            ),
+                        )
+                        refreshMessagesQuietly()
+                    } else {
+                        // Falha "suave" reportada pelo backend (ex.: provider
+                        // indisponível) -- mantém o arquivo para um retry
+                        // explícito (nova tentativa = nova Idempotency-Key).
+                        _uiState.value = _uiState.value.copy(
+                            errorMessage = "Não foi possível enviar a mídia. Tente novamente.",
+                            media = _uiState.value.media.copy(isUploadingMedia = false, uploadProgress = 0f),
+                        )
+                    }
                 }
                 is ApiResult.Failure -> {
-                    _uiState.value = _uiState.value.copy(isActionInProgress = false)
+                    _uiState.value = _uiState.value.copy(
+                        media = _uiState.value.media.copy(isUploadingMedia = false, uploadProgress = 0f),
+                    )
                     handleActionFailure(result.error)
                 }
             }
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        // Rede de segurança: se a tela for destruída com mídia pendente (o
+        // usuário nunca confirmou nem cancelou explicitamente), nenhum
+        // arquivo de cliente pode sobreviver além da sessão -- ver regra de
+        // "nunca persistir mídia de cliente" do escopo desta PR.
+        val media = _uiState.value.media
+        mediaFileStore.delete(media.cameraOutputFile)
+        mediaFileStore.delete(media.audioOutputFile)
+        mediaFileStore.delete(media.pendingMedia?.file)
     }
 
     /**

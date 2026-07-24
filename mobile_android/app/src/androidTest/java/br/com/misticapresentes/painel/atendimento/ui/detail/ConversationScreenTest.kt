@@ -49,6 +49,32 @@ class ConversationScreenTest {
     }
 
     @Test
+    fun mediaComposerButtonsAreDisplayed() {
+        val api = FakeAtendimentoApi()
+        val viewModel = ConversationViewModel(AtendimentoRepository(api), conversationId = 1)
+
+        composeRule.setContent {
+            MisticaTheme {
+                ConversationScreen(
+                    container = AppContainer(composeRule.activity),
+                    conversationId = 1,
+                    onBack = {},
+                    viewModel = viewModel,
+                )
+            }
+        }
+        composeRule.waitForIdle()
+
+        // Botões de câmera/galeria/áudio do compose avançado de mídia (PR
+        // #413), ao lado do botão de produto já existente -- nenhum deles
+        // aciona rede real (permissão/CameraX/galeria são fluxo de
+        // plataforma, fora do escopo de teste instrumentado desta tela).
+        composeRule.onNodeWithTag("conversation_open_camera").assertIsDisplayed()
+        composeRule.onNodeWithTag("conversation_open_gallery").assertIsDisplayed()
+        composeRule.onNodeWithTag("conversation_open_audio_recorder").assertIsDisplayed()
+    }
+
+    @Test
     fun actionsMenuOpensAndDispatchesClaim() {
         val api = FakeAtendimentoApi()
         val viewModel = ConversationViewModel(AtendimentoRepository(api), conversationId = 1)

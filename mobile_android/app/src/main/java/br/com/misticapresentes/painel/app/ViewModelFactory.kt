@@ -54,6 +54,8 @@ class ConversationViewModelFactory(
             ConversationViewModel::class.java -> ConversationViewModel(
                 repository = container.atendimentoRepository,
                 conversationId = conversationId,
+                mediaFileStore = container.mediaFileStore,
+                imageCompressor = container.imageCompressor,
             ) as T
             else -> throw IllegalArgumentException("ViewModel desconhecida: ${modelClass.name}")
         }

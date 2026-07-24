@@ -50,11 +50,34 @@ object ApiClient {
             .create(AtendimentoApi::class.java)
     }
 
+    /**
+     * Variante de [createAtendimentoApi] com timeouts maiores, usada só para
+     * o upload de mídia (imagem/áudio, PR #413 -- `POST .../media`), que pode
+     * levar bem mais que os 20s padrão em rede móvel lenta. Mesma
+     * infraestrutura (cookie de sessão, Origin/CSRF, retry, sessão expirada,
+     * log sanitizado) -- nenhum endpoint novo, só um client HTTP irmão com
+     * timeout de escrita maior.
+     */
+    fun createAtendimentoMediaApi(
+        secureSessionStore: SecureSessionStore,
+        sessionExpiredNotifier: SessionExpiredNotifier,
+        baseUrl: String = EnvironmentConfig.baseUrl,
+        verboseLogs: Boolean = EnvironmentConfig.verboseNetworkLogs,
+    ): AtendimentoApi {
+        return buildRetrofit(
+            secureSessionStore, sessionExpiredNotifier, baseUrl, verboseLogs,
+            connectTimeoutSeconds = 20, readTimeoutSeconds = 60, writeTimeoutSeconds = 90,
+        ).create(AtendimentoApi::class.java)
+    }
+
     private fun buildRetrofit(
         secureSessionStore: SecureSessionStore,
         sessionExpiredNotifier: SessionExpiredNotifier,
         baseUrl: String,
         verboseLogs: Boolean,
+        connectTimeoutSeconds: Long = 15,
+        readTimeoutSeconds: Long = 20,
+        writeTimeoutSeconds: Long = 20,
     ): Retrofit {
         val httpUrl = baseUrl.toHttpUrl()
         val cookieJar = PersistentCookieJar(secureSessionStore)
@@ -69,9 +92,9 @@ object ApiClient {
 
         val okHttpClient = OkHttpClient.Builder()
             .cookieJar(cookieJar)
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(20, TimeUnit.SECONDS)
-            .writeTimeout(20, TimeUnit.SECONDS)
+            .connectTimeout(connectTimeoutSeconds, TimeUnit.SECONDS)
+            .readTimeout(readTimeoutSeconds, TimeUnit.SECONDS)
+            .writeTimeout(writeTimeoutSeconds, TimeUnit.SECONDS)
             .addInterceptor(AuthInterceptor(httpUrl))
             .addInterceptor(RetryInterceptor())
             .addInterceptor(SessionExpiryInterceptor(sessionExpiredNotifier))
