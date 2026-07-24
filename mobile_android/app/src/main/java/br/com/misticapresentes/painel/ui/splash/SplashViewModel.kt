@@ -7,7 +7,7 @@ import br.com.misticapresentes.painel.auth.AuthState
 import br.com.misticapresentes.painel.common.ConnectivityObserver
 import br.com.misticapresentes.painel.common.FeatureFlag
 import br.com.misticapresentes.painel.common.FeatureFlagsRepository
-import br.com.misticapresentes.painel.common.LegacyPrefsMigration
+import br.com.misticapresentes.painel.common.LegacyPrefsMigrator
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,7 +32,7 @@ sealed class SplashDestination {
 class SplashViewModel(
     private val authRepository: AuthRepository,
     private val connectivityObserver: ConnectivityObserver,
-    private val legacyPrefsMigration: LegacyPrefsMigration,
+    private val legacyPrefsMigration: LegacyPrefsMigrator,
     private val featureFlagsRepository: FeatureFlagsRepository,
 ) : ViewModel() {
 

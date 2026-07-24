@@ -3,6 +3,16 @@ package br.com.misticapresentes.painel.common
 import android.content.Context
 
 /**
+ * Contrato de migração das preferências legadas. Existe como interface para
+ * permitir testar ViewModels que disparam a migração (ex.: SplashViewModel)
+ * com um fake em memória, sem depender de SharedPreferences/DataStore reais
+ * (Robolectric) só para satisfazer essa dependência.
+ */
+interface LegacyPrefsMigrator {
+    suspend fun migrateIfNeeded()
+}
+
+/**
  * Migra com segurança as preferências do app legado (Java, pré-#411):
  * `server_url` e `api_token` salvos em SharedPreferences comuns (texto
  * puro), sob o arquivo "mistica_painel_prefs".
@@ -20,8 +30,8 @@ import android.content.Context
 class LegacyPrefsMigration(
     private val context: Context,
     private val appPreferences: AppPreferences,
-) {
-    suspend fun migrateIfNeeded() {
+) : LegacyPrefsMigrator {
+    override suspend fun migrateIfNeeded() {
         val legacyPrefs = context.getSharedPreferences(LEGACY_PREFS_NAME, Context.MODE_PRIVATE)
         if (!legacyPrefs.contains(LEGACY_KEY_URL) && !legacyPrefs.contains(LEGACY_KEY_TOKEN)) {
             appPreferences.markLegacyPrefsMigrated()
