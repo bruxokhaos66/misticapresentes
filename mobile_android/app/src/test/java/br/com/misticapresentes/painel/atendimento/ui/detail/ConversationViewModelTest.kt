@@ -308,6 +308,13 @@ class ConversationViewModelTest {
         atendimentoApi.messages = messagesRange(51..100)
         val localViewModel = ConversationViewModel(AtendimentoRepository(atendimentoApi), conversationId = 1)
         dispatcher.scheduler.advanceUntilIdle()
+        // Snapshot DEPOIS do advanceUntilIdle() acima, não um valor fixo: esse
+        // primeiro advanceUntilIdle() também libera o load() inicial da
+        // `viewModel` de nível de classe (criada em setUp(), que compartilha
+        // este mesmo `atendimentoApi`), então o total absoluto de chamadas
+        // "getMessages" no callLog não é previsível aqui -- só a diferença
+        // causada pelos dois cliques em loadOlderMessages() importa.
+        val getMessagesCallsBeforeDoubleClick = atendimentoApi.callLog.count { it == "getMessages" }
 
         atendimentoApi.getMessagesDelayMs = 1_000
         atendimentoApi.messages = messagesRange(1..50)
@@ -315,8 +322,11 @@ class ConversationViewModelTest {
         localViewModel.loadOlderMessages() // segundo clique enquanto o primeiro ainda está em voo
         dispatcher.scheduler.advanceUntilIdle()
 
-        // 1 chamada do load() inicial + só 1 chamada de loadOlderMessages (não 2).
-        assertEquals(2, atendimentoApi.callLog.count { it == "getMessages" })
+        // Só 1 chamada nova de getMessages (não 2) para os dois cliques.
+        assertEquals(
+            getMessagesCallsBeforeDoubleClick + 1,
+            atendimentoApi.callLog.count { it == "getMessages" },
+        )
         assertEquals(100, localViewModel.uiState.value.messages.size)
     }
 
