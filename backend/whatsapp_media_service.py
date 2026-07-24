@@ -191,6 +191,62 @@ def baixar_midia(media_id: str) -> tuple[bytes, str, str]:
     return conteudo, extensao, mime_canonico
 
 
+# ---------------------------------------------------------------------------
+# Validação de mídia ENVIADA pelo painel (compose da Central de Atendimento
+# -- item 8 da especificação de envio avançado). Distinto da validação de
+# mídia RECEBIDA acima: aqui a allowlist é fechada por finalidade
+# (media_kind="image"|"audio"), sempre por magic bytes -- o content_type
+# declarado pelo navegador NUNCA é aceito sozinho. Imagem passa ainda pelo
+# Pillow (Image.open(...).verify()) em backend/whatsapp_inbox_routes.py, a
+# defesa adicional contra bytes que só imitam o cabeçalho magic mas não são
+# uma imagem genuína (SVG/HTML/JS disfarçados nunca passam nas duas
+# checagens juntas).
+# ---------------------------------------------------------------------------
+
+_ASSINATURAS_IMAGEM_SAIDA: list[tuple[bytes, str, str]] = [
+    (b"\xff\xd8\xff", "jpg", "image/jpeg"),
+    (b"\x89PNG\r\n\x1a\n", "png", "image/png"),
+]
+
+# EBML (WebM), OggS (Ogg) e o box `ftyp` de MP4/M4A -- os formatos que o
+# MediaRecorder do navegador tipicamente produz, mais mp3/wav por
+# compatibilidade com upload manual de um áudio já gravado.
+_ASSINATURAS_AUDIO_SAIDA: list[tuple[bytes, str, str]] = [
+    (b"\x1a\x45\xdf\xa3", "webm", "audio/webm"),
+    (b"OggS", "ogg", "audio/ogg"),
+    (b"ID3", "mp3", "audio/mpeg"),
+    (b"\xff\xfb", "mp3", "audio/mpeg"),
+    (b"\xff\xf3", "mp3", "audio/mpeg"),
+    (b"\xff\xf2", "mp3", "audio/mpeg"),
+]
+
+
+def identificar_imagem_saida(cabecalho: bytes) -> tuple[str, str] | None:
+    """Identifica JPEG/PNG/WEBP reais pelos magic bytes -- allowlist fechada
+    para mídia de SAÍDA (envio pelo painel). Nunca aceita SVG, HTML,
+    JavaScript ou qualquer outro tipo, mesmo que o navegador declare
+    ``image/*`` no content-type."""
+    if cabecalho[:4] == b"RIFF" and cabecalho[8:12] == b"WEBP":
+        return "webp", "image/webp"
+    for assinatura, extensao, mime in _ASSINATURAS_IMAGEM_SAIDA:
+        if cabecalho.startswith(assinatura):
+            return extensao, mime
+    return None
+
+
+def identificar_audio_saida(cabecalho: bytes) -> tuple[str, str] | None:
+    """Identifica webm/ogg/mp3/mp4(m4a)/wav reais pelos magic bytes --
+    allowlist fechada para áudio/nota de voz enviado pelo painel."""
+    if cabecalho[:4] == b"RIFF" and cabecalho[8:12] == b"WAVE":
+        return "wav", "audio/wav"
+    if len(cabecalho) >= 12 and cabecalho[4:8] == b"ftyp":
+        return "m4a", "audio/mp4"
+    for assinatura, extensao, mime in _ASSINATURAS_AUDIO_SAIDA:
+        if cabecalho.startswith(assinatura):
+            return extensao, mime
+    return None
+
+
 def salvar_midia_local(conteudo: bytes, extensao: str) -> str:
     """Grava o conteúdo com um nome gerado pelo servidor (uuid4 -- nunca
     derivado de entrada do cliente/Meta), sempre dentro do diretório

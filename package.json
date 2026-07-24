@@ -7,6 +7,7 @@
     "test:e2e": "playwright test",
     "test:isis2": "node --test tests/isis2/*.test.js",
     "test:mercadopago-js": "node --test tests/mercadopago-cardform-config.test.js",
+    "test:central-atendimento-js": "node --test tests/central-atendimento-compose.test.js",
     "test:lighthouse": "lhci autorun",
     "build:site": "node scripts/minify-assets.mjs"
   },

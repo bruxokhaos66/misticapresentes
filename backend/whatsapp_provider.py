@@ -135,6 +135,23 @@ class WhatsAppProvider(ABC):
         backend/whatsapp_catalog_repository.py::produto_linha_publica)."""
         raise WhatsAppEnvioPermanente("send_inbox_image não suportado por este provedor.", codigo="image_not_supported")
 
+    def upload_media(self, *, conteudo: bytes, mime_type: str, filename: str) -> str | None:
+        """Faz upload de um arquivo local para a Meta (POST .../media,
+        multipart/form-data) e devolve o `media_id` temporário da Meta, usado
+        em seguida por send_inbox_media. Só usado pelo compose de mídia da
+        Central de Atendimento (backend/whatsapp_inbox_routes.py) -- nunca
+        pelo fluxo de notificações administrativas. `filename` é só
+        cosmético/log, nunca decide o tipo do arquivo (quem chama já validou
+        os bytes por magic bytes antes)."""
+        raise WhatsAppEnvioPermanente("upload_media não suportado por este provedor.", codigo="media_upload_not_supported")
+
+    def send_inbox_media(self, *, to: str, media_id: str, media_type: str, caption: str | None = None) -> ResultadoEnvioWhatsApp:
+        """Envia uma mensagem `type: image` ou `type: audio` referenciando um
+        `media_id` já enviado à Meta via upload_media. Mensagens de áudio da
+        Cloud API não suportam legenda -- `caption` é ignorado quando
+        media_type == "audio". Mesma janela de 24h de send_inbox_text."""
+        raise WhatsAppEnvioPermanente("send_inbox_media não suportado por este provedor.", codigo="media_send_not_supported")
+
     @abstractmethod
     def parse_delivery_webhook(self, payload: dict) -> list[StatusEntregaWhatsApp]:
         raise NotImplementedError
@@ -164,6 +181,12 @@ class DisabledWhatsAppProvider(WhatsAppProvider):
         return ResultadoEnvioWhatsApp(ok=False, status="skipped_disabled")
 
     def send_inbox_image(self, *, to: str, image_url: str, caption: str | None = None) -> ResultadoEnvioWhatsApp:
+        return ResultadoEnvioWhatsApp(ok=False, status="skipped_disabled")
+
+    def upload_media(self, *, conteudo: bytes, mime_type: str, filename: str) -> str | None:
+        return None
+
+    def send_inbox_media(self, *, to: str, media_id: str, media_type: str, caption: str | None = None) -> ResultadoEnvioWhatsApp:
         return ResultadoEnvioWhatsApp(ok=False, status="skipped_disabled")
 
     def parse_delivery_webhook(self, payload: dict) -> list[StatusEntregaWhatsApp]:
@@ -294,6 +317,78 @@ class MetaWhatsAppCloudProvider(WhatsAppProvider):
             "image": {"link": url_limpa},
         }
         if caption:
+            corpo["image"]["caption"] = str(caption)[:1024]
+
+        try:
+            with self._cliente() as cliente:
+                resposta = cliente.post(f"{self._base_url()}/messages", json=corpo)
+        except httpx.TimeoutException as exc:
+            raise WhatsAppEnvioTransitorio("Timeout ao chamar a Graph API.", codigo="timeout") from exc
+        except httpx.TransportError as exc:
+            raise WhatsAppEnvioTransitorio("Falha de conexão com a Graph API.", codigo="connection_error") from exc
+
+        return self._interpretar_resposta(resposta)
+
+    def upload_media(self, *, conteudo: bytes, mime_type: str, filename: str) -> str | None:
+        if not conteudo:
+            raise WhatsAppEnvioPermanente("Conteúdo de mídia vazio.", codigo="empty_media")
+        token = whatsapp_access_token()
+        if not token or not whatsapp_phone_number_id():
+            raise WhatsAppEnvioPermanente("WhatsApp Cloud API sem credenciais configuradas.", codigo="missing_configuration")
+
+        # Upload multipart -- cliente próprio (sem Content-Type json fixo do
+        # _cliente() padrão) para deixar o httpx montar o boundary correto.
+        cliente = httpx.Client(
+            timeout=whatsapp_request_timeout_seconds(),
+            headers={"Authorization": f"Bearer {token}", "User-Agent": "MisticaPresentes-WhatsAppNotifications/1.0"},
+            follow_redirects=False,
+        )
+        try:
+            with cliente:
+                resposta = cliente.post(
+                    f"{self._base_url()}/media",
+                    data={"messaging_product": "whatsapp", "type": mime_type},
+                    files={"file": (filename or "arquivo", conteudo, mime_type)},
+                )
+        except httpx.TimeoutException as exc:
+            raise WhatsAppEnvioTransitorio("Timeout ao enviar mídia para a Graph API.", codigo="timeout") from exc
+        except httpx.TransportError as exc:
+            raise WhatsAppEnvioTransitorio("Falha de conexão ao enviar mídia para a Graph API.", codigo="connection_error") from exc
+
+        conteudo_resposta = resposta.content[:_LIMITE_RESPOSTA_BYTES]
+        try:
+            corpo_resposta = json.loads(conteudo_resposta or b"{}")
+        except ValueError:
+            corpo_resposta = {}
+
+        if resposta.status_code == 200 and corpo_resposta.get("id"):
+            return str(corpo_resposta["id"])
+
+        erro = corpo_resposta.get("error") or {}
+        resumo = f"http_{resposta.status_code}_code_{erro.get('code')}_sub_{erro.get('error_subcode')}"
+        if resposta.status_code == 429:
+            raise WhatsAppEnvioTransitorio(resumo, codigo="rate_limited")
+        if resposta.status_code in (500, 502, 503, 504):
+            raise WhatsAppEnvioTransitorio(resumo, codigo=f"http_{resposta.status_code}")
+        raise WhatsAppEnvioPermanente(resumo, codigo=f"http_{resposta.status_code}")
+
+    def send_inbox_media(self, *, to: str, media_id: str, media_type: str, caption: str | None = None) -> ResultadoEnvioWhatsApp:
+        if not to:
+            raise WhatsAppEnvioPermanente("Destinatário ausente.", codigo="missing_recipient")
+        if not media_id:
+            raise WhatsAppEnvioPermanente("media_id ausente.", codigo="missing_media_id")
+        if media_type not in ("image", "audio"):
+            raise WhatsAppEnvioPermanente("Tipo de mídia não suportado.", codigo="invalid_media_type")
+
+        corpo: dict = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": to,
+            "type": media_type,
+            media_type: {"id": media_id},
+        }
+        # A Cloud API não aceita legenda em mensagens de áudio -- só imagem.
+        if media_type == "image" and caption:
             corpo["image"]["caption"] = str(caption)[:1024]
 
         try:

@@ -232,9 +232,99 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 .bolha .meta { display: block; font-size: 0.7rem; opacity: 0.75; margin-top: 0.25rem; }
 
-.form-enviar { display: flex; flex-wrap: wrap; gap: 0.5rem; padding: 0.75rem 1rem; border-top: 1px solid var(--cor-borda); }
-.form-enviar select { flex-basis: 100%; padding: 0.4rem; border-radius: var(--raio); border: 1px solid var(--cor-borda); background: var(--cor-painel-alt); color: var(--cor-texto); }
-.form-enviar textarea { flex: 1; padding: 0.5rem; border-radius: var(--raio); border: 1px solid var(--cor-borda); background: var(--cor-painel-alt); color: var(--cor-texto); resize: vertical; }
+.form-enviar { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.75rem 1rem; border-top: 1px solid var(--cor-borda); }
+.form-enviar select { width: 100%; padding: 0.4rem; border-radius: var(--raio); border: 1px solid var(--cor-borda); background: var(--cor-painel-alt); color: var(--cor-texto); }
+
+.compose-linha { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: flex-end; }
+.compose-linha textarea { flex: 1 1 200px; min-width: 0; padding: 0.5rem; border-radius: var(--raio); border: 1px solid var(--cor-borda); background: var(--cor-painel-alt); color: var(--cor-texto); resize: vertical; }
+
+.compose-acoes-midia { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+
+.btn-icone {
+  border: 1px solid var(--cor-borda);
+  background: var(--cor-painel-alt);
+  color: var(--cor-texto);
+  border-radius: var(--raio);
+  min-width: 40px;
+  min-height: 40px;
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.btn-icone:hover { border-color: var(--cor-acento); }
+.btn-icone:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* -------------------------------------------------------------------
+ * Compose avançado: prévia de mídia (imagem/áudio), progresso de envio
+ * e indicador de gravação de áudio -- item "envio avançado de mensagens
+ * e mídia". Reaproveita as variáveis de cor/raio do restante do painel.
+ * ------------------------------------------------------------------- */
+
+.previa-midia, .gravacao-audio {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0 1rem 0.5rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+  background: var(--cor-painel-alt);
+}
+.previa-midia[hidden], .gravacao-audio[hidden] { display: none; }
+
+.previa-midia-conteudo { display: flex; align-items: center; justify-content: center; min-height: 80px; }
+.previa-midia-conteudo img { max-width: 100%; max-height: 40vh; border-radius: var(--raio); display: block; }
+.previa-midia-conteudo audio { width: 100%; }
+
+.previa-midia input[type="text"] {
+  padding: 0.45rem;
+  border-radius: var(--raio);
+  border: 1px solid var(--cor-borda);
+  background: var(--cor-painel);
+  color: var(--cor-texto);
+}
+
+.previa-midia-progresso { display: flex; align-items: center; gap: 0.5rem; }
+.previa-midia-progresso progress { flex: 1; height: 8px; accent-color: var(--cor-acento); }
+
+.previa-midia-acoes, .gravacao-audio-acoes { display: flex; gap: 0.5rem; justify-content: flex-end; flex-wrap: wrap; }
+.previa-midia-acoes button, .gravacao-audio-acoes button { min-height: 38px; }
+
+.gravacao-audio { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+.gravacao-audio p { margin: 0; }
+
+.toast-container {
+  position: fixed;
+  left: 50%;
+  bottom: 1.25rem;
+  transform: translateX(-50%);
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  pointer-events: none;
+  max-width: min(90vw, 420px);
+}
+
+.toast {
+  background: var(--cor-painel);
+  color: var(--cor-texto);
+  border: 1px solid var(--cor-borda);
+  border-left: 4px solid var(--cor-sucesso);
+  border-radius: var(--raio);
+  padding: 0.55rem 0.9rem;
+  font-size: 0.85rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+.toast.aviso { border-left-color: var(--cor-alerta); }
+
+@media (max-width: 900px) {
+  .compose-linha { flex-direction: column; align-items: stretch; }
+  .compose-acoes-midia { justify-content: flex-start; }
+  .compose-linha > .btn { width: 100%; }
+  .previa-midia-acoes button, .gravacao-audio-acoes button { flex: 1 1 auto; }
+}
 
 .cliente-info { background: var(--cor-painel-alt); border: 1px solid var(--cor-borda); border-radius: var(--raio); padding: 0.6rem; margin-bottom: 0.75rem; }
 .cliente-info dt { color: var(--cor-texto-fraco); font-size: 0.75rem; }

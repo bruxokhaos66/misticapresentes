@@ -302,6 +302,20 @@ def whatsapp_media_max_bytes() -> int:
     return _int_env("WHATSAPP_MEDIA_MAX_BYTES", 10_485_760, minimo=1024, maximo=100_000_000)
 
 
+def whatsapp_outbound_image_max_bytes() -> int:
+    """Limite de tamanho para imagens ENVIADAS pelo painel (Central de
+    Atendimento -- compose de mídia), independente de
+    whatsapp_media_max_bytes() (que governa só o download de mídia
+    RECEBIDA). Aplicado durante a leitura em streaming do upload, nunca só
+    depois de bufferizar o arquivo inteiro."""
+    return _int_env("WHATSAPP_OUTBOUND_IMAGE_MAX_BYTES", 5 * 1024 * 1024, minimo=102_400, maximo=20_000_000)
+
+
+def whatsapp_outbound_audio_max_bytes() -> int:
+    """Limite de tamanho para áudios/notas de voz ENVIADOS pelo painel."""
+    return _int_env("WHATSAPP_OUTBOUND_AUDIO_MAX_BYTES", 16 * 1024 * 1024, minimo=102_400, maximo=30_000_000)
+
+
 def whatsapp_media_storage_dir() -> str:
     return os.environ.get("WHATSAPP_MEDIA_STORAGE_DIR", "").strip() or "/data/uploads/whatsapp"
 
