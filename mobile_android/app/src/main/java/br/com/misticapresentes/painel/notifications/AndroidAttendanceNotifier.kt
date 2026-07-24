@@ -3,11 +3,14 @@ package br.com.misticapresentes.painel.notifications
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import br.com.misticapresentes.painel.MainActivity
 import br.com.misticapresentes.painel.R
 import br.com.misticapresentes.painel.atendimento.sync.AttendanceForegroundState
@@ -77,11 +80,22 @@ class AndroidAttendanceNotifier(private val context: Context) : AttendanceNotifi
             .setContentIntent(pendingIntent)
             .build()
 
+        if (!hasPostNotificationsPermission()) return
         runCatching {
             NotificationManagerCompat.from(appContext).notify(notificationIdFor(conversationId), notification)
         }
-        // SecurityException se POST_NOTIFICATIONS não foi concedida (Android
-        // 13+) -- best effort, nunca derruba o app por causa de um aviso.
+        // runCatching cobre a corrida rara em que a permissão é revogada
+        // entre o check acima e a chamada -- best effort, nunca derruba o
+        // app por causa de um aviso.
+    }
+
+    /** Android 13+ (API 33) exige POST_NOTIFICATIONS em tempo de execução; antes disso a permissão é implícita. */
+    private fun hasPostNotificationsPermission(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
+        return ContextCompat.checkSelfPermission(
+            appContext,
+            Manifest.permission.POST_NOTIFICATIONS,
+        ) == PackageManager.PERMISSION_GRANTED
     }
 
     override fun clearForConversation(conversationId: Long) {
