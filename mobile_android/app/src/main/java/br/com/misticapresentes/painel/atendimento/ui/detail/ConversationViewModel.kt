@@ -592,6 +592,23 @@ class ConversationViewModel(
         mediaFileStore.delete(media.pendingMedia?.file)
     }
 
+    private fun runAction(block: suspend () -> ApiResult<Conversation>) {
+        val state = _uiState.value
+        if (state.isActionInProgress) return
+        _uiState.value = state.copy(isActionInProgress = true, isActionsMenuOpen = false, errorMessage = null)
+        viewModelScope.launch {
+            when (val result = block()) {
+                is ApiResult.Success -> {
+                    _uiState.value = _uiState.value.copy(isActionInProgress = false, conversation = result.data)
+                }
+                is ApiResult.Failure -> {
+                    _uiState.value = _uiState.value.copy(isActionInProgress = false)
+                    handleActionFailure(result.error)
+                }
+            }
+        }
+    }
+
     /**
      * 409 (assignment_version desatualizado) recarrega a conversa inteira do
      * backend e avisa o atendente com uma mensagem clara -- nunca tenta
