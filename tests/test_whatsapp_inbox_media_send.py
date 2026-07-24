@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib
 import os
 import secrets as secrets_mod
+import tempfile
 import uuid
 from datetime import datetime, timedelta
 
@@ -20,6 +21,14 @@ os.environ.setdefault("WHATSAPP_VERIFY_TOKEN", "verify-teste-" + uuid.uuid4().he
 os.environ.setdefault("WHATSAPP_PROVIDER", "meta_cloud")
 os.environ.setdefault("WHATSAPP_PHONE_NUMBER_ID", "123456")
 os.environ.setdefault("WHATSAPP_ACCESS_TOKEN", "token-de-teste")
+# O padrão de whatsapp_media_storage_dir() é "/data/uploads/whatsapp" (disco
+# persistente de produção) -- inexistente/sem permissão de escrita em CI e em
+# qualquer máquina de desenvolvedor sem esse ponto de montagem. Mesma correção
+# de tests/test_whatsapp_inbox_admin.py/test_whatsapp_media_service.py (que
+# usam monkeypatch.setenv com tmp_path por teste), mas aqui como padrão do
+# módulo inteiro via setdefault, já que salvar_midia_local() é exercitado por
+# quase todo teste deste arquivo.
+os.environ.setdefault("WHATSAPP_MEDIA_STORAGE_DIR", tempfile.mkdtemp(prefix="whatsapp-media-teste-"))
 
 from fastapi.testclient import TestClient
 
